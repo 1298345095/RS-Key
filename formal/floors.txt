@@ -28,13 +28,21 @@
 \* compared. The `Mut_*`/`Solo_*` families already name theirs through
 \* `gen-configs.sh`'s INVARIANTS block, so the column is for the rows that do not.
 \*
+\* The depths in the comments below are the WORKERS=1 reading, and they are the
+\* one number here that nothing compares. TLC reports the deepest BFS level its
+\* workers OPENED, which overshoots the diameter by one when a worker starts the
+\* next level early -- `Store.cfg` is 6 at one worker over six runs, 6 or 7 at the
+\* default two over thirteen, 7 at four and at eight. A ratchet on it would be red
+\* or green by scheduler, so there is none: re-measure by hand with
+\* `WORKERS=1 ./run-tlc.sh <cfg>`.
+\*
 \* Columns: <config or glob>  <GREEN|RED>  <min distinct, or - >  [heap]  [invariant]
 \* First match wins, so an exact name may precede its class glob.
 
 Shipped.cfg                          GREEN   20000000
 Seams.cfg                            GREEN   200
 \* The flash layer (RSKeyStore): a small exhaustive space -- 364 distinct at
-\* depth 7 -- so its floor is set near a third, the same rule as its siblings.
+\* depth 6 -- so its floor is set near a third, the same rule as its siblings.
 Store.cfg                            GREEN   90
 \* The retry/recovery lattice (RSKeyRetryLattice): 243 distinct at depth 11, five
 \* budgeted references over a ceiling of two -- a third is the floor here too.

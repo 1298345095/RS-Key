@@ -233,8 +233,11 @@ IS a state the shipped tree reaches, so `NoOrphanedMetadata` keeps every arm who
 drop landed while `NoSilentOrphan` (SEC-STORE-006) forbids the one thing the code
 may not do, which is answer `Ok` from the arm that could not.
 `StoreSolo_BugDeleteHidesFaultedDrop.cfg` is what says the new arm is reachable
-rather than inert — RED on `NoSilentOrphan` in 61 distinct states at depth 4 — and
-the sweep's fifth recorder asks the same question of the real `Fs`.
+rather than inert — RED on `NoSilentOrphan` in 43 distinct states at one worker,
+61 at two and 74–76 at four. A counterexample search halts at the first violation,
+so the verdict and the invariant are the result and the count is only where this
+search happened to trip (`formal/README.md`'s rule for the column). The sweep's
+fifth recorder asks the same question of the real `Fs`.
 
 The PR gate carries the same clauses at concrete FIDs
 (`a_cache_write_moves_one_fid_and_no_other_across_three_bytes` and

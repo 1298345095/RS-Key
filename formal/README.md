@@ -1079,10 +1079,10 @@ Round two's "no, in two independent ways" was exact.
 | `FairMut_BugFairnessFoldsLocalCeremony.cfg` | RED `OpAdvancesIsOneActivity` | 57 | 36 | 4 | < 1 s |
 | `Seams.cfg` (the second module) | **GREEN, exhaustive** | 6 045 | 410 | 11 | 1 s |
 | 14 × `SeamMut_*.cfg` / 14 × `SeamSolo_*.cfg` | RED, each on its own target | — | 27 – 381 | 3 – 8 | ≤ 1 s |
-| `Store.cfg` | **GREEN, exhaustive** | 4 185 | 364 | 7 | < 1 s |
+| `Store.cfg` | **GREEN, exhaustive** | 4 185 | 364 | 6 | < 1 s |
 | `Lattice.cfg` | **GREEN, exhaustive** | 2 431 | 243 | 11 | < 1 s |
 | `Policies.cfg` (all four applets in one module) | **GREEN, exhaustive** | 45 253 | 2 268 | 14 | 1 s |
-| `Admin.cfg` / `Display.cfg` / `Boot.cfg` / `Transport.cfg` | **GREEN, exhaustive** | 15 – 127 | 5 – 24 | 3 – 5 | < 1 s each |
+| `Admin.cfg` / `Display.cfg` / `Boot.cfg` / `Transport.cfg` | **GREEN, exhaustive** | 15 – 127 | 5 – 24 | 2 – 5 | < 1 s each |
 | `Liveness.cfg` (reduced constants, `HEAP=12g` from `floors.txt`) | **GREEN** | 85 388 061 | 7 903 336 | 43 | **1591 s** |
 | `Liveness.cfg` at the old 4 GB default | **out of memory** in the temporal check, state search complete | 85 388 061 | 7 903 336 | 43 | 1500 s |
 | 3 × `LiveMut_*.cfg` | RED, each on its own property | 579 360 – 733 606 | 79 706 – 100 162 | — | ≤ 4 s |
@@ -1090,9 +1090,18 @@ Round two's "no, in two independent ways" was exact.
 Every named baseline above, plus `Fairness.cfg` and `Liveness.cfg`, is an exhaustive
 search and its count is reproducible; every RED row stops at the first
 counterexample, so its count is **worker-scheduling dependent** and moves between
-runs of the identical command. TLC's reported *depth* is not quite deterministic
-under 2 workers either. The verdict and the invariant are the result; the count
-says how deep TLC had to go, roughly.
+runs of the identical command. The verdict and the invariant are the result; the
+count says how deep TLC had to go, roughly.
+
+TLC's reported *depth* is worker-dependent on a GREEN exhaustive row too — it is
+the deepest BFS level the workers opened, which overshoots the graph's diameter
+by one whenever a worker starts the next level before the last one drains. Only
+`WORKERS=1` reports the diameter, so **the Depth column above is the one-worker
+reading**. Measured on `Store.cfg`: 6 at one worker over six runs, 6 or 7 at the
+default two over thirteen, 7 at four and at eight; `Admin.cfg`, `Display.cfg` and
+`Transport.cfg` move the same way. Nothing compares this column to anything —
+`run-tlc.sh` holds only `distinct` against `floors.txt` — so re-measure it by hand
+with `WORKERS=1 ./run-tlc.sh <cfg>` rather than trusting it to have been held.
 
 **Every row above is from one `./run-tlc.sh all` on the final tree**, which now
 exits non-zero if any row misses what `floors.txt` requires of it. The
@@ -1436,7 +1445,7 @@ seventh, recorded with the fault-disjunct work earlier in this file.)
 | `BugTruncatedScanDecidesAll` | `fs.rs:211-213` — `scan` deciding the whole FID space after a *truncated* walk, so a missed live key reads absent | `NoFalseAbsent` | 24 states |
 | `BugMetaAddDropsOnFault` | the 0x077C databug's meta half — a faulted `EF_META` read rebuilt from empty, dropping every other record | `NoRecordLostToMetaWrite` | 51 states |
 
-`Store.cfg` is **GREEN, exhaustive** over 364 distinct states at depth 7 in
+`Store.cfg` is **GREEN, exhaustive** over 364 distinct states at depth 6 in
 about a second; every `StoreSolo_*.cfg` — the run that checks *only* the mutant's
 own target — is RED, so no mutant here is caught by a sibling. The counts are an
 order of magnitude, not a pin, the same as everywhere else.
