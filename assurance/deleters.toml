@@ -23,10 +23,18 @@
 # Scope, matching the roadmap's §3.4 so the counts reproduce: callers outside
 # `crates/rsk-fs` (which defines the family), outside `fuzz/`, and outside the
 # cfg-gated `*_tests.rs` / `*_kani.rs` sources. That leaves 43 — 24 `delete`,
-# 9 `delete_key`, 5 `force_delete`, 5 `force_delete_halves`. The one in-crate
-# caller left out by the scope rule is `rsk-fs`'s own `request_rescrub`
+# 9 `delete_key`, 5 `force_delete`, 5 `force_delete_halves`.
+#
+# Run the same derivation over `crates/rsk-fs` and it finds FIVE more, which this
+# header used to call "the one" — a hand-written count in the header of the file
+# written to refute hand-written counts. Four of them are not decisions: `fs.rs`'s
+# `delete_key` and `force_delete` delegate to the family rather than call it, and
+# `powercut_model.rs` is behind the `test-util` feature, where one line is the
+# power-cut model's OWN `delete` method (the receiver test cannot tell it from
+# this one) and the other is that model's driver. The fifth is the only shipping
+# in-crate caller and it is a decision: `rsk-fs`'s own `request_rescrub`
 # (`lib.rs`), which re-arms the at-rest scrub marker and is best-effort for the
-# reason `init.rs`'s pair below are: the next boot runs it again.
+# reason `init.rs`'s pair below are — the next boot runs it again.
 #
 # class
 #   wipe-sweep     a batched reset/factory-wipe phase, with a delete budget and
@@ -313,7 +321,7 @@ answer = "discarded"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "best-effort"
-why = "scan_files runs neutralize_default_reset_code at every SELECT and it is idempotent, so a failed pass is retried on the next select rather than lost."
+why = "scan_files runs neutralize_default_reset_code and it is idempotent, so a failed pass is retried rather than lost. The window is a POWER CYCLE, not a select: OpenPgpApplet::select takes _fs unused, and scan_files is called from firmware/src/main.rs (boot) and terminate.rs (TERMINATE DF) alone. Re-provisioning on select is the PIV sibling's property, and even that runs once per power cycle behind files_ensured."
 
 [[site]]
 file = "crates/rsk-openpgp/src/init.rs"
@@ -324,7 +332,7 @@ answer = "discarded"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "best-effort"
-why = "the DEK half of the same idempotent repair, and it only ever fires for the PUBLISHED factory reset code."
+why = "the DEK half of the same idempotent repair, retried on the next boot rather than the next select, and it only ever fires for the PUBLISHED factory reset code."
 
 [[site]]
 file = "crates/rsk-openpgp/src/lib.rs"
