@@ -157,7 +157,7 @@ PgpDelete ==
 (***************************************************************************)
 (* OATH. `cmd_calculate` first requires the access-code session, then a    *)
 (* confirmed touch for PROP_TOUCH credentials                              *)
-(* (crates/rsk-oath/src/lib.rs:555-587).                                   *)
+(* (crates/rsk-oath/src/lib.rs:569-601).                                   *)
 (***************************************************************************)
 OathSetCode ==
     /\ oathCodeSet' = TRUE
