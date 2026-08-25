@@ -288,6 +288,66 @@ def test_a_continuation_line_call_is_read_against_the_let_that_owns_it():
     Reading only the call's own line calls every one of those a reader, which is
     the direction that hides a discard."""
     lines = ["    let _ = ctx", "        .fs", "        .delete(X);"]
-    assert deleter_gate.DISCARD.match(deleter_gate.statement_head(lines, 2))
+    assert deleter_gate.disposal(lines, 2) == "discarded"
     lines = ["    gate(ctx)?;", "    ctx.fs", "        .delete(X)", "        .map_err(f)?;"]
-    assert not deleter_gate.DISCARD.match(deleter_gate.statement_head(lines, 2))
+    assert deleter_gate.disposal(lines, 2) == "read"
+
+
+def test_a_call_inside_a_condition_is_not_read_against_the_block_body():
+    """The forward walk that finds a trailing `.ok();` must stop at a line that
+    OPENS a block: `if ….is_err() {` reads the answer, and the first `;` after it
+    belongs to the body. Two of the ten `force_delete` callers are that shape."""
+    lines = [
+        "    if fs.has_key(slot) && fs.force_delete(slot.get()).is_err() {",
+        "        log(x).ok();",
+        "    }",
+    ]
+    assert deleter_gate.disposal(lines, 0) == "read"
+
+
+# --- the four spellings of "discard" -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        # Rust 2021 destructuring assignment: `let`-less, and `cargo fmt --check`
+        # and `clippy -D warnings` are both happy with it.
+        "    _ = fs.delete_key(KEY);",
+        "    fs.delete_key(KEY).ok();",
+        "    drop(fs.delete_key(KEY));",
+    ],
+)
+def test_every_spelling_of_a_discard_derives_as_one(tree, capsys, spelling):
+    """A must-read site converted into any of these used to derive as `read`, so
+    the ledger could be updated honestly and the row stayed green — verbatim the
+    property the docstring claims. The `let _ =` spelling has its own case above;
+    these are the three that were invisible."""
+    tree.edit(
+        "crates/rsk-app/src/lib.rs",
+        "    fs.delete_key(KEY)\n        .map_err(|_| Sw::MEMORY_FAILURE)?;",
+        spelling,
+    )
+    tree.edit(
+        "assurance/deleters.toml",
+        'call = "fs.delete_key(KEY)"',
+        'call = "%s"' % spelling.strip(),
+    )
+    said = red(tree, capsys)
+    assert "discards the deleter's answer" in said
+    assert "do not re-label it" in said
+
+
+def test_a_ufcs_caller_is_on_the_roster(tree, capsys):
+    """The receiver test (`.delete(`) cannot see the same call spelled
+    `Fs::force_delete(fs, x)` or `<Fs<S>>::delete(fs, x)`. Two callers were added
+    that way, one of them deleting the FIDO seed, and the count did not move."""
+    tree.edit(
+        "crates/rsk-app/src/lib.rs",
+        "    Ok(())",
+        "    let _ = Fs::force_delete(fs, SEED);\n"
+        "    let _ = <Fs<S>>::delete(fs, INDEX);\n    Ok(())",
+    )
+    said = red(tree, capsys)
+    assert "Fs::force_delete(fs, SEED)" in said
+    assert "<Fs<S>>::delete(fs, INDEX)" in said

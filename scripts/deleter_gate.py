@@ -26,8 +26,11 @@ What is checked, and the direction of each:
 * every derived call site has exactly one entry, and every entry names a site
   that is still there. A new caller arrives unaudited and the row goes red;
 * the `answer` recorded — whether the site reads the deleter's `Result` or
-  discards it into `let _ =` — is DERIVED from the statement, so turning a
-  reading caller into a discarding one cannot pass as an unrelated edit;
+  discards it — is DERIVED from the statement, so turning a reading caller into
+  a discarding one cannot pass as an unrelated edit. Both ENDS of the statement
+  are read, because the four spellings of "discard" sit at both: `let _ =`, the
+  same binding without the `let`, `drop(…)` around the call, and a trailing
+  `.ok();`;
 * `disposition` and `answer` must agree: `must-read` needs `read`,
   `best-effort` needs `discarded`. That is the pair that makes the judgement
   falsifiable by the code rather than by a reviewer's memory;
@@ -60,10 +63,14 @@ LEDGER = pathlib.Path("assurance/deleters.toml")
 #: back apart, which is the shape a reset sweep needs (see their rustdoc).
 VERBS = ("delete", "delete_key", "force_delete", "force_delete_halves")
 #: The leading `.` is the whole receiver test: it is what separates `fs.delete(`
-#: from `Foo::delete(` and from any `_delete(` suffix of a longer name. Longest
-#: alternative last is deliberate — `delete` is tried first and the `\s*\(` after
-#: it is what sends `.delete_key(` back for the longer one.
-CALL = re.compile(rf"\.({'|'.join(VERBS)})\s*\(")
+#: from `Foo::delete(` and from any `_delete(` suffix of a longer name. The
+#: second alternative is the SAME call spelled UFCS — `Fs::force_delete(fs, x)`,
+#: `<Fs<S>>::delete(fs, x)` — which the receiver test alone cannot see: two new
+#: callers were added that way, one of them deleting the FIDO seed, and the
+#: roster count did not move. Longest verb alternative last is deliberate —
+#: `delete` is tried first and the `\s*\(` after it is what sends `.delete_key(`
+#: back for the longer one.
+CALL = re.compile(rf"(?:\.|(?:\bFs\b|>)::)({'|'.join(VERBS)})\s*\(")
 
 #: Where a delete caller cannot be. `crates/rsk-fs` defines the family, so its
 #: own uses are the implementation rather than callers of it; `fuzz/` drives the
@@ -89,9 +96,22 @@ CFG_GATED = re.compile(r"(?:^|_)(tests|kani)\.rs$")
 #: disposition below rests on the answer being one crate.
 MINT = re.compile(r"\.meta_add(?:_reserve)?\s*\(")
 
-#: A statement that throws the answer away. `let _ = …`, in the spellings rustfmt
-#: leaves behind.
-DISCARD = re.compile(r"^\s*let\s+_\s*(?::[^=]*)?=")
+#: A statement that throws the answer away, at its HEAD. Three spellings, and
+#: two of them used to derive as `read`: `let _ = …`, the same binding without
+#: the `let` (Rust 2021 destructuring assignment), and `drop(…)` around the call.
+#: All three pass `cargo fmt --check` and `clippy -D warnings`, so a must-read
+#: site could be converted into any of them with this row still green.
+DISCARD = re.compile(r"^\s*(?:let\s+)?_\s*(?::[^=]*)?=|^\s*drop\s*\(")
+
+#: The fourth spelling, and the only one that shows at the statement's END:
+#: `….ok();` throws the `Result` away exactly as `let _ =` does, and
+#: `statement_head` cannot see it.
+DISCARD_TAIL = re.compile(r"\.ok\s*\(\s*\)\s*;$")
+
+#: How far forward a statement may run before the walk gives up and calls the
+#: site a reader. A delete call statement is a line or a short `.method()` chain;
+#: past that the forward walk is guessing.
+STATEMENT_LINES = 12
 
 #: A statement boundary: the line before a statement's first line ends in one of
 #: these, or is blank, or is a comment. Walking back to it is what lets a call on
@@ -140,6 +160,35 @@ def statement_head(lines, index):
     return lines[at]
 
 
+def statement_tail(lines, index):
+    """The last line of the statement `lines[index]` belongs to, or `None`.
+
+    `….ok();` discards at the END, where [`statement_head`] cannot see it. A line
+    that opens a block is not a simple statement — `if ….is_err() {` READS the
+    answer — so the walk stops there rather than running into the body and
+    reading someone else's `;`.
+    """
+    for at in range(index, min(index + STATEMENT_LINES, len(lines))):
+        text = lines[at].strip()
+        if text.endswith("{"):
+            return None
+        if text.endswith(";"):
+            return text
+    return None
+
+
+def disposal(lines, index):
+    """`"discarded"` or `"read"`: what the statement at `lines[index]` does with
+    the deleter's `Result`. Both ends of the statement, because the spellings sit
+    at both ends."""
+    if DISCARD.match(statement_head(lines, index)):
+        return "discarded"
+    tail = statement_tail(lines, index)
+    if tail is not None and DISCARD_TAIL.search(tail):
+        return "discarded"
+    return "read"
+
+
 def sites(root):
     """[(file, line, call text, verb, answer)] for the whole checkout."""
     found = []
@@ -147,12 +196,9 @@ def sites(root):
         lines = path.read_text().splitlines()
         for number, line in enumerate(lines, 1):
             for hit in CALL.finditer(line):
-                answer = (
-                    "discarded"
-                    if DISCARD.match(statement_head(lines, number - 1))
-                    else "read"
+                found.append(
+                    (rel, number, line.strip(), hit.group(1), disposal(lines, number - 1))
                 )
-                found.append((rel, number, line.strip(), hit.group(1), answer))
     return found
 
 

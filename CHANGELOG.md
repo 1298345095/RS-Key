@@ -168,6 +168,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The delete-caller row could be satisfied by a discard it could not see.**
+  `scripts/deleter_gate.py` derived "reads the answer" from a `let _ =` at the
+  statement's head, so three other spellings of the same discard read as `read`:
+  `_ = …` (the `let`-less destructuring assignment), a trailing `.ok();`, and
+  `drop(…)` around the call. Any of them turns a `must-read` site into a
+  best-effort one with `cargo fmt --check` and `clippy -D warnings` clean and the
+  row green — verbatim the property the guard's docstring claims. And the
+  receiver test (`.delete(`) could not see the same call spelled UFCS, so
+  `Fs::force_delete(fs, x)` and `<Fs<S>>::delete(fs, x)` were invisible: two new
+  unaudited callers, one of them deleting the FIDO seed, left the roster at 43.
+  Both ends of a statement are read now, the UFCS spelling is on the roster, and
+  the mutation table carries all four arms — each driven through the row itself,
+  green before and red after.
+
 - **The fix for that faulted drop introduced a worse defect than the one it
   closed, and `authenticatorReset` is where it was measured.** `Fs::force_delete`
   names three outcomes and returned a type that carries two, so every caller had
