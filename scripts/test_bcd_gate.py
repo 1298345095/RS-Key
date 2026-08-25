@@ -23,6 +23,7 @@ import subprocess
 import pytest
 
 import bcd_gate
+import gate_lines
 
 MAIN = """#![no_std]
 
@@ -530,7 +531,7 @@ def test_a_green_run_says_nothing_but_its_summary(tree, monkeypatch, capsys):
 
 def test_check_sh_still_runs_the_guard():
     check = (bcd_gate.ROOT / "scripts/check.sh").read_text()
-    assert "scripts/bcd_gate.py" in check
+    assert gate_lines.runs(check, "scripts/bcd_gate.py")
 
 
 def test_the_tests_are_named_after_the_guard():

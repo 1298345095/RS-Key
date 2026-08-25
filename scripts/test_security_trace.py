@@ -9,6 +9,7 @@ import sys
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import gate_lines
 import security_trace
 
 TRACE = pathlib.Path(__file__).parents[1] / "formal" / "traces" / "security-phase4.jsonl"
@@ -418,7 +419,7 @@ def test_a_configuration_floors_txt_names_no_verdict_for_is_fatal(monkeypatch, t
 def test_check_sh_runs_this_row():
     """`NAMED` says this table exists; only this says the guard is wired in."""
     check = (pathlib.Path(__file__).parents[1] / "scripts/check.sh").read_text()
-    assert "scripts/security_trace.py --check-data" in check
+    assert gate_lines.runs(check, "scripts/security_trace.py --check-data")
 
 
 # --- the alwaysUv arm, and the branches the session that recorded it needed ---

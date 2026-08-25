@@ -91,6 +91,18 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   none, and four cases that run the script over a throwaway git checkout —
   because every case called `audit()`, and `run()` returning 0 with all fourteen
   findings printed survived all 182 of them.
+- **A gate row can no longer be commented out, and a mutation table can no longer
+  be emptied, with the suite green.** Both are properties of the whole set of
+  guards rather than of any one of them, and both were measured across it: all
+  **eleven** `scripts/*_gate.py` rows commented out of `check.sh` at once left
+  `pytest scripts -q` identical to its baseline, because every assertion that a
+  row is wired in compared the file's RAW text — the roster's own comment-cut was
+  applied to one half of it and eight guards each kept a copy of the same raw
+  check. And all **nineteen** mutation tables could be truncated to their SPDX
+  line, because the roster asked only whether the file exists. Deleting the line,
+  or the file, was caught in both cases, which is what made the pair look
+  covered. One comment-aware reader in `scripts/gate_lines.py` now, a floor on
+  the cases each table carries, and the mutation driven at all 11 + 8 + 19 sites.
 
 ## [0.4.11] - 2026-08-24
 

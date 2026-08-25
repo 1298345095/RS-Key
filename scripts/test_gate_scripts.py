@@ -11,10 +11,22 @@ review, in the same pass that found four holes in the guards themselves.
 Deliberately not inside one of the guards: it is a fact about the set of them,
 and putting it in whichever one happened to be written last is how it comes to be
 deleted with that one.
+
+Both of its rules then shipped with a hole of that same family, found by the next
+review and measured on the whole set rather than on the guard that prompted it. A
+row can be COMMENTED OUT: the roster compared `check.sh`'s raw text while the
+comment-cut written here for exactly that was applied only to `NAMED`, and all
+eleven `*_gate.py` rows commented out at once left `pytest scripts -q` identical
+to its baseline. And a table can be EMPTIED: the roster asked `is_file()` and
+nothing else, so truncating one to its SPDX line took 241 cases out of the suite
+with zero new failures. Deleting either — the line, the file — was caught, which
+is what made the pair look covered.
 """
 
 import pathlib
 import re
+
+import gate_lines
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HERE = pathlib.Path(__file__).resolve().parent
@@ -51,6 +63,20 @@ NAMED = {
 #: The pytest invocation that has to reach the tests, wherever it is spelled.
 COLLECTS = re.compile(r"pytest\s+([^\n|;&]*)")
 
+#: A case of a mutation table. Counted as written rather than as pytest collects
+#: it: a parametrized table counts higher either way, and re-entering pytest to
+#: find that out costs more than the rule is worth.
+CASE = re.compile(r"^def test_", re.M)
+
+#: What a mutation table must carry. The smallest in the tree has 8 cases, so
+#: this catches the COLLAPSE and not a slide — and the collapse is what was
+#: measured: `test_verdict_gate.py` truncated to its SPDX line took 241 cases out
+#: of `pytest scripts -q` with ZERO new failures, because the rule below asked
+#: only whether the file exists. What it still does not cover: this file, which
+#: is a table nothing else is a roster for, and the aggregate — `pytest` exits 5
+#: on a collection of nothing, and no row floors it above that.
+TABLE_FLOOR = 5
+
 
 def check_sh():
     return (ROOT / "scripts/check.sh").read_text()
@@ -62,14 +88,38 @@ def test_there_are_gates_to_check():
 
 
 def test_every_gate_is_run_by_check_sh():
-    missing = [g for g in GATES if f"scripts/{g}" not in check_sh()]
+    """The row's CODE, because a `#` in front of it is not a row.
+
+    This compared the file's raw text and `code()` — written in this file for
+    exactly that, citing the `kani_gate.py` precedent — was applied only to
+    `NAMED`. Measured: all eleven `*_gate.py` rows commented out at once left
+    `pytest scripts -q` identical to its baseline, while deleting one line
+    outright was caught.
+    """
+    missing = [g for g in GATES if not gate_lines.runs(check_sh(), f"scripts/{g}")]
     assert not missing, f"check.sh runs none of {missing}"
 
 
+def tables():
+    """(guard, its mutation table) for both halves of the roster."""
+    return [(g, f"test_{g}") for g in GATES] + [(g, t) for g, (t, _) in NAMED.items()]
+
+
 def test_every_gate_has_a_mutation_table():
-    missing = [g for g in GATES if not (HERE / f"test_{g}").is_file()]
-    missing += [g for g, (table, _) in NAMED.items() if not (HERE / table).is_file()]
+    missing = [g for g, table in tables() if not (HERE / table).is_file()]
     assert not missing, f"no scripts/test_<name>.py for {missing}"
+
+
+def test_every_mutation_table_has_cases_in_it():
+    """A file, not an empty one: the rule above asked `is_file()` and nothing
+    else, so truncating `test_verdict_gate.py` to its SPDX line took 241 cases
+    out of the suite with zero new failures. Deleting it outright was caught —
+    which is the pair that says the hole is the emptying, not the removal."""
+    empty = {table: len(CASE.findall((HERE / table).read_text()))
+             for _, table in tables()
+             if (HERE / table).is_file()
+             and len(CASE.findall((HERE / table).read_text())) < TABLE_FLOOR}
+    assert not empty, f"mutation tables under the floor of {TABLE_FLOOR}: {empty}"
 
 
 def test_the_named_guards_still_exist():
@@ -78,27 +128,15 @@ def test_the_named_guards_still_exist():
     assert not missing, f"{missing} are named here but not in scripts/"
 
 
-def code(text):
-    """`text`'s lines with their comment tails cut off.
-
-    A guard named only in a comment is run by nothing, and counting one is a hole
-    this repo has already shipped: `kani_gate.py` read a commented-out invocation
-    as live, and the prefix-only repair still passed `true # cargo …`. Cutting at
-    the first `#` refuses both. Deliberately the conservative direction — a real
-    invocation carrying a trailing `#` would be missed and go red, which is loud,
-    where a comment counted as an invocation is silent.
-    """
-    return [
-        stripped
-        for line in text.splitlines()
-        if (stripped := line.split("#", 1)[0]).strip()
-    ]
-
-
 def wired_in(guard, runner_text):
-    """Whether the runner's code — not its prose — names `guard`."""
-    name = pathlib.PurePath(guard).name
-    return any(name in line for line in code(runner_text))
+    """Whether the runner's code — not its prose — names `guard`.
+
+    `gate_lines.runs` rather than a comment-cut written here: this file had one,
+    and having it in the file that needed it did not stop the rule above from
+    comparing raw text instead. The eight guards that assert their own row in
+    their own table read it from there too now.
+    """
+    return gate_lines.runs(runner_text, pathlib.PurePath(guard).name)
 
 
 def test_every_named_guard_is_run_by_its_stated_runner():

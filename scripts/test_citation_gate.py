@@ -389,7 +389,7 @@ def test_a_per_page_floor_is_honoured_and_is_lower_than_the_default():
 
 def test_check_sh_still_runs_the_guard():
     check = (citation_gate.ROOT / "scripts/check.sh").read_text()
-    assert "scripts/citation_gate.py" in check
+    assert gate_lines.runs(check, "scripts/citation_gate.py")
 
 
 def test_the_tests_are_named_after_the_guard():

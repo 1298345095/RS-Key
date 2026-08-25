@@ -17,6 +17,7 @@ import shutil
 import pytest
 
 import config_gen_gate
+import gate_lines
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -217,7 +218,8 @@ def test_the_floor_is_a_live_rule_not_a_dead_constant(tree, monkeypatch):
 def test_check_sh_runs_the_row():
     """`scripts/test_gate_scripts.py` asserts this for every `*_gate.py`; asserted
     here too, because that file finds guards by glob and a rename escapes it."""
-    assert "scripts/config_gen_gate.py" in (ROOT / "scripts/check.sh").read_text()
+    check = (ROOT / "scripts/check.sh").read_text()
+    assert gate_lines.runs(check, "scripts/config_gen_gate.py")
 
 
 def test_the_generator_still_takes_an_output_directory():

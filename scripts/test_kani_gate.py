@@ -21,6 +21,7 @@ import subprocess
 
 import pytest
 
+import gate_lines
 import kani_gate
 
 RUNNER = """#!/usr/bin/env bash
@@ -495,7 +496,7 @@ def test_a_cover_in_a_crate_no_harness_reaches(tree):
 
 def test_check_sh_still_runs_the_guard():
     check = (kani_gate.ROOT / "scripts/check.sh").read_text()
-    assert "scripts/kani_gate.py" in check
+    assert gate_lines.runs(check, "scripts/kani_gate.py")
 
 
 def test_the_tests_are_named_after_the_guard():

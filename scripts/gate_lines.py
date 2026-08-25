@@ -74,6 +74,21 @@ def split_at_comment(body):
     return (body[: found.start()], body[found.start() :]) if found else (body, "")
 
 
+def runs(text, needle):
+    """Whether `text`'s CODE — not its prose — carries `needle`.
+
+    A guard named only in a comment is run by nothing, and counting one is a hole
+    this repo has now shipped twice. `kani_gate.py` read a commented-out
+    invocation as live; and a `#` typed in front of a `check.sh` row left every
+    assertion that the row is wired in green, because each compared the file's
+    RAW text — measured, all eleven `*_gate.py` rows commented out at once and
+    `pytest scripts -q` identical to its baseline. Deliberately the conservative
+    direction: a real invocation carrying a trailing `#` is missed and goes red,
+    which is loud, where a comment counted as an invocation is silent.
+    """
+    return any(needle in split_at_comment(body)[0] for _indent, body in logical_lines(text))
+
+
 def logical_lines(text):
     """(indent, stripped text) per line, with `\\` continuations joined into one.
 
