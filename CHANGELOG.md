@@ -129,6 +129,27 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `a_reset_answers_for_the_heads_it_could_not_drop` (`rsk-piv`, over a medium that
   refuses EF_META's own `remove`). **bcdDevice → 0x0987.**
 
+- **Three removal commands answered `9000` over what they had not removed.** The
+  caller half of the same audit: of the 23 `let _ = fs.delete…` sites outside
+  `rsk-fs`, most are best-effort by design and stay that way — an index the store
+  rebuilds, a sealed nickname the rpIdHash AAD already invalidates, a large blob
+  its slot's next owner cannot open, an OTP slot whose *reply* is the status
+  record recomputed from flash, a staging record every later `load_dek` retires
+  anyway, journal entries the reset has already re-sealed under a seed it
+  replaced. Four are not, because the command's whole effect **is** the removal
+  and nothing else on the card repairs it: OATH `DELETE` (`0x02`) over a
+  credential, OATH `SET CODE` (`0x03`) dropping the OTP-PIN that would otherwise
+  survive as a second unlock path past the code being installed, `SET CODE`'s
+  `73 00` removing the access code itself, and OpenPGP `PUT DATA 0xD3` with an
+  empty body clearing the reset code — the RC verifier *and* the DEK sealed under
+  it, so a refused removal left a `RESET RETRY P1=0` path live behind a card that
+  had just reported it revoked (`init`'s repair pass reaches the FACTORY reset
+  code alone). All four read the answer now and map it to `6581`, matching the
+  sibling commands of the same shape: PIV's `DELETE DATA` and CTAP's
+  `deleteCredential` both already did. Four tests over a medium that refuses to
+  remove one nominated fid, each driven red against the unfixed code with the
+  whole suite watched. **bcdDevice → 0x0988.**
+
 ## [0.4.11] - 2026-08-24
 
 The catch-up release, and the one where the instruments were audited harder than

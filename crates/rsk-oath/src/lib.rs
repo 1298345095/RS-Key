@@ -315,10 +315,13 @@ impl<'a> OathApplet<'a> {
         let mkek = read_fused(self.mkek_source);
         let dev = self.device(&mkek);
         match find_cred(&dev, fs, name, &mut scratch) {
-            Some((fid, _)) => {
-                let _ = fs.delete(fid);
-                Sw::OK
-            }
+            // Read the answer: this command's whole effect is the removal, and a
+            // `9000` over a TOTP secret still in flash is what the host prints as
+            // "deleted". PIV's DELETE DATA and CTAP's deleteCredential both do.
+            Some((fid, _)) => match fs.delete(fid) {
+                Ok(()) => Sw::OK,
+                Err(_) => Sw::MEMORY_FAILURE,
+            },
             None => Sw::DATA_INVALID,
         }
     }
@@ -335,9 +338,15 @@ impl<'a> OathApplet<'a> {
             if !key.is_empty() {
                 return Sw::WRONG_DATA;
             }
-            let _ = fs.delete_key(EF_OATH_CODE);
+            // Answered, like the sibling removals: `select` derives `validated`
+            // from `!code_set`, so a `9000` over a code that stayed hands the owner
+            // a card that locks itself again on the next power cycle.
+            let dropped = fs.delete_key(EF_OATH_CODE);
             self.validated = true;
-            return Sw::OK;
+            return match dropped {
+                Ok(()) => Sw::OK,
+                Err(_) => Sw::MEMORY_FAILURE,
+            };
         }
         // KEY, CHALLENGE, RESPONSE and nothing else, in the card's order —
         // which is ykman's and the YKOATH document's.
@@ -377,9 +386,14 @@ impl<'a> OathApplet<'a> {
         // `validated` flag as VALIDATE, so a PIN minted while the applet was open
         // would survive as a second, invisible unlock path for the store the owner
         // is protecting right now. Re-mint it from a session that knows this code.
-        let _ = fs.delete(EF_OTP_PIN);
+        // Answered rather than discarded: a surviving PIN is that second path, and
+        // the lock-down below happens either way.
+        let dropped = fs.delete(EF_OTP_PIN);
         self.validated = false;
-        Sw::OK
+        match dropped {
+            Ok(()) => Sw::OK,
+            Err(_) => Sw::MEMORY_FAILURE,
+        }
     }
 
     fn cmd_reset<S: Storage>(&mut self, _apdu: &Apdu, fs: &mut Fs<S>) -> Sw {

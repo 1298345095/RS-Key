@@ -38,6 +38,10 @@ mod p1p2_tests;
 #[path = "grammar_tests.rs"]
 mod grammar_tests;
 
+/// What the two removal commands answer when the medium refuses the removal.
+#[path = "removal_tests.rs"]
+mod removal_tests;
+
 /// RFC 6238 reference secrets.
 const SECRET_SHA1: &[u8] = b"12345678901234567890";
 const SECRET_SHA256: &[u8] = b"12345678901234567890123456789012";

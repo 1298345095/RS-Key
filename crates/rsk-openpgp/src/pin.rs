@@ -864,11 +864,19 @@ pub fn put_reset_code<S: Storage>(
         return Sw::SECURITY_STATUS_NOT_SATISFIED;
     }
     if data.is_empty() {
-        let _ = fs.delete(EF_RC);
-        let _ = fs.delete_key(EF_DEK_RC);
-        let _ = set_pin_retry_counter(fs, EF_RC, 0);
+        // All three answered, not discarded: the verifier and the DEK sealed under
+        // it are what RESET RETRY P1=0 walks in through, so a `9000` over a survivor
+        // revokes a credential only on paper. `init`'s repair pass reaches the
+        // FACTORY reset code alone, so nothing else on the card clears a set one.
+        let verifier = fs.delete(EF_RC).is_ok();
+        let dek = fs.delete_key(EF_DEK_RC).is_ok();
+        let counter = set_pin_retry_counter(fs, EF_RC, 0).is_ok();
         sess.has_rc = false;
-        return Sw::OK;
+        return if verifier && dek && counter {
+            Sw::OK
+        } else {
+            Sw::MEMORY_FAILURE
+        };
     }
     sess.has_rc = false;
     let mut dek = [0u8; DEK_SIZE];

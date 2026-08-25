@@ -1537,3 +1537,62 @@ fn even_the_right_password_is_charged_before_it_is_compared() {
         "an uncharged attempt may not raise an access status"
     );
 }
+
+/// Clearing the reset code (`PUT DATA 0xD3` with an empty body) drops the RC
+/// verifier and the DEK copy sealed under it. Both were `let _ =` and the card
+/// answered `9000` regardless — so a flash that refused the removals left a
+/// RESET RETRY path live behind a card that had just reported it revoked. The
+/// delete-caller audit's fail-OPEN direction: the survivor is a credential, not
+/// a lock, and nothing else on the card repairs it (`init`'s
+/// `neutralize_default_reset_code` only reaches the FACTORY one).
+#[test]
+fn clearing_the_reset_code_answers_for_a_reset_code_that_survives() {
+    let d = dev();
+    let (storage, tap) = DyingStorage::new();
+    let mut fs = Fs::new(storage);
+    fs.scan();
+    scan_files(&d, &mut fs, &mut CountRng(0)).unwrap();
+    let mut sess = Session::new();
+    assert_eq!(
+        verify(
+            &d,
+            &mut fs,
+            &mut sess,
+            &mut CountRng(0),
+            0x00,
+            PW3_MODE83,
+            PW3_DEFAULT
+        ),
+        Sw::OK
+    );
+    assert_eq!(
+        put_reset_code(&d, &mut fs, &mut sess, &mut CountRng(7), b"resetme0"),
+        Sw::OK
+    );
+
+    tap.set(0); // the medium takes nothing more
+    let cleared = put_reset_code(&d, &mut fs, &mut sess, &mut CountRng(7), b"");
+    tap.set(usize::MAX);
+
+    // The proof that the answer would have been a lie: the code it says is gone
+    // still resets PW1.
+    sess.reset();
+    let mut data = [0u8; 14];
+    data[..8].copy_from_slice(b"resetme0");
+    data[8..].copy_from_slice(b"222222");
+    let still_resets = reset_retry(
+        &d,
+        &mut fs,
+        &mut sess,
+        &mut CountRng(7),
+        0x00,
+        PW1_MODE81,
+        &data,
+    ) == Sw::OK;
+
+    assert_eq!(
+        (cleared, still_resets),
+        (Sw::MEMORY_FAILURE, true),
+        "the reset code outlived the command that says it cleared it"
+    );
+}
