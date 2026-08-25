@@ -467,7 +467,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # The TLA+ model checker. It ran in no workflow at all until now: `floors.txt`,
-  # the vacuity check and the 44-mutant matrix were ratchets whose only puller was
+  # the vacuity check and the mutant matrix -- 156 of the 186 configurations
+  # `run-tlc.sh --tiers` lists under `safety` -- were ratchets whose only puller was
   # whoever remembered `./formal/run-tlc.sh`, on the one machine that had a jar at
   # a hardcoded store path. The tool is pinned in the dev shell now, which is what
   # makes this row possible.

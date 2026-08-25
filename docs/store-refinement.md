@@ -131,7 +131,8 @@ ever have covered the FIDs a harness enumerated.
 ## The persistent half, exhaustively on the host
 
 `store_steps_tests.rs` drives the REAL `Fs` over a REAL medium at three FIDs and
-reads one of three step recorders after every step. Three FIDs because
+reads, after every step, the recorders that step can violate — five of them over
+four properties. Three FIDs because
 `NoRecordLostToMetaWrite` is about the records a rewrite *drops*: with a subject
 and one neighbour, "the write kept everything else" cannot be told from "the
 write kept the one file we looked at".
@@ -141,7 +142,8 @@ write kept the one file we looked at".
 | every three-step sequence | the clauses over a fresh store | 12³ = 1728 orderings, 5184 steps |
 | the same, then a reboot with no `scan` | EF_META UNKNOWN rather than confirmed — the 0x077C door | 1728 × 12 more steps |
 | every two-step sequence over a failing medium | the FAULT path three of the recorders are about | 144 orderings |
-| each recorder against the state its invariant forbids | that a recorder can answer TRUE at all | 6 assertions |
+| each of the three helper predicates against the state its invariant forbids | that a recorder can answer TRUE at all, and one state over that it does not | 3 × 2 assertions |
+| the fifth recorder | pairs a predicate with what `Fs::delete` ANSWERED, which no `StoreView` carries — so the sweeps above are where it is read | — |
 | a live-read counter per recorder | that the sweeps are not a loop over nothing | 5 counters, each `> 0` in the sweeps that reach it |
 
 Two measurements decide whether this is worth anything.

@@ -11,21 +11,21 @@
 //! spelling the model's persistent clauses as Rust predicates and holding them
 //! against `powercut.rs` gives 0 disagreements over the whole domain, because
 //! each comes out as the same boolean function as its `*_landed` twin — a copy
-//! compared to itself. Two of the three are STEP recorders and the third is
-//! CROSS-FID; neither shape has a per-FID face.
+//! compared to itself. Two of the four are STEP recorders, the third is CROSS-FID
+//! and the fourth forbids an ANSWER rather than a state; none has a per-FID face.
 //!
-//! **And it cannot be a Kani harness in this build.** Every metadata path opens
-//! with `known_absent(EF_META)`, `EF_META` is `0xE010`, and the `cfg(kani)`
-//! present map is three bytes (`fs.rs:29`) — so the index is 7170 of 3. Measured
-//! on a harness that does nothing but `meta_add`: `1 of 164 failed … index out
-//! of bounds … fs.rs:118, decided_bit`, in 0.11 s. The shrink that made the
-//! cache half provable is what puts this half out of CBMC's reach here.
+//! **And it is not a Kani harness here.** What is out of CBMC's reach is the
+//! clauses over a MEDIUM: `docs/store-refinement.md` measured both blob
+//! obligations timing out at 420 s even with `EF_META` aliased under `cfg(kani)`
+//! and `META_MAX` shrunk. The two fault-site obligations verify in 0.107 s each,
+//! and taking them is its own change — a `cfg(kani)` redefinition of a public
+//! constant and a status change for two registry rows — not a footnote to this file.
 //!
 //! So: exhaustive enumeration on the host, over the REAL `Fs`, a REAL medium and
 //! three FIDs, with the recorders read after every step. Bounded in the same
 //! sense a Kani harness is — a length, not a corpus — and the registry keeps
-//! these three `MODELLED-ONLY`, because `assurance_gate` reads `BOUNDED` off a
-//! Kani harness name and there cannot be one.
+//! these four `MODELLED-ONLY`, because `assurance_gate` reads `BOUNDED` off a
+//! Kani harness name and this bridge is not one.
 
 use super::store_assurance::{
     StoreView, VIEW_FIDS, delete_orphaned_metadata, meta_add_lost_a_record,
@@ -243,9 +243,9 @@ fn every_three_step_sequence_survives_an_unscanned_reboot_between_them() {
 }
 
 /// A medium whose reads fail while the budget is armed, so the walk meets
-/// EF_META's FAULT path — the one `RamStorage` cannot produce and the one both
-/// remaining recorders are about. A fault is not an absence, and the whole of
-/// `NoFalseMetaAbsent` is that the cache must not confuse them.
+/// EF_META's FAULT path — the one `RamStorage` cannot produce and the one the
+/// three fault-path recorders are about. A fault is not an absence, and the whole
+/// of `NoFalseMetaAbsent` is that the cache must not confuse them.
 ///
 /// The budget is shared with the driver rather than counted down blindly,
 /// because the OBSERVATIONS must not be what fails: see `drive`.
@@ -303,10 +303,10 @@ impl Storage for FaultAfter {
     }
 }
 
-/// The same walk with the medium failing for the duration of every step, so both
-/// remaining recorders meet the state they are about: a `meta_add` that cannot
-/// read the blob it is rewriting, and a `meta_delete` that cannot read the blob
-/// it is dropping from.
+/// The same walk with the medium failing for the duration of every step, so the
+/// three fault-path recorders meet the state they are about: a `meta_add` that
+/// cannot read the blob it is rewriting, a `meta_delete` that cannot read the blob
+/// it is dropping from, and a `delete` whose drop the medium refuses.
 ///
 /// Two steps, not three: a bystander's record is planted before the walk starts,
 /// so two is already the shape both clauses need — one operation over the fault

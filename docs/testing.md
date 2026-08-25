@@ -444,9 +444,11 @@ exclusion and its reason live in that guard, next to the roster it belongs to.
 machine — PIN retries, the pinUvAuthToken and its permissions, which transport
 owns the touch, which channel owns a stateful walk, the reset window, the
 persistent gate records, and the position at which power is lost inside a
-multi-write flash sequence. TLC checks eight named invariants exhaustively at
-the firmware's own PIN-retry constants; the names are the ones the `rsk-fido`
-Kani harnesses use, so one property reads model → code → harness by grep.
+multi-write flash sequence. TLC checks eight security invariants exhaustively at
+the firmware's own PIN-retry constants — `Shipped.cfg`'s INVARIANTS block names
+nine, and `TypeOK` is the one no mutant targets. Four of the eight are also Kani
+harness names — three in `rsk-fido`, `NoCrossTransportTouchConsumption` in
+`rsk-device` — so those four read model → code → harness by grep.
 
 It exists because Kani proves a property over *one call* and RS-Key's dangerous
 defects have lived in *orderings*. It is a **design artefact, not a proof of the
@@ -461,7 +463,9 @@ nix develop            # exports TLA2TOOLS_JAR; the JVM comes with it
 cd formal && ./gen-configs.sh && ./run-tlc.sh safety   # the tier CI runs
 ```
 
-`safety` is the nine shipped models, their 71 mutation switches, floors and the vacuity check —
+`safety` is the nine shipped models, the 76 mutation switches that have a
+configuration family of their own (77 `Bug*` switches exist; `BugDeadTokenAuthorized`
+has none), floors and the vacuity check —
 `deep-checks.yml`'s weekly `formal` row, which also fires on any push touching
 `formal/`. `liveness` is the temporal half and is not in CI: it needs a 12g
 heap. `all` is both. Tier membership lives in `formal/run-tlc.sh`.
