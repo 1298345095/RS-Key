@@ -7,6 +7,7 @@ use crate::consts::{EF_CRED, EF_LARGEBLOB, EF_PIN, EF_RP, RESET_WINDOW_MS};
 use crate::seed::{bump_sign_counter, get_sign_counter, load_keydev};
 use rsk_crypto::Device;
 use rsk_fs::Fs;
+use rsk_fs::storage::faults::MetaStuck;
 use rsk_fs::storage::ram::RamStorage;
 
 struct SeqRng(u64);
@@ -359,7 +360,7 @@ fn reset_sweep_de_dupes_stored_versions() {
         state: &mut state,
         now_ms: 0,
     };
-    assert_eq!(sweep(&mut ctx, is_fido_fid), Ok(()));
+    assert_eq!(sweep(&mut ctx, is_fido_fid), Ok(false));
     assert_eq!(
         fs.into_storage().removes,
         1,
@@ -1072,4 +1073,84 @@ fn a_reset_sweeps_more_secrets_than_one_batch_holds() {
             EF_CRED + i
         );
     }
+}
+
+/// One reset over a provisioned applet, optionally with EF_META unreadable. The
+/// head in it is `rsk-piv`'s, because that crate mints the only ones and EF_META is
+/// a single blob shared by every applet — it is a bystander here, and that is the
+/// point: it survives a FIDO reset in both arms, and all it does is make FIDO's
+/// metadata drops read a live blob. Returns the answer and the fixture records still
+/// live ON THE MEDIUM (the present cache is marked absent either way, so a
+/// cache-level read would pass with the backend `remove` never called).
+fn reset_with_ef_meta_stuck(stuck: bool) -> (CtapResult, Vec<&'static str>) {
+    let (backend, medium) = MetaStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(11);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    fs.put(EF_KEY_DEV_ENC.get(), &[0x5A; 48]).unwrap();
+    fs.put(EF_CRED, &[0xC0; 100]).unwrap();
+    fs.put(EF_CRED + 1, &[0xC1; 100]).unwrap();
+    fs.put(EF_RP, &[0xAB; 40]).unwrap();
+    fs.put(EF_PIN, &[8, 4, 1, 0, 0]).unwrap();
+    const PIV_SLOT_9A: u16 = 0x9A00;
+    fs.meta_add(PIV_SLOT_9A, &[0xAA, 0x01, 0x02, 0x03]).unwrap();
+
+    medium.stick(stuck);
+    let mut state = FidoState::new();
+    let answered = {
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: 0,
+        };
+        reset(&mut ctx)
+    };
+    medium.stick(false);
+
+    // Not EF_KEY_DEV: `ensure_seed` mints a fresh one, so its presence says nothing.
+    let named: [(&'static str, u16); 5] = [
+        ("seed_enc", EF_KEY_DEV_ENC.get()),
+        ("cred0", EF_CRED),
+        ("cred1", EF_CRED + 1),
+        ("rp", EF_RP),
+        ("pin", EF_PIN),
+    ];
+    let survivors = named
+        .iter()
+        .filter(|&&(_, fid)| medium.live(fid))
+        .map(|&(name, _)| name)
+        .collect();
+    (answered, survivors)
+}
+
+/// A faulted EF_META must not end the wipe, and must not pass as a clean one.
+///
+/// `Fs::force_delete` folds the metadata drop into its answer, so the four sweeps
+/// `?`-ed a faulted drop straight out of their loops: `authenticatorReset` erased
+/// `EF_KEY_DEV` and stopped, leaving `EF_KEY_DEV_ENC` — the soft lock's wrapped copy
+/// of the seed — live together with every credential, defeating the reset's own
+/// ordering rule that what a cut leaves behind must at least be undecryptable. And
+/// retrying never made progress: the loop reaches the same fid first every time.
+///
+/// BOTH halves are the assertion. The status word alone passed the defect — the
+/// aborting tree answered `Err` too — and the survivor list alone passed the
+/// `let _ =` the whole audit started from.
+#[test]
+fn a_faulted_metadata_drop_never_stops_the_wipe_and_never_passes_as_clean() {
+    assert_eq!(
+        reset_with_ef_meta_stuck(false),
+        (Ok(0), vec![]),
+        "the control: nothing armed, so the wipe takes the range and says so"
+    );
+    assert_eq!(
+        reset_with_ef_meta_stuck(true),
+        (Err(CtapError::Other), vec![]),
+        "under a faulted EF_META the wipe still owes the WHOLE range — a survivor here \
+         is a secret the reset was asked to erase — and it still owes an error for the \
+         record it could not prove dropped"
+    );
 }

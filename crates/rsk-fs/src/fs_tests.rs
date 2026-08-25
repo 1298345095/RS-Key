@@ -1123,3 +1123,35 @@ fn an_unfaulted_force_delete_takes_the_value_and_the_record() {
         "the last record was dropped, so EF_META goes with it"
     );
 }
+
+/// What `force_delete` folds, and why the fold cannot be the only shape on offer:
+/// the value went, the record could not be dropped, and those pull a reset sweep in
+/// opposite directions. With one answer for both, the four applet sweeps `?`-ed a
+/// faulted read of the SHARED EF_META blob out of their loops after a single file —
+/// at the same fid on every retry, so no retry made progress (0x0987, measured on
+/// `authenticatorReset`).
+#[test]
+fn force_delete_halves_keeps_the_value_and_the_record_apart() {
+    let (mut fs, ram, armed) = armed_fs();
+    fs.put(SLOT, b"sealed key material").unwrap();
+    fs.meta_add(SLOT, &[0xAA, 0x01, 0x02, 0x03]).unwrap();
+
+    armed.set(true);
+    let gone = fs.force_delete_halves(SLOT);
+    armed.set(false);
+
+    assert_eq!(
+        (gone.value, gone.record),
+        (Ok(()), Err(Error::MemoryFatal)),
+        "the removal is unconditional, so only the record half may fail here"
+    );
+    let mut buf = [0u8; 32];
+    assert!(
+        ram.borrow_mut().read(SLOT, &mut buf).is_none(),
+        "the value must go even when the record could not be dropped"
+    );
+    assert!(
+        ram.borrow_mut().read(EF_META, &mut buf).is_some(),
+        "the record is what the error is about — it stands"
+    );
+}

@@ -202,3 +202,61 @@ fn removing_the_access_code_answers_for_a_code_that_survives() {
         "the lock outlived the command that says it removed it"
     );
 }
+
+/// RESET's sweep, the fourth deleter of the family and the one the applet's whole
+/// state goes through. Its metadata half is reached the same way the other three
+/// are: EF_META is ONE blob shared by every applet, so a fault reading it fails an
+/// OATH removal over a fid that carries no record of its own. Folding that into
+/// `Fs::force_delete`'s single answer let the sweep `?` it out of the loop after
+/// the first file, at the same fid on every retry — so RESET stopped making
+/// progress while the credentials and the unlock records stayed in flash.
+///
+/// Both halves are the assertion: the range is empty, AND the answer is `6581`.
+/// The status alone passed the defect, because the aborting sweep answered `6581`
+/// too.
+#[test]
+fn a_faulted_metadata_drop_never_stops_the_wipe_and_never_passes_as_clean() {
+    for stuck in [false, true] {
+        let (backend, medium) = rsk_fs::storage::faults::MetaStuck::new();
+        let mut fs = Fs::new(backend);
+        fs.scan();
+        let rng = RefCell::new(CountRng(7));
+        let touch = RefCell::new(AlwaysConfirm);
+        let mut app = applet(&rng, &touch);
+
+        let mut out = [0u8; 2048];
+        macro_rules! go {
+            ($raw:expr) => {{
+                let mut res = ResBuf::new(&mut out);
+                Applet::process(&mut app, &Apdu::parse(&$raw).unwrap(), &mut fs, &mut res)
+            }};
+        }
+        let cred = put_data(b"bank", 0x21, 6, SECRET_SHA1, false, None);
+        assert_eq!(go!(apdu(INS_PUT, 0, 0, &cred)), Sw::OK);
+        assert_eq!(
+            go!(apdu(INS_SET_PIN, 0, 0, &tlv(TAG_PASSWORD, b"1234"))),
+            Sw::OK
+        );
+        // A PIV head — that crate mints the only ones — so EF_META is live and the
+        // sweep's metadata drops read it rather than short-circuiting on absence.
+        fs.meta_add(0x9A00, &[0xAA, 0x01, 0x02, 0x03]).unwrap();
+
+        medium.stick(stuck);
+        let answered = go!(apdu(INS_RESET, 0xDE, 0xAD, &[]));
+        medium.stick(false);
+
+        let want = if stuck { Sw::MEMORY_FAILURE } else { Sw::OK };
+        assert_eq!(
+            (
+                answered,
+                medium.live(EF_OATH_CRED),
+                medium.live(EF_OTP_PIN),
+                stuck
+            ),
+            (want, false, false, stuck),
+            "a faulted EF_META must not end the wipe: the credential and the OTP-PIN \
+             are owed the whole sweep, and the answer is owed the record it could not \
+             prove dropped"
+        );
+    }
+}

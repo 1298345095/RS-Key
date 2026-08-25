@@ -8004,8 +8004,12 @@ fn a_slot_delete_answers_for_what_it_could_not_drop() {
 /// drop that cannot land is deterministically its, and `scan_files`' later reads
 /// and writes still work, which keeps the re-provisioning half out of the verdict.
 ///
-/// Returns the reset's answer and whether 0x9A's head outlived its key.
-fn reset_with_ef_meta_stuck(stuck: bool) -> (Result<(), Sw>, bool) {
+/// Returns the reset's answer, whether 0x9A's head outlived its key, and the
+/// certificate objects still live — the second half is what a sweep that STOPPED on
+/// the faulted drop fails: folding the two answers into one made this reset abort at
+/// 0x9A's own fid, so the rest of the range stayed on the card while the status word
+/// read the same on both sides.
+fn reset_with_ef_meta_stuck(stuck: bool) -> (Result<(), Sw>, bool, Vec<&'static str>) {
     let rng = RefCell::new(TestRng(7));
     let pres = RefCell::new(AlwaysConfirm);
     let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
@@ -8036,6 +8040,20 @@ fn reset_with_ef_meta_stuck(stuck: bool) -> (Result<(), Sw>, bool) {
     // other one EF_META carries, and it would empty the blob after 0x9A's rather
     // than before it. `scan_files` re-mints it unconditionally either way.
     fs.meta_delete(key_fid(SLOT_CARDMGM).get()).unwrap();
+    // Certificate objects: plain 0xD2xx values, so they carry no head of their own
+    // (0x9A keeps the only one) and `scan_files` does not put them back.
+    let certs: [(&'static str, u16); 4] = [
+        (
+            "cert_9a",
+            files::cert_fid_for_slot(SLOT_AUTHENTICATION).unwrap(),
+        ),
+        ("cert_9c", files::cert_fid_for_slot(SLOT_SIGNATURE).unwrap()),
+        ("cert_9d", files::cert_fid_for_slot(SLOT_KEYMGM).unwrap()),
+        ("pivman", files::EF_PIVMAN_DATA),
+    ];
+    for (_, fid) in certs {
+        fs.put(fid, &[0xCE; 40]).unwrap();
+    }
 
     if stuck {
         unremovable.set(rsk_fs::EF_META);
@@ -8053,19 +8071,26 @@ fn reset_with_ef_meta_stuck(stuck: bool) -> (Result<(), Sw>, bool) {
         .meta_find(key_fid(SLOT_AUTHENTICATION).get(), &mut head)
         .is_some()
         && !fs.has_key(key_fid(SLOT_AUTHENTICATION));
-    (answered, orphan)
+    let survivors = certs
+        .iter()
+        .filter(|&&(_, fid)| fs.has_data(fid))
+        .map(|&(name, _)| name)
+        .collect();
+    (answered, orphan, survivors)
 }
 
 #[test]
 fn a_reset_answers_for_the_heads_it_could_not_drop() {
     assert_eq!(
         reset_with_ef_meta_stuck(false),
-        (Ok(()), false),
-        "the clean control: the wipe takes 0x9A's key and its head"
+        (Ok(()), false, vec![]),
+        "the clean control: the wipe takes 0x9A's key, its head and the objects"
     );
     assert_eq!(
         reset_with_ef_meta_stuck(true),
-        (Err(Sw::MEMORY_FAILURE), true),
-        "the head stands over a key that is gone — legal, and the answer must say so"
+        (Err(Sw::MEMORY_FAILURE), true, vec![]),
+        "the head stands over a key that is gone — legal, and the answer must say so \
+         — but the sweep still owes the WHOLE range, and a surviving object is a \
+         record RESET reported erased"
     );
 }

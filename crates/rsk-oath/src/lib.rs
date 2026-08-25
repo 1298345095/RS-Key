@@ -1495,14 +1495,23 @@ fn wipe_oath<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // the credentials live behind no lock at all, since `select` derives
     // `validated` from `!code_set`. Credentials first, proven empty, then the
     // unlock records.
-    sweep(fs, is_oath_cred_fid)?;
-    sweep(fs, is_oath_lock_fid)
+    let creds = sweep(fs, is_oath_cred_fid)?;
+    let locks = sweep(fs, is_oath_lock_fid)?;
+    if creds || locks {
+        return Err(Sw::MEMORY_FAILURE);
+    }
+    Ok(())
 }
 
 /// One phase of [`wipe_oath`]: delete every live fid matching `pred`, reporting
 /// success only when the enumeration provably completed over an empty range.
-fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<(), Sw> {
+///
+/// `Ok(true)` is "the range is clear, and a metadata record over it could not be
+/// dropped" — carried to the end of the wipe rather than stopped on, for the reason
+/// `Fs::force_delete_halves` states.
+fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<bool, Sw> {
     let mut deleted = 0u32;
+    let mut orphaned = false;
     loop {
         let mut fids = [0u16; 32];
         let mut n = 0;
@@ -1516,7 +1525,7 @@ fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<(), Sw> {
             // A truncated walk (flash read fault) can hide a live fid, so an empty
             // batch only proves the range is clear when the enumeration completed.
             return if complete {
-                Ok(())
+                Ok(orphaned)
             } else {
                 Err(Sw::MEMORY_FAILURE)
             };
@@ -1526,7 +1535,9 @@ fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<(), Sw> {
             return Err(Sw::MEMORY_FAILURE);
         }
         for &fid in &fids[..n] {
-            fs.force_delete(fid).map_err(|_| Sw::MEMORY_FAILURE)?;
+            let gone = fs.force_delete_halves(fid);
+            gone.value.map_err(|_| Sw::MEMORY_FAILURE)?;
+            orphaned |= gone.record.is_err();
         }
     }
 }

@@ -188,3 +188,65 @@ fn terminate_rejects_p1p2_and_data() {
         Sw::WRONG_LENGTH
     );
 }
+
+/// TERMINATE DF's sweep is the third of the four the delete-caller audit covers,
+/// and the metadata half reaches it the same way: EF_META is ONE blob shared by
+/// every applet, so a fault reading it fails an OpenPGP removal over a fid that
+/// carries no record of its own. Folding that into `Fs::force_delete`'s single
+/// answer let the sweep `?` it out of the loop after the first file — and
+/// `terminate_df` skips the re-seed on a failed wipe, so the card was left holding
+/// the private-key records the command says it destroyed.
+///
+/// Returns the answer and the imported secrets still live ON THE MEDIUM. Those are
+/// the fids `scan_files` never puts back, so they read the same on both arms; the
+/// present cache would not, since a delete marks absent whether or not the backend
+/// `remove` ran.
+fn terminate_with_ef_meta_stuck(stuck: bool) -> (Sw, Vec<&'static str>) {
+    let (backend, medium) = rsk_fs::storage::faults::MetaStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    let named: [(&'static str, u16); 5] = [
+        ("pk_sig", EF_PK_SIG.get()),
+        ("pk_dec", EF_PK_DEC.get()),
+        ("pk_aut", EF_PK_AUT.get()),
+        ("login", EF_LOGIN_DATA),
+        ("fp", EF_FP),
+    ];
+    for (_, fid) in named {
+        fs.put(fid, &[0xAB; 40]).unwrap();
+    }
+    // A PIV head — that crate mints the only ones — so EF_META is live and the
+    // sweep's metadata drops read it rather than short-circuiting on absence.
+    fs.meta_add(0x9A00, &[0xAA, 0x01, 0x02, 0x03]).unwrap();
+
+    medium.stick(stuck);
+    let answered = terminate_df(&dev(), &mut fs, &mut CountRng(0), true, &apdu());
+    medium.stick(false);
+
+    let survivors = named
+        .iter()
+        .filter(|&&(_, fid)| medium.live(fid))
+        .map(|&(name, _)| name)
+        .collect();
+    (answered, survivors)
+}
+
+/// Both halves are the assertion: the range is empty, AND the answer is `6581`.
+/// The status alone passed the defect, because the aborting sweep answered `6581`
+/// too.
+#[test]
+fn a_faulted_metadata_drop_never_stops_the_wipe_and_never_passes_as_clean() {
+    assert_eq!(
+        terminate_with_ef_meta_stuck(false),
+        (Sw::OK, vec![]),
+        "the control: nothing armed, so the wipe takes the range and says so"
+    );
+    assert_eq!(
+        terminate_with_ef_meta_stuck(true),
+        (Sw::MEMORY_FAILURE, vec![]),
+        "under a faulted EF_META the wipe still owes the WHOLE range — a survivor \
+         here is a private key TERMINATE reported destroyed — and it still owes an \
+         error for the record it could not prove dropped"
+    );
+}

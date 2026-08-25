@@ -239,9 +239,26 @@ medium refused and the value may be live. Held by
 `a_faulted_metadata_drop_is_reported_by_force_delete_too` at the `Fs` layer and
 `a_reset_answers_for_the_heads_it_could_not_drop` at the APDU layer.
 
+**And the first shape of that repair was itself the wrong one, measured.** Naming
+three outcomes in the prose while returning a type that carries two left every
+caller to collapse them, and the four sweeps collapsed them with `?`: a faulted
+read of the shared EF_META blob then ended `authenticatorReset` after ONE file,
+at the same fid on every retry, so no retry made progress and `EF_KEY_DEV_ENC` —
+the soft lock's wrapped copy of the seed — survived with every credential. That
+is the `?`-before-the-value failure arriving through the callers instead of
+through the body. So the sweeps take
+[`Fs::force_delete_halves`](https://github.com/TheMaxMur/RS-Key/blob/main/crates/rsk-fs/src/fs.rs)
+now, which hands the two answers back apart: a refused backend removal still
+stops the sweep, because `for_each_key` re-yields the fid it could not remove,
+while a faulted metadata drop is carried to the end of the range and answered for
+there. Both halves are the test, in all four applets — the range is empty AND the
+command answers the fault — because a test that read only the status word passed
+the aborting tree too.
+
 **Every caller now carries a written decision**, in
 [`assurance/deleters.toml`](https://github.com/TheMaxMur/RS-Key/blob/main/assurance/deleters.toml):
-43 sites — 24 `delete`, 9 `delete_key`, 10 `force_delete` — each classed, each
+43 sites — 24 `delete`, 9 `delete_key`, 5 `force_delete`, 5
+`force_delete_halves` — each classed, each
 saying whether its fid can carry a head, and each saying whether discarding the
 answer is an allowed best-effort wipe there or a device reporting success over
 something still in flash. The roster under those decisions is **derived**, not

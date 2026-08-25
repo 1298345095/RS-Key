@@ -62,16 +62,24 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
     // And the seed leads the flash, in its own write ahead of the batch: ring order
     // otherwise reaches `EF_RP` before `EF_CRED`, and what a cut leaves behind must
     // at least be undecryptable. `EF_KEY_DEV_ENC` is the soft lock's copy of it.
+    let mut orphaned = false;
     for fid in FIDO_SEED_FIDS {
-        ctx.fs.force_delete(fid).map_err(|_| CtapError::Other)?;
+        let gone = ctx.fs.force_delete_halves(fid);
+        gone.value.map_err(|_| CtapError::Other)?;
+        orphaned |= gone.record.is_err();
     }
-    sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
-    sweep(ctx, is_fido_gate_fid)?;
+    orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
+    orphaned |= sweep(ctx, is_fido_gate_fid)?;
     ensure_seed(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?;
     // Privacy: fold the journal window into the epoch (per-event details are
     // scrubbed, aggregate history stays attested), then record the reset.
     journal::fold_and_scrub(ctx);
     journal::append(ctx, journal::EV_RESET, 0, &[]);
+    // The erase ran to the end of every range and a record still could not be
+    // dropped: the wipe is done, and the answer must not say it is clean.
+    if orphaned {
+        return Err(CtapError::Other);
+    }
     Ok(0)
 }
 
@@ -79,9 +87,17 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
 /// reporting success only when the enumeration provably completed over an empty
 /// range. Batched because `for_each_key` cannot delete mid-iteration, and de-duped
 /// because the flash walk can yield multiple stored versions of one fid.
+///
+/// `Ok(true)` is "the range is clear, and a metadata record over it could not be
+/// dropped" — the caller carries that to the end of the reset rather than stopping,
+/// for the reason `Fs::force_delete_halves` states.
 /// Refines `RSKeySecurityState!ResetNeverWeakensSurvivingState` — SEC-FIDO-006.
-fn sweep<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, pred: fn(u16) -> bool) -> Result<(), CtapError> {
+fn sweep<S: Storage, R: Rng>(
+    ctx: &mut Ctx<S, R>,
+    pred: fn(u16) -> bool,
+) -> Result<bool, CtapError> {
     let mut deleted = 0u32;
+    let mut orphaned = false;
     loop {
         let mut keys = [0u16; 64];
         let mut n = 0usize;
@@ -95,7 +111,7 @@ fn sweep<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, pred: fn(u16) -> bool) -> Resu
             // An un-yielded FID is only evidence of absence when the walk finished;
             // a truncated one must fail rather than report the range clear.
             return if complete {
-                Ok(())
+                Ok(orphaned)
             } else {
                 Err(CtapError::Other)
             };
@@ -108,7 +124,9 @@ fn sweep<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, pred: fn(u16) -> bool) -> Resu
             // force_delete (unconditional), not delete: a false-absent key would be
             // skipped yet re-yielded by for_each_key every pass — an infinite loop.
             // Propagate a backend error rather than retry it, so the wipe progresses.
-            ctx.fs.force_delete(fid).map_err(|_| CtapError::Other)?;
+            let gone = ctx.fs.force_delete_halves(fid);
+            gone.value.map_err(|_| CtapError::Other)?;
+            orphaned |= gone.record.is_err();
         }
     }
 }

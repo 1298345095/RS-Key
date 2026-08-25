@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 RS-Key contributors
 #
-# The delete-family caller dispositions. `Fs::delete`, `Fs::delete_key` and
-# `Fs::force_delete` each remove the value whatever their EF_META drop did, and
-# each RETURNS what that drop did: `Err` names a state — the value is gone and a
-# record may still stand over it — rather than a no-op. So every caller makes a
+# The delete-family caller dispositions. `Fs::delete`, `Fs::delete_key`,
+# `Fs::force_delete` and `Fs::force_delete_halves` each remove the value whatever
+# their EF_META drop did, and each RETURNS what that drop did: `Err` names a state
+# — the value is gone and a record may still stand over it — rather than a no-op.
+# The last spelling hands the two answers back apart, because a reset sweep must
+# stop on one and carry the other to the end of its range. So every caller makes a
 # decision, and this file is where the decision is written down.
 #
 # NOT a roster. `scripts/deleter_gate.py` derives which sites exist, which verb
@@ -21,10 +23,10 @@
 # Scope, matching the roadmap's §3.4 so the counts reproduce: callers outside
 # `crates/rsk-fs` (which defines the family), outside `fuzz/`, and outside the
 # cfg-gated `*_tests.rs` / `*_kani.rs` sources. That leaves 43 — 24 `delete`,
-# 9 `delete_key`, 10 `force_delete`. The one in-crate caller left out by the
-# scope rule is `rsk-fs`'s own `request_rescrub` (`lib.rs`), which re-arms the
-# at-rest scrub marker and is best-effort for the reason `init.rs`'s pair below
-# are: the next boot runs it again.
+# 9 `delete_key`, 5 `force_delete`, 5 `force_delete_halves`. The one in-crate
+# caller left out by the scope rule is `rsk-fs`'s own `request_rescrub`
+# (`lib.rs`), which re-arms the at-rest scrub marker and is best-effort for the
+# reason `init.rs`'s pair below are: the next boot runs it again.
 #
 # class
 #   wipe-sweep     a batched reset/factory-wipe phase, with a delete budget and
@@ -38,9 +40,9 @@
 #
 # metadata
 #   drops-head     the fid can carry an EF_META head and the drop must go with
-#                  the value. `force_delete`'s and `delete`'s postconditions
-#                  differ nowhere else, so this is the axis §5A п.6 asks each
-#                  site to name
+#                  the value. The three `delete` spellings' postconditions differ
+#                  nowhere else, so this is the axis §5A п.6 asks each site to
+#                  name
 #   none           the fid carries no head — heads are minted on PIV key fids
 #                  alone (`head_minters` below, derived), so the metadata half
 #                  of the answer is vacuous at this site
@@ -194,25 +196,25 @@ why = "the panel's own deleteCredential — it reports the deletion to the owner
 
 [[site]]
 file = "crates/rsk-fido/src/reset.rs"
-line = 66
-call = "ctx.fs.force_delete(fid).map_err(|_| CtapError::Other)?;"
-verb = "force_delete"
+line = 67
+call = "let gone = ctx.fs.force_delete_halves(fid);"
+verb = "force_delete_halves"
 answer = "read"
 class = "wipe-sweep"
 metadata = "none"
 disposition = "must-read"
-why = "the seed fids ahead of the batch. FIDO fids carry no EF_META head, so the metadata half of the answer is vacuous here; the value half is the seed every box is derived from."
+why = "the seed fids ahead of the batch. Both halves are read and they go different ways: the value half is the seed every box is derived from, so a refused removal stops the reset; the record half is carried to the reset's final answer, because EF_META is shared and one faulted read of it must not end the wipe after one file."
 
 [[site]]
 file = "crates/rsk-fido/src/reset.rs"
-line = 111
-call = "ctx.fs.force_delete(fid).map_err(|_| CtapError::Other)?;"
-verb = "force_delete"
+line = 127
+call = "let gone = ctx.fs.force_delete_halves(fid);"
+verb = "force_delete_halves"
 answer = "read"
 class = "wipe-sweep"
 metadata = "none"
 disposition = "must-read"
-why = "the sweep. Best-effort in the sense that a torn wipe is a state the design accepts, NOT in the sense that it may be reported as a completed one — the sweep's own rule is that a flash fault means the range cannot be proven clear."
+why = "the sweep. Best-effort in the sense that a torn wipe is a state the design accepts, NOT in the sense that it may be reported as a completed one — the sweep's own rule is that a flash fault means the range cannot be proven clear. The record half is deferred rather than propagated, because `?`-ing it here erased exactly one file and answered Err, at the same fid on every retry (measured at 0x0987)."
 
 [[site]]
 file = "crates/rsk-fido/src/seed.rs"
@@ -293,14 +295,14 @@ why = "VERIFY PIN raises the same validated flag VALIDATE does, so an OTP-PIN th
 
 [[site]]
 file = "crates/rsk-oath/src/lib.rs"
-line = 1529
-call = "fs.force_delete(fid).map_err(|_| Sw::MEMORY_FAILURE)?;"
-verb = "force_delete"
+line = 1538
+call = "let gone = fs.force_delete_halves(fid);"
+verb = "force_delete_halves"
 answer = "read"
 class = "wipe-sweep"
 metadata = "none"
 disposition = "must-read"
-why = "wipe_oath's sweep, credentials first then the unlock records; OATH fids carry no EF_META head, and a truncated walk already fails the wipe rather than reporting the range clear."
+why = "wipe_oath's sweep, credentials first then the unlock records; OATH fids carry no EF_META head, so the record half is only ever the shared blob being unreadable — deferred to the end of the wipe, while a refused removal still stops it, and a truncated walk already fails the wipe rather than reporting the range clear."
 
 [[site]]
 file = "crates/rsk-openpgp/src/init.rs"
@@ -425,14 +427,14 @@ why = "the generic DO writer's empty-body clear. The host reads every one of the
 
 [[site]]
 file = "crates/rsk-openpgp/src/terminate.rs"
-line = 167
-call = "fs.force_delete(fid).map_err(|_| Sw::MEMORY_FAILURE)?;"
-verb = "force_delete"
+line = 172
+call = "let gone = fs.force_delete_halves(fid);"
+verb = "force_delete_halves"
 answer = "read"
 class = "wipe-sweep"
 metadata = "none"
 disposition = "must-read"
-why = "TERMINATE DF's sweep, secrets before the UIF gates scan_files would re-seed. OpenPGP fids carry no EF_META head, and the phase above already refuses to call a truncated walk an empty range."
+why = "TERMINATE DF's sweep, secrets before the UIF gates scan_files would re-seed. OpenPGP fids carry no EF_META head, so the record half is only ever the shared blob being unreadable — deferred, because terminate_df skips the re-seed on a failed wipe and an early stop left the private-key records on the card. The phase above already refuses to call a truncated walk an empty range."
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
@@ -469,14 +471,14 @@ why = "and its second. Both slots' valid bits come off flash in the response tha
 
 [[site]]
 file = "crates/rsk-piv/src/files.rs"
-line = 469
-call = "fs.force_delete(fid).map_err(|_| Sw::MEMORY_FAILURE)?;"
-verb = "force_delete"
+line = 479
+call = "let gone = fs.force_delete_halves(fid);"
+verb = "force_delete_halves"
 answer = "read"
 class = "wipe-sweep"
 metadata = "drops-head"
 disposition = "must-read"
-why = "the site this audit was about: PIV key fids carry EF_META heads, so the metadata half is NOT vacuous, and force_delete hid a faulted drop here until 0x0987. GET METADATA answers from that head with no has_key probe."
+why = "the site this audit was about: PIV key fids carry EF_META heads, so the record half is NOT vacuous here, and force_delete hid a faulted drop until 0x0987. GET METADATA answers from that head with no has_key probe. The head is reported at the end of the sweep rather than propagated out of it, so an orphan the medium forces is answered for without the rest of the range surviving with it."
 
 [[site]]
 file = "crates/rsk-piv/src/lib.rs"

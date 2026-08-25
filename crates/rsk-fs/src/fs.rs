@@ -35,6 +35,23 @@ const FID_PRESENT_BYTES: usize = 3;
 #[cfg(not(kani))]
 const _: () = assert!(((u16::MAX >> 3) as usize) < FID_PRESENT_BYTES);
 
+/// The two answers a removal gives, kept apart for the callers that must act on
+/// them differently. [`Fs::force_delete`] folds them into one `Result`, which is
+/// the right default; a reset sweep cannot use it, because the two failures pull
+/// it in opposite directions.
+#[must_use]
+pub struct Removal {
+    /// The backend removal. `Err` is "the medium refused, and the value may
+    /// still be live" — a sweep must stop on it, because `for_each_key` keeps
+    /// re-yielding a fid it could not remove.
+    pub value: Result<()>,
+    /// The EF_META drop. `Err` is "the value is gone, a record may still stand
+    /// over it" — a sweep must NOT stop on it, because EF_META is one blob shared
+    /// by every applet, so one faulted read of it would end the wipe after a
+    /// single file and end it at the same fid on every retry.
+    pub record: Result<()>,
+}
+
 /// The file system: the set of live dynamic FIDs and a present-cache over a
 /// [`Storage`] backend.
 pub struct Fs<S: Storage> {
@@ -467,23 +484,55 @@ impl<S: Storage> Fs<S> {
     ///
     /// **The metadata half is [`delete`](Self::delete)'s, not a variant of it, and it
     /// is what separates the three outcomes a caller can get.** `Ok(())` is "value
-    /// gone and record gone"; `Err` from the drop below is "value gone, a record may
-    /// still stand over it" — the removal is unconditional, so no secret outlives its
-    /// erase either way; `Err` from the backend `remove` is "the medium refused" and
-    /// the value may be live. All four applet reset sweeps run through here, and
-    /// `rsk-piv`'s is over fids that carry a head — heads are minted by that crate
-    /// alone — so this answer is the only thing standing between a faulted drop and a
-    /// wipe reporting success over it.
+    /// gone and record gone"; `Err` from the drop is "value gone, a record may still
+    /// stand over it" — the removal is unconditional, so no secret outlives its erase
+    /// either way; `Err` from the backend `remove` is "the medium refused" and the
+    /// value may be live. This folds the two into one answer, which is what a caller
+    /// deleting one named record wants. **A sweep must not use it**: the two failures
+    /// pull it in opposite directions, so it takes
+    /// [`force_delete_halves`](Self::force_delete_halves) instead.
     ///
     /// Refines `RSKeyStore!NoOrphanedMetadata` — SEC-STORE-001, where the drop
     /// landed, and Refines `RSKeyStore!NoSilentOrphan` — SEC-STORE-006, where not.
     pub fn force_delete(&mut self, fid: u16) -> Result<()> {
-        let meta = self.meta_delete(fid);
-        self.storage.remove(fid)?;
+        let gone = self.force_delete_halves(fid);
+        gone.value?;
+        gone.record
+    }
+
+    /// [`force_delete`](Self::force_delete) with its two answers handed back apart,
+    /// for the four applet reset sweeps — the callers that cannot fold them.
+    ///
+    /// A sweep must **stop** on a refused backend removal, or `for_each_key` re-yields
+    /// the fid it could not remove until the delete budget runs out; and it must
+    /// **not** stop on a faulted metadata drop, because EF_META is one blob shared by
+    /// every applet, so one unreadable head would abort `authenticatorReset` after a
+    /// single file — at the same fid on every retry, so no retry makes progress, and
+    /// the wrapped device seed would outlive the credentials derived from it. Folding
+    /// them left that distinction unrepresentable, which is how it was measured at
+    /// 0x0987. What the sweep owes instead is both halves: erase the whole range, and
+    /// still answer for the record it could not drop.
+    ///
+    /// Refines `RSKeyStore!NoOrphanedMetadata` — SEC-STORE-001, where the drop
+    /// landed, and Refines `RSKeyStore!NoSilentOrphan` — SEC-STORE-006, where not.
+    pub fn force_delete_halves(&mut self, fid: u16) -> Removal {
+        let record = self.meta_delete(fid);
+        if let Err(refused) = self.storage.remove(fid) {
+            // Not marked absent: a refused removal may have left the value live, and
+            // caching that as absence is the false-absent the present cache exists to
+            // keep out.
+            return Removal {
+                value: Err(refused),
+                record,
+            };
+        }
         self.mark_absent(fid);
         self.dynamic.retain(|&f| f != fid);
         self.write_gen = self.write_gen.wrapping_add(1);
-        meta
+        Removal {
+            value: Ok(()),
+            record,
+        }
     }
 
     // ---- typed key-slot API ----

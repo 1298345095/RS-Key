@@ -3,11 +3,12 @@
 # Copyright (C) 2026 RS-Key contributors
 """Hold the delete-family caller dispositions against the tree, both ways.
 
-`Fs::delete`, `Fs::delete_key` and `Fs::force_delete` all remove the value
-whatever their metadata drop did, and all three RETURN what the drop did — `Err`
-names a state (the value is gone, a record may still stand over it) rather than a
-no-op. Which callers may discard that answer and which may not is a judgement per
-call site, and `assurance/deleters.toml` is where those judgements live.
+`Fs::delete`, `Fs::delete_key`, `Fs::force_delete` and `Fs::force_delete_halves`
+all remove the value whatever their metadata drop did, and all four RETURN what
+the drop did — `Err` names a state (the value is gone, a record may still stand
+over it) rather than a no-op. Which callers may discard that answer and which may
+not is a judgement per call site, and `assurance/deleters.toml` is where those
+judgements live.
 
 A ledger of judgements is only worth the roster under it. This one is DERIVED
 here and compared with the file; nothing about which sites exist is stored. Two
@@ -53,10 +54,11 @@ import tomllib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 LEDGER = pathlib.Path("assurance/deleters.toml")
 
-#: The three removal verbs. `delete_key` is `delete` over a `KeyFid`, so it
-#: carries the identical contract; `force_delete` differs only in that the
-#: backend removal is unconditional (see its rustdoc).
-VERBS = ("delete", "delete_key", "force_delete")
+#: The removal verbs. `delete_key` is `delete` over a `KeyFid`, so it carries the
+#: identical contract; `force_delete` differs only in that the backend removal is
+#: unconditional; `force_delete_halves` is that one with its two answers handed
+#: back apart, which is the shape a reset sweep needs (see their rustdoc).
+VERBS = ("delete", "delete_key", "force_delete", "force_delete_halves")
 #: The leading `.` is the whole receiver test: it is what separates `fs.delete(`
 #: from `Foo::delete(` and from any `_delete(` suffix of a longer name. Longest
 #: alternative last is deliberate — `delete` is tried first and the `\s*\(` after
@@ -97,8 +99,9 @@ DISCARD = re.compile(r"^\s*let\s+_\s*(?::[^=]*)?=")
 BOUNDARY = re.compile(r"[;{},]$|^$|^//|^/\*|^\*")
 
 #: The roster cannot shrink to nothing without someone saying so. Measured at 43
-#: (33 `delete`/`delete_key` + 10 `force_delete`) when this landed; floored well
-#: under that so ordinary movement does not trip it and a broken derivation does.
+#: (33 `delete`/`delete_key` + 10 of the two `force_delete` spellings) when this
+#: landed; floored well under that so ordinary movement does not trip it and a
+#: broken derivation does.
 FLOOR_SITES = 30
 
 DISPOSITIONS = {"must-read": "read", "best-effort": "discarded"}
@@ -264,7 +267,7 @@ def run(root):
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         print(
-            "\nEvery caller of Fs::delete / delete_key / force_delete owes a\n"
+            "\nEvery caller of the Fs delete family owes a\n"
             "disposition: whether discarding the deleter's answer is an allowed\n"
             "best-effort wipe there, or a device reporting success over a record\n"
             "or a secret that is still in flash. Decide the site in\n"

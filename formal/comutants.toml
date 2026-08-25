@@ -304,12 +304,12 @@ note = "the §6.5.5.7 triad kept instead of narrowed — mc/ga persist past the 
 status = "patch"
 file = "crates/rsk-fido/src/reset.rs"
 find = """
-    sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
-    sweep(ctx, is_fido_gate_fid)?;
+    orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
+    orphaned |= sweep(ctx, is_fido_gate_fid)?;
 """
 replace = """
-    sweep(ctx, is_fido_gate_fid)?;
-    sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
+    orphaned |= sweep(ctx, is_fido_gate_fid)?;
+    orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
 """
 slice = ["cargo", "test", "-p", "rsk-fido"]
 expect = "killed"
@@ -320,12 +320,14 @@ status = "patch"
 file = "crates/rsk-fido/src/reset.rs"
 find = """
     for fid in FIDO_SEED_FIDS {
-        ctx.fs.force_delete(fid).map_err(|_| CtapError::Other)?;
+        let gone = ctx.fs.force_delete_halves(fid);
+        gone.value.map_err(|_| CtapError::Other)?;
+        orphaned |= gone.record.is_err();
     }
-    sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
+    orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
 """
 replace = """
-    sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
+    orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
 """
 slice = ["cargo", "test", "-p", "rsk-fido"]
 expect = "killed"

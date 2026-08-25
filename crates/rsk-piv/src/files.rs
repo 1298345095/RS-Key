@@ -428,16 +428,26 @@ pub fn reset_files<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng) 
 /// the keys — and a power cut there lets `scan_files` re-seed the factory PIN over
 /// slot keys that are still live and, unlike OpenPGP's, not PIN-bound at rest.
 fn wipe_piv<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
-    sweep(fs, is_piv_secret_fid)?;
-    sweep(fs, is_piv_gate_fid)
+    let secrets = sweep(fs, is_piv_secret_fid)?;
+    let gates = sweep(fs, is_piv_gate_fid)?;
+    if secrets || gates {
+        return Err(Sw::MEMORY_FAILURE);
+    }
+    Ok(())
 }
 
 /// One phase of [`wipe_piv`]: delete every live fid matching `pred`. Batched
 /// because `for_each_key` cannot delete mid-iteration, and DE-DUPED because it
 /// yields one entry per stored *version*: a batch of superseded copies is not a
 /// batch of distinct fids.
-fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<(), Sw> {
+///
+/// `Ok(true)` is "the range is clear, and an EF_META head over it could not be
+/// dropped" — PIV mints the only heads, so this is the phase where that half is not
+/// vacuous. Carried to the end of the wipe rather than stopped on, for the reason
+/// `Fs::force_delete_halves` states.
+fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<bool, Sw> {
     let mut deleted = 0u32;
+    let mut orphaned = false;
     loop {
         let mut fids = [0u16; 32];
         let mut n = 0;
@@ -451,7 +461,7 @@ fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<(), Sw> {
             // A truncated walk (flash read fault) can hide a live fid, so an empty
             // batch only proves the range is clear when the enumeration completed.
             return if complete {
-                Ok(())
+                Ok(orphaned)
             } else {
                 Err(Sw::MEMORY_FAILURE)
             };
@@ -466,7 +476,9 @@ fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<(), Sw> {
             // force_delete (unconditional, and it drops the meta record itself):
             // `delete` skips a false-absent file that `for_each_key` keeps
             // yielding, so the sweep would spin instead of converging.
-            fs.force_delete(fid).map_err(|_| Sw::MEMORY_FAILURE)?;
+            let gone = fs.force_delete_halves(fid);
+            gone.value.map_err(|_| Sw::MEMORY_FAILURE)?;
+            orphaned |= gone.record.is_err();
         }
     }
 }

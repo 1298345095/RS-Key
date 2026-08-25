@@ -18,7 +18,7 @@ pub mod powercut;
 pub mod sealed;
 pub mod storage;
 
-pub use fs::Fs;
+pub use fs::{Fs, Removal};
 pub use sealed::{KeyFid, Sealed};
 pub use storage::Storage;
 

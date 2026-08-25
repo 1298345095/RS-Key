@@ -110,3 +110,94 @@ pub mod ram {
         }
     }
 }
+
+/// Backends that fail on purpose, shared by the applet crates' tests. One flash
+/// fault shape per type, narrow enough that the setup and the observation cannot
+/// be what fails.
+#[cfg(any(test, feature = "test-util"))]
+pub mod faults {
+    use super::ram::RamStorage;
+    use super::*;
+    use crate::EF_META;
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+
+    /// A RAM medium whose EF_META reads fail on demand while every other value
+    /// still reads. Deleting anything then leaves "a record may stand over what I
+    /// erased" undecidable — and EF_META is ONE blob shared by every applet, so
+    /// that answer arrives at fids which carry no record of their own. It is the
+    /// fault all four applet reset sweeps must carry to the end of their range
+    /// instead of stopping on it.
+    pub struct MetaStuck {
+        inner: Rc<RefCell<RamStorage>>,
+        stuck: Rc<Cell<bool>>,
+        err: bool,
+    }
+
+    /// The other end of a [`MetaStuck`]: arms the fault, and reads the medium
+    /// past `Fs`'s present cache — which a delete marks absent whether or not the
+    /// backend `remove` ran, so a cache-level check would pass over a wipe that
+    /// never happened.
+    pub struct Medium {
+        inner: Rc<RefCell<RamStorage>>,
+        stuck: Rc<Cell<bool>>,
+    }
+
+    impl MetaStuck {
+        pub fn new() -> (Self, Medium) {
+            let inner = Rc::new(RefCell::new(RamStorage::new()));
+            let stuck = Rc::new(Cell::new(false));
+            (
+                Self {
+                    inner: inner.clone(),
+                    stuck: stuck.clone(),
+                    err: false,
+                },
+                Medium { inner, stuck },
+            )
+        }
+    }
+
+    impl Medium {
+        /// Start (`true`) or stop refusing EF_META.
+        pub fn stick(&self, on: bool) {
+            self.stuck.set(on);
+        }
+        /// Whether `fid` still has a value ON THE MEDIUM.
+        pub fn live(&self, fid: u16) -> bool {
+            self.inner.borrow_mut().exists(fid)
+        }
+    }
+
+    impl Storage for MetaStuck {
+        fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+            if fid == EF_META && self.stuck.get() {
+                self.err = true;
+                return None;
+            }
+            self.err = false;
+            self.inner.borrow_mut().read(fid, buf)
+        }
+        fn write(&mut self, fid: u16, data: &[u8]) -> Result<()> {
+            self.inner.borrow_mut().write(fid, data)
+        }
+        fn remove(&mut self, fid: u16) -> Result<()> {
+            self.inner.borrow_mut().remove(fid)
+        }
+        fn size(&mut self, fid: u16) -> Option<usize> {
+            if fid == EF_META && self.stuck.get() {
+                self.err = true;
+                return None;
+            }
+            self.err = false;
+            self.inner.borrow_mut().size(fid)
+        }
+        fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+            self.inner.borrow_mut().for_each_key(f)
+        }
+        /// The whole point: a FAILED read must not be memoised as absence.
+        fn last_error(&self) -> bool {
+            self.err
+        }
+    }
+}

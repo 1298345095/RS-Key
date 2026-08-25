@@ -106,7 +106,8 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 - **Every caller of the delete family carries a written decision now, over a
   roster nothing hand-keeps.** `assurance/deleters.toml` disposes of all 43 sites
-  outside `crates/rsk-fs` — 24 `Fs::delete`, 9 `delete_key`, 10 `force_delete` —
+  outside `crates/rsk-fs` — 24 `Fs::delete`, 9 `delete_key`, 10 across the two
+  `force_delete` spellings —
   each classed, each naming whether its fid can carry an EF_META head (the axis
   `force_delete`'s postcondition differs on, and the one the 0x077C databug turned
   on), and each saying whether discarding the deleter's answer is an allowed
@@ -166,6 +167,31 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `== build-configuration matrix ==`) rather than only through the function.
 
 ### Fixed
+
+- **The fix for that faulted drop introduced a worse defect than the one it
+  closed, and `authenticatorReset` is where it was measured.** `Fs::force_delete`
+  names three outcomes and returned a type that carries two, so every caller had
+  to collapse them — and the four applet reset sweeps collapsed them with `?`. A
+  faulted read of EF_META, the ONE blob every applet shares, then aborted the wipe
+  after a single file, at the same fid on every retry, so no retry made progress:
+  measured side by side on the same fixture, three consecutive resets answered
+  `Err` with `EF_KEY_DEV_ENC` — the soft lock's wrapped copy of the device seed —
+  still in flash together with both credentials, the RP record and the PIN, where
+  the previous build had erased all of them. That defeats the reset's own
+  ordering rule, that what a cut leaves behind must at least be undecryptable, and
+  it is the `?`-before-the-value repair measurement had already rejected, arriving
+  through the callers instead of through the body.
+  `Fs::force_delete_halves` hands the two answers back apart now, and the four
+  sweeps read both: a refused backend removal still stops the sweep, because
+  `for_each_key` keeps re-yielding a fid it could not remove, while a faulted
+  metadata drop is carried to the end of the range and answered for there — so the
+  wipe erases everything it can reach AND does not report success over what it
+  could not. `force_delete` is the fold of the two and is unchanged for the six
+  callers that delete one named record, `att_clear`'s ordered pair included.
+  Pinned in all four applets, each driven red by the real regression with the whole
+  crate suite watched: in every one the status word matched on both sides and the
+  SURVIVOR list was the discriminator, which is why a test asserting only the
+  answer passed the defect. **bcdDevice → 0x0989.**
 
 - **The faulted-drop defect that `Fs::delete` was cured of was still standing at
   the third deleter, and every applet reset sweep goes through it.**
