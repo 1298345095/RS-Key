@@ -341,9 +341,8 @@ def read_registry(text):
             continue
         pattern, want = parts[0], parts[1]
         # `.rstrip()` because `read` strips trailing IFS whitespace off the last
-        # field and `split(None, 4)` keeps it: three spaces after the invariant
-        # name made TWO findings about a row the runner reads correctly, which is
-        # a red for the wrong reason and how a gate row comes to be deleted.
+        # field and `split(None, 4)` keeps it: three spaces after an invariant
+        # name made TWO findings about a row the runner reads correctly.
         floor = (parts + ["-"] * COLUMNS)[2]
         invariant = (parts + ["-"] * COLUMNS)[4].rstrip()
         if CLASS.search(pattern):
@@ -599,10 +598,9 @@ def check_floors(configs, first, ratchets, previous, text, problems):
         return
     was_rows, was_ratchets, _ = read_registry(previous)
     if not was_rows and not was_ratchets:
-        # `previous is None` above is not the whole of "git could not answer": a
-        # `git` that returned the empty string parses to no rows, every `before`
-        # is None, and NO FLOOR IS COMPARED WITH ANYTHING while this reports
-        # nothing at all — the exact failure the docstring above refuses.
+        # `previous is None` is not the whole of "git could not answer": an empty
+        # string parses to no rows, every `before` is None, and NO FLOOR IS
+        # COMPARED WITH ANYTHING while this reports nothing at all.
         problems.append(
             f"the committed {REGISTRY} parses to no rows and no ratchets, so no floor could"
             " be compared with anything — an answer of nothing reads here exactly like a"

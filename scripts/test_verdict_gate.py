@@ -687,10 +687,17 @@ def test_a_malformed_row_is_a_finding_rather_than_a_traceback():
 
 def test_the_configuration_floor_catches_a_glob_that_found_nothing(tmp_path):
     """The shape five guards in this tree shipped with: every loop runs over an
-    empty set and the row reads as a pass."""
+    empty set and the row reads as a pass.
+
+    And the same tree is the only one that reaches the missing-`BASELINE` branch,
+    so it is asserted here rather than left driven-but-unread: every `Fix*` arm is
+    compared against `Shipped.cfg`, and without it they are compared against
+    nothing — the same shrug the derivation was refused for.
+    """
     problems, _ = verdict_gate.audit(tmp_path, registry_text=REGISTRY,
                                      previous_text=PREVIOUS, runner_text=RUNNER)
     assert any(f"under the floor of {verdict_gate.CONFIG_FLOOR}" in p for p in problems)
+    assert any("no such configuration, so a `Fix*` constant" in p for p in problems), problems[:3]
 
 
 # --- the row as check.sh runs it ------------------------------------------
