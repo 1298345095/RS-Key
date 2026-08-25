@@ -2490,7 +2490,7 @@ against a fake TLC. Measured, they name **two** of this file's 25 wildcard
 families — `Mut_` and `Solo_`, because the fixture happens to spell
 `Mut_BugResetGatesFirst.cfg` — which leaves **23 families and 102 of the 192
 configurations** with no cheap witness at all. Falsified before the row was
-written: `SeamMut_*.cfg RED` → `GREEN`, and `./scripts/check.sh` passed all 101
+written: `SeamMut_*.cfg RED` → `GREEN`, and `./scripts/check.sh` passed all 98
 rows and printed `ALL CHECKS PASSED`.
 
 Nothing in the row is a list, because a list is what goes stale. **The verdict

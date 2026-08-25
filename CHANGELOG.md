@@ -50,7 +50,7 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   and `scripts/test_run_tlc.py`) name **two** of its 25 wildcard families, so
   **23 families covering 102 of the 192 configurations** had no merge-gate
   witness at all — and flipping `SeamMut_*.cfg` from `RED` to `GREEN` left
-  `./scripts/check.sh` passing all 101 rows.
+  `./scripts/check.sh` passing all 98 rows.
   `scripts/verdict_gate.py` is the new `TLA verdict registry` row, and it derives
   what the registry should say rather than keeping a second copy of it: the
   verdict comes from a configuration's own CONSTANTS (a `Bug*`/`Mutate*` switch
@@ -1573,7 +1573,7 @@ could not fail are written down, each with what it missed.
   codes taken with no pipe: an unknown runner label, a bad `matrix.<prop>`, a tab
   in the indentation and an unquoted `$var` in a `run:` block each stop the gate
   at row 1 of 1 with rc 1 and its own message — and with the row deleted that
-  same tab left all 98 rows green, which is what makes it load-bearing rather
+  same tab left all 95 rows green, which is what makes it load-bearing rather
   than decorative. Host tooling and CI only, so no `bcdDevice` bump.
 
 - **Two hand-written curve rosters bounded a buffer size, and nothing said so.**

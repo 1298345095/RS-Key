@@ -610,7 +610,7 @@ run "formal scopes"            python scripts/scope_gate.py
 # And `floors.txt` itself, which only the weekly TLC matrix reads — so between
 # two weeklies it could be weakened with every row here green. Measured: the two
 # layers that did reach it name 2 of its 25 wildcard families, and flipping
-# `SeamMut_*.cfg` from RED to GREEN passed all 101 rows. This one derives the
+# `SeamMut_*.cfg` from RED to GREEN passed all 98 rows. This one derives the
 # verdict from each configuration's own CONSTANTS instead of trusting the column.
 run "TLA verdict registry"     python scripts/verdict_gate.py
 run "comutants lint"           python scripts/comutate.py --lint
