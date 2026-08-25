@@ -1074,3 +1074,52 @@ fn an_unfaulted_delete_takes_the_value_and_the_record() {
         "the last record was dropped, so EF_META goes with it"
     );
 }
+
+/// The third deleter owes the same answer, and it used to hide it: `force_delete`
+/// spelled the drop `let _ = self.meta_delete(fid)` and then reported `Ok(())`,
+/// which is `BugDeleteHidesFaultedDrop` — `NoSilentOrphan`'s mutant — standing in
+/// the shipped tree at the one deleter all four applet reset sweeps go through.
+/// The audit's second half is that `rsk-piv`'s wipe reaches metadata-carrying fids
+/// through it, so MOVE was never "the one path" that does.
+#[test]
+fn a_faulted_metadata_drop_is_reported_by_force_delete_too() {
+    let (mut fs, ram, armed) = armed_fs();
+    fs.put(SLOT, b"sealed key material").unwrap();
+    fs.meta_add(SLOT, &[0xAA, 0x01, 0x02, 0x03]).unwrap();
+
+    armed.set(true);
+    let answered = fs.force_delete(SLOT);
+    armed.set(false);
+
+    assert!(
+        matches!(answered, Err(Error::MemoryFatal)),
+        "a force_delete that could not drop the record answered {answered:?}"
+    );
+    let mut buf = [0u8; 32];
+    assert!(
+        ram.borrow_mut().read(SLOT, &mut buf).is_none(),
+        "the value must go even when the record could not be dropped"
+    );
+    assert!(
+        ram.borrow_mut().read(EF_META, &mut buf).is_some(),
+        "the record is what the error is about — it stands"
+    );
+}
+
+/// `force_delete`'s control: nothing armed, so the same sequence answers `Ok(())`
+/// and both halves go — the unconditional backend `remove` is unchanged.
+#[test]
+fn an_unfaulted_force_delete_takes_the_value_and_the_record() {
+    let (mut fs, ram, _armed) = armed_fs();
+    fs.put(SLOT, b"sealed key material").unwrap();
+    fs.meta_add(SLOT, &[0xAA, 0x01, 0x02, 0x03]).unwrap();
+
+    assert_eq!(fs.force_delete(SLOT), Ok(()));
+
+    let mut buf = [0u8; 32];
+    assert!(ram.borrow_mut().read(SLOT, &mut buf).is_none());
+    assert!(
+        ram.borrow_mut().read(EF_META, &mut buf).is_none(),
+        "the last record was dropped, so EF_META goes with it"
+    );
+}

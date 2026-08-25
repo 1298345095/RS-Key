@@ -275,15 +275,15 @@ split three ways, and the split is the point.
 |---|---|
 | **Equivalent, not a defect** | `ctaphid.rs:420` `\|` → `^` on `(f[5] << 8) \| f[6]` — disjoint bits, the two operators agree |
 | **Fail-safe direction** | `ctaphid.rs:431` `>` → `>=` refuses an exactly-maximum message: stricter, so `NoBufferOverrun` still holds. `fs.rs:147` and `fs.rs:190` `\|=` → `&=` clear *decided* bits, which sends more reads to the reliable backend |
-| **Model-blind** | the dynamic-file registry in `scan` (`fs.rs:195` and `fs.rs:198`, three mutants), `has_data`'s zero-length test (`fs.rs:250`), `factory_wipe`'s 64-key batch bound (`fs.rs:363`), the registry retain in `delete` (`fs.rs:458`), and **`meta_delete`'s fault guard (`fs.rs:594`)** |
+| **Model-blind** | the dynamic-file registry in `scan` (`fs.rs:195` and `fs.rs:198`, three mutants), `has_data`'s zero-length test (`fs.rs:250`), `factory_wipe`'s 64-key batch bound (`fs.rs:363`), the registry retain in `delete` (`fs.rs:458`), and **`meta_delete`'s fault guard (`fs.rs:607`)** |
 
 The last one was worth the exercise on its own. `Fs::meta_add_reserve` refuses a
 FAILED EF_META read and the model carries that as `BugMetaAddDropsOnFault`; its
-sibling `Fs::meta_delete` has the identical guard at `fs.rs:596`, and **nothing
+sibling `Fs::meta_delete` has the identical guard at `fs.rs:609`, and **nothing
 held it at either level**. No test killed it, and `MetaDelete` was modelled as an
 unconditional single write with no read to fail. Worse than a lost delete: the
 mutant caches EF_META as *absent*, and the next `meta_add` legitimately trusts
-`known_absent` and rebuilds the blob from empty (`fs.rs:557`), so the records go
+`known_absent` and rebuilds the blob from empty (`fs.rs:570`), so the records go
 on the write **after** the defect. That is why it is `NoFalseMetaAbsent`,
 SEC-STORE-004, a step recorder — once the cache has lied, the losing write is
 correct code and no state predicate over `meta` can tell the two apart.
@@ -2254,7 +2254,7 @@ State 2  MetaAdd("a")        meta = [a |-> TRUE,  b |-> FALSE]
 The cache says `EF_META` is absent while `b`'s record stands. Nothing in
 `TypeOK` or the four invariants forbids that state, and from it `MetaAdd` does
 exactly what the shipped code does — trusts the cache and rebuilds the blob from
-empty (`fs.rs:557`), losing `b`. This is SEC-STORE-004's damage arriving from a
+empty (`fs.rs:570`), losing `b`. This is SEC-STORE-004's damage arriving from a
 STATE rather than from the step that made the cache lie, and the model had no
 way to say the cache is honest. One conjunct fixes it:
 

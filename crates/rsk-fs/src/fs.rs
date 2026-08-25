@@ -464,13 +464,26 @@ impl<S: Storage> Fs<S> {
     /// absent). A torn-migration false-absent key — live in the backend, present bit
     /// clear — is still removed; otherwise `authenticatorReset`'s re-enumerating wipe
     /// (it reads the backend directly) keeps re-finding it and loops forever.
+    ///
+    /// **The metadata half is [`delete`](Self::delete)'s, not a variant of it, and it
+    /// is what separates the three outcomes a caller can get.** `Ok(())` is "value
+    /// gone and record gone"; `Err` from the drop below is "value gone, a record may
+    /// still stand over it" — the removal is unconditional, so no secret outlives its
+    /// erase either way; `Err` from the backend `remove` is "the medium refused" and
+    /// the value may be live. All four applet reset sweeps run through here, and
+    /// `rsk-piv`'s is over fids that carry a head — heads are minted by that crate
+    /// alone — so this answer is the only thing standing between a faulted drop and a
+    /// wipe reporting success over it.
+    ///
+    /// Refines `RSKeyStore!NoOrphanedMetadata` — SEC-STORE-001, where the drop
+    /// landed, and Refines `RSKeyStore!NoSilentOrphan` — SEC-STORE-006, where not.
     pub fn force_delete(&mut self, fid: u16) -> Result<()> {
-        let _ = self.meta_delete(fid);
+        let meta = self.meta_delete(fid);
         self.storage.remove(fid)?;
         self.mark_absent(fid);
         self.dynamic.retain(|&f| f != fid);
         self.write_gen = self.write_gen.wrapping_add(1);
-        Ok(())
+        meta
     }
 
     // ---- typed key-slot API ----

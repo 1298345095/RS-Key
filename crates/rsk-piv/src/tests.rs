@@ -7902,9 +7902,10 @@ impl Storage for MetaFaults {
     }
 }
 
-/// MOVE with `to = 0xFF` is the slot DELETE, and it is the one path in the tree
-/// that deletes a fid carrying an EF_META head — the heads are minted by this
-/// crate alone. `Fs::delete` removes the value whatever the head does, so a
+/// MOVE with `to = 0xFF` is the slot DELETE, and it is one of the two paths in the
+/// tree that delete a fid carrying an EF_META head — the heads are minted by this
+/// crate alone, and the other path is RESET's sweep, below.
+/// `Fs::delete` removes the value whatever the head does, so a
 /// faulted drop leaves a record over a key that is gone and GET METADATA would
 /// answer for a slot that cannot sign; a failed `remove` leaves the other
 /// direction, a live key with no head, which is the state `files.rs`'s mint-arm
@@ -7993,5 +7994,78 @@ fn a_slot_delete_answers_for_what_it_could_not_drop() {
         (Sw::MEMORY_FAILURE, false, true),
         "the other direction: the head went and the key did not, so the move is \
          not done and the answer must not say it is"
+    );
+}
+
+/// MOVE is not the only path that deletes a fid carrying a head, and the delete-
+/// caller audit found the other one hiding what MOVE reports: RESET sweeps through
+/// `Fs::force_delete`, which used to swallow `meta_delete`'s error. The medium here
+/// refuses EF_META's own `remove`, and 0x9A is left holding the ONLY head — so the
+/// drop that cannot land is deterministically its, and `scan_files`' later reads
+/// and writes still work, which keeps the re-provisioning half out of the verdict.
+///
+/// Returns the reset's answer and whether 0x9A's head outlived its key.
+fn reset_with_ef_meta_stuck(stuck: bool) -> (Result<(), Sw>, bool) {
+    let rng = RefCell::new(TestRng(7));
+    let pres = RefCell::new(AlwaysConfirm);
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    let unremovable = std::rc::Rc::new(std::cell::Cell::new(0u16));
+    let mut fs = Fs::new(MetaFaults {
+        inner: RamStorage::new(),
+        budget: std::rc::Rc::new(std::cell::Cell::new(0usize)),
+        unremovable: unremovable.clone(),
+        err: false,
+    });
+    fs.scan();
+    select(&mut app, &mut fs);
+    auth_mgm(&mut app, &mut fs);
+    verify_pin(&mut app, &mut fs);
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            INS_ASYM_KEYGEN,
+            0,
+            SLOT_AUTHENTICATION,
+            &gen_template(ALGO_ECCP256)
+        )
+        .0,
+        Sw::OK
+    );
+    // After the management key has been used for the last time: 0x9B's head is the
+    // other one EF_META carries, and it would empty the blob after 0x9A's rather
+    // than before it. `scan_files` re-mints it unconditionally either way.
+    fs.meta_delete(key_fid(SLOT_CARDMGM).get()).unwrap();
+
+    if stuck {
+        unremovable.set(rsk_fs::EF_META);
+    }
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let answered = files::reset_files(&dev, &mut fs, &mut *rng.borrow_mut());
+    unremovable.set(0);
+
+    let mut head = [0u8; 8];
+    let orphan = fs
+        .meta_find(key_fid(SLOT_AUTHENTICATION).get(), &mut head)
+        .is_some()
+        && !fs.has_key(key_fid(SLOT_AUTHENTICATION));
+    (answered, orphan)
+}
+
+#[test]
+fn a_reset_answers_for_the_heads_it_could_not_drop() {
+    assert_eq!(
+        reset_with_ef_meta_stuck(false),
+        (Ok(()), false),
+        "the clean control: the wipe takes 0x9A's key and its head"
+    );
+    assert_eq!(
+        reset_with_ef_meta_stuck(true),
+        (Err(Sw::MEMORY_FAILURE), true),
+        "the head stands over a key that is gone — legal, and the answer must say so"
     );
 }

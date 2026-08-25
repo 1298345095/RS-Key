@@ -220,11 +220,24 @@ a secret that outlives its erase.
 
 What `delete` does now is remove the value regardless and **return** the metadata
 error, so `Err` names a state (the value is gone, a record may stand) instead of
-hiding it. The one caller in the tree that deletes a fid carrying a head is PIV's
-MOVE with `to = 0xFF`, the slot delete — heads are minted by `rsk-piv` alone — and
-it reads the answer: the head gets a retry, because one read can fault where the
-next lands, and the key is read back, because a `remove` that failed leaves the
-source holding a live key. Both directions answer `6581`.
+hiding it. The `delete` caller that reaches a fid carrying a head is PIV's MOVE
+with `to = 0xFF`, the slot delete — heads are minted by `rsk-piv` alone — and it
+reads the answer: the head gets a retry, because one read can fault where the next
+lands, and the key is read back, because a `remove` that failed leaves the source
+holding a live key. Both directions answer `6581`.
+
+**That was written as "the one caller in the tree", and the audit of the delete
+family refuted it.** There is a second, and it is the one all four applet reset
+sweeps go through: `Fs::force_delete`, whose metadata drop was a `let _ =`. PIV's
+`wipe_piv` runs it over the same head-carrying fids, so RESET could answer `9000`
+over a head it could not drop — `BugDeleteHidesFaultedDrop` still standing at the
+third deleter, on the P0-launch reset path, after the `delete` half was closed.
+`force_delete` returns the metadata outcome now, and its contract names the three
+outcomes separately from `delete`'s because its callers need the distinction:
+value gone and record gone, value gone with a record possibly standing, or the
+medium refused and the value may be live. Held by
+`a_faulted_metadata_drop_is_reported_by_force_delete_too` at the `Fs` layer and
+`a_reset_answers_for_the_heads_it_could_not_drop` at the APDU layer.
 
 **And the model's half landed with it**, in `41c3b70`. `RSKeyStore!Delete`
 carries a second disjunct now — the medium error, one backend write and no cut

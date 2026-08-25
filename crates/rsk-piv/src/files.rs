@@ -303,10 +303,10 @@ pub fn scan_files<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng) -
     // goes in phase 1 of the device-wide wipe, so a tear between them leaves a live
     // key whose `meta_find` fails and `general_authenticate` answers
     // REFERENCE_NOT_FOUND for good. The other direction is `force_delete`, which
-    // drops the key even when its own `meta_delete` failed (`let _ =`): a stale
-    // AES-256 head left over a re-minted 24-byte DEFAULT_MGM wedges the slot on the
-    // length compare, and RESET runs this very path, so nothing would clear it. The
-    // mint arm is therefore an unconditional rewrite — `meta_add` replaces.
+    // drops the key whatever its own `meta_delete` did: a stale AES-256 head left
+    // over a re-minted 24-byte DEFAULT_MGM wedges the slot on the length compare,
+    // and RESET runs this very path, so nothing would clear it. The mint arm is
+    // therefore an unconditional rewrite — `meta_add` replaces.
     let have_meta = {
         let mut meta = [0u8; 8];
         fs.meta_find(key_fid(SLOT_CARDMGM).get(), &mut meta)

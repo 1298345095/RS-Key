@@ -104,6 +104,31 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   covered. One comment-aware reader in `scripts/gate_lines.py` now, a floor on
   the cases each table carries, and the mutation driven at all 11 + 8 + 19 sites.
 
+### Fixed
+
+- **The faulted-drop defect that `Fs::delete` was cured of was still standing at
+  the third deleter, and every applet reset sweep goes through it.**
+  `Fs::force_delete` spelled its metadata drop `let _ = self.meta_delete(fid)` and
+  then answered `Ok(())` — `BugDeleteHidesFaultedDrop`, the mutant
+  `NoSilentOrphan` (SEC-STORE-006) exists to kill, in the shipped tree on the
+  P0-launch reset path. The docs had recorded PIV's MOVE with `to = 0xFF` as "the
+  one caller in the tree that deletes a fid carrying a head"; the caller audit of
+  the delete family found the second one, and it is `wipe_piv`, which sweeps the
+  very same head-carrying fids through `force_delete`. So a PIV RESET whose EF_META
+  drop could not land answered `9000` with a head standing over a key that was
+  gone, and GET METADATA reads that head — its `is_key` arm dropped the `has_key`
+  probe precisely because a delete "clears the meta record unconditionally".
+  `force_delete` returns the metadata outcome now, exactly as `delete` does; the
+  backend `remove` is still unconditional, so this is not the `?`-before-the-value
+  repair measurement rejected — no secret outlives its erase, only the answer
+  changed. All ten `force_delete` callers already read that answer, and all four
+  sweeps already treat a flash read fault as "the range cannot be proven clear",
+  so the fault now fails the wipe it could not prove instead of being reported
+  complete. Held at both layers, each driven red before the fix:
+  `a_faulted_metadata_drop_is_reported_by_force_delete_too` (`rsk-fs`) and
+  `a_reset_answers_for_the_heads_it_could_not_drop` (`rsk-piv`, over a medium that
+  refuses EF_META's own `remove`). **bcdDevice → 0x0987.**
+
 ## [0.4.11] - 2026-08-24
 
 The catch-up release, and the one where the instruments were audited harder than
