@@ -164,7 +164,6 @@ formal/README.md	crates/rsk-fs/src/lib.rs	46-46	let _ = fs.delete(EF_HARDENED);	
 formal/README.md	crates/rsk-oath/src/lib.rs	330-332	if !self.validated {	}
 formal/README.md	crates/rsk-oath/src/lib.rs	337-349	if let Some([key]) = parse_exact(data, [TAG_KEY]) {	};
 formal/README.md	crates/rsk-oath/src/lib.rs	524-526	// states left a host unable to tell a wrong password from no password.	return Sw::WRONG_DATA;
-formal/README.md	crates/rsk-oath/src/lib.rs	1133-1134	// the record and TLV checks, so a malformed request is not an attempt.	self.validated = false;
 formal/README.md	crates/rsk-oath/src/lib.rs	1134-1135	self.validated = false;	self.otp_pin_verified = false;
 formal/README.md	crates/rsk-oath/src/lib.rs	1185-1189	/// `select` recomputes `validated` from whether a code is set.	self.chain = Chain::None;
 formal/README.md	crates/rsk-oath/src/lib.rs	1187-1187	self.validated = false;	self.validated = false;
@@ -248,7 +247,7 @@ formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	337-349	if let Some([key]
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	345-345	self.validated = true;	self.validated = true;
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	385-392	// Installing a new access code drops any OTP-PIN: VERIFY PIN sets the same	self.validated = false;
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	524-526	// states left a host unable to tell a wrong password from no password.	return Sw::WRONG_DATA;
-formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1133-1134	// the record and TLV checks, so a malformed request is not an attempt.	self.validated = false;
+formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1134-1135	self.validated = false;	self.otp_pin_verified = false;
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1157-1172	// Any attempt clears a prior unlock; only a correct PIN re-validates below.	self.validated = true;
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1185-1189	/// `select` recomputes `validated` from whether a code is set.	self.chain = Chain::None;
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1193-1193	/// algorithm) when an access code is set.	/// algorithm) when an access code is set.

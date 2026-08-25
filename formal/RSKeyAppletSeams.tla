@@ -311,7 +311,7 @@ OathVerifyOtpPin(ok) ==
     /\ UNCHANGED << sel, fresh, pfresh, oneShotSig, psig, oathCodeSet, viol >>
 
 \* aa47867: a refused CHANGE of the OTP PIN drops the standing authentication,
-\* both halves (crates/rsk-oath/src/lib.rs:1133-1134). Before it, `0xB2` VERIFY
+\* both halves (crates/rsk-oath/src/lib.rs:1134-1135). Before it, `0xB2` VERIFY
 \* closed the safe on a wrong PIN and `0xB3` CHANGE did not -- so the whole retry
 \* budget could be burned through CHANGE while GET CREDENTIAL went on serving
 \* the stored password.
