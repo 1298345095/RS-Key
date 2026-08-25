@@ -38,6 +38,41 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+### Added
+
+- **The TLA verdict registry is held at merge time now, not only by the weekly
+  matrix.** `formal/floors.txt` records what each of the 192 TLC configurations
+  must produce — GREEN or RED, a state floor, and for some RED rows the invariant
+  they must break — and the only thing that read it was `run-tlc.sh`, which runs
+  in the weekly `deep-checks.yml` safety tier and nowhere else. So between two
+  weeklies the file could be weakened and every gate row stayed green. Measured,
+  not assumed: the two layers that did reach it (`security_trace.py --check-data`
+  and `scripts/test_run_tlc.py`) name **two** of its 25 wildcard families, so
+  **23 families covering 102 of the 192 configurations** had no merge-gate
+  witness at all — and flipping `SeamMut_*.cfg` from `RED` to `GREEN` left
+  `./scripts/check.sh` passing all 101 rows.
+  `scripts/verdict_gate.py` is the new `TLA verdict registry` row, and it derives
+  what the registry should say rather than keeping a second copy of it: the
+  verdict comes from a configuration's own CONSTANTS (a `Bug*`/`Mutate*` switch
+  on means RED, unless a `Check*` observer is off — which is what makes
+  `TraceSecurityBadAlphaNoR4b.cfg` a GREEN control), solo-style is read off the
+  INVARIANTS block instead of off the `Solo_` in a filename, an entry may not be
+  missing, orphaned, masked by an earlier wildcard or contradicted by a second
+  row, and a floor is compared with the newest committed registry that differs
+  from the working tree's — so a decrease has to say so in the file. It also
+  holds `run-tlc.sh`'s own extractor to the names the registry gives it: the
+  `[A-Za-z]+` that could not read a digit, and left every `R4*` row printing a
+  blank verdict column for its whole life, is a static disagreement between two
+  files now, and so is a `floors.txt` saved with CRLF endings — which makes the
+  runner read `[ "$distinct" -lt "200\r" ]` as an integer error, take the
+  non-zero for "not below the floor", and pass every floored row. 182 cases in
+  `scripts/test_verdict_gate.py`, parametrized over families **derived** from
+  `floors.txt` rather than listed, so a new family arrives covered instead of
+  arriving unwatched. Six of the rules are review findings on the finished
+  guard: 26 of 32 mutations of it died against the table and the six survivors
+  were the holes, including one assertion that read `[] == []` once its rule was
+  removed.
+
 ## [0.4.11] - 2026-08-24
 
 The catch-up release, and the one where the instruments were audited harder than

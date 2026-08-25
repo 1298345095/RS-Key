@@ -607,6 +607,12 @@ run "standing assumptions"     python scripts/assumption_gate.py
 # CONSTANTS are too small to express the defect its own mutants rebuild.
 # Two of the twenty-five module mutants go GREEN one element down.
 run "formal scopes"            python scripts/scope_gate.py
+# And `floors.txt` itself, which only the weekly TLC matrix reads — so between
+# two weeklies it could be weakened with every row here green. Measured: the two
+# layers that did reach it name 2 of its 25 wildcard families, and flipping
+# `SeamMut_*.cfg` from RED to GREEN passed all 101 rows. This one derives the
+# verdict from each configuration's own CONSTANTS instead of trusting the column.
+run "TLA verdict registry"     python scripts/verdict_gate.py
 run "comutants lint"           python scripts/comutate.py --lint
 run "seam trace map"           python scripts/trace_map.py
 run "security trace refinement" python scripts/security_trace.py --check-data formal/TraceSecurityData.tla formal/traces/security-phase4.jsonl

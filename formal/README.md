@@ -2295,7 +2295,7 @@ is paying for the wrong thing first.
 ## What now catches a run nobody watched
 
 That `VACUOUS` rule was one heuristic and a **reporting** guard: it printed a
-word and returned 0, and it only sees the collapse all the way to nothing. Five
+word and returned 0, and it only sees the collapse all the way to nothing. Six
 things stand between this model and a pass it did not earn now, and each is
 mutation-tested rather than argued.
 
@@ -2470,6 +2470,89 @@ nothing at all. Deliberately outside: `CHANGELOG.md`, whose entries cite the tre
 as it stood and **must** be allowed to rot; the guard's own fixtures, which name
 files that exist only inside a fixture; and `docs/guides/fips.md`, which writes
 `piv/keygen.rs` line 48, a path fragment that resolves to nothing.
+
+**6. The verdict registry itself** (`scripts/verdict_gate.py`, the `TLA verdict
+registry` row). Everything above is read by `run-tlc.sh`, and `run-tlc.sh` is run
+by the weekly safety tier and by nothing else — so `floors.txt` could be weakened
+on a Monday and no gate would say so until Sunday. Two narrower layers did reach
+it: `security_trace.py --check-data` reads the `TraceSecurity*` verdict entries
+and the `@TraceSecurity*` ratchets, and `test_run_tlc.py` drives the real runner
+against a fake TLC. Measured, they name **two** of this file's 25 wildcard
+families — `Mut_` and `Solo_`, because the fixture happens to spell
+`Mut_BugResetGatesFirst.cfg` — which leaves **23 families and 102 of the 192
+configurations** with no cheap witness at all. Falsified before the row was
+written: `SeamMut_*.cfg RED` → `GREEN`, and `./scripts/check.sh` passed all 101
+rows and printed `ALL CHECKS PASSED`.
+
+Nothing in the row is a list, because a list is what goes stale. **The verdict
+comes from the configuration's own CONSTANTS**: a file switching a
+`Bug*`/`Mutate*` constant on is a mutant and owes RED, unless a `Check*` observer
+is switched off — which is exactly what makes `TraceSecurityBadAlphaNoR4b.cfg` a
+GREEN control rather than a mutant that stopped firing. **Solo-style is read off
+the INVARIANTS block**, not off the `Solo_` in a filename: a configuration
+checking ONE invariant says which defect its RED describes, and a multi-target
+one borrows that from the sibling running the same switches — so flipping
+`SeamSolo_*.cfg` to GREEN leaves all fourteen `SeamMut_*` REDs unattributable and
+says so. `TraceSeamsBad.cfg` is the one carve-out, registered with its reason:
+its divergence lives in `TraceSeamsBad.tla` rather than in a switch, and TLC
+refuses the replay by DEADLOCK, which names no invariant.
+
+**And `run-tlc.sh`'s own reader is held to the names this file gives it.** The
+`Invariant [A-Za-z]+ is violated` that could not match a digit is a static
+disagreement between two files, so narrowing it back names all seven rows it
+would blind. A floor is compared with the newest committed registry whose bytes
+differ from the working tree's, never with `HEAD`: on a clean checkout — which is
+every CI run — `HEAD` *is* the working tree, and every floor would compare equal
+to itself.
+
+| Mutation | What the row said | Exit |
+|---|---|---|
+| the tree as it stands | `191 configuration(s) held to 55 entries (25 wildcard families covering 161), 6 ratchets, 1 exempt` | 0 |
+| `SeamMut_*.cfg` `RED` → `GREEN` | `… requires GREEN, but the configuration switches BugAdminOpensKeyOps on and so owes RED` | **1** |
+| the `SeamSolo_*.cfg` row deleted | `no verdict entry in formal/floors.txt and no registered exemption` | **1** |
+| a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 14 configuration(s) first `` | **1** |
+| a second, disagreeing `Shipped.cfg` row | `both match it and disagree (('RED', None, None) against ('GREEN', 20000000, None))` | **1** |
+| `Mut_*.cfg` given a floor | `RED with a floor of 5000 — a counterexample search halts at the first violation` | **1** |
+| a RED naming an invariant its configuration does not check | `expects RED at NoOrphanedMetadata, which the configuration does not check` | **1** |
+| a RED attributed to `TypeOK` | `which every configuration checks and no mutant targets — that attributes the RED to nothing` | **1** |
+| a RED attributed to a temporal property | `` names the property EveryWalkCloses; … reads `Invariant … is violated` and nothing else `` | **1** |
+| `TraceSeamsBad.cfg` `RED` → `GREEN`, the one carve-out | `the carve-out exempts the derivation, not the verdict` | **1** |
+| `Shipped.cfg` floored at 1 | `GREEN floored at 1, under the 2 the runner already refuses as VACUOUS` | **1** |
+| `Store.cfg` floor 90 → 30 | `floor 90 -> 30 with no justification — add \* floor-decrease: …` | **1** |
+| the same, with the marker beside it | the summary — a re-measurement is allowed, saying nothing about it is not | 0 |
+| `@TraceSecurityGatesMin` 7 → 6 | `floor 7 -> 6 with no justification` | **1** |
+| `@TraceSecurityAmbiguousMax` 0 → 1 | `floor 0 -> 1 with no justification` — a `Max` is the same ratchet upside down | **1** |
+| all six `@` ratchet lines deleted | `recorded at 22 in the committed registry and gone from this one — a deleted ratchet is the largest decrease there is` | **1** |
+| an orphaned row | `` `Gone_*.cfg` matches no configuration in formal/ `` | **1** |
+| a remark typed after the invariant name | `` names R4cGateAnswers  and a remark, which … `[A-Za-z][A-Za-z0-9_]*` cannot read `` | **1** |
+| the file saved with CRLF endings | `` carries a CR, and … reads a floor of `200\r` as an integer error `` | **1** |
+| a row carrying a character class | `` `Boot[MS]*.cfg` … a shell `case` expands and this row resolves as a literal `` | **1** |
+
+**Six of those rows are review findings, not design.** An adversarial pass over
+the finished guard mutated its rules one at a time and drove the whole table:
+26 of 32 mutations died, and the six that lived were the holes. The carve-out
+`continue` skipped the verdict comparison as well as the derivation, so
+`TraceSeamsBad.cfg` — the one row singled out for attention — was the only RED in
+the file that could be turned GREEN with the row happy. `read_text` folds
+`\r\n`, and a CRLF `floors.txt` makes `[ "$distinct" -lt "200\r" ]` an integer
+error, which bash reads as false and every floored row falls through to GREEN —
+so the audit asks the bytes. `test_a_red_row_given_a_floor_is_rejected` asserted
+`[…] == problems`, which is `[] == []` when the rule is gone. That is guard hole
+six of six, caught before it shipped rather than after.
+
+182 cases in `scripts/test_verdict_gate.py`, and the families they run over are
+**derived** from `floors.txt` rather than listed — which is the whole difference
+from the layer that covered two of them by accident. `RED`→`GREEN`, a deleted
+row, a masking wildcard and a wrong-reason RED each run on all 25; the floor arms
+run on all 26 subjects that carry one, in both directions, because a guard that
+refuses a legitimate re-measurement is deleted the first week a model shrinks.
+
+What it deliberately does not catch: which of several invariants a configuration
+checks a mutation actually breaks. Swap `R4cGateAnswers` for
+`R4bAlphaMatchesGamma` on a row whose configuration checks both and this stays
+green — only a run tells those apart, and the weekly matrix is that run. What
+closes here is the cheap half: the registry is no longer weakenable in the six
+days between two of them.
 
 ### And the dead-action check, which is the vacuity question
 
