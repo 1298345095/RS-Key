@@ -14,12 +14,12 @@
 //! compared to itself. Two of the four are STEP recorders, the third is CROSS-FID
 //! and the fourth forbids an ANSWER rather than a state; none has a per-FID face.
 //!
-//! **And it is not a Kani harness here.** What is out of CBMC's reach is the
-//! clauses over a MEDIUM: `docs/store-refinement.md` measured both blob
-//! obligations timing out at 420 s even with `EF_META` aliased under `cfg(kani)`
-//! and `META_MAX` shrunk. The two fault-site obligations verify in 0.107 s each,
-//! and taking them is its own change — a `cfg(kani)` redefinition of a public
-//! constant and a status change for two registry rows — not a footnote to this file.
+//! **And its clauses over a MEDIUM are out of CBMC's reach.**
+//! `docs/store-refinement.md` measured both blob obligations timing out at 420 s
+//! even with `EF_META` aliased under `cfg(kani)` and `META_MAX` shrunk. The two
+//! fault-site obligations do verify, in 0.107 s each, but taking them is its own
+//! change — a `cfg(kani)` redefinition of a public constant and a status change
+//! for two registry rows — not a footnote to this file.
 //!
 //! So: exhaustive enumeration on the host, over the REAL `Fs`, a REAL medium and
 //! three FIDs, with the recorders read after every step. Bounded in the same
