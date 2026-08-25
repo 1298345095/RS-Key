@@ -180,7 +180,7 @@ def test_a_generator_that_dies_says_so_and_says_nothing_else(tree):
     group: measured, that wrote four of nineteen families and the caller saw 0.
 
     ONE finding, because everything downstream would also fire — a generator that
-    wrote nothing leaves all 188 files reading as unregistered, and telling the
+    wrote nothing leaves all 191 files reading as unregistered, and telling the
     reader their tree is wrong when the generator is is the report defect this
     tree has shipped before.
     """
@@ -231,7 +231,7 @@ def test_the_generator_still_takes_an_output_directory():
 
 
 def test_a_generated_config_that_lost_its_header_is_found(tree):
-    """The sentence the row is NAMED after, held on the side that has 187 files.
+    """The sentence the row is NAMED after, held on the side that has 191 files.
 
     It was checked only on the one hand-written file: rewrite the generator's
     header, regenerate so the tree agrees, and every configuration stopped

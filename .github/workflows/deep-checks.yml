@@ -497,9 +497,10 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
 
-      # Shipped.cfg alone is 61 M distinct states at 1137 s on the author's
-      # machine; the rest of the matrix is seconds apiece. Two workers is what
-      # run-tlc.sh caps at, and the runner has four cores.
+      # Shipped.cfg alone is 48.7 M distinct states — 539 s on the author's
+      # machine, 21 min re-measured with a gate run beside it; the rest of the
+      # matrix is seconds apiece. Two workers is what run-tlc.sh caps at, and
+      # the runner has four cores.
       # `set -o pipefail` is load-bearing: a `run:` block is `bash -e` WITHOUT it,
       # so the pipe below would report tee's exit code and a RED matrix would pass
       # as green — the exact hole this row exists to close, in the row itself.

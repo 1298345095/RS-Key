@@ -191,8 +191,8 @@ def co_refuted(root: pathlib.Path) -> dict[str, list[str]]:
 
     A model mutant whose CODE twin was driven against the real suite and caught is
     evidence about the code, not only about the model — and the status ladder
-    cannot see it, because BOUNDED keys on a Kani harness name. Twenty of the
-    forty-two MODELLED-ONLY rows carried one, which reads in the table as "no
+    cannot see it, because BOUNDED keys on a Kani harness name. Twenty-eight of
+    the forty-four MODELLED-ONLY rows carry one, which reads in the table as "no
     evidence at all". Derived here rather than hand-recorded, like every other
     column; `scripts/comutate.py` owns the invariant lookup and is reused.
     """

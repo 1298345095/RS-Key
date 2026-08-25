@@ -444,9 +444,9 @@ exclusion and its reason live in that guard, next to the roster it belongs to.
 machine — PIN retries, the pinUvAuthToken and its permissions, which transport
 owns the touch, which channel owns a stateful walk, the reset window, the
 persistent gate records, and the position at which power is lost inside a
-multi-write flash sequence. TLC checks six named invariants exhaustively at
-small constants; the names are the ones the `rsk-fido` Kani harnesses use, so
-one property reads model → code → harness by grep.
+multi-write flash sequence. TLC checks eight named invariants exhaustively at
+the firmware's own PIN-retry constants; the names are the ones the `rsk-fido`
+Kani harnesses use, so one property reads model → code → harness by grep.
 
 It exists because Kani proves a property over *one call* and RS-Key's dangerous
 defects have lived in *orderings*. It is a **design artefact, not a proof of the
@@ -492,7 +492,7 @@ The companion co-refutation run asks whether production tests reject those
 same semantic defects. The original phase-2 baseline is fixed at 28 rows:
 26 are killed by code-level harnesses, two are unreachable by construction,
 and none remains a gap. Its generated table is in `formal/README.md`; ordinary
-`check.sh` rejects drift, while the full 67-entry live roster runs weekly:
+`check.sh` rejects drift, while the full 69-entry live roster runs weekly:
 
 ```sh
 python scripts/comutate.py --lint
@@ -520,12 +520,13 @@ is measured; nothing in it is an aspiration.
 > reset phases, abort and reboot; the complete `FidoState` and byte-level flash
 > are linked by unit tests and sampled power-cut fuzz, not by that proof. On top
 > of that sits a
-> **TLA+ model** of the authenticator's security state. TLC checks six named
-> invariants exhaustively over 60,020,016 states at small constants. **That
-> is a result about the model, not about the firmware binary**: it is only as
-> good as the model's fidelity to the code. Citations and co-refutation are
-> maintained by hand; a bounded emulator trace also checks raw C-state → B and
-> α(C) = γ(B) at recorded boundaries, but says nothing about unrecorded runs. Every
+> **TLA+ model** of the authenticator's security state. TLC checks eight named
+> invariants exhaustively over 48,679,968 distinct states at the firmware's own
+> PIN-retry constants. **That is a result about the model, not about the
+> firmware binary**: it is only as good as the model's fidelity to the code.
+> Citations and co-refutation are maintained by hand; a bounded emulator trace
+> also checks raw C-state → B and α(C) = γ(B) at recorded boundaries, but says
+> nothing about unrecorded runs. Every
 > invariant has been shown to be breakable by an injected defect, so none of
 > them is a check that cannot fail — and the model has already produced two
 > counterexamples on the shipped tree, both fixed and co-refuted since.

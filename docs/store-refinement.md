@@ -75,10 +75,10 @@ ever have covered the FIDs a harness enumerated.
 ## What this is not
 
 - **Not a Kani result for the persistent half — and the first version of this
-  bullet was wrong about why.** `NoOrphanedMetadata`, `NoRecordLostToMetaWrite`
-  and `NoFalseMetaAbsent` have a bridge now — `store_steps_tests.rs`, below — but
-  it is a host sweep, so the three stay `MODELLED-ONLY`: `assurance_gate` reads
-  `BOUNDED` off a Kani harness name.
+  bullet was wrong about why.** `NoOrphanedMetadata`, `NoRecordLostToMetaWrite`,
+  `NoFalseMetaAbsent` and `NoSilentOrphan` have a bridge now —
+  `store_steps_tests.rs`, below — but it is a host sweep, so the four stay
+  `MODELLED-ONLY`: `assurance_gate` reads `BOUNDED` off a Kani harness name.
 
   A harness that does nothing but `meta_add` does fail, and the message is the
   present map:
@@ -140,9 +140,9 @@ write kept the one file we looked at".
 |---|---|---|
 | every three-step sequence | the clauses over a fresh store | 12³ = 1728 orderings, 5184 steps |
 | the same, then a reboot with no `scan` | EF_META UNKNOWN rather than confirmed — the 0x077C door | 1728 × 12 more steps |
-| every two-step sequence over a failing medium | the FAULT path both meta recorders are about | 144 orderings |
+| every two-step sequence over a failing medium | the FAULT path three of the recorders are about | 144 orderings |
 | each recorder against the state its invariant forbids | that a recorder can answer TRUE at all | 6 assertions |
-| a live-read counter per recorder | that the sweeps are not a loop over nothing | 4 counters, all `> 0` |
+| a live-read counter per recorder | that the sweeps are not a loop over nothing | 5 counters, each `> 0` in the sweeps that reach it |
 
 Two measurements decide whether this is worth anything.
 
@@ -176,14 +176,16 @@ survives in both** and an orphan is a record over a *gone* value.
 exist — and `cargo test -p rsk-fs` does kill this mutant, through
 `powercut::tests::a_cut_never_leaves_metadata_behind_a_file_that_is_gone`.
 
-### The one shape the sweep will not judge, and the defect behind it
+### The one shape the sweep could not judge, and the defect behind it
 
-**A faulted `Delete`.** `MetaAdd` and `MetaDelete` each carry a faulted disjunct
-in the model; `Delete` carries none — `dead` there is a power *cut*, not a medium
-error. Reading `NoOrphanedMetadata` at a faulted delete would be judging a step
-nothing states, so the fault is armed only for the two actions that have one.
+**A faulted `Delete`.** `MetaAdd` and `MetaDelete` each carried a faulted disjunct
+in the model and `Delete` carried none — `dead` there is a power *cut*, not a
+medium error — so reading `NoOrphanedMetadata` at a faulted delete would have been
+judging a step nothing stated, and the fault was armed only for the two actions
+that had one. Both halves are closed now; the code's is below, the model's at the
+end of this section.
 
-That is a modelling decision, and it is standing in front of something real. The
+That was a modelling decision, and it was standing in front of something real. The
 first version of this paragraph described it as a meta-only-file curiosity. **It
 is not.** `Fs::delete` used to swallow `meta_delete`'s error (a `let _ =` in
 `fs.rs`, deliberately quoted without a line — the fix moved it) and then remove
@@ -222,12 +224,15 @@ it reads the answer: the head gets a retry, because one read can fault where the
 next lands, and the key is read back, because a `remove` that failed leaves the
 source holding a live key. Both directions answer `6581`.
 
-The model's half is the other item, and it is still open: `RSKeyStore!Delete`
-carries no faulted disjunct, so the sweep still cannot judge the shape, and
-`NoOrphanedMetadata` still reads as unconditional where the code now permits an
-orphan on an error it reports. Until that lands the invariant is stated more
-strongly than the code holds it, which is the direction that at least fails
-loudly.
+**And the model's half landed with it**, in `41c3b70`. `RSKeyStore!Delete`
+carries a second disjunct now — the medium error, one backend write and no cut
+point — and it took two clauses rather than one weakened one: an orphaned record
+IS a state the shipped tree reaches, so `NoOrphanedMetadata` keeps every arm whose
+drop landed while `NoSilentOrphan` (SEC-STORE-006) forbids the one thing the code
+may not do, which is answer `Ok` from the arm that could not.
+`StoreSolo_BugDeleteHidesFaultedDrop.cfg` is what says the new arm is reachable
+rather than inert — RED on `NoSilentOrphan` in 61 distinct states at depth 4 — and
+the sweep's fifth recorder asks the same question of the real `Fs`.
 
 The PR gate carries the same clauses at concrete FIDs
 (`a_cache_write_moves_one_fid_and_no_other_across_three_bytes` and

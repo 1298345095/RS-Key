@@ -34,7 +34,7 @@
 Shipped.cfg                          GREEN   20000000
 Seams.cfg                            GREEN   200
 \* The flash layer (RSKeyStore): a small exhaustive space -- 364 distinct at
-\* depth 6 -- so its floor is set near a third, the same rule as its siblings.
+\* depth 7 -- so its floor is set near a third, the same rule as its siblings.
 Store.cfg                            GREEN   90
 \* The retry/recovery lattice (RSKeyRetryLattice): 243 distinct at depth 11, five
 \* budgeted references over a ceiling of two -- a third is the floor here too.
