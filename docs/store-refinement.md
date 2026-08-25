@@ -239,6 +239,19 @@ medium refused and the value may be live. Held by
 `a_faulted_metadata_drop_is_reported_by_force_delete_too` at the `Fs` layer and
 `a_reset_answers_for_the_heads_it_could_not_drop` at the APDU layer.
 
+**Every caller now carries a written decision**, in
+[`assurance/deleters.toml`](https://github.com/TheMaxMur/RS-Key/blob/main/assurance/deleters.toml):
+43 sites — 24 `delete`, 9 `delete_key`, 10 `force_delete` — each classed, each
+saying whether its fid can carry a head, and each saying whether discarding the
+answer is an allowed best-effort wipe there or a device reporting success over
+something still in flash. The roster under those decisions is **derived**, not
+stored: `scripts/deleter_gate.py` reads the tree for the sites, the verbs and
+whether each statement reads or discards the `Result`, and holds the file to that
+in both directions, so a new caller arriving unaudited or a `must-read` site
+quietly becoming a `let _ =` reddens the `delete-caller dispositions` row. It
+derives the head-minting crates too, because every `drops-head` decision rests on
+that being `rsk-piv` alone.
+
 **And the model's half landed with it**, in `41c3b70`. `RSKeyStore!Delete`
 carries a second disjunct now — the medium error, one backend write and no cut
 point — and it took two clauses rather than one weakened one: an orphaned record

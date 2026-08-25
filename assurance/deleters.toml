@@ -1,0 +1,534 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 RS-Key contributors
+#
+# The delete-family caller dispositions. `Fs::delete`, `Fs::delete_key` and
+# `Fs::force_delete` each remove the value whatever their EF_META drop did, and
+# each RETURNS what that drop did: `Err` names a state — the value is gone and a
+# record may still stand over it — rather than a no-op. So every caller makes a
+# decision, and this file is where the decision is written down.
+#
+# NOT a roster. `scripts/deleter_gate.py` derives which sites exist, which verb
+# each calls and whether each reads or discards the answer, and holds this file
+# to that in both directions. What is stored here is only the judgement a script
+# cannot make: which class the site is in, whether the fid can carry an EF_META
+# head, whether discarding is allowed there, and why. A ledger written from
+# memory is what `assurance/crates.toml`'s header records going wrong, and the
+# audit this file comes out of began by refuting a sentence in
+# docs/store-refinement.md that named "the one caller in the tree that deletes a
+# fid carrying a head" — there were two, and the second was hiding a faulted
+# drop on the reset path.
+#
+# Scope, matching the roadmap's §3.4 so the counts reproduce: callers outside
+# `crates/rsk-fs` (which defines the family), outside `fuzz/`, and outside the
+# cfg-gated `*_tests.rs` / `*_kani.rs` sources. That leaves 43 — 24 `delete`,
+# 9 `delete_key`, 10 `force_delete`. The one in-crate caller left out by the
+# scope rule is `rsk-fs`'s own `request_rescrub` (`lib.rs`), which re-arms the
+# at-rest scrub marker and is best-effort for the reason `init.rs`'s pair below
+# are: the next boot runs it again.
+#
+# class
+#   wipe-sweep     a batched reset/factory-wipe phase, with a delete budget and
+#                  a two-phase order carrying the security property
+#   secret-or-gate the record is a secret or an authorization/policy gate; a
+#                  survivor changes what the device will do or hand over
+#   metadata       the site deletes a fid that carries an EF_META head, and the
+#                  head is the point
+#   bookkeeping    an index, cache, label or public object; a survivor costs a
+#                  re-derivation, not a decision
+#
+# metadata
+#   drops-head     the fid can carry an EF_META head and the drop must go with
+#                  the value. `force_delete`'s and `delete`'s postconditions
+#                  differ nowhere else, so this is the axis §5A п.6 asks each
+#                  site to name
+#   none           the fid carries no head — heads are minted on PIV key fids
+#                  alone (`head_minters` below, derived), so the metadata half
+#                  of the answer is vacuous at this site
+#
+# disposition
+#   must-read      the answer is load-bearing here; the site reads it
+#   best-effort    discarding is allowed here, and `why` says what makes it so
+#
+# `answer` is DERIVED, not decided: it says what the statement actually does
+# with the `Result`. It is in the file so that a site changing from one to the
+# other cannot pass as an unrelated edit — the gate compares them and requires
+# the disposition to agree.
+
+# The crates that write an EF_META head, derived by the gate. Every `drops-head`
+# disposition rests on this being one crate; a second minter arriving silently
+# is how that premise stops holding while every entry still reads as if it does.
+head_minters = ["crates/rsk-piv"]
+
+
+[[site]]
+file = "crates/rsk-fido/src/config.rs"
+line = 344
+call = "ctx.fs.delete(EF_ALWAYS_UV).map_err(|_| CtapError::Other)?;"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "the record IS the alwaysUv policy, and toggleAlwaysUv's whole effect is moving it; a survivor leaves the platform's view of UV enforcement wrong."
+
+[[site]]
+file = "crates/rsk-fido/src/config.rs"
+line = 377
+call = ".and_then(|()| ctx.fs.delete_key(EF_KEY_DEV))"
+verb = "delete_key"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "AUT_ENABLE wraps the seed and then drops the plain copy: a survivor means the soft lock is not engaged while the card reports it is."
+
+[[site]]
+file = "crates/rsk-fido/src/config.rs"
+line = 416
+call = ".delete_key(EF_KEY_DEV_ENC)"
+verb = "delete_key"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "AUT_DISABLE's mirror — a surviving wrapped copy keeps lock_engaged true, so the device demands an unlock it has just said it released."
+
+[[site]]
+file = "crates/rsk-fido/src/config.rs"
+line = 429
+call = "ctx.fs.delete(EF_EA_RPIDS).map_err(|_| CtapError::Other)?;"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "an empty rpId list means no RP qualifies for vendor-facilitated enterprise attestation; a surviving list keeps the ones the host removed."
+
+[[site]]
+file = "crates/rsk-fido/src/credmgmt.rs"
+line = 673
+call = ".delete(EF_CRED + slot)"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "deleteCredential's only effect. A surviving EF_CRED is an assertable credential the platform was told is gone."
+
+[[site]]
+file = "crates/rsk-fido/src/credmgmt.rs"
+line = 706
+call = "let _ = fs.delete(EF_RP + j);"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "the RP index at count zero, and the credential it counted has already gone through the read above; a survivor is a stale count the next decrement or a reset reclaims."
+
+[[site]]
+file = "crates/rsk-fido/src/credmgmt.rs"
+line = 711
+call = "let _ = fs.delete(crate::consts::EF_RPNICK + j);"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "a device-local nickname sealed with the rpIdHash as AAD, never surfaced while its EF_RP slot is empty and rejected outright if the slot is reused."
+
+[[site]]
+file = "crates/rsk-fido/src/journal.rs"
+line = 192
+call = "fs.delete(EF_AUDIT_ENABLED).map_err(|_| ())"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "the flag is what is_enabled gates journalling on, and the vendor command records the transition — turning it off has to have happened."
+
+[[site]]
+file = "crates/rsk-fido/src/journal.rs"
+line = 361
+call = "let _ = ctx.fs.delete(EF_AUDIT_RING + i as u16);"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "the entries are already folded into the epoch and passed by m.start, and reset regenerates the device seed before this runs, so a survivor is unreachable and undecryptable."
+
+[[site]]
+file = "crates/rsk-fido/src/largeblobext.rs"
+line = 276
+call = "let _ = fs.delete(EF_CRED_BLOB + slot);"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "the blob is AAD-bound to its credential slot, so the slot's next owner cannot open a survivor, and credential_store clears it anyway."
+
+[[site]]
+file = "crates/rsk-fido/src/passkeys.rs"
+line = 190
+call = "let _ = fs.delete(EF_RPNICK + slot); // absent is fine — the RP ends up unnamed"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "clearing a display-only label: a survivor keeps the old nickname on the panel, which is what the line beside it says it is willing to leave."
+
+[[site]]
+file = "crates/rsk-fido/src/passkeys.rs"
+line = 278
+call = "if fs.delete(ef_cred_fid).is_err() {"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "the panel's own deleteCredential — it reports the deletion to the owner's face, and a surviving EF_CRED is still assertable."
+
+[[site]]
+file = "crates/rsk-fido/src/reset.rs"
+line = 66
+call = "ctx.fs.force_delete(fid).map_err(|_| CtapError::Other)?;"
+verb = "force_delete"
+answer = "read"
+class = "wipe-sweep"
+metadata = "none"
+disposition = "must-read"
+why = "the seed fids ahead of the batch. FIDO fids carry no EF_META head, so the metadata half of the answer is vacuous here; the value half is the seed every box is derived from."
+
+[[site]]
+file = "crates/rsk-fido/src/reset.rs"
+line = 111
+call = "ctx.fs.force_delete(fid).map_err(|_| CtapError::Other)?;"
+verb = "force_delete"
+answer = "read"
+class = "wipe-sweep"
+metadata = "none"
+disposition = "must-read"
+why = "the sweep. Best-effort in the sense that a torn wipe is a state the design accepts, NOT in the sense that it may be reported as a completed one — the sweep's own rule is that a flash fault means the range cannot be proven clear."
+
+[[site]]
+file = "crates/rsk-fido/src/seed.rs"
+line = 320
+call = "fs.force_delete(EF_PAUTHTOKEN.get())"
+verb = "force_delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared."
+
+[[site]]
+file = "crates/rsk-fido/src/vendor.rs"
+line = 425
+call = ".force_delete(EF_ATT_KEY.get())"
+verb = "force_delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "ATT_CLEAR, measured: discarding these two reported 'org attestation removed' over a half-done erase, and U2F REGISTER then answered 6F00 forever."
+
+[[site]]
+file = "crates/rsk-fido/src/vendor.rs"
+line = 428
+call = ".force_delete(EF_ATT_CHAIN)"
+verb = "force_delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "the chain half of the same erase, ordered after the key so the surviving combination is the harmless one."
+
+[[site]]
+file = "crates/rsk-fido/src/vendor.rs"
+line = 882
+call = "if ctx.fs.delete(EF_EE_DEV).is_err() {"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "BACKUP_LOAD drops the old certificate BEFORE the new seed commits: a survivor is a cert over a superseded key that matches_template would accept forever (audit run-32)."
+
+[[site]]
+file = "crates/rsk-oath/src/lib.rs"
+line = 321
+call = "Some((fid, _)) => match fs.delete(fid) {"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "DELETE's only effect. Discarded until 0x0988, so a refused removal answered 9000 and the host tool printed 'deleted' over a TOTP secret still in flash."
+
+[[site]]
+file = "crates/rsk-oath/src/lib.rs"
+line = 344
+call = "let dropped = fs.delete_key(EF_OATH_CODE);"
+verb = "delete_key"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "SET CODE's 73 00: select derives validated from !code_set, so a 9000 over a code that stayed locks the card again next power cycle behind a code the owner was told was gone."
+
+[[site]]
+file = "crates/rsk-oath/src/lib.rs"
+line = 391
+call = "let dropped = fs.delete(EF_OTP_PIN);"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "VERIFY PIN raises the same validated flag VALIDATE does, so an OTP-PIN that survives installing an access code is a second and invisible way past it."
+
+[[site]]
+file = "crates/rsk-oath/src/lib.rs"
+line = 1529
+call = "fs.force_delete(fid).map_err(|_| Sw::MEMORY_FAILURE)?;"
+verb = "force_delete"
+answer = "read"
+class = "wipe-sweep"
+metadata = "none"
+disposition = "must-read"
+why = "wipe_oath's sweep, credentials first then the unlock records; OATH fids carry no EF_META head, and a truncated walk already fails the wipe rather than reporting the range clear."
+
+[[site]]
+file = "crates/rsk-openpgp/src/init.rs"
+line = 164
+call = "let _ = fs.delete(EF_RC);"
+verb = "delete"
+answer = "discarded"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "best-effort"
+why = "scan_files runs neutralize_default_reset_code at every SELECT and it is idempotent, so a failed pass is retried on the next select rather than lost."
+
+[[site]]
+file = "crates/rsk-openpgp/src/init.rs"
+line = 165
+call = "let _ = fs.delete_key(EF_DEK_RC);"
+verb = "delete_key"
+answer = "discarded"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "best-effort"
+why = "the DEK half of the same idempotent repair, and it only ever fires for the PUBLISHED factory reset code."
+
+[[site]]
+file = "crates/rsk-openpgp/src/lib.rs"
+line = 277
+call = "let _ = fs.delete(stor);"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "one instance of the cardholder certificate: a public data object the host reads back with GET DATA and can overwrite, gating nothing."
+
+[[site]]
+file = "crates/rsk-openpgp/src/pin.rs"
+line = 393
+call = "let _ = fs.delete_key(stage);"
+verb = "delete_key"
+answer = "discarded"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "best-effort"
+why = "load_dek re-runs this retirement on every PIN use, so a failed one is retried rather than lost, and the stage only opens under a PIN the owner has already replaced."
+
+[[site]]
+file = "crates/rsk-openpgp/src/pin.rs"
+line = 460
+call = "let _ = fs.delete_key(stage);"
+verb = "delete_key"
+answer = "discarded"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "best-effort"
+why = "the same retirement after a recovered update commits; the same next-load_dek repair covers it."
+
+[[site]]
+file = "crates/rsk-openpgp/src/pin.rs"
+line = 516
+call = "let _ = fs.delete_key(stage);"
+verb = "delete_key"
+answer = "discarded"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "best-effort"
+why = "and after an ordinary staged commit. All three are the one record load_dek is built to finish off."
+
+[[site]]
+file = "crates/rsk-openpgp/src/pin.rs"
+line = 871
+call = "let verifier = fs.delete(EF_RC).is_ok();"
+verb = "delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "the RC verifier is what RESET RETRY P1=0 walks in through, and init's repair pass reaches the FACTORY code alone — nothing on the card clears a set one."
+
+[[site]]
+file = "crates/rsk-openpgp/src/pin.rs"
+line = 872
+call = "let dek = fs.delete_key(EF_DEK_RC).is_ok();"
+verb = "delete_key"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "the DEK sealed under that reset code. A survivor of either half leaves the revoked credential able to reset PW1."
+
+[[site]]
+file = "crates/rsk-openpgp/src/putdata.rs"
+line = 151
+call = "if fs.has_key(slot) && fs.force_delete(slot.get()).is_err() {"
+verb = "force_delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "SEC-POL-003: changing a slot's algorithm attribute invalidates its key, and a survivor is a key the card would go on using under the wrong attribute."
+
+[[site]]
+file = "crates/rsk-openpgp/src/putdata.rs"
+line = 155
+call = "if fs.has_data(public) && fs.force_delete(public).is_err() {"
+verb = "force_delete"
+answer = "read"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "must-read"
+why = "the public half of the same invalidation — a point still served for a key that is no longer there."
+
+[[site]]
+file = "crates/rsk-openpgp/src/putdata.rs"
+line = 198
+call = "let _ = fs.delete(target);"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "the generic DO writer's empty-body clear. The host reads every one of these back with GET DATA, and the two that gate anything fail CLOSED: a survivor keeps the stricter UIF or the previous attribute, over a key the branch above has already invalidated."
+
+[[site]]
+file = "crates/rsk-openpgp/src/terminate.rs"
+line = 167
+call = "fs.force_delete(fid).map_err(|_| Sw::MEMORY_FAILURE)?;"
+verb = "force_delete"
+answer = "read"
+class = "wipe-sweep"
+metadata = "none"
+disposition = "must-read"
+why = "TERMINATE DF's sweep, secrets before the UIF gates scan_files would re-seed. OpenPGP fids carry no EF_META head, and the phase above already refuses to call a truncated walk an empty range."
+
+[[site]]
+file = "crates/rsk-otp/src/lib.rs"
+line = 432
+call = "let _ = fs.delete(fid);"
+verb = "delete"
+answer = "discarded"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "best-effort"
+why = "the reply is status(), recomputed from flash in the same response — so a slot that did not go still reports CONFIG_VALID and the host is told without being told."
+
+[[site]]
+file = "crates/rsk-otp/src/lib.rs"
+line = 553
+call = "let _ = fs.delete(fid1);"
+verb = "delete"
+answer = "discarded"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "best-effort"
+why = "the swap's first half, under the same self-reporting status() reply."
+
+[[site]]
+file = "crates/rsk-otp/src/lib.rs"
+line = 563
+call = "let _ = fs.delete(fid2);"
+verb = "delete"
+answer = "discarded"
+class = "secret-or-gate"
+metadata = "none"
+disposition = "best-effort"
+why = "and its second. Both slots' valid bits come off flash in the response that acknowledges the swap."
+
+[[site]]
+file = "crates/rsk-piv/src/files.rs"
+line = 469
+call = "fs.force_delete(fid).map_err(|_| Sw::MEMORY_FAILURE)?;"
+verb = "force_delete"
+answer = "read"
+class = "wipe-sweep"
+metadata = "drops-head"
+disposition = "must-read"
+why = "the site this audit was about: PIV key fids carry EF_META heads, so the metadata half is NOT vacuous, and force_delete hid a faulted drop here until 0x0987. GET METADATA answers from that head with no has_key probe."
+
+[[site]]
+file = "crates/rsk-piv/src/lib.rs"
+line = 839
+call = "return match fs.delete(fid) {"
+verb = "delete"
+answer = "read"
+class = "bookkeeping"
+metadata = "none"
+disposition = "must-read"
+why = "PUT DATA with an empty body IS the object delete, so the removal is the whole command; it has answered 6581 all along."
+
+[[site]]
+file = "crates/rsk-piv/src/lib.rs"
+line = 1135
+call = "let _ = fs.delete(tofid);"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "clearing the destination's certificate when the source has none. A public object, read back with GET DATA, gating nothing — a survivor is the destination's previous cert."
+
+[[site]]
+file = "crates/rsk-piv/src/lib.rs"
+line = 1160
+call = "let dropped = fs.delete_key(key_fid(from));"
+verb = "delete_key"
+answer = "read"
+class = "metadata"
+metadata = "drops-head"
+disposition = "must-read"
+why = "MOVE with to = 0xFF, the slot delete. The head earns a retry because one EF_META read can fault where the next lands, and the key is read back because a failed remove leaves the source holding it."
+
+[[site]]
+file = "crates/rsk-piv/src/lib.rs"
+line = 1161
+call = "let _ = fs.delete(pubkey_fid(from));"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "the source's cached public point. Heads live on key_fid alone, so this fid carries none, and GET METADATA derives the point when it is absent."
+
+[[site]]
+file = "crates/rsk-piv/src/lib.rs"
+line = 1163
+call = "let _ = fs.delete(f);"
+verb = "delete"
+answer = "discarded"
+class = "bookkeeping"
+metadata = "none"
+disposition = "best-effort"
+why = "the source's certificate. Public, gating nothing, and MOVE's own answer already covers the key and its head."

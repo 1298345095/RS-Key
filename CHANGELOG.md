@@ -104,6 +104,25 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   covered. One comment-aware reader in `scripts/gate_lines.py` now, a floor on
   the cases each table carries, and the mutation driven at all 11 + 8 + 19 sites.
 
+- **Every caller of the delete family carries a written decision now, over a
+  roster nothing hand-keeps.** `assurance/deleters.toml` disposes of all 43 sites
+  outside `crates/rsk-fs` — 24 `Fs::delete`, 9 `delete_key`, 10 `force_delete` —
+  each classed, each naming whether its fid can carry an EF_META head (the axis
+  `force_delete`'s postcondition differs on, and the one the 0x077C databug turned
+  on), and each saying whether discarding the deleter's answer is an allowed
+  best-effort wipe there or a device reporting success over something still in
+  flash. The roster under those decisions is **derived**: `scripts/deleter_gate.py`
+  reads the tree for the sites, the verb each calls and whether the statement
+  reads or discards the `Result`, and holds the file to it in both directions —
+  so a new caller arriving unaudited, a `must-read` site quietly becoming a
+  `let _ =`, or a relabelling in place of a re-decision all redden the new
+  `delete-caller dispositions` row. It derives the head-minting crates too,
+  because every `drops-head` decision rests on that set being `rsk-piv` alone.
+  19 cases in `scripts/test_deleter_gate.py`, and the row itself was driven red
+  through `./scripts/check.sh` (EXIT=1 at `== delete-caller dispositions ==`)
+  rather than only through the function — five of the five guards this repo
+  shipped before it had a hole of that family.
+
 ### Fixed
 
 - **The faulted-drop defect that `Fs::delete` was cured of was still standing at
