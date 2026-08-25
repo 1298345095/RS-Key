@@ -43,6 +43,10 @@ Limits, so the row is not read as more than it is.
   that the registry names one the configuration checks and the runner can read.
   Swapping `R4cGateAnswers` for `R4bAlphaMatchesGamma` on a row whose
   configuration checks both stays green here, and the weekly matrix refuses it;
+* a divergence expressed in a constant that is neither a defect switch nor a
+  `Fix*` is not read as one. Those are SIZES — `MaxRetries`, `ResetWindow`, the
+  reduced constants `TokenRefinement.cfg` runs at — and whether a scope is big
+  enough to express a defect is `scope_gate.py`'s question, not this one's;
 * the floor comparison is against the last DIFFERING commit, not against a merge
   base, so a decrease split across two commits is judged in two steps and each
   step's marker is dropped by the next. That is deliberate — the marker is a
@@ -75,13 +79,28 @@ DEFECT = re.compile(r"^(?:Bug|Mutate)[A-Z]")
 #: which is a CONTROL and expects GREEN — the one thing that separates
 #: `TraceSecurityBadAlphaNoR4b.cfg` from the RED row it is the control for.
 OBSERVER = re.compile(r"^Check[A-Z]")
+#: A shipped fix, and the exclusion above read the other way round: taken OFF the
+#: arm the baseline ships it on, a `Fix*` is a defect present again, which is what
+#: `Historical_E77.cfg` is. Left unread it was an unlisted limit — `gen-configs
+#: .sh`'s `emit <name> <bug> <fix> <fix2>` makes a Fix-only mutant a
+#: one-argument change, and one would have derived GREEN.
+FIX = re.compile(r"^Fix[A-Z]")
+
+#: The configuration every `Fix*` arm is compared against: the tree as it stands,
+#: and the registry's own first row. Only the arm is read from it — a size that
+#: differs is a scope, not a mutation.
+BASELINE = "Shipped.cfg"
 
 #: The invariant TLC would report vacuously in every configuration; it is the
 #: type predicate, never a mutant's target.
 TYPE_INVARIANT = "TypeOK"
 
-#: Below this `run-tlc.sh` already refuses a GREEN as `VACUOUS`, so a floor here
-#: notices nothing that the runner does not notice first.
+#: Below this a GREEN says nothing: the Next relation fired nothing at all.
+#: `run-tlc.sh` refuses that as `VACUOUS` on its own — but only on the branch it
+#: reaches, and the `distinct < 2` test sits behind an `elif` after
+#: `grep -qE '^INIT([[:space:]]|$)'`. So for the two induction probes
+#: (`StoreInduction.cfg`, `BootInduction.cfg`) the runner holds depth to 1 and
+#: applies NO distinct floor whatever, and this is the only one they have.
 MIN_FLOOR = 2
 
 #: One weakening can reach 161 configurations — a wildcard laid over the whole
@@ -142,6 +161,20 @@ CONFIG_FLOOR = 100
 #: is the defect: `[A-Za-z]+` there and `R4cGateAnswers` here read RED coarsely
 #: and compared nothing for the whole life of the nine trace rows.
 RUNNER_READS = re.compile(r"'Invariant (?P<name>\S+) is violated'")
+
+#: `Name = value` or `Name <- operator`, the two spellings a `.cfg` assigns with.
+ASSIGNMENT = re.compile(r"([A-Za-z][A-Za-z0-9_]*)\s*(?:=|<-)\s*(.+)$")
+
+#: What STARTS one, which is not the same question: `Name =` with the value on
+#: the next line is an assignment whose first line carries no value. Read as a
+#: continuation of the line above it folds two constants into one, and the row
+#: then goes red naming the wrong one — measured, `Boot.cfg` reported
+#: `BugRekeyKeepsTheMarker` for a `BugMarkerBeforeScrub` that was switched on.
+ASSIGNS = re.compile(r"[A-Za-z][A-Za-z0-9_]*\s*(?:=|<-)")
+
+#: A TLA+ line comment, and it may sit AFTER a value. `Bug… = TRUE  \* kept` is
+#: TRUE to TLC and was "not armed" here, which is the whole of the finding below.
+INLINE_COMMENT = re.compile(r"\\\*")
 
 
 def git(root, *args):
@@ -204,6 +237,28 @@ def block_names(text, head):
     return list(dict.fromkeys(names))
 
 
+def statements(body):
+    """`body`'s lines with comment tails cut and wrapped values folded back on.
+
+    Both are legal TLA+ that TLC reads straight through, and reading either as
+    "no value" is the silent direction: a defect switched on in a BASELINE
+    configuration then derives GREEN. Measured end to end against real TLC —
+    `Boot.cfg` carrying `BugMarkerBeforeScrub = TRUE  \\* E-arm kept`, and the
+    same value wrapped onto the next line, each gave `run-tlc.sh` RED at
+    `MarkerNeverLies` with this row EXIT=0.
+    """
+    out = []
+    for raw in body.splitlines():
+        line = INLINE_COMMENT.split(raw, 1)[0].strip()
+        if not line:
+            continue
+        if out and not ASSIGNS.match(line):
+            out[-1] += " " + line
+        else:
+            out.append(line)
+    return out
+
+
 def assignments(text):
     """CONSTANT assignments of one configuration, as {name: raw value}.
 
@@ -213,16 +268,12 @@ def assignments(text):
     """
     out = {}
     block = re.search(r"^CONSTANTS?\s*$([\s\S]*?)(?=^[A-Z]+\s*$|\Z)", text, re.M)
-    for line in block.group(1).splitlines() if block else []:
-        line = line.strip()
-        if not line or line.startswith("\\*"):
-            continue
-        hit = re.match(r"([A-Za-z][A-Za-z0-9_]*)\s*(?:=|<-)\s*(.+)$", line)
+    for line in statements(block.group(1)) if block else []:
+        hit = ASSIGNMENT.match(line)
         if hit:
             out[hit.group(1)] = hit.group(2).strip()
-    for inline in re.finditer(r"^CONSTANTS?\s+([A-Za-z][A-Za-z0-9_]*)\s*(?:=|<-)\s*(.+)$",
-                              text, re.M):
-        out[inline.group(1)] = inline.group(2).strip()
+    for inline in re.finditer(rf"^CONSTANTS?\s+{ASSIGNMENT.pattern}", text, re.M):
+        out[inline.group(1)] = INLINE_COMMENT.split(inline.group(2), 1)[0].strip()
     return out
 
 
@@ -233,12 +284,19 @@ class Config:
         text = path.read_text(encoding="utf-8")
         self.name = path.name
         constants = assignments(text)
+        # A switch whose value is neither is a FINDING, never "not armed": every
+        # unreadable spelling would otherwise derive GREEN, which is the
+        # direction `v == "TRUE"` failed in by construction.
+        self.unreadable = sorted((n, v) for n, v in constants.items()
+                                 if (DEFECT.match(n) or OBSERVER.match(n))
+                                 and v not in ("TRUE", "FALSE"))
         self.armed = sorted(n for n, v in constants.items() if DEFECT.match(n) and v == "TRUE")
         self.disarmed = sorted(n for n, v in constants.items()
                                if OBSERVER.match(n) and v == "FALSE")
+        self.fixes = {n: v for n, v in constants.items() if FIX.match(n)}
         self.invariants = block_names(text, "INVARIANTS?")
         self.targets = [i for i in self.invariants if i != TYPE_INVARIANT]
-        self.properties = block_names(text, "PROPERTI?E?S?")
+        self.properties = block_names(text, "PROPERT(?:Y|IES)")
 
     @property
     def want(self):
@@ -282,7 +340,12 @@ def read_registry(text):
                 " <min distinct, or -> [heap] [invariant]`")
             continue
         pattern, want = parts[0], parts[1]
-        floor, invariant = (parts + ["-"] * COLUMNS)[2], (parts + ["-"] * COLUMNS)[4]
+        # `.rstrip()` because `read` strips trailing IFS whitespace off the last
+        # field and `split(None, 4)` keeps it: three spaces after the invariant
+        # name made TWO findings about a row the runner reads correctly, which is
+        # a red for the wrong reason and how a gate row comes to be deleted.
+        floor = (parts + ["-"] * COLUMNS)[2]
+        invariant = (parts + ["-"] * COLUMNS)[4].rstrip()
         if CLASS.search(pattern):
             problems.append(
                 f"{REGISTRY}:{number}: `{pattern}` carries a character class, which a shell"
@@ -356,6 +419,48 @@ def check_completeness(rows, first, every, problems):
                             " configuration in formal/ — an orphaned entry")
 
 
+def check_switches(configs, problems):
+    """A defect switch this row cannot read is reported, never taken for OFF.
+
+    The two spellings that defeated `v == "TRUE"` are read now, so what is left
+    here is everything else: `= 1`, `= TRUE /\\ FALSE`, a value that is no value.
+    Reported rather than skipped because the skip is the silent direction — the
+    weekly matrix would run the mutant this file called a baseline.
+    """
+    for name, config in sorted(configs.items()):
+        for switch, value in config.unreadable:
+            problems.append(
+                f"{name}: {switch} = {value!r}, which is neither TRUE nor FALSE — whether"
+                " the defect is switched on cannot be derived, and an unreadable switch"
+                " reads here exactly like one that is off")
+
+
+def check_reverted_fixes(configs, first, problems):
+    """A shipped fix taken back out is a defect, whatever its constant is called.
+
+    `Fix*` is not a defect switch — reading it as one would call every baseline a
+    mutant — so it is read as one exactly where it differs from `BASELINE`, which
+    is what `Historical_E77.cfg` is. One direction only: a reverted fix may not
+    be required GREEN, and nothing here asks a configuration to be RED.
+    """
+    baseline = configs.get(BASELINE)
+    if baseline is None:
+        problems.append(f"{BASELINE}: no such configuration, so a `Fix*` constant taken"
+                        " off the arm the tree ships has nothing to be compared with")
+        return
+    for name, config in sorted(configs.items()):
+        row = first.get(name)
+        if row is None or row["want"] == "RED":
+            continue
+        reverted = sorted(n for n, v in config.fixes.items()
+                          if n in baseline.fixes and v != baseline.fixes[n])
+        if reverted:
+            problems.append(
+                f"{name}: {REGISTRY}:{row['line']} `{row['pattern']}` requires GREEN, but"
+                f" it takes {', '.join(reverted)} off the arm {BASELINE} ships it on —"
+                " a fix taken back out is the defect it closed, and owes RED")
+
+
 def check_conflicts(every, problems):
     """Two rows over one configuration are refused, not settled by their order."""
     for name, hits in sorted(every.items()):
@@ -416,7 +521,8 @@ def check_row_shape(rows, reads, problems):
                             " way to nothing only")
         elif row["want"] == "GREEN" and row["floor"] < MIN_FLOOR:
             problems.append(f"{where}: GREEN floored at {row['floor']}, under the"
-                            f" {MIN_FLOOR} the runner already refuses as VACUOUS")
+                            f" {MIN_FLOOR} below which a GREEN says only that nothing"
+                            " was enabled")
         if row["want"] == "RED" and row["floor"] is not None:
             problems.append(f"{where}: RED with a floor of {row['floor']} — a counterexample"
                             " search halts at the first violation, so its state count is"
@@ -492,6 +598,18 @@ def check_floors(configs, first, ratchets, previous, text, problems):
             problems.append(f"{subject}: a floor-decrease marker with nothing to compare it to")
         return
     was_rows, was_ratchets, _ = read_registry(previous)
+    if not was_rows and not was_ratchets:
+        # `previous is None` above is not the whole of "git could not answer": a
+        # `git` that returned the empty string parses to no rows, every `before`
+        # is None, and NO FLOOR IS COMPARED WITH ANYTHING while this reports
+        # nothing at all — the exact failure the docstring above refuses.
+        problems.append(
+            f"the committed {REGISTRY} parses to no rows and no ratchets, so no floor could"
+            " be compared with anything — an answer of nothing reads here exactly like a"
+            " registry no floor fell in")
+        for subject in sorted(stated):
+            problems.append(f"{subject}: a floor-decrease marker with nothing to compare it to")
+        return
     was_first, _ = resolve(was_rows, sorted(configs))
     weakened = {}
     for name in sorted(configs):
@@ -539,7 +657,15 @@ def audit(formal=FORMAL, registry_text=None, previous_text=FROM_GIT, runner_text
         previous_text = previous_registry(formal.parent)
 
     rows, ratchets, problems = read_registry(text)
-    configs = {path.name: Config(path) for path in sorted(formal.glob("*.cfg"))}
+    configs = {}
+    for path in sorted(formal.glob("*.cfg")):
+        # A directory named `*.cfg` is an `IsADirectoryError` a line later, and a
+        # traceback is a report nobody can act on. `config_gen_gate.audit` has
+        # the same rule over the same glob, and for the same reason.
+        if path.is_file():
+            configs[path.name] = Config(path)
+        else:
+            problems.append(f"{path.name}: a formal/*.cfg entry that is not a regular file")
     first, every = resolve(rows, sorted(configs))
     if "\r" in text:
         # `read` leaves the CR on the last field, so `[ "$distinct" -lt "$floor" ]`
@@ -560,7 +686,9 @@ def audit(formal=FORMAL, registry_text=None, previous_text=FROM_GIT, runner_text
 
     check_completeness(rows, first, every, problems)
     check_conflicts(every, problems)
+    check_switches(configs, problems)
     check_verdicts(configs, first, problems)
+    check_reverted_fixes(configs, first, problems)
     check_row_shape(rows, reads, problems)
     check_reasons(configs, first, problems)
     check_floors(configs, first, ratchets, previous_text, text, problems)

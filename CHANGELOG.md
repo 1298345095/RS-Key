@@ -65,13 +65,32 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   blank verdict column for its whole life, is a static disagreement between two
   files now, and so is a `floors.txt` saved with CRLF endings — which makes the
   runner read `[ "$distinct" -lt "200\r" ]` as an integer error, take the
-  non-zero for "not below the floor", and pass every floored row. 182 cases in
+  non-zero for "not below the floor", and pass every floored row. 241 cases in
   `scripts/test_verdict_gate.py`, parametrized over families **derived** from
   `floors.txt` rather than listed, so a new family arrives covered instead of
   arriving unwatched. Six of the rules are review findings on the finished
   guard: 26 of 32 mutations of it died against the table and the six survivors
   were the holes, including one assertion that read `[] == []` once its rule was
   removed.
+- **The same row, after a second review refused it.** The verdict was derived
+  with `value == "TRUE"`, which two TLA+-legal spellings defeat — a trailing
+  `\*` comment and a value wrapped onto the next line — so a defect switched on
+  in a **baseline** configuration derived GREEN. Measured against real TLC rather
+  than read off the source: `Boot.cfg` with `BugMarkerBeforeScrub = TRUE  \* E-arm
+  kept` came back `RED: MarkerNeverLies … !! expected GREEN` from `run-tlc.sh`
+  while the row printed `ok` and exited 0, and routed through `gen-configs.sh`
+  the config generator's own gate stayed green as well. Both spellings are read
+  now, and a switch value that is neither `TRUE` nor `FALSE` is a finding rather
+  than a shrug. With it: a shipped `Fix*` taken back out owes RED (the exclusion
+  that kept `Shipped.cfg` from reading as a mutant had made a Fix-only mutation a
+  silent GREEN), a directory named `*.cfg` is reported instead of raising,
+  trailing whitespace after an invariant name is stripped the way `read` strips
+  it, `PROPERTY` is read as well as `PROPERTIES`, and a committed registry that
+  parses to nothing is a finding rather than a comparison of nothing with
+  nothing. The table gained the four arms on the ten **exact** RED rows that had
+  none, and four cases that run the script over a throwaway git checkout —
+  because every case called `audit()`, and `run()` returning 0 with all fourteen
+  findings printed survived all 182 of them.
 
 ## [0.4.11] - 2026-08-24
 

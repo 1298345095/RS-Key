@@ -2536,6 +2536,13 @@ to itself.
 | a remark typed after the invariant name | `` names R4cGateAnswers  and a remark, which … `[A-Za-z][A-Za-z0-9_]*` cannot read `` | **1** |
 | the file saved with CRLF endings | `` carries a CR, and … reads a floor of `200\r` as an integer error `` | **1** |
 | a row carrying a character class | `` `Boot[MS]*.cfg` … a shell `case` expands and this row resolves as a literal `` | **1** |
+| `Boot.cfg` carrying `BugMarkerBeforeScrub = TRUE  \* E-arm kept` | `requires GREEN, but the configuration switches BugMarkerBeforeScrub on and so owes RED` | **1** |
+| the same value wrapped onto the next line | the same, naming the same switch | **1** |
+| a switch value that is neither `TRUE` nor `FALSE` | `` = '1', which is neither TRUE nor FALSE — whether the defect is switched on cannot be derived `` | **1** |
+| a shipped fix taken back out of a GREEN configuration | `takes FixPpuatRequiresPin off the arm Shipped.cfg ships it on — a fix taken back out is the defect it closed` | **1** |
+| a directory named `*.cfg` in `formal/` | `a formal/*.cfg entry that is not a regular file` — a report, where it used to be an `IsADirectoryError` | **1** |
+| a committed registry that parses to nothing | `parses to no rows and no ratchets, so no floor could be compared with anything` | **1** |
+| three trailing spaces after an invariant name | the summary — `read` strips them off the last field, and so does this | 0 |
 
 **Six of those rows are review findings, not design.** An adversarial pass over
 the finished guard mutated its rules one at a time and drove the whole table:
@@ -2549,12 +2556,39 @@ so the audit asks the bytes. `test_a_red_row_given_a_floor_is_rejected` asserted
 `[…] == problems`, which is `[] == []` when the rule is gone. That is guard hole
 six of six, caught before it shipped rather than after.
 
-182 cases in `scripts/test_verdict_gate.py`, and the families they run over are
+**A second adversarial pass then refused the row**, and its blocker was in the
+centrepiece: the verdict was derived with `value == "TRUE"`, and two TLA+-legal
+spellings defeat that — a trailing `\*` comment and a value wrapped onto the next
+line. Measured end to end against real TLC, not read off the source: `Boot.cfg`
+carrying `BugMarkerBeforeScrub = TRUE  \* E-arm kept` gave `run-tlc.sh`
+`RED: MarkerNeverLies … !! expected GREEN` while this row printed
+`ok — 191 configuration(s)` and exited 0 — a defect switched on in a **baseline**
+configuration, passing the merge gate and dying six days later. Routed through
+`gen-configs.sh` instead of edited by hand, `config_gen_gate.py` stayed green
+too, so nothing else was a backstop. A switch value that is neither `TRUE` nor
+`FALSE` is a finding now rather than a shrug, because "not TRUE means not armed"
+is what failed, and it failed silently by construction. The fold has a boundary
+of its own: reading `Name =` as a continuation of the line above folds two
+constants into one, which reports the WRONG switch where a switch sits above it
+and reports NOTHING where a size does.
+
+The same pass found the row's exit code held by nothing — every case called
+`audit()`, so `run()` returning 0 with all fourteen findings printed survived the
+whole table — the `Fix*` exclusion unlisted, a directory named `*.cfg` raising
+instead of reporting, trailing whitespace after an invariant name producing two
+findings about a row the runner reads correctly, and `MIN_FLOOR`'s justification
+false for the two induction probes, whose `distinct < 2` check `run-tlc.sh`
+guards with an `elif` they never reach.
+
+241 cases in `scripts/test_verdict_gate.py`, and the families they run over are
 **derived** from `floors.txt` rather than listed — which is the whole difference
 from the layer that covered two of them by accident. `RED`→`GREEN`, a deleted
-row, a masking wildcard and a wrong-reason RED each run on all 25; the floor arms
-run on all 26 subjects that carry one, in both directions, because a guard that
+row, a masking wildcard and a wrong-reason RED each run on all 25 families **and
+on the ten exact RED rows**, which had had none of the four; the floor arms run
+on all 26 subjects that carry one, in both directions, because a guard that
 refuses a legitimate re-measurement is deleted the first week a model shrinks.
+Four more cases run the script itself over a throwaway git checkout, because an
+exit code is the only thing `check.sh` reads.
 
 What it deliberately does not catch: which of several invariants a configuration
 checks a mutation actually breaks. Swap `R4cGateAnswers` for
