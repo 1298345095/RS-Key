@@ -599,6 +599,12 @@ run "SPDX headers"             python scripts/spdx_gate.py
 run "generated TLC configs"    python scripts/config_gen_gate.py
 run "formal citations"         python scripts/citation_gate.py
 run "assurance registry"       python scripts/assurance_gate.py
+# The registry above says WHAT is claimed; this says of WHICH IMAGE. `nix build`
+# makes nineteen, `largeblob-ext` swaps the CTAP surface with no flake package at
+# all, and four no-touch builds remove the consent gate the authorization
+# properties are about — so a claim proved on the default build was being
+# asserted about eighteen others by silence.
+run "build-configuration matrix" python scripts/matrix_gate.py
 # Every caller of the delete family owes a disposition: allowed best-effort wipe,
 # or a device reporting success over a secret still in flash. The audit that
 # wrote them found `force_delete` hiding a faulted metadata drop on the reset

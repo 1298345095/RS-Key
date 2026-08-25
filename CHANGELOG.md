@@ -123,6 +123,48 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   rather than only through the function — five of the five guards this repo
   shipped before it had a hole of that family.
 
+- **A security property is claimed about an *image* now, not about "the
+  firmware".** The tree builds **19** named `firmware*` flake packages of which
+  `release-build.yml` publishes **14**; `firmware/Cargo.toml` carries **6** cargo
+  features no package expresses — `largeblob-ext` swaps the CTAP 2.1
+  `largeBlobKey` pair for the 2.3 `largeBlob` extension and holds **four**
+  `check.sh` rows at zero packages — and `firmware/boards/` is a third axis of
+  **6** presets under both. Every entry in `assurance/properties.toml` was
+  measured on exactly one of those **31** configurations and read as a claim
+  about all of them. The sharpest case is not hypothetical: "the no-touch image"
+  is **four** packages, and they replace the physical-consent gate the P0-launch
+  authorization properties are *about* with an instant auto-confirm.
+  `docs/assurance-matrix.md` is the disposition — **40** P0-family properties ×
+  31 configurations = **1240** cells, each `covered`, `equivalent`,
+  `conditional`, `out-of-scope` or `gap`. It is generated, never written:
+  `scripts/matrix_gate.py` derives the columns from `nix/firmware.nix`,
+  `firmware/Cargo.toml` and `firmware/boards/`, the rows from the registry, and
+  diffs the page on the new `build-configuration matrix` row, so a new package,
+  feature, board or P0-family property arrives as declared gaps rather than as
+  silence. `assurance/configurations.toml` holds only the half no derivation can
+  produce. `equivalent` takes **one** basis and both of its halves are
+  machine-checked: the two columns' derived per-crate cargo-feature closures
+  must be equal — `firmware-display` cannot be equivalent to `firmware`, its
+  closure moves six crates — **and** the cell must write down the build knobs
+  that still differ, with their values. That second half is a review finding on
+  the finished guard, and the measurement that earned it: all 143 `equivalent`
+  cells compared an *empty* feature set with an empty one (that is what "the
+  delta is knobs" means), so the rule was vacuous on every cell it guarded while
+  `FLASH_SIZE`, `KVMAIN`, `LED_KIND` and `led_order` — real `rustc-env` /
+  `rustc-cfg` inputs, and a regenerated `memory.x` — moved unread. Five more of
+  the same pass: a package written `attr =` / newline / `mkFirmware {` (a break
+  this very file already uses twice, and nothing runs `nixfmt --check`) was
+  invisible, and reformatting one onto a single line *erased its knob* and made
+  it read as the default build; a hand-declared `disposition = "gap"` took its
+  column out of the rule that makes a gap owe a question; a board in a
+  subdirectory was no column though `build.rs` builds it; one `elif` could not
+  fail; and the weak `dep?/feat` resolution depended on alphabetical order.
+  **955 of the 1240 cells are `gap` and say so**; every column carrying one owes
+  the question that would settle it, because a gap with no question is a shrug
+  with a verdict column. 46 cases in `scripts/test_matrix_gate.py`, and the row
+  was driven red through `./scripts/check.sh` (EXIT=1 at
+  `== build-configuration matrix ==`) rather than only through the function.
+
 ### Fixed
 
 - **The faulted-drop defect that `Fs::delete` was cured of was still standing at

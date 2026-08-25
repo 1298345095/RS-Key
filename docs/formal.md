@@ -102,6 +102,14 @@ model must *reject* is required to go red, so the replay harness is proven
 able to refuse. A green replay is evidence about the recorded sessions, not
 a proof about all runs; coverage grows by recording richer sessions.
 
+## Which image a claim is about
+
+Every statement above says "the firmware", and the firmware is nineteen flake
+packages, six cargo features no package expresses, and six board presets under
+both. The [assurance matrix](assurance-matrix.md) is the per-configuration
+disposition — generated from those three sources and the property registry, so a
+new image arrives as a column of declared gaps instead of as silence.
+
 ## The checks of the checks
 
 An invariant no defect can violate is the TLA+ analogue of a test that cannot
