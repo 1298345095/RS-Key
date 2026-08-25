@@ -31,8 +31,8 @@ EXTENDS Naturals, FiniteSets, TLC
 CONSTANTS
     RPs,                \* relying parties (>= 2 to exercise rpId binding)
     Channels,           \* CTAPHID channel ids (>= 2 to exercise walk ownership)
-    MaxRetries,         \* models MAX_PIN_RETRIES = 8   (consts.rs:361)
-    MismatchLimit,      \* models PIN_MISMATCH_LIMIT = 3 (consts.rs:365)
+    MaxRetries,         \* models MAX_PIN_RETRIES = 8   (consts.rs:364)
+    MismatchLimit,      \* models PIN_MISMATCH_LIMIT = 3 (consts.rs:368)
     MaxClock,           \* coarse tick ceiling
     ResetWindow         \* models RESET_WINDOW_MS = 10_000 (consts.rs:397)
 
@@ -478,7 +478,7 @@ OtpCancelWait ==
 \*
 \* So for those two the sole thing separating a stopped or expired token from a
 \* live authorization is that stopUsingPinUvAuthToken ALSO zeroes the
-\* permissions (state.rs:589-590). `verify_token` is a MAC over bytes that stay
+\* permissions (state.rs:552-553). `verify_token` is a MAC over bytes that stay
 \* put, so it keeps succeeding. Modelling one uniform guard hid that, and hid
 \* the BugStopUsingKeepsPerms mutant with it.
 TokenGuardUv(p, rp) ==
@@ -1434,7 +1434,7 @@ OpAdvances ==
     \/ ResetRefused \/ ResetConfirmed \/ ResetSweepSecrets \/ ResetSweepGates
     \/ ResetFinish \/ ResetAborts
 
-\* The presence wait carries PRESENCE_TIMEOUT_MS
+\* The presence wait times out on its own budget
 \* (crates/rsk-device/src/presence.rs:215-216),
 \* so it resolves with no finger and no cancel. This is the assumption that makes
 \* every ceremony terminate, and it is the one the firmware most clearly owes.
@@ -1541,7 +1541,7 @@ NoTokenAfterInvalidation ==
     /\ "NoTokenAfterInvalidation" \notin viol
     \* Every path that retires a session token must leave nothing behind that
     \* still opens a door. `verify_token` is a MAC over bytes that stay put, so
-    \* zero permissions is the whole defence (state.rs:589-590).
+    \* zero permissions is the whole defence (state.rs:552-553).
     /\ ~(plat.held /\ plat.revoked /\ tok.perms # {})
     \* And every path that revokes the persistent grant must DELETE the record,
     \* not merely stop honouring it (clientpin.rs:214-218, :300-304).
