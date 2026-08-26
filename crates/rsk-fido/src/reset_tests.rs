@@ -1219,6 +1219,11 @@ fn reset_rounds_with_remove_refused(
 /// end state the metadata repair exists to remove, reproduced on rounds 1, 2 and 3.
 ///
 /// The answer stays `Err` — a removal that could not be proven is not a clean wipe.
+///
+/// It also goes red on the `BugSeedDoesNotLead` co-mutant, but for the ANSWER
+/// (`Ok(0)` where `Err` is owed, since that patch deletes the `refused` flag), not
+/// for the seed ordering. `a_torn_reset_never_starts_while_the_seed_is_still_readable`
+/// is the one that kills it on the ordering, and is what carries that verdict.
 #[test]
 fn a_refused_seed_removal_no_longer_forfeits_the_rest_of_the_wipe() {
     let rounds = reset_rounds_with_remove_refused(EF_KEY_DEV_ENC.get(), false, 3);

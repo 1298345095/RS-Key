@@ -339,6 +339,11 @@ fn a_completed_wipe_reseeds_the_applet_even_when_a_record_could_not_be_proven_dr
 /// finds the owner's values present and writes nothing — no touch-OFF UIF flag and
 /// no KDF-none back over a private key the surviving DEK can still open.
 ///
+/// Driving `scan_files`' `UIF_DEFAULT` write unconditionally fails **three** tests,
+/// not this one alone: `boot_settles_a_sex_code_outside_the_value_list` and
+/// `a_refused_sex_repair_leaves_the_old_byte_and_retries` count writes, so three
+/// extra ones break the wear budget too. All three fail in the same direction.
+///
 /// Returns the answer, the imported secret still live ON THE MEDIUM, and every
 /// record `scan_files` seeds that changed across the whole command.
 fn terminate_with_a_refused_secret_removal() -> (Sw, bool, Vec<String>) {

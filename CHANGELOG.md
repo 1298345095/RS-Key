@@ -266,6 +266,11 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   Swept by class rather than by site, as the tree's own rule asks: the four other
   delete loops in the four applet sweeps all take their fids from `for_each_key`,
   so a refusal there really does re-yield and `?` stays right in every one.
+  Correction, re-measured: the new test also goes red on the `BugSeedDoesNotLead`
+  co-mutant, but on the ANSWER — `Ok(0)` where `Err` is owed, since that patch
+  deletes the `refused` flag — and not on the seed ordering.
+  `a_torn_reset_never_starts_while_the_seed_is_still_readable` is the one that
+  kills it for the right reason, and the two of them are the whole failure list.
   **bcdDevice → 0x098B.**
 
 - **A TERMINATE DF that erased the whole applet and then locked it out until the
@@ -286,7 +291,14 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   the gate records go last, and that is measured rather than argued: over a wipe
   refused in phase 1 all seven gate records survive and `scan_files` changes
   **none** of them, so it cannot put a touch-OFF UIF flag back over a private key
-  the surviving DEK still opens. **bcdDevice → 0x098A.**
+  the surviving DEK still opens. Two corrections, both re-measured: that watch
+  list was seven records against a function that writes ten, and the three it
+  missed are the entry above; and driving `scan_files`' `UIF_DEFAULT` write
+  unconditionally fails **three** tests rather than one — the safety test plus
+  `boot_settles_a_sex_code_outside_the_value_list` and
+  `a_refused_sex_repair_leaves_the_old_byte_and_retries`, which count writes and
+  see three extra ones. All three fail in the same direction.
+  **bcdDevice → 0x098A.**
 
 - **The delete-caller row could be satisfied by a discard it could not see.**
   `scripts/deleter_gate.py` derived "reads the answer" from a `let _ =` at the
