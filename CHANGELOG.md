@@ -192,6 +192,21 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **Six `reset.rs` citations in `RSKeySecurityState.tla` pointed at code their
+  prose was never about, three of them re-blessed by a mechanical +6 shift.** The
+  shift moved sixteen line numbers without a content check, and the commit's own
+  `citations.lock` recorded the proof: the citation *labelled*
+  `is_fido_gate_fid (run-36)` was locked as ending on `pub fn is_fido_seed_fid`.
+  It was inherited — the pre-shift `130-143` had the same target — and
+  `citation_gate.py` cannot see it by design, since whether a resolved line still
+  *means* what the model says is a review question its own header calls out. The
+  shift was also partial: `Phase 1` was corrected to `:77` while `Phase 2` kept
+  `:59` and `BugResetGatesFirst` kept `:58-59`, both of which are the
+  `ctx.state.reset()` comment. All six are re-derived by content and re-locked:
+  the two sweeps at `77-78`, the gate sweep at `78`, `is_fido_gate_fid` at
+  `177-204`, and the `EF_BACKUP_SEALED` paragraph at `182-203` — which is what
+  `formal/README.md` has said all along, so the two pages agree again.
+
 - **The reset refinement could not express the mechanism its own safety argument
   rests on, so four Kani obligations were green over it vacuously.** 0x098B made
   the secret sweep the thing that stops a wipe whose seed the medium kept — its

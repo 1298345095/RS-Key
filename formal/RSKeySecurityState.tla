@@ -39,7 +39,7 @@ CONSTANTS
 (* Mutation switches. All FALSE is the shipped tree. Each rebuilds one real  *)
 (* defect; `formal/README.md` maps every switch to its commit or audit id.   *)
 CONSTANTS
-    BugResetGatesFirst,           \* reset.rs:58-59   two-phase wipe order
+    BugResetGatesFirst,           \* reset.rs:77-78   two-phase wipe order
     BugCredBeforeRp,              \* credential.rs:832-852 registration order
     BugTokenSurvivesPinChange,    \* clientpin.rs:313  resetPinUvAuthToken
     BugSetPinKeepsPpuat,          \* clientpin.rs:214-218
@@ -54,7 +54,7 @@ CONSTANTS
     BugWarmResetReopensWindow,    \* reset.rs:210-211  in_reset_window
     BugCmWalkIgnoresChannel,      \* state.rs:169-180  may_walk_rps
     BugDeleteRpBeforeCred,        \* credmgmt.rs:665-673 deleteCredential order
-    BugBackupSealedNotAGate,      \* reset.rs:136-149 is_fido_gate_fid (run-36)
+    BugBackupSealedNotAGate,      \* reset.rs:182-203 is_fido_gate_fid (run-36)
     BugConsumeKeepsMcGa,          \* state.rs:566-571  a narrowed 6.5.5.7 triad
     BugNoDropStaleCancelAtEntry,  \* crates/rsk-device/src/presence.rs:195-196
     BugWrongPinKeepsToken,        \* clientpin.rs:783  the pre-E38 tree
@@ -150,9 +150,9 @@ VARIABLES
     pin,    \* EF_PIN:  [set, retries, everSet]                (clientpin.rs:35)
     \* The gate records: [ppuat, ppuatStale, alwaysUv, backupSealed].
     \* `backupSealed` is EF_BACKUP_SEALED and it runs the other way round from
-    \* the rest: its ABSENCE is the permissive state (reset.rs:136-143), so what
+    \* the rest: its ABSENCE is the permissive state (reset.rs:182-203), so what
     \* a torn wipe can re-open is a window the owner had closed.
-    gate,   \*                                                 (reset.rs:142-150)
+    gate,   \*                                                 (reset.rs:177-204)
     \* The secrets: [cred, rpent, seed]. `cred` and `rpent` are the records that
     \* still OPEN, not the records that still occupy a slot: every credential box,
     \* rpId box and EF_RP domain is sealed under the seed, and `credential_load` /
@@ -1152,7 +1152,7 @@ ResetConfirmed ==
     /\ UNCHANGED << pin, gate, lock, pres, sys >>
 
 \* Which phase EF_BACKUP_SEALED belongs to is the audit run-36 class fix itself
-\* (reset.rs:136-143): it is in the GATE set, so the marker outlives the seed it
+\* (reset.rs:182-203): it is in the GATE set, so the marker outlives the seed it
 \* protects. BugBackupSealedNotAGate moves it back into phase 1, where it sat.
 SealedIsAGate == ~BugBackupSealedNotAGate /\ gate.backupSealed
 SealedIsASecret == BugBackupSealedNotAGate /\ gate.backupSealed
@@ -1232,7 +1232,7 @@ ResetSweepSecrets ==
 \* PIN they had themselves asked to erase.
 PinRecordDeleted == [pin EXCEPT !.set = FALSE, !.everSet = SecretsLive]
 
-\* Phase 2, reset.rs:59 -- the records that GATE the applet rather than being
+\* Phase 2, reset.rs:78 -- the records that GATE the applet rather than being
 \* the secret. Same arbitrary intra-phase order.
 ResetSweepGates ==
     /\ op.kind = "reset" /\ op.step = 2
