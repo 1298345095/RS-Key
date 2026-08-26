@@ -63,11 +63,17 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
     // otherwise reaches `EF_RP` before `EF_CRED`, and what a cut leaves behind must
     // at least be undecryptable. `EF_KEY_DEV_ENC` is the soft lock's copy of it.
     let mut orphaned = false;
+    // A FIXED two-fid list: nothing re-yields what it could not remove, so the
+    // reason the sweeps below stop does not reach it, and stopping only forfeits
+    // the erase of all the seed derives — identically on every retry (0x0989).
+    let mut refused = false;
     for fid in FIDO_SEED_FIDS {
         let gone = ctx.fs.force_delete_halves(fid);
-        gone.value.map_err(|_| CtapError::Other)?;
+        refused |= gone.value.is_err();
         orphaned |= gone.record.is_err();
     }
+    // Covers the seed fids too, so a refused seed removal stops the wipe HERE,
+    // before the gate phase could drop `EF_BACKUP_SEALED` over a seed still live.
     orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
     orphaned |= sweep(ctx, is_fido_gate_fid)?;
     ensure_seed(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?;
@@ -75,9 +81,9 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
     // scrubbed, aggregate history stays attested), then record the reset.
     journal::fold_and_scrub(ctx);
     journal::append(ctx, journal::EV_RESET, 0, &[]);
-    // The erase ran to the end of every range and a record still could not be
-    // dropped: the wipe is done, and the answer must not say it is clean.
-    if orphaned {
+    // The erase ran to the end of every range and a removal still could not be
+    // proven: the wipe is done, and the answer must not say it is clean.
+    if orphaned || refused {
         return Err(CtapError::Other);
     }
     Ok(0)

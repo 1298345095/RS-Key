@@ -3,11 +3,11 @@
 
 use super::*;
 use crate::FidoState;
-use crate::consts::{EF_CRED, EF_LARGEBLOB, EF_PIN, EF_RP, RESET_WINDOW_MS};
+use crate::consts::{EF_BACKUP_SEALED, EF_CRED, EF_LARGEBLOB, EF_PIN, EF_RP, RESET_WINDOW_MS};
 use crate::seed::{bump_sign_counter, get_sign_counter, load_keydev};
 use rsk_crypto::Device;
 use rsk_fs::Fs;
-use rsk_fs::storage::faults::MetaStuck;
+use rsk_fs::storage::faults::{MetaStuck, RemoveStuck};
 use rsk_fs::storage::ram::RamStorage;
 
 struct SeqRng(u64);
@@ -1152,5 +1152,106 @@ fn a_faulted_metadata_drop_never_stops_the_wipe_and_never_passes_as_clean() {
         "under a faulted EF_META the wipe still owes the WHOLE range — a survivor here \
          is a secret the reset was asked to erase — and it still owes an error for the \
          record it could not prove dropped"
+    );
+}
+
+/// `rounds` consecutive resets over a provisioned applet, with the medium refusing
+/// `remove` for one fid throughout. `force_delete_halves` removes UNCONDITIONALLY,
+/// so the refusal lands even at a fid that was never live — which is how a fixed
+/// two-element list can forfeit a whole wipe to a record that was already gone, and
+/// forfeit it identically on every retry. Returns each round's answer and the
+/// fixture records still live ON THE MEDIUM after it.
+fn reset_rounds_with_remove_refused(
+    fid: u16,
+    seed_live: bool,
+    rounds: usize,
+) -> Vec<(CtapResult, Vec<&'static str>)> {
+    let (backend, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(11);
+    if seed_live {
+        ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    }
+    fs.put(EF_CRED, &[0xC0; 100]).unwrap();
+    fs.put(EF_CRED + 1, &[0xC1; 100]).unwrap();
+    fs.put(EF_RP, &[0xAB; 40]).unwrap();
+    fs.put(EF_PIN, &[8, 4, 1, 0, 0]).unwrap();
+    fs.put(EF_BACKUP_SEALED, &[1]).unwrap();
+
+    medium.refuse(Some(fid));
+    let named: [(&'static str, u16); 5] = [
+        ("cred0", EF_CRED),
+        ("cred1", EF_CRED + 1),
+        ("rp", EF_RP),
+        ("pin", EF_PIN),
+        ("backup", EF_BACKUP_SEALED),
+    ];
+    let mut out = Vec::new();
+    for _ in 0..rounds {
+        let mut state = FidoState::new();
+        let answered = {
+            let mut presence = crate::AlwaysConfirm;
+            let mut ctx = Ctx {
+                presence: &mut presence,
+                dev: dev(),
+                fs: &mut fs,
+                rng: &mut rng,
+                state: &mut state,
+                now_ms: 0,
+            };
+            reset(&mut ctx)
+        };
+        let live = named
+            .iter()
+            .filter(|&&(_, f)| medium.live(f))
+            .map(|&(name, _)| name)
+            .collect();
+        out.push((answered, live));
+    }
+    medium.refuse(None);
+    out
+}
+
+/// A refused removal in the seed loop must not cost the rest of the wipe. The loop
+/// is a fixed two-element `for` — nothing re-yields the fid it could not remove, so
+/// the reason the enumerating sweeps stop does not reach it, and stopping here just
+/// leaves the credentials derived from the seed live. Measured at 0x0989: the exact
+/// end state the metadata repair exists to remove, reproduced on rounds 1, 2 and 3.
+///
+/// The answer stays `Err` — a removal that could not be proven is not a clean wipe.
+#[test]
+fn a_refused_seed_removal_no_longer_forfeits_the_rest_of_the_wipe() {
+    let rounds = reset_rounds_with_remove_refused(EF_KEY_DEV_ENC.get(), false, 3);
+    assert_eq!(
+        rounds,
+        vec![
+            (Err(CtapError::Other), vec![]),
+            (Err(CtapError::Other), vec![]),
+            (Err(CtapError::Other), vec![]),
+        ],
+        "a seed fid the medium will not remove is unremovable on every retry, so \
+         stopping on it leaves the credentials live for good"
+    );
+}
+
+/// …and the reason carrying it is safe: the secret sweep's predicate covers the seed
+/// fids too, so a seed that is STILL LIVE is re-yielded there and stops the wipe
+/// before the gate phase — which is what would drop `EF_BACKUP_SEALED` and re-open
+/// the one-time seed-export window over that live seed (SEC-FIDO-006C).
+#[test]
+fn a_seed_the_medium_kept_stops_the_wipe_before_the_gates() {
+    for fid in FIDO_SEED_FIDS {
+        assert!(
+            is_fido_fid(fid) && !is_fido_gate_fid(fid),
+            "0x{fid:04X} must be inside the secret sweep, or a refused seed reaches \
+             the gate phase"
+        );
+    }
+    let rounds = reset_rounds_with_remove_refused(EF_KEY_DEV.get(), true, 1);
+    let (answered, live) = &rounds[0];
+    assert_eq!(*answered, Err(CtapError::Other));
+    assert!(
+        live.contains(&"pin") && live.contains(&"backup"),
+        "the gate phase must not run over a seed the medium would not remove: {live:?}"
     );
 }

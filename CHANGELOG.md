@@ -192,6 +192,28 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **`authenticatorReset`'s seed loop still reached the exact end state the
+  metadata repair exists to remove, and still made no progress on a retry.** The
+  reason a sweep must stop on a refused backend removal is that `for_each_key`
+  re-yields the fid it could not remove — a property of the *enumerating* sweeps.
+  `FIDO_SEED_FIDS` is a fixed two-element `for` with no enumeration and nothing to
+  spin on, and `force_delete_halves` removes UNCONDITIONALLY, so a medium that
+  refused one seed fid — including one that was never live — forfeited the whole
+  wipe. Measured over three consecutive resets with the refusal standing:
+  `live=[cred0, cred1, rp, pin, backup]` on rounds 1, 2 **and** 3, byte-identical
+  to the row 0x0989 was written to remove. The value failure is accumulated there
+  now, the way the record failure already was, and the answer is still `Err` — a
+  removal that could not be proven is not a clean wipe. Safe because the secret
+  sweep's predicate covers the seed fids too: a seed that is genuinely still live
+  is re-yielded there and stops the wipe before the gate phase, which is what
+  would drop `EF_BACKUP_SEALED` and re-open the one-time seed-export window over
+  it (`ResetKeepsTheBackupSeal`, SEC-FIDO-006C) — pinned by a test that refuses
+  the removal of a LIVE seed and asserts `EF_PIN` and `EF_BACKUP_SEALED` survive.
+  Swept by class rather than by site, as the tree's own rule asks: the four other
+  delete loops in the four applet sweeps all take their fids from `for_each_key`,
+  so a refusal there really does re-yield and `?` stays right in every one.
+  **bcdDevice → 0x098B.**
+
 - **A TERMINATE DF that erased the whole applet and then locked it out until the
   next reboot.** The sweep gained a THIRD outcome at 0x0989 — the range is clear,
   one metadata drop could not be *proven* — inside a two-valued return, and

@@ -319,15 +319,15 @@ note = "gates swept before secrets: a torn reset can strand a passkey with its P
 status = "patch"
 file = "crates/rsk-fido/src/reset.rs"
 find = """
+    let mut refused = false;
     for fid in FIDO_SEED_FIDS {
         let gone = ctx.fs.force_delete_halves(fid);
-        gone.value.map_err(|_| CtapError::Other)?;
+        refused |= gone.value.is_err();
         orphaned |= gone.record.is_err();
     }
-    orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
 """
 replace = """
-    orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
+    let refused = false;
 """
 slice = ["cargo", "test", "-p", "rsk-fido"]
 expect = "killed"
