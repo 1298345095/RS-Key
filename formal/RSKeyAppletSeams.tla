@@ -40,7 +40,7 @@ CONSTANTS
     \* 637ed98 taken back out: PIV and OpenPGP used to reset on EVERY select,
     \* ignoring the `reselect` flag the trait hands them.
     BugReselectResetsStatus,
-    \* crates/rsk-device/src/ccid.rs:348-363 -- the ICC power transition.
+    \* crates/rsk-device/src/ccid.rs:354-369 -- the ICC power transition.
     BugCardResetKeepsStatus,
     \* e5da38b taken back out: PW3, the admin PIN, standing in for PW1/PW2 on
     \* PSO:CDS, PSO:DECIPHER and INTERNAL AUTHENTICATE.
@@ -490,7 +490,7 @@ PivKeyOp ==
 
 \* SCardDisconnect(SCARD_RESET_CARD) / CCID_POWER_OFF / CCID_POWER_ON:
 \* `Dispatcher::reset_card` deselects, which drops the selected applet's
-\* security status (crates/rsk-device/src/ccid.rs:348-363,
+\* security status (crates/rsk-device/src/ccid.rs:354-369,
 \* crates/rsk-sdk/src/applet.rs:222-230). This is the one the `cross_applet`
 \* fuzz target already watches, one layer down.
 \* Its own trailing UNCHANGED named `psig` while the ELSE branch assigned it, so
@@ -537,7 +537,7 @@ FidoReset == UNCHANGED vars
 \* `Fs::factory_wipe` (crates/rsk-fs/src/fs.rs:343-390) is FLASH-only: it never
 \* sees an applet, so every in-RAM status here stands over freshly-defaulted
 \* verifiers until the reboot both callers queue immediately after
-\* (crates/rsk-device/src/ccid.rs:304-313, crates/rsk-display/src/pin.rs:681-689).
+\* (crates/rsk-device/src/ccid.rs:310-319, crates/rsk-display/src/pin.rs:681-689).
 \* Modelled as the wipe AND its reboot in one step, which is what makes the
 \* window unobservable -- and that is exactly the assumption to attack if anyone
 \* ever separates them.
