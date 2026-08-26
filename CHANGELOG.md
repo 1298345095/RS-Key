@@ -224,8 +224,11 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `for_each_key` keeps re-yielding a fid it could not remove, while a faulted
   metadata drop is carried to the end of the range and answered for there — so the
   wipe erases everything it can reach AND does not report success over what it
-  could not. `force_delete` is the fold of the two and is unchanged for the six
-  callers that delete one named record, `att_clear`'s ordered pair included.
+  could not. `force_delete` is the fold of the two and is unchanged at the five
+  sites outside `rsk-fs` that delete one named record, `att_clear`'s ordered pair
+  included — three distinct functions, and a count `scripts/deleter_gate.py`
+  derives from the tree rather than one written here from memory (this line said
+  *six*, and nothing in the tree is six).
   Pinned in all four applets, each driven red by the real regression with the whole
   crate suite watched: in every one the status word matched on both sides and the
   SURVIVOR list was the discriminator, which is why a test asserting only the
