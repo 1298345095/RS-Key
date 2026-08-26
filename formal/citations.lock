@@ -118,7 +118,6 @@ formal/README.md	crates/rsk-fido/src/reset.rs	70-79	for fid in FIDO_SEED_FIDS {	
 formal/README.md	crates/rsk-fido/src/reset.rs	77-78	orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;	orphaned |= sweep(ctx, is_fido_gate_fid)?;
 formal/README.md	crates/rsk-fido/src/reset.rs	92-138	/// One phase of the reset sweep: delete every live FIDO-owned fid matching `pred`,	}
 formal/README.md	crates/rsk-fido/src/reset.rs	111-111	if pred(fid) && n < keys.len() && !keys[..n].contains(&fid) {	if pred(fid) && n < keys.len() && !keys[..n].contains(&fid) {
-formal/README.md	crates/rsk-fido/src/reset.rs	117-123	// An un-yielded FID is only evidence of absence when the walk finished;	};
 formal/README.md	crates/rsk-fido/src/reset.rs	119-123	return if complete {	};
 formal/README.md	crates/rsk-fido/src/reset.rs	126-126	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
 formal/README.md	crates/rsk-fido/src/reset.rs	177-204	/// The FIDO records that *gate* the applet rather than being the secret itself.	}
@@ -182,6 +181,7 @@ formal/README.md	crates/rsk-openpgp/src/pin.rs	793-793	if data.len() <= rc_len {
 formal/README.md	crates/rsk-openpgp/src/pso.rs	80-92	(0x9E, 0x9A) => {	if !sess.has_pw2 {
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	59-65	pub fn write_authorized(sess: &Session, fid: u16) -> bool {	}
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	181-183	if matches!(fid, EF_UIF_SIG | EF_UIF_DEC | EF_UIF_AUT) {	if let Some(n) = fs.read(target, &mut cur)
+formal/README.md	crates/rsk-openpgp/src/terminate.rs	151-151	let mut deleted = 0u32;	let mut deleted = 0u32;
 formal/README.md	crates/rsk-openpgp/src/terminate.rs	182-182	if deleted > WIPE_MAX_DELETES {	if deleted > WIPE_MAX_DELETES {
 formal/README.md	crates/rsk-piv/src/auth.rs	57-65	/// skips the PIN; listing known gated values made unknown bytes ungated.	}
 formal/README.md	crates/rsk-piv/src/auth.rs	63-63	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,

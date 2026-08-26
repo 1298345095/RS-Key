@@ -284,7 +284,14 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   same sentence `formal/README.md` already cited correctly, which is the tell that
   found them. Re-locked, each verified through the lock's own first/last line.
   No syntactic rule was added: "reject a citation whose first or last line is a
-  comment" was measured last round at 190 false positives of 485.
+  comment" was measured last round at 190 false positives of 485. **The scope
+  that sentence never gave**, since a measurement nobody can reproduce is a
+  number and not evidence: every citation the gate reads whose span resolves to
+  a real range in a real file, counting a line that starts with `//`, `/*` or
+  `*`. Re-measured at that scope on this tree — 600 such spans — the rule fires
+  on **227**, and its narrowest variant (first *and* last both comments) on
+  **45**. The share has not moved (39% then, 38% now), which is the point: a
+  rule that rejects two citations in five is not a rule.
 
 - **Six `reset.rs` citations in `RSKeySecurityState.tla` pointed at code their
   prose was never about, three of them re-blessed by a mechanical +6 shift.** The
