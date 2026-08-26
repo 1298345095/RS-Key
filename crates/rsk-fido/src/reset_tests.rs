@@ -501,6 +501,66 @@ fn a_refused_removal_stops_the_sweep_instead_of_spinning_into_the_valve() {
     );
 }
 
+/// One sweep over five credentials, optionally with EF_META unreadable. Returns the
+/// answer and whether any of them is still live ON THE MEDIUM.
+fn sweep_with_ef_meta_stuck(stuck: bool) -> (Result<bool, CtapError>, bool) {
+    const LIVE: u16 = 5;
+    let (backend, medium) = MetaStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    for i in 0..LIVE {
+        fs.put(EF_CRED + i, &[0xC0; 8]).unwrap();
+    }
+    // A head keeps EF_META live, so the drops read the blob rather than short out
+    // on a known-absent one. `rsk-piv` mints the only heads; it is a bystander.
+    const PIV_SLOT_9A: u16 = 0x9A00;
+    fs.meta_add(PIV_SLOT_9A, &[0xAA, 0x01, 0x02, 0x03]).unwrap();
+
+    medium.stick(stuck);
+    let mut rng = SeqRng(5);
+    let mut state = FidoState::new();
+    let answered = {
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: 0,
+        };
+        sweep(&mut ctx, is_fido_fid)
+    };
+    medium.stick(false);
+    (answered, (0..LIVE).any(|i| medium.live(EF_CRED + i)))
+}
+
+/// The sweep's OWN metadata half — `orphaned |= gone.record.is_err()` inside
+/// `sweep`, not the copy in the seed loop above it. `|= false;` there leaves
+/// `615 passed; 0 failed`, because every `reset()`-level test reaches the sweeps
+/// with `orphaned` already true: the seed loop sets it for `EF_KEY_DEV` and
+/// `EF_KEY_DEV_ENC` first. OATH, PIV and OpenPGP own the same line; FIDO was the
+/// asymmetry inside a class the audit says it read by class.
+///
+/// Both halves are the assertion, as in the `reset()`-level test below: a faulted
+/// EF_META must be carried to the END of the range — the blob is shared by every
+/// applet, so stopping would end the wipe after one file, at the same fid on every
+/// retry — and it must still be answered for.
+#[test]
+fn a_faulted_metadata_drop_is_carried_to_the_end_of_the_sweep_and_still_answered_for() {
+    assert_eq!(
+        sweep_with_ef_meta_stuck(false),
+        (Ok(false), false),
+        "the control: nothing armed, so the sweep clears the range and says so"
+    );
+    assert_eq!(
+        sweep_with_ef_meta_stuck(true),
+        (Ok(true), false),
+        "a faulted EF_META still owes the WHOLE range, and the sweep still owes its \
+         caller the record it could not prove dropped"
+    );
+}
+
 /// `RESET_MAX_DELETES` is written as `4 * MAX_RESIDENT_CREDENTIALS + 15`, and the
 /// 15 is a hand-count of `is_fido_fid`'s fixed arm. Count the predicate instead of
 /// trusting it: add a record there and the bound silently stops covering the

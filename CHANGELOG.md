@@ -214,6 +214,14 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   bounds the spend at the five files it seeded. Driven: the swallow turns exactly
   one test red in each crate, reading "the sweep asked for 1039 removals over 5
   files" — the runaway, not its inverse.
+  *The metadata half, in FIDO only.* `orphaned |= gone.record.is_err()` inside
+  FIDO's `sweep` → `|= false;` also left 615 passing, and only there: OATH, PIV
+  and OpenPGP own the same line. Every `reset()`-level fixture reaches the sweeps
+  with the flag already set, because the seed loop above them sets it first — an
+  asymmetry inside the very class the entry below says it read by class. Closed
+  the way the new tests are, by calling `sweep` directly over a medium whose
+  EF_META is unreadable and asserting both arms (`Ok(false)` clean, `Ok(true)`
+  faulted, and an empty range either way).
   `bcdDevice -> 0x098E`, for the same reason as the entry below: nothing here can
   reach the image, and the row counts `crates/rsk-fs/src/storage.rs` wholesale.
 
