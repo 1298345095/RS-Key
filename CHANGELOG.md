@@ -230,6 +230,64 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   a `gap`, not `covered` — its evidence is real but was all produced at the
   default 4 MB geometry, and that column also pins `flashSize = 16M`.
 
+- **And which *threat* it is against.** `docs/threat-model.md` is the root of
+  every evidence chain the registry describes, and **33** rows cited it by the
+  file name and nothing else — which names no threat, so a property with none
+  behind it was indistinguishable from one with a threat that was simply not
+  written down. Each P0-family row now names a **clause**:
+  `docs/threat-model.md#TM-…`, an id of the new
+  `assurance/threat_clauses.toml`, and the bare file name is refused on those
+  rows. The clause set is not a hand roster — `scripts/threat_gate.py` derives it
+  from the page's own headings and list items (**45**, of which **32** state a
+  defence and **13** are the title, assets, an out-of-scope declaration, a stated
+  residual, a third-party result or a process) and holds the file one-to-one
+  against it, so
+  a new bullet arrives as a clause nobody classified and a reworded one as a
+  citation gone stale. The lock is the clause's first line, not a line number:
+  text inserted above it does not rot the reference, which is the failure mode
+  `formal/citations.lock` pays for.
+  **The mapping is the finding.** **33** of the **40** P0-family rows trace, and
+  **19** of those land on one clause — the `Protocol gates` bullet, whose one
+  sentence enumerates five gates and is the most load-bearing line on the page.
+  **Seven** do not trace at all, and each records which of exactly two things
+  that is: `missing-clause` or `defends-nothing`. All seven are the first, and
+  **four of them name the same absent clause** — `SEC-STORE-001`, `-003`, `-004`
+  and `-005`, because the page states **no power-interruption threat** though a
+  host can cut USB power at a chosen instant and the whole `RSKeyStore` module
+  exists for that attacker. The other three: `SEC-FIDO-005` (nothing says the
+  owner must be able to see and revoke what the device holds), `SEC-POL-003`
+  (nothing covers key material surviving a slot's re-parameterisation) and
+  `SEC-POL-006` (no Yubico OTP clause exists at all — the OTP slot access code is
+  missing from the `Protocol gates` enumeration for the same reason).
+  From the other end, **21** of the 32 stated defences have no registered
+  property and one more is answered only by an out-of-queue ruling: the P0 family
+  covers the hostile-host protocol surface and none of the at-rest, secure-boot,
+  anti-rollback, supply-chain or post-quantum half, which is where stages 9–11
+  live. Every one of those is printed on each run rather than refused, because
+  minting a false mapping to empty the list is the failure this row exists to
+  stop. **One docs finding falls out of the mapping**: the `Protocol gates`
+  clause enumerates FIDO touch, OpenPGP UIF, OATH access codes and PIV
+  management-key auth, and no Yubico OTP gate at all, though `SEC-POL-005`
+  enforces one.
+  Nine of the rules are review findings on the finished guard, each a spelling
+  the first draft could not see: `*`, `+` and ordered list markers; headings
+  outside `##`/`###`; `~~~` fences; a setext heading — refused out loud rather
+  than missed, and the first draft of *that* refusal demanded `-{3,}` while
+  CommonMark makes a single `-` an H2; a blockquote, table row or HTML list, any
+  of which can carry a clause; trailing whitespace read as a rewrite; a reference
+  spelled `#tm-host-gates` or `./docs/…`, which fell through every rule while
+  LOOKING traced; a missing or unparseable input arriving as a traceback rather
+  than a sentence; and two roster entries claiming one clause. Two more were
+  judgement, not code: the `SEC-POL-006` verdict rested on the enumeration gap
+  above while `SEC-POL-005` cited that same clause, and `SEC-STORE-004` said it
+  inherited a threat from a row that is traced — so the rule for when a property
+  traces is now written down in the registry instead of applied by feel.
+  56 cases in `scripts/test_threat_gate.py`, every red arm read in full for
+  direction and collateral, the three ratchets pinned at the tree's own counts
+  (zeroing all three left the whole table green), and the row driven red through
+  `./scripts/check.sh` — EXIT=1 at `== threat-model traceability ==`, 90 rows
+  green before it — rather than only through the function.
+
 ### Fixed
 
 - **Three of the eight closures above were themselves defective; the review that

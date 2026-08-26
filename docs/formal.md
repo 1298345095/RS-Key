@@ -110,6 +110,18 @@ both. The [assurance matrix](assurance-matrix.md) is the per-configuration
 disposition — generated from those three sources and the property registry, so a
 new image arrives as a column of declared gaps instead of as silence.
 
+## Which threat a claim is against
+
+The [threat model](threat-model.md) is the root every chain above hangs from,
+and naming the page names no threat. Each P0-family property cites a **clause**
+of it — `docs/threat-model.md#TM-…`, an id of `assurance/threat_clauses.toml`,
+whose entries are held one-to-one against the page's own headings and bullets so
+a new clause cannot arrive unclassified. A property with no clause is a recorded
+finding rather than a blank, and says which of two things it is: the page is
+missing a threat this tree defends against, or the property is against nothing.
+The other direction is printed on every run — a stated defence that no property
+answers is the same finding from the other end.
+
 ## The checks of the checks
 
 An invariant no defect can violate is the TLA+ analogue of a test that cannot

@@ -605,6 +605,11 @@ run "assurance registry"       python scripts/assurance_gate.py
 # properties are about — so a claim proved on the default build was being
 # asserted about eighteen others by silence.
 run "build-configuration matrix" python scripts/matrix_gate.py
+# And of WHICH THREAT. The threat model is the root of every evidence chain here
+# and was cited by the file name alone on 33 rows, which names no threat. This
+# derives the page's clauses, holds each P0-family row to one of them, and makes
+# a row with none say which of the two things that is.
+run "threat-model traceability" python scripts/threat_gate.py
 # Every caller of the delete family owes a disposition: allowed best-effort wipe,
 # or a device reporting success over a secret still in flash. The audit that
 # wrote them found `force_delete` hiding a faulted metadata drop on the reset
