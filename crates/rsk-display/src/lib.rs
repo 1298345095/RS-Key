@@ -185,7 +185,10 @@ const SETTINGS_PERSIST_QUIET_MS: u64 = 1_500;
 /// [`Hooks::host_request_pending`] and yield the instant a host command
 /// arrives, so this bound can be generous (a comfortable browse) without making the
 /// host wait for it.
-const MENU_INACTIVITY_MS: u64 = 60_000;
+/// Public for the same reason [`UI_YIELD_FLOOR_MS`] is: `tools/emu`'s panel bench
+/// separates "yielded" from "timed out" with a bound between the two, and a bound
+/// that cannot see this end of the pair is prose.
+pub const MENU_INACTIVITY_MS: u64 = 60_000;
 
 /// Minimum time an on-device modal that yields to the host stays open before a queued
 /// host command may close it. `REQ` latches until the worker drains it, and the worker

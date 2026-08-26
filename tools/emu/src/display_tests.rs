@@ -64,11 +64,15 @@ const REPLY_TIMEOUT: Duration = Duration::from_secs(90);
 /// over on the first `TOUCH_POLL_MS` (16 ms) poll past `UI_YIELD_FLOOR_MS`; a
 /// screen that does not yield at all makes it wait out `MENU_INACTIVITY_MS`
 /// (60 s), so anything between the two separates them.
-const MENU_YIELD_BOUND: Duration = Duration::from_secs(20);
-// The bound only separates the two while it sits strictly between them. The lower
-// end is public and checked here; `MENU_INACTIVITY_MS` is private to `rsk-display`,
-// so the upper end is prose until it is not.
-const _: () = assert!(rsk_display::UI_YIELD_FLOOR_MS < 20_000);
+const MENU_YIELD_BOUND_MS: u64 = 20_000;
+const MENU_YIELD_BOUND: Duration = Duration::from_millis(MENU_YIELD_BOUND_MS);
+// The bound only separates the two while it sits strictly between them, and both
+// ends move in `rsk-display` where nothing here would notice: at
+// `MENU_INACTIVITY_MS = 15_000` a screen that never yields waits it out INSIDE this
+// bound and the two tests below pass over the defect they exist to catch.
+// One per end, so a build failure names which of the two moved.
+const _: () = assert!(rsk_display::UI_YIELD_FLOOR_MS < MENU_YIELD_BOUND_MS);
+const _: () = assert!(MENU_YIELD_BOUND_MS < rsk_display::MENU_INACTIVITY_MS);
 
 /// What the same command takes with the panel idle — the control that says the
 /// figure above is a modal holding the executor and not the emulator being slow.

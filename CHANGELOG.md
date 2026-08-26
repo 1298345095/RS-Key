@@ -192,6 +192,22 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The panel's host-yield bound had one end measured and the other written
+  down.** `tools/emu`'s two menu-yield tests separate "the menu handed the
+  executor back" from "the menu timed out" with a 20 s bound that only works
+  while it sits strictly between `UI_YIELD_FLOOR_MS` (2.5 s, public) and
+  `MENU_INACTIVITY_MS` (60 s, private to `rsk-display`) — and the file said so:
+  "the upper end is prose until it is not". Measured: at
+  `MENU_INACTIVITY_MS = 15_000` a Settings menu with the
+  `host_request_pending_after` yield deleted — a host command waiting out the
+  whole modal, which is what these tests exist to catch — passes both of them,
+  because 15 s is inside the bound. `MENU_INACTIVITY_MS` is `pub` for the bench
+  now, as `UI_YIELD_FLOOR_MS` already was, and each end of the bound is its own
+  `const _: () = assert!` so a build failure names which one moved. Driven: at
+  `MENU_INACTIVITY_MS = 15_000` the upper assert stops the build, at
+  `UI_YIELD_FLOOR_MS = 25_000` the lower one does. Visibility only, no behaviour
+  change.
+
 - **The PIN entry row's overflow test hand-copied the constant that selects the
   branch it tests.** `render_pin_dots` must clear the "+" overflow marker when
   `entered` drops, and the test mirrored `ENTRY_X0` / `ENTRY_MAX_SHOWN` /
