@@ -63,6 +63,23 @@ statement = "At an unambiguous recorded boundary, all independently inferred B a
 source = ["docs/token-refinement.md"]
 
 [[property]]
+id = "SEC-REF-005"
+name = "NoAuthorizationBypassA"
+status = "MODELLED-ONLY"
+statement = "Every event the token abstraction admits as Authorized had the gate its operation's requirement names."
+source = ["CTAP 2.3 §6.5", "CTAP 2.3 §6.8", "docs/authorization-slice.md"]
+
+# Registered because it must be REFUTED. A predicate nothing can make false is the
+# oracle §4.3 condition 11 refuses, so the disagreement is a row of this registry
+# rather than a paragraph: `TokenGateDisagreement.cfg` is RED and floors.txt says so.
+[[property]]
+id = "SEC-REF-006"
+name = "RequiredGateAgreesWithRelation"
+status = "MODELLED-ONLY"
+statement = "The requirement-derived gate and the relation read as a gate are one predicate — the degeneracy this slice must refuse, not establish."
+source = ["docs/authorization-slice.md"]
+
+[[property]]
 id = "SEC-FIDO-001"
 name = "NoAuthorizationBypass"
 status = "BOUNDED"

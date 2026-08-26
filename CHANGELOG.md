@@ -40,6 +40,31 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **Tier A of the authorization slice now has an oracle that is not the model
+  it checks.** `formal/RSKeyTokenGate.tla` carries `RequiredGate`, one line per
+  abstract operation, transcribed from CTAP 2.3 §6.1/§6.2/§6.5/§6.6/§6.8/§6.11 —
+  never read off `AllowedEventRel`, because a postcondition that transcribes its
+  subject satisfies every other condition and still cannot fail (§4.3's eleventh,
+  and the per-FID projection that reported 0 divergences over 5⁴ inputs is this
+  tree's own instance of it). `NoAuthorizationBypassA` says every event the
+  relation admits as `Authorized` had the gate its operation's requirement names.
+  Four generated configurations: `TokenGate.cfg` GREEN at a floor of **44** — a
+  pin, because the invariant is asserted over the relation's slice at the current
+  state and so covers `AllowedRelation` only if every A state is reachable;
+  `TokenGateOracle.cfg`, a probe whose initial states ARE the set on which the
+  requirement and the relation disagree, floored at **22**; and
+  `TokenGateDisagreement.cfg`, registered **RED** because a GREEN there is the
+  degenerate oracle. `TokenGateMut_BugUnauthorizedEdge.cfg` adds one `Authorized`
+  edge the requirement forbids, so the invariant is known able to fail.
+  **Measured before the row was accepted: 31 disagreeing (state, operation) pairs
+  over 22 states, in two families** — every state disagrees on `ClearPin`, where
+  the relation's `pre.pinSet` is a frame condition and §6.6's real gate is a
+  window and a touch that tier A cannot see; and nine also disagree on `UseCm`,
+  where §6.8.2 lets the persistent grant authorize on its own and RS-Key
+  additionally demands `EF_PIN`. The second family is the shipped tree being
+  **stricter than the requirement**, which an oracle taken from the code could
+  not have shown.
+
 - **The first P0-launch assurance slice, written down before its proof code
   exists.** [`docs/authorization-slice.md`](docs/authorization-slice.md) fixes
   the scope and the measurement plan for `SEC-FIDO-001` /

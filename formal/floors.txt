@@ -129,6 +129,23 @@ TraceSecurityBadPinSet.cfg           RED     -       -       R4cGateAnswers
 \* emptied 12 -- because a mapping that retreats to NO-OPINION costs nothing and
 \* reads exactly as green without a floor here.
 @TraceSecurityOutcomesMin 13
+\* Tier A's requirement half (RSKeyTokenGate). The first floor is a PIN at 44
+\* and not a third: NoAuthorizationBypassA is asserted over the relation's SLICE
+\* at the current state, so it covers AllowedRelation only if every A state is
+\* reachable -- and 44 is the whole domain. Lose one and the invariant quietly
+\* stops being about the edges out of it.
+TokenGate.cfg                        GREEN   44
+\* The oracle's non-degeneracy, run as a probe rather than a behaviour: every
+\* state on which the requirement and the relation disagree is an INITIAL state,
+\* so the distinct count IS the size of that set and 22 is a PIN too. An oracle
+\* transcribed from the relation empties it, and TLC refuses an empty INIT.
+TokenGateOracle.cfg                  GREEN   22
+\* E4a. The two are not one predicate, and this row is what says so; a GREEN
+\* here is the refuted per-FID projection repeating itself one tier up.
+TokenGateDisagreement.cfg            RED     -       -       RequiredGateAgreesWithRelation
+\* One Authorized edge the requirement forbids, so the invariant above is known
+\* able to fail rather than assumed to be.
+TokenGateMut_BugUnauthorizedEdge.cfg RED     -       -       NoAuthorizationBypassA
 \* Phase 5. Reduced constants keep the labelled action check separate from the
 \* 60-million-state shipped safety row. Floors are calibrated after the first
 \* successful run; the non-vacuity guard still requires at least two states.

@@ -241,7 +241,7 @@ def test_a_generated_config_that_lost_its_header_is_found(tree):
     """
     script = tree / "formal/gen-configs.sh"
     text = script.read_text()
-    assert text.count(config_gen_gate.HEADER) == 14, text.count(config_gen_gate.HEADER)
+    assert text.count(config_gen_gate.HEADER) == 15, text.count(config_gen_gate.HEADER)
     script.write_text(text.replace(config_gen_gate.HEADER, "Auto-written; hands off"))
     code, stderr = config_gen_gate.generate(tree, tree / "formal")
     assert code == 0, stderr

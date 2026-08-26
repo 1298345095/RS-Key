@@ -39,7 +39,7 @@ fi
 
 # Which module a configuration belongs to: the seam configs are the second
 # module's, and TLC takes the module name rather than reading it from the cfg.
-spec_for() { case "$1" in TokenRefinement*) echo RSKeyTokenRefinement ;; TraceSecurity*) echo TraceSecurity ;; TraceSeamsBad*) echo TraceSeamsBad ;; TraceSeams*) echo TraceSeams ;; Seam*) echo RSKeyAppletSeams ;; Store*) echo RSKeyStore ;; Lat*) echo RSKeyRetryLattice ;; Polic*) echo RSKeyAppletPolicies ;; Admin*) echo RSKeyAdminSurface ;; Disp*) echo RSKeyTrustedDisplay ;; Boot*) echo RSKeyBootHardening ;; Trans*) echo RSKeyTransport ;; *) echo RSKeySecurityState ;; esac; }
+spec_for() { case "$1" in TokenGate*) echo RSKeyTokenGate ;; TokenRefinement*) echo RSKeyTokenRefinement ;; TraceSecurity*) echo TraceSecurity ;; TraceSeamsBad*) echo TraceSeamsBad ;; TraceSeams*) echo TraceSeams ;; Seam*) echo RSKeyAppletSeams ;; Store*) echo RSKeyStore ;; Lat*) echo RSKeyRetryLattice ;; Polic*) echo RSKeyAppletPolicies ;; Admin*) echo RSKeyAdminSurface ;; Disp*) echo RSKeyTrustedDisplay ;; Boot*) echo RSKeyBootHardening ;; Trans*) echo RSKeyTransport ;; *) echo RSKeySecurityState ;; esac; }
 
 # floors.txt: what each configuration must produce. First match wins.
 expect_for() {
@@ -217,6 +217,10 @@ list_safety() {
   echo TraceSecurityBadResetWindow.cfg # and ignoring the reset window
   echo TraceSecurityBadAlwaysUvArm.cfg # and the alwaysUv arm of the same rule
   echo TraceSecurityBadPinSet.cfg # and the arm that only a PIN-less cell can refute
+  echo TokenGate.cfg             # tier A's requirement half: the oracle, and
+  echo TokenGateOracle.cfg       # the set on which it differs from the relation
+  echo TokenGateDisagreement.cfg # …which is RED because the two are not one predicate
+  echo TokenGateMut_BugUnauthorizedEdge.cfg # and one edge the requirement forbids
   echo TokenRefinement.cfg       # phase 5: native B -> A state refinement
   echo TokenRefinementBadMap.cfg # a wrong gamma must be refused
   echo TokenRefinementOutcome.cfg # labelled B outcomes refine A events

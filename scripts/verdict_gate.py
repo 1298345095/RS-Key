@@ -121,6 +121,9 @@ NO_VERDICT = {
 UNSWITCHED_RED = {
     "TraceSeamsBad.cfg": "the divergence lives in TraceSeamsBad.tla rather than in a "
     "switch, and TLC refuses the replay by DEADLOCK — which names no invariant",
+    "TokenGateDisagreement.cfg": "the refusal is that RequiredGate and the relation "
+    "read as a gate are two predicates, which is a property of the module and not of "
+    "a switch — a GREEN here is the degenerate oracle §4.3 refuses",
 }
 
 #: A floor may fall, but not quietly. The reason is part of the pattern: a marker

@@ -34,6 +34,7 @@ finding printed passed all 182 cases of the first edition.
 """
 
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -580,7 +581,13 @@ def test_a_runner_that_cannot_read_a_digit_is_rejected():
     assert narrowed != RUNNER
     problems = findings(REGISTRY, runner=narrowed)
     assert any("cannot read" in p for p in problems), problems[:3]
-    assert len(problems) == sum(1 for row in ROWS if row["invariant"]), problems
+    # Rows the narrowed reader still reads are no disagreement, and the tier-A
+    # gate rows are the first of those -- `NoAuthorizationBypassA` is all
+    # letters. Counting every invariant-naming row was exact only while every
+    # one of them was an `R4*`.
+    unreadable = [row for row in ROWS
+                  if row["invariant"] and not re.fullmatch(r"[A-Za-z]+", row["invariant"])]
+    assert len(problems) == len(unreadable), problems
 
 
 def test_a_runner_with_no_reader_at_all_is_rejected():

@@ -78,6 +78,7 @@ p1 = [
 # obligations, which are the WAY a property earns evidence, and the two rulings.
 out-of-queue = [
   "SEC-REF-001", "SEC-REF-002", "SEC-REF-003", "SEC-REF-004",
+  "SEC-REF-005", "SEC-REF-006",
   "SEC-TRACE-001", "SEC-TRACE-002", "SEC-TRACE-004",
   "SEC-RISK-001", "SEC-RISK-002",
 ]
