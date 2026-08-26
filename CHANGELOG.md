@@ -192,6 +192,31 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **An adversarial review of the entry below found three more lines of the same
+  four-applet sweep that no test could falsify, and one premise the new tests
+  rest on that nothing asserted.**
+  *The premise.* Each of the four valve tests kills `>` → `==` only while the
+  batch does not DIVIDE the budget; the tests argue that in prose and nothing
+  held them to it. Measured: add one fid to `is_fido_fid` and move the bound to
+  `4 × 256 + 16` — which `reset_bound_is_exactly_the_fid_space` *forces*, since
+  it asserts the bound equals the fid space — and the honest tree stays at
+  `615 passed; 0 failed` **and so does the same tree with `==`**, because
+  1040 = 5 × 208. A `const _: () = assert!(…)` beside each of the four fixtures
+  makes it a compile error instead: driven through all six arms (each budget
+  moved onto a multiple of five, and `UNDEAD` moved to 1, which divides
+  everything — the exact blindness the two old runaways had).
+  *The swallowed `?`.* `gone.value.map_err(…)?` → `let _ = gone.value;` left
+  615 / 118 / 140 / 197 passing in all four sweeps. The refusing fixtures cannot
+  see it, because the loop then spins on the fid the medium kept straight into
+  the VALVE, which returns the *same* error. The removal COUNT is what separates
+  a sweep that stopped from one the budget stopped, so
+  `rsk_fs::storage::faults::RemoveMedium` counts them now and one test per applet
+  bounds the spend at the five files it seeded. Driven: the swallow turns exactly
+  one test red in each crate, reading "the sweep asked for 1039 removals over 5
+  files" — the runaway, not its inverse.
+  `bcdDevice -> 0x098E`, for the same reason as the entry below: nothing here can
+  reach the image, and the row counts `crates/rsk-fs/src/storage.rs` wholesale.
+
 - **The reset runaway valve was falsifiable in none of its four applets, and the
   reason was the batch, not the cardinality.** `deleted > RESET_MAX_DELETES` is
   each wipe's progress guard; mutating `>` to `==` lets `deleted` — which rises a

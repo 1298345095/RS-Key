@@ -2,7 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
-use rsk_fs::storage::faults::Undead;
+use rsk_fs::storage::faults::{RemoveStuck, Undead};
 use rsk_fs::storage::ram::RamStorage;
 
 /// PUT's body grammar — a rule per field, a measured card cell per rule. Hung
@@ -1991,6 +1991,37 @@ fn a_sweep_that_never_converges_stops_inside_its_delete_budget() {
         count.removals() <= RESET_MAX_DELETES,
         "the valve let the sweep spend {} deletions on a budget of {RESET_MAX_DELETES}",
         count.removals()
+    );
+}
+
+/// The `?` under the valve — a refused backend removal must STOP the sweep, because
+/// `for_each_key` re-yields the fid the medium kept. Nothing in any of the four
+/// applets could see it: swallow the `?` and the loop spins on that fid straight
+/// into the VALVE, which answers the SAME error, so `let _ = gone.value;` left
+/// 118 / 615 / 140 / 197 passing. The removal COUNT is the observation that
+/// separates them — one batch against a whole budget.
+#[test]
+fn a_refused_removal_stops_the_sweep_instead_of_spinning_into_the_valve() {
+    const LIVE: u16 = 5;
+    let (backend, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    for i in 0..LIVE {
+        fs.put(EF_OATH_CRED + i, &[0x11; 24]).unwrap();
+    }
+    // Which of the batch is reached first is a fresh HashMap order per run, so the
+    // stop lands anywhere in 1..=LIVE — the bound is what has to hold, not a count.
+    medium.refuse(Some(EF_OATH_CRED));
+    assert_eq!(
+        sweep(&mut fs, is_oath_cred_fid),
+        Err(Sw::MEMORY_FAILURE),
+        "a removal the medium refused must fail the sweep"
+    );
+    assert!(
+        medium.attempts() <= LIVE as u32,
+        "the sweep asked for {} removals over {LIVE} credentials: it carried on past \
+         the refusal and the delete budget, not the `?`, is what stopped it",
+        medium.attempts()
     );
 }
 

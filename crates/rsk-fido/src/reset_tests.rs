@@ -459,6 +459,48 @@ fn a_sweep_that_never_converges_stops_inside_its_delete_budget() {
     );
 }
 
+/// The `?` under the valve — a refused backend removal must STOP the sweep, because
+/// `for_each_key` re-yields the fid the medium kept. Nothing in any of the four
+/// applets could see it: swallow the `?` and the loop spins on that fid straight
+/// into the VALVE, which answers the SAME error, so `let _ = gone.value;` left
+/// 615 / 118 / 140 / 197 passing. The removal COUNT is the observation that
+/// separates them — one batch against a whole budget.
+#[test]
+fn a_refused_removal_stops_the_sweep_instead_of_spinning_into_the_valve() {
+    const LIVE: u16 = 5;
+    let (backend, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    for i in 0..LIVE {
+        fs.put(EF_CRED + i, &[0xC0; 8]).unwrap();
+    }
+    // Which of the batch is reached first is a fresh HashMap order per run, so the
+    // stop lands anywhere in 1..=LIVE — the bound is what has to hold, not a count.
+    medium.refuse(Some(EF_CRED));
+    let mut rng = SeqRng(5);
+    let mut state = FidoState::new();
+    let mut presence = crate::AlwaysConfirm;
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev: dev(),
+        fs: &mut fs,
+        rng: &mut rng,
+        state: &mut state,
+        now_ms: 0,
+    };
+    assert_eq!(
+        sweep(&mut ctx, is_fido_fid),
+        Err(CtapError::Other),
+        "a removal the medium refused must fail the sweep"
+    );
+    assert!(
+        medium.attempts() <= LIVE as u32,
+        "the sweep asked for {} removals over {LIVE} files: it carried on past the \
+         refusal and the delete budget, not the `?`, is what stopped it",
+        medium.attempts()
+    );
+}
+
 /// `RESET_MAX_DELETES` is written as `4 * MAX_RESIDENT_CREDENTIALS + 15`, and the
 /// 15 is a hand-count of `is_fido_fid`'s fixed arm. Count the predicate instead of
 /// trusting it: add a record there and the bound silently stops covering the

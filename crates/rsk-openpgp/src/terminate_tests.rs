@@ -448,3 +448,41 @@ fn a_wipe_that_never_converges_stops_inside_its_delete_budget() {
         count.removals()
     );
 }
+
+/// The `?` under the valve — a refused backend removal must STOP the wipe, because
+/// `for_each_key` re-yields the fid the medium kept. Nothing in any of the four
+/// applets could see it: swallow the `?` and the loop spins on that fid straight
+/// into the VALVE, which answers the SAME error, so `let _ = gone.value;` left
+/// 197 / 615 / 118 / 140 passing. The removal COUNT is the observation that
+/// separates them — one batch against a whole budget.
+#[test]
+fn a_refused_removal_stops_the_wipe_instead_of_spinning_into_the_valve() {
+    const LIVE: [u16; 5] = [
+        EF_PK_SIG.get(),
+        EF_PK_DEC.get(),
+        EF_PK_AUT.get(),
+        EF_LOGIN_DATA,
+        EF_FP,
+    ];
+    let (backend, medium) = rsk_fs::storage::faults::RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    for fid in LIVE {
+        fs.put(fid, &[0xAB; 40]).unwrap();
+    }
+    // Which of the batch is reached first is a fresh HashMap order per run, so the
+    // stop lands anywhere in 1..=LIVE.len() — the bound is what has to hold.
+    medium.refuse(Some(EF_PK_SIG.get()));
+    assert_eq!(
+        wipe_openpgp(&mut fs),
+        Err(Sw::MEMORY_FAILURE),
+        "a removal the medium refused must fail the wipe"
+    );
+    assert!(
+        medium.attempts() <= LIVE.len() as u32,
+        "the wipe asked for {} removals over {} files: it carried on past the refusal \
+         and the delete budget, not the `?`, is what stopped it",
+        medium.attempts(),
+        LIVE.len()
+    );
+}

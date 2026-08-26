@@ -209,6 +209,7 @@ pub mod faults {
     pub struct RemoveStuck {
         inner: Rc<RefCell<RamStorage>>,
         refused: Rc<Cell<Option<u16>>>,
+        attempts: Rc<Cell<u32>>,
     }
 
     /// The other end of a [`RemoveStuck`]: arms the fault, and reads the medium
@@ -217,18 +218,25 @@ pub mod faults {
     pub struct RemoveMedium {
         inner: Rc<RefCell<RamStorage>>,
         refused: Rc<Cell<Option<u16>>>,
+        attempts: Rc<Cell<u32>>,
     }
 
     impl RemoveStuck {
         pub fn new() -> (Self, RemoveMedium) {
             let inner = Rc::new(RefCell::new(RamStorage::new()));
             let refused = Rc::new(Cell::new(None));
+            let attempts = Rc::new(Cell::new(0));
             (
                 Self {
                     inner: inner.clone(),
                     refused: refused.clone(),
+                    attempts: attempts.clone(),
                 },
-                RemoveMedium { inner, refused },
+                RemoveMedium {
+                    inner,
+                    refused,
+                    attempts,
+                },
             )
         }
     }
@@ -242,6 +250,13 @@ pub mod faults {
         pub fn live(&self, fid: u16) -> bool {
             self.inner.borrow_mut().exists(fid)
         }
+        /// Removals the medium was asked for. The refusal alone cannot tell a sweep
+        /// that STOPPED on it from one that swallowed it: the second spins on the
+        /// re-yielded fid into the delete budget, which answers the SAME error. The
+        /// COUNT separates them — one batch against a whole budget.
+        pub fn attempts(&self) -> u32 {
+            self.attempts.get()
+        }
     }
 
     impl Storage for RemoveStuck {
@@ -252,6 +267,7 @@ pub mod faults {
             self.inner.borrow_mut().write(fid, data)
         }
         fn remove(&mut self, fid: u16) -> Result<()> {
+            self.attempts.set(self.attempts.get() + 1);
             if self.refused.get() == Some(fid) {
                 return Err(Error::MemoryFatal);
             }
