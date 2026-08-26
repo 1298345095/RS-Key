@@ -354,14 +354,22 @@ weighs nothing. Left as it is on purpose — re-balancing moves harnesses betwee
 shards and every shard floor with them, which is a change to make deliberately
 and not as a side effect of measuring.
 
-**Where each of these has actually run.** The four weekly shards are the CI half
-and are green there: `deep-checks.yml` run 32621720655, the Sunday cron of
-2026-08-23, took `light1` 20 m 33 s, `light2` 54 m 52 s, `light3` 4 m 59 s and
-`heavy` 1 h 33 m 41 s on hosted `ubuntu-latest` runners — all four well inside
-the 6 h job cap, `heavy` included, which is the job that died twice while this
-split was being drawn. `all` is the maintainer's half and stays off CI by
-arithmetic: one job would cost the sum of the four, and the 3770 s above is that
-sum on a machine three times the runner's memory. It runs where the table says.
+**Where each of these has actually run.** The four weekly shards are the CI half.
+`deep-checks.yml` run 32621720655, the Sunday cron of 2026-08-23, took `light1`
+20 m 33 s, `light2` 54 m 52 s, `light3` 4 m 59 s and `heavy` 1 h 33 m 41 s on
+hosted `ubuntu-latest` runners, all four inside the 6 h job cap — and only one of
+the four is a reading of the roster above. That run was `main` at `06813cc1`,
+where `FLOOR_all` was 66 against today's 89 and `light1` and `light2` carried 17
+and 21 harnesses; their times are about smaller shards than the ones that exist
+now. `heavy` is the exception — 5 harnesses and 1 cover then and now, over a
+proof file `189f24c` moved byte-identical — which makes it the figure that
+mattered anyway: it is the job that died twice while this split was being drawn,
+and 1 h 33 m 41 s is what it costs instead. The other three owe a reading, and
+the next Sunday cron is the first that can give them one.
+
+`all` is the maintainer's half and stays off CI by arithmetic: one job would cost
+the sum of the four, and the 3770 s above is that sum on a machine three times
+the runner's memory. It runs where the table says.
 
 None of the fourteen figures in the Harnesses and Covers columns is kept by hand, and
 neither are `kani.sh`'s `FLOOR_*`/`COVERS_*`. `scripts/kani_gate.py` counts the
