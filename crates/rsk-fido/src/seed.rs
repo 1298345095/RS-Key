@@ -315,6 +315,13 @@ pub fn ensure_ppuat<S: Storage>(
 /// `resetPersistentPinUvAuthToken` (§6.5.4): drop the token, which clears its
 /// permissions with it. `force_delete`, not `delete` — this revokes a capability,
 /// so a false-absent present bit must not leave the record live in the backend.
+///
+/// The FOLDED answer, deliberately, though EF_PAUTHTOKEN carries no EF_META head of
+/// its own: `att_clear` and OpenPGP's attribute-change erase are in exactly that
+/// position too, and splitting the halves for this one caller would re-open, at this
+/// caller alone, the swallowed metadata drop 0x0987 closed. All four call sites are
+/// one-shot commands, so refusing costs the command and no sweep's progress — the
+/// reason the four reset sweeps, which lose a whole range, decided the other way.
 /// Refines `RSKeySecurityState!NoTokenAfterInvalidation` — SEC-FIDO-003.
 pub fn clear_ppuat<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
     fs.force_delete(EF_PAUTHTOKEN.get())

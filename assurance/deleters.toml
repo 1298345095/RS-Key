@@ -226,14 +226,14 @@ why = "the sweep. Best-effort in the sense that a torn wipe is a state the desig
 
 [[site]]
 file = "crates/rsk-fido/src/seed.rs"
-line = 320
+line = 327
 call = "fs.force_delete(EF_PAUTHTOKEN.get())"
 verb = "force_delete"
 answer = "read"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "must-read"
-why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared."
+why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared. The folded answer is kept deliberately (reviewed 0x0989): the record half here is only ever the shared blob being unreadable, but that is equally true of vendor.rs:425/428 and rsk-openpgp/src/putdata.rs:151/155, and splitting the halves for this caller alone would re-open the swallowed drop 0x0987 closed. One-shot commands lose the command, not a sweep's range."
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
