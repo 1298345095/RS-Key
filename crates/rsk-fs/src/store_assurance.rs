@@ -96,12 +96,12 @@ impl<S: Storage> Fs<S> {
         }
     }
 
-    /// `Put`'s cache clause (`fs.rs:408-428` → `mark_present`).
+    /// `Put`'s cache clause (`fs.rs:413-433` → `mark_present`).
     pub fn step_put(&mut self, fid: u16) {
         self.mark_present(fid);
     }
 
-    /// `Delete`'s cache clause (`fs.rs:468-477` → `mark_absent`).
+    /// `Delete`'s cache clause (`fs.rs:473-482` → `mark_absent`).
     pub fn step_delete(&mut self, fid: u16) {
         self.mark_absent(fid);
     }
@@ -112,7 +112,7 @@ impl<S: Storage> Fs<S> {
         self.record_unless_faulted(fid, live);
     }
 
-    /// The reader `NoFalseAbsent` is stated over (`fs.rs:145-147`).
+    /// The reader `NoFalseAbsent` is stated over (`fs.rs:150-152`).
     pub fn reads_absent(&self, fid: u16) -> bool {
         self.known_absent(fid)
     }
