@@ -869,8 +869,11 @@ def run(root, write=False):
     except (*MALFORMED, ValueError) as error:
         problems.append(f"{ARTIFACT} cannot be generated from {LEDGER}: {error}")
     else:
-        got = (root / ARTIFACT).read_text() if (root / ARTIFACT).is_file() else ""
-        if want != got:
+        # Bytes, not text: `read_text` folds `\r\n` to `\n`, so a CRLF copy
+        # compared as text is equal to a LF one — the lesson `config_gen_gate.py`
+        # already wrote down, in the very file this row names as its model.
+        got = (root / ARTIFACT).read_bytes() if (root / ARTIFACT).is_file() else b""
+        if want.encode() != got:
             problems.append(
                 f"{ARTIFACT} is not what the generator writes — run"
                 " `python scripts/matrix_gate.py --write` and commit the result"

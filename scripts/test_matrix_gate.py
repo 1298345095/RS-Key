@@ -752,3 +752,12 @@ def test_a_hand_edited_matrix_is_rejected(tree, capsys):
     this row; `config_gen_gate.py` shipped for the same reason one file over."""
     tree.edit("docs/assurance-matrix.md", "## Open gaps", "## Open holes")
     assert "is not what the generator writes" in red(tree, capsys)
+
+
+def test_a_matrix_rewritten_with_crlf_line_endings_is_rejected(tree, capsys):
+    """`read_text` folds `\\r\\n` to `\\n`, so a CRLF copy compared as text is
+    EQUAL to the LF one the generator writes — and the whole rewrite passed. The
+    lesson is `config_gen_gate.py`'s, in the file this row names as its model."""
+    path = tree.root / "docs/assurance-matrix.md"
+    path.write_bytes(path.read_text().replace("\n", "\r\n").encode())
+    assert "is not what the generator writes" in red(tree, capsys)
