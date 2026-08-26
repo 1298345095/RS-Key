@@ -8,7 +8,7 @@
 # harness in `rsk-phy` costs half an hour or more and nothing that expensive
 # belongs on a pull request. But that put every proof a day away from the change that broke
 # it, and the split is cheap once the cost is measured rather than assumed: the
-# whole fast tier discharges in ~212 s of solving (docs/testing.md carries the
+# whole fast tier discharges in 229 s of solving (docs/testing.md carries the
 # table), while four crates hold everything slow.
 #
 # So: `pr` on every pull request that touches the crates, `state` additionally
@@ -32,31 +32,36 @@ cd "$(dirname "$0")/.."
 # --- the tiers ---------------------------------------------------------------
 #
 # FAST: every crate whose whole harness set discharges in under a minute a
-# harness. Measured 2026-08-13 on kani 0.67.0 under load — 49 harnesses, 200 s of
-# solving all told, the slowest three being `rsk-piv::set_protected…` at 45 s,
-# `rsk-led::every_block_length…` at 44 s and `indices_in_range` at 29 s. The
-# `rsk-device` six (the presence arbitration) cost 3 s together, and the four
-# `rsk-fs::powercut` rules 0.5 s.
+# harness. Measured 2026-08-26 on kani 0.67.0, idle 18-core Apple M5 Pro — 63
+# harnesses, 229 s of solving all told, the slowest three being
+# `rsk-usb::no_buffer_overrun_after_any_single_frame` at 39 s,
+# `rsk-piv::set_protected…` at 37 s and `rsk-led::every_block_length…` at 34 s.
+# The `rsk-device` seven (the presence arbitration) cost 2 s together, and the
+# four `rsk-fs::powercut` rules 0.4 s.
 # `--harness-timeout 5m` below is the tripwire on that claim: a harness that
 # grows past it fails the PR row rather than quietly making every pull request
 # wait, and the answer is to move its crate to SLOW, not to raise the cap.
 FAST="rsk-sdk rsk-fs rsk-crypto rsk-openpgp rsk-otp rsk-piv rsk-oath rsk-usb rsk-ui rsk-led rsk-slip39 rsk-bip39 rsk-device"
 
 # SLOW: the arithmetic and the state sequences. `rsk-phy` carries
-# `serialize_parse_roundtrip` (27m42s measured 2026-08-13; ~80 min was recorded
-# once), `rsk-rsa` the functional division spec and the sieve, `rsk-mldsa` the
-# rounding round-trips, `rsk-fido` the three sequence proofs (~12 min together,
-# and one of them peaks at 9.3 GiB).
-# Both dated `rsk-phy` figures — this one and HEAVY's below — were taken while
-# that harness lived in `rsk-rescue`; `189f24c` moved the file byte-identical, so
-# they are inherited under the new crate name, not re-run.
+# `serialize_parse_roundtrip` (18m35s measured 2026-08-26; 27m42s in 2026-08-13's
+# reading and ~80 min on a hosted runner once), `rsk-rsa` the functional division
+# spec and the sieve — and the sieve is the expensive half by an order of
+# magnitude, 1058 s against the spec's 87 s — `rsk-mldsa` the rounding
+# round-trips, `rsk-fido` the three sequence proofs (519 s together, and one of
+# them peaks at 9.3 GiB).
+# The `rsk-phy` figures are no longer inherited: they were first taken while that
+# harness lived in `rsk-rescue` and `189f24c` moved the file byte-identical, but
+# both this one and HEAVY's below are re-measured under the current crate name.
 SLOW="rsk-phy rsk-rsa rsk-mldsa rsk-fido"
 
 # HEAVY: the crates that get a job of their own, because their peak
-# solver memory is near what a hosted runner has left over. Measured 2026-08-14:
-# `rsk-phy`'s round-trip peaks at 11.1 GB and the runner dies under it
-# ("received a shutdown signal" at 50-58 min, twice, against a 6 h job cap and
-# with the run's other jobs still going, so neither a timeout nor a cancel);
+# solver memory is near what a hosted runner has left over. `rsk-phy`'s
+# round-trip peaked at 11.1 GB when this split was drawn and the runner died
+# under it ("received a shutdown signal" at 50-58 min, twice, against a 6 h job
+# cap and with the run's other jobs still going, so neither a timeout nor a
+# cancel); re-measured 2026-08-26 the tier peaks at 19.9 GiB, so the number the
+# split was drawn by was 1.8× low, in the direction that argues for the split.
 # `rsk-fido`'s 9.3 GiB fits, which the `state` row demonstrates on every run. The
 # ceiling therefore sits between the two, and the split is drawn by that number
 # rather than by how long a crate takes. The LIGHT shards below are the rest of
@@ -69,10 +74,13 @@ HEAVY="rsk-phy"
 # shard's instead, and a shard that dies costs its own crates only — the reasoning
 # that drew HEAVY, applied to time rather than to memory.
 #
-# Balanced by cost, not by crate count: the three expensive crates left after
-# HEAVY (`rsk-fido`'s sequence proofs ~12 min, `rsk-rsa`'s division spec and
-# sieve, `rsk-mldsa`'s rounding round-trips) go one per shard, and the fast crates
-# fill in around them.
+# Balanced by cost, not by crate count: the expensive crates left after HEAVY go
+# one per shard and the fast ones fill in around them. Two of the three carry
+# their shard — `rsk-fido`'s sequence proofs 519 s, `rsk-rsa`'s sieve 1058 s — and
+# the third does not: `rsk-mldsa`'s rounding round-trips discharge in 1.9 s, so
+# LIGHT3 is 162 s against LIGHT2's 1289 s (measured 2026-08-26). Re-balancing
+# moves harnesses between shards and every FLOOR_light* with them, so it is a
+# deliberate change and not one to make while reading the clock.
 LIGHT1="rsk-fido rsk-ui rsk-piv rsk-oath"
 LIGHT2="rsk-rsa rsk-device rsk-fs rsk-crypto rsk-bip39"
 LIGHT3="rsk-mldsa rsk-led rsk-sdk rsk-openpgp rsk-usb rsk-otp rsk-slip39"
