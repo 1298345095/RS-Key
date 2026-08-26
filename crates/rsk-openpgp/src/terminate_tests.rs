@@ -215,8 +215,9 @@ fn terminate_rejects_p1p2_and_data() {
 /// every applet, so a fault reading it fails an OpenPGP removal over a fid that
 /// carries no record of its own. Folding that into `Fs::force_delete`'s single
 /// answer let the sweep `?` it out of the loop after the first file — and
-/// `terminate_df` skips the re-seed on a failed wipe, so the card was left holding
-/// the private-key records the command says it destroyed.
+/// `terminate_df` skipped the re-seed on a failed wipe (it re-seeds unconditionally
+/// since 0x098A), so the card was left holding the private-key records the command
+/// says it destroyed.
 ///
 /// Returns the answer and the imported secrets still live ON THE MEDIUM. Those are
 /// the fids `scan_files` never puts back, so they read the same on both arms; the

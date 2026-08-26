@@ -192,6 +192,27 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **Eleven more citations in the same class, found by sweeping it instead of
+  fixing the three that were reported.** The class is every `reset.rs` and
+  `is_*_fid` citation the model carries: 59 read by hand against the code they
+  land on, 11 wrong. Two were the `is_fido_fid`/`is_fido_gate_fid` confusion the
+  previous round left behind — the `store` variable and `RSKeyAppletSeams`'s
+  `FidoReset` both cited the *gate* predicate's `EF_BACKUP_SEALED` paragraph while
+  their prose is about `is_fido_fid`, now `214-256` on both pages. Two were ranges
+  that stop short of what they name: `authenticatorReset` cited as `31-74` when
+  `reset` runs to `:90` (`formal/README.md` had it right), and the `Err` "at
+  `:117-121`" that is on `:122`. One ended mid-sentence two lines before the
+  `ctx.state.reset()` its invariant's third clause is about.
+  Four more came out of the same paragraphs and are the reset's RAM half:
+  `Ctx::load_keydev` cited three times as `lib.rs:91-95`, which is
+  `require_presence`, and `state.keydev_dec` as `state.rs:360-362`, which is
+  `channel`. The last two are in `scripts/security_trace.py`, which no gate reads:
+  both name `reset.rs:187` for the reset-window predicate that is on `:211` — the
+  same sentence `formal/README.md` already cited correctly, which is the tell that
+  found them. Re-locked, each verified through the lock's own first/last line.
+  No syntactic rule was added: "reject a citation whose first or last line is a
+  comment" was measured last round at 190 false positives of 485.
+
 - **Six `reset.rs` citations in `RSKeySecurityState.tla` pointed at code their
   prose was never about, three of them re-blessed by a mechanical +6 shift.** The
   shift moved sixteen line numbers without a content check, and the commit's own

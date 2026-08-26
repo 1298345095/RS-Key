@@ -160,7 +160,7 @@ VARIABLES
     \* deleting the seed empties both here while the flash records remain, which
     \* is exactly what the shipped wipe buys and the only thing these invariants
     \* can be about -- an unopenable record is neither usable nor manageable.
-    store,  \*                                                  (reset.rs:193-221)
+    store,  \*                                                  (reset.rs:214-256)
     lock,   \* the soft lock: [soft, mism, policyMism]         (state.rs:285-293)
     tok,    \* device-side session token: [live, perms, rp]    (state.rs:248-262)
     plat,   \* the platform's copy: [held, verifies, revoked]  (ghost + wire)
@@ -180,10 +180,10 @@ VARIABLES
     snap,
     upSpent,\* ghost: a user-presence test has been spent since the token issued
     viol,   \* ghost: the set of invariant names some step has violated
-    \* `state.keydev_dec` (state.rs:360-362): the seed a vendor UNLOCK decrypted
+    \* `state.keydev_dec` (state.rs:338-340): the seed a vendor UNLOCK decrypted
     \* into RAM on a soft-locked device. NOT a second seed -- it is the SAME
     \* owner's seed by another route, and `Ctx::load_keydev` PREFERS it
-    \* (crates/rsk-fido/src/lib.rs:91-95), so deleting the flash record does
+    \* (crates/rsk-fido/src/lib.rs:104-108), so deleting the flash record does
     \* not end reachability
     \* while this stands. That preference is the whole of E110: the model used to
     \* have only the flash record, so a wipe whose flash half succeeded read as
@@ -249,7 +249,7 @@ Init ==
 (* The seed's TWO homes. Every credential box, rpId box, credBlob,          *)
 (* hmac-secret key and large-blob key is derived from the device seed       *)
 (* (reset.rs:140-144), and `Ctx::load_keydev` reads it from RAM first and   *)
-(* flash second (crates/rsk-fido/src/lib.rs:91-95). So "the records still  *)
+(* flash second (crates/rsk-fido/src/lib.rs:104-108). So "the records still *)
 (* open" is a claim                                                         *)
 (* about BOTH, and the wipe's own claim -- that what a tear leaves behind is *)
 (* undecryptable -- holds only once the last copy is gone.                   *)
@@ -1062,7 +1062,7 @@ DeleteCredWriteB ==
                     viol, ram >>
 
 (***************************************************************************)
-(* authenticatorReset -- reset.rs:31-74. Two phases, each a batch of        *)
+(* authenticatorReset -- reset.rs:31-90. Two phases, each a batch of        *)
 (* force_delete calls; `for_each_key` yields in FLASH-RING order, so the    *)
 (* order WITHIN a phase is not controlled and is modelled as arbitrary.     *)
 (***************************************************************************)
@@ -1615,7 +1615,7 @@ NoLiveTokenWithoutPinRecord == tok.live => pin.set
 NoUnmanageableCredential == Idle => store.cred \subseteq store.rpent
 
 \* No prefix of an authenticatorReset -- torn or complete -- leaves a
-\* surviving usable secret whose gate has already gone (reset.rs:52-59).
+\* surviving usable secret whose gate has already gone (reset.rs:52-61).
 \* Shipped twin: reset_tests.rs::a_torn_reset_never_unseals_a_surviving_seed.
 \*
 \* THE THREE CLAUSES ARE NAMED because `Solo_*` names an INVARIANT and never a
