@@ -319,27 +319,51 @@ that would otherwise die half an hour later on a confusing one. It is also the
 thing that has to be revisited if a later Kani lets the two combine, because then
 the interleaving becomes real and grouping by harness stops being safe.
 
-The split is by measured cost, not by guess (kani 0.67.0, 18-core Apple Silicon
-under load, 2026-08-13; "solve" excludes compilation, which dominates a cold
-run):
+The split is by measured cost, not by guess. Every row below is one run of the
+command above it, taken on 2026-08-26 under kani 0.67.0, on the maintainer's
+18-core Apple M5 Pro (48 GB, macOS 27) with nothing else on the machine. "Solve" is the sum of Kani's own per-harness `Verification Time` and so
+excludes compilation; "Wall" is the whole command with it. "Peak" is the tier's
+`maximum resident set size` under `/usr/bin/time -l` — the largest single CBMC
+process, not the sum of them:
 
-| Tier | Crates | Harnesses | Covers | Solve | Slowest harness |
-|---|---|---|---|---|---|
-| `pr` | 13 | 63 | 35 | 276 s | `rsk-piv::set_protected_total_and_invariant`, 47 s |
-| `state` | 2 | 26 | 30 | ~10 min | `rsk-fido::…_at_call_site`, ~7 min (9.3 GiB peak) |
-| `all` | 17 | 89 | 55 | ~1 h 46 | `rsk-phy::serialize_parse_roundtrip`, 27 m 42 s |
-| `light1` | 4 | 27 | 23 | not yet run | `rsk-fido::…_at_call_site`, ~7 min (9.3 GiB peak) |
-| `light2` | 5 | 29 | 12 | not yet run | `rsk-rsa`'s division spec and sieve |
-| `light3` | 7 | 28 | 19 | not yet run | `rsk-mldsa`'s rounding round-trips |
-| `heavy` | 1 | 5 | 1 | ~55 min | `rsk-phy::serialize_parse_roundtrip`, 55 min (11.1 GB peak) |
+| Tier | Crates | Harnesses | Covers | Solve | Wall | Peak | Slowest harness |
+|---|---|---|---|---|---|---|---|
+| `pr` | 13 | 63 | 35 | 229 s | 251 s | 2.8 GiB | `rsk-usb::no_buffer_overrun_after_any_single_frame`, 39 s |
+| `state` | 2 | 26 | 30 | 546 s | 553 s | 9.3 GiB | `rsk-fido::…_at_call_site`, 5 m 47 s |
+| `all` | 17 | 89 | 55 | 3735 s | 3770 s | 19.0 GiB | `rsk-phy::serialize_parse_roundtrip`, 19 m 07 s |
+| `light1` | 4 | 27 | 23 | 528 s | 538 s | 9.3 GiB | `rsk-fido::…_at_call_site`, 5 m 35 s |
+| `light2` | 5 | 29 | 12 | 1289 s | 1300 s | 8.9 GiB | `rsk-rsa::sieve_step_keeps_residues`, 17 m 38 s |
+| `light3` | 7 | 28 | 19 | 162 s | 176 s | 2.4 GiB | `rsk-usb::no_buffer_overrun_after_any_single_frame`, 36 s |
+| `heavy` | 1 | 5 | 1 | 1785 s | 1788 s | 19.9 GiB | `rsk-phy::serialize_parse_roundtrip`, 18 m 35 s |
 
-`pr` and `state` are measured runs. `all` has never been run end to end here:
-its cover count is the two measured tiers plus `rsk-phy`'s one, so
-**`FLOOR_all` is a number no run has reached**. The `rsk-phy` times and the
-11.1 GB peak are **inherited**, not re-run: they were taken while that harness
-lived in `rsk-rescue`, and `189f24c` moved the file byte-identical.
+Every tier came back at exactly its floor, and `all` is no longer the sum of the
+others: the four weekly shards ran separately in the same session and checked
+**the same 89 harness names**, compared name by name out of the four logs
+against `all`'s own listing, for 3763 s of solving against `all`'s 3735 s. So
+`FLOOR_all` and `COVERS_all` are numbers a run has reached, not numbers the
+partition adds up to.
 
-None of the six figures in the Harnesses and Covers columns is kept by hand, and
+Two figures this page carried are refuted by that run rather than confirmed.
+`rsk-phy` peaks at **19.9 GiB**, not the 11.1 GB inherited from when the harness
+lived in `rsk-rescue` — 1.8× higher, in the direction that makes `heavy`'s own
+job more necessary, not less. And `light3`'s slowest harness is not
+`rsk-mldsa`'s rounding round-trips: those discharge in 1.9 s, and what the shard
+actually costs is `rsk-usb`, `rsk-led` and `rsk-oath`. So the three shards are
+balanced 528 : 1289 : 162 s, and the crate placed in `light3` to weigh it down
+weighs nothing. Left as it is on purpose — re-balancing moves harnesses between
+shards and every shard floor with them, which is a change to make deliberately
+and not as a side effect of measuring.
+
+**Where each of these has actually run.** The four weekly shards are the CI half
+and are green there: `deep-checks.yml` run 32621720655, the Sunday cron of
+2026-08-23, took `light1` 20 m 33 s, `light2` 54 m 52 s, `light3` 4 m 59 s and
+`heavy` 1 h 33 m 41 s on hosted `ubuntu-latest` runners — all four well inside
+the 6 h job cap, `heavy` included, which is the job that died twice while this
+split was being drawn. `all` is the maintainer's half and stays off CI by
+arithmetic: one job would cost the sum of the four, and the 3770 s above is that
+sum on a machine three times the runner's memory. It runs where the table says.
+
+None of the fourteen figures in the Harnesses and Covers columns is kept by hand, and
 neither are `kani.sh`'s `FLOOR_*`/`COVERS_*`. `scripts/kani_gate.py` counts the
 tree's `#[kani::proof]` and `kani::cover!` per tier — comments stripped, since two
 `*_kani.rs` files discuss `kani::cover!` in prose — and fails the merge gate on
@@ -355,14 +379,12 @@ answer is to move its crate to the slow list, never to raise the cap.
 
 A harness that trips its cap ends the whole row, and it ends it *above* the floor
 checks: `cargo kani` exits 1, `pipefail` makes that the pipeline's, and the script
-stops at the `tee`. Both measured on kani 0.67.0, 2026-08-13. That matters for
-`TIMEOUT_all=30m`, because the harness it is really about —
-`serialize_parse_roundtrip` — verified in **27 m 42 s** here, an 8% margin, on an
-18-core Apple Silicon under load. The `~80 min` this page carried for it is not
-reproduced; if it is right for a slower runner then the daily row has been failing
-on a correct harness, and `FLOOR_all` and `COVERS_all` have never been read. The
-`~1 h 45` in the Solve column above still includes the old figure and no one has
-re-composed it.
+stops at the `tee`. Both measured on kani 0.67.0, 2026-08-13. That is why `all`
+and the four weekly tiers now cap at `6h`, the runner's own ceiling: there a cap
+that fires costs the row its floors, so it reports nothing rather than reporting
+a slow proof. The 30-minute cap it replaced had an 8% margin over
+`serialize_parse_roundtrip` at 27 m 42 s and none at all against the ~80 min a
+hosted runner once recorded; the harness takes 18 m 35 s on the machine above.
 
 Pin the version — a verdict belongs to the tool that gave it, and an unpinned
 install is not the one CI runs. `--harness-timeout` is experimental (hence the
@@ -471,6 +493,16 @@ has none), floors and the vacuity check —
 `deep-checks.yml`'s weekly `formal` row, which also fires on any push touching
 `formal/`. `liveness` is the temporal half and is not in CI: it needs a 12g
 heap. `all` is both. Tier membership lives in `formal/run-tlc.sh`.
+
+Both tiers are measured runs, not sums. On 2026-08-26, on the same Apple M5 Pro
+as the Kani table above, `safety` came back over **186 configurations in 2003 s
+— 18 GREEN, 168 RED, and not one row that missed what `floors.txt` asks of it**;
+`liveness` took **1334 s** for its four, `Liveness.cfg` GREEN over 7 602 760
+distinct states at the 12g heap that file gives it. CI has the `safety` half:
+`deep-checks.yml` run 32684551258 discharged it in 1 h 14 m 47 s against a
+120-minute cap. `liveness` has no CI row and is the maintainer's, and
+`Liveness_Full.cfg` is nobody's yet — `floors.txt` reserves it a 24 GB heap that
+no run has asked for.
 
 The emulator CI also records raw security-state snapshots from the real
 `21_pin_webauthn` suite and replays them against `RSKeySecurityState`. R4a
