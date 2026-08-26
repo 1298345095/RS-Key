@@ -204,7 +204,7 @@ why = "the panel's own deleteCredential — it reports the deletion to the owner
 
 [[site]]
 file = "crates/rsk-fido/src/reset.rs"
-line = 71
+line = 76
 call = "let gone = ctx.fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -215,7 +215,7 @@ why = "the seed fids ahead of the batch. Both halves are read and BOTH are carri
 
 [[site]]
 file = "crates/rsk-fido/src/reset.rs"
-line = 133
+line = 138
 call = "let gone = ctx.fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -479,7 +479,7 @@ why = "and its second. Both slots' valid bits come off flash in the response tha
 
 [[site]]
 file = "crates/rsk-piv/src/files.rs"
-line = 479
+line = 484
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
