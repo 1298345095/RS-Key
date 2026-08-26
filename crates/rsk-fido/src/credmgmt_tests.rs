@@ -1825,6 +1825,15 @@ fn enumerate_credentials_reads_are_linear_not_quadratic() {
     let mut rng = SeqRng(1);
     ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
     const N: usize = 32;
+    /// Reads per rp the linear path may spend. The bound is `PER_RP * N`, and it
+    /// only separates linear from quadratic while it stays UNDER the `N * N` the
+    /// message names — at N = 8 the two are equal and this test stops seeing the
+    /// pre-index pattern at all.
+    const PER_RP: usize = 8;
+    const _: () = assert!(
+        PER_RP * N < N * N,
+        "the pass bound is not under the quadratic figure, so a pre-index regression fits inside it"
+    );
     let mut hashes = std::vec::Vec::new();
     for i in 0..N {
         let rp = std::format!("rp{i:04}.example");
@@ -1845,7 +1854,7 @@ fn enumerate_credentials_reads_are_linear_not_quadratic() {
     }
     let total = reads.get();
     assert!(
-        total <= 8 * N,
+        total <= PER_RP * N,
         "enumerateCredentials read the store {total} times for N={N} rps; \
          expected ~O(N), quadratic (pre-index) would be ~{}",
         N * N

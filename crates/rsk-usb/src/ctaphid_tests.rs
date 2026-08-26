@@ -47,13 +47,22 @@ fn single_frame_ping() {
 fn multi_frame_reassembly() {
     let mut asm = Reassembler::new();
     let cid = 0x0100_0000;
-    // 57 (INIT) + 59 (CONT0) + 10 (CONT1) = 126 bytes.
-    let mut payload = [0u8; 126];
+    // INIT + one whole CONT + a remainder, sized off the frame widths: 126 is three
+    // frames only while INIT_DATA is 57 and CONT_DATA 59.
+    const TAIL: usize = 10;
+    const LEN: usize = INIT_DATA + CONT_DATA + TAIL;
+    const _: () = assert!(TAIL < CONT_DATA); // or the last frame is not part-full
+    let mut payload = [0u8; LEN];
     for (i, b) in payload.iter_mut().enumerate() {
         *b = i as u8;
     }
     assert_eq!(
-        asm.feed(&init_frame(cid, CTAPHID_PING, 126, &payload[..INIT_DATA])),
+        asm.feed(&init_frame(
+            cid,
+            CTAPHID_PING,
+            LEN as u16,
+            &payload[..INIT_DATA]
+        )),
         Outcome::None
     );
     assert_eq!(
@@ -319,11 +328,17 @@ fn tx_empty_still_emits_init() {
     assert_eq!(frames[0][6], 0);
 }
 
+/// A payload of exactly four frames — INIT, two whole continuations, a remainder.
+/// Sized off the frame widths because the two tests below assert the *count*, and
+/// 200 bytes is four frames only while INIT_DATA is 57 and CONT_DATA 59.
+const FOUR_FRAME_TAIL: usize = 25;
+const FOUR_FRAME_LEN: usize = INIT_DATA + 2 * CONT_DATA + FOUR_FRAME_TAIL;
+const _: () = assert!(FOUR_FRAME_TAIL > 0 && FOUR_FRAME_TAIL <= CONT_DATA);
+
 #[test]
 fn tx_multi_frame_seq_increments() {
-    let data = [0xCD; 200];
+    let data = [0xCD; FOUR_FRAME_LEN];
     let frames: Vec<_> = TxFrames::new(0x0100_0000, CTAPHID_MSG, &data).collect();
-    // 200 = 57 (INIT) + 59 + 59 + 25 → 4 frames.
     assert_eq!(frames.len(), 4);
     assert_eq!(frames[0][4], CTAPHID_MSG);
     assert_eq!(frames[1][4], 0); // seq 0
@@ -334,7 +349,23 @@ fn tx_multi_frame_seq_increments() {
 // Drive every payload length through TX framing then RX reassembly.
 #[test]
 fn roundtrip() {
-    for &len in &[0usize, 1, 56, 57, 58, 116, 200, 1000, CTAP_MAX_MESSAGE] {
+    // The three around the INIT/CONT split and the one exactly on the first
+    // continuation boundary are DERIVED: copied as 56/57/58/116 they straddle
+    // nothing at any other `HID_RPT_SIZE`, and a defect that only bites where a
+    // message ends on a frame edge walks through. Measured at `HID_RPT_SIZE = 68`
+    // with `in_tx = bcnt > CONT_DATA` — an INIT_DATA/CONT_DATA slip — the whole
+    // ctaphid suite reported 31 passed, 0 failed.
+    for &len in &[
+        0usize,
+        1,
+        INIT_DATA - 1,
+        INIT_DATA,
+        INIT_DATA + 1,
+        INIT_DATA + CONT_DATA,
+        200,
+        1000,
+        CTAP_MAX_MESSAGE,
+    ] {
         let cid = 0x0100_0000;
         let cmd = CTAPHID_PING;
         let mut data = [0u8; CTAP_MAX_MESSAGE];
@@ -415,7 +446,7 @@ fn write_frames_abandons_when_host_stalls() {
 #[test]
 fn write_frames_writes_every_frame_when_host_drains() {
     let mut sink = CountingSink { written: 0 };
-    let data = [0xCD; 200]; // 57 + 59 + 59 + 25 → 4 frames
+    let data = [0xCD; FOUR_FRAME_LEN];
     // Timeout never fires, so each write wins its race and all frames go out.
     let done = poll_bounded(
         write_frames(&mut sink, 0x0100_0000, CTAPHID_MSG, &data, || {
@@ -701,7 +732,10 @@ fn the_declared_length_is_refused_one_byte_past_the_buffer() {
 #[test]
 fn a_partial_last_frame_advances_by_its_remainder_and_no_further() {
     const CID: u32 = 0x0203_0405;
-    const TAIL: usize = 10; // < CONT_DATA, so the last frame is part-full
+    const TAIL: usize = 10;
+    // Part-full is the whole point of the fixture, so it is checked, not asserted
+    // in prose: at `TAIL == CONT_DATA` the `min` this test drives never bites.
+    const _: () = assert!(TAIL < CONT_DATA);
     let payload = [0x77u8; INIT_DATA + TAIL];
     let mut r = Reassembler::new();
     assert!(matches!(

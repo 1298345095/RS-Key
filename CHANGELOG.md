@@ -192,6 +192,29 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **Three more boundary probes copied from constants they could not see.** Each
+  test straddles an edge that arithmetic elsewhere decides, and each wrote the
+  answer down instead of deriving it, so an ordinary edit to the source constant
+  moves the edge out from under the probe with the row still green.
+  *OATH.* `mark_has_room_matches_raise_mark` probes 957/958/959 because
+  `CRED_MAX − MARK_LEN − 2 == 958`; at `CRED_MAX = 1200` the edge is 1134, every
+  probe lands in the "fits" region, and `<=` → `<` in `mark_has_room` passes. The
+  edge is computed now — driven, the same off-by-one fails at "a blob of 1134
+  bytes" and the widening alone stays green.
+  *FIDO.* `enumerate_credentials_reads_are_linear_not_quadratic` passes at
+  `total <= 8 * N` and names `N * N` as the quadratic figure, which separates them
+  only while `N > 8`. Measured, the finding's own `N: 32 → 8` does **not** blind
+  it — the pre-index cost is `N² + N`, so 72 > 64 still fails — but `N = 7` does:
+  56 ≤ 56, mutation green. A `const _: () = assert!(PER_RP * N < N * N)` makes
+  both 8 and 7 build failures.
+  *CTAPHID.* `roundtrip`'s 56/57/58/116 are `INIT_DATA ∓ 1` and the first
+  continuation boundary. At `HID_RPT_SIZE = 68` — where the whole suite still
+  reports 31 passed, 0 failed — an `in_tx = bcnt > CONT_DATA` slip survives every
+  test in the file; derived, the probe moves to `len = 62` and kills it there.
+  `multi_frame_reassembly`'s 126 and the two `frames.len() == 4` fixtures are
+  derived from the frame widths too, and the two "part-full last frame" premises
+  are compile-time assertions rather than trailing comments.
+
 - **The panel's host-yield bound had one end measured and the other written
   down.** `tools/emu`'s two menu-yield tests separate "the menu handed the
   executor back" from "the menu timed out" with a 20 s bound that only works
