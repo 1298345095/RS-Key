@@ -46,8 +46,9 @@
 #   comutants — the semantic model mutants re-injected into production Rust
 #          (`scripts/comutate.py run`). Gating: every recorded code-level kill
 #          must still go red, and a new GAP is an abstraction-fidelity finding.
-#   formal — TLC over formal/: the model, its 44 mutants, their floors and the
-#          vacuity check (formal/run-tlc.sh `safety`). Gating. It also runs on
+#   formal — TLC over formal/: the 186 configurations `run-tlc.sh safety` lists,
+#          their floors and the vacuity check — 18 that must come back GREEN and
+#          168 that must go RED on a named invariant. Gating. It also runs on
 #          any push touching formal/, so an edit to the model is checked at once
 #          rather than up to a week later. The `liveness` tier is deliberately
 #          not here — it needs a 12g heap, and 11.1 GB is where the kani `heavy`

@@ -1104,23 +1104,23 @@ Round two's "no, in two independent ways" was exact.
 
 | Configuration | Verdict | States generated | Distinct | Depth | Wall |
 |---|---|---|---|---|---|
-| `Shipped.cfg` (the tree as it stands, `SYMMETRY` on, firmware constants) | **GREEN, exhaustive** | 699 350 223 | 48 679 968 | 55 | **539 s** |
-| `Historical_E76.cfg` (the seed-lead taken back out) | RED `NoUnmanageableCredential` | 2 286 995 | 246 718 | 13 | 4 s |
-| `Historical_E77.cfg` (the grant back in phase 2 **and** the consumer fix out) | RED `NoAccessibleSecretWithoutGate` | 2 060 496 | 221 977 | 13 | 3 s |
-| 28 × `Mut_*.cfg` | RED, each caught | 65 – 3 926 726 | 40 – 410 556 | 4 – 14 | ≤ 6 s |
-| 28 × `Solo_*.cfg` + 3 structural | RED, each on its **own** target | 65 – 6 430 819 | 40 – 658 903 | 4 – 15 | ≤ 9 s |
-| 3 × `SoloClause_*.cfg` | RED, each on **one clause** | 25 216 – 22 897 118 | 5 867 – 2 231 576 | 8 – 18 | ≤ 30 s |
-| `Fairness.cfg` (`ENABLED OpAdvances => ~Idle`, liveness constants) | **GREEN** | 85 388 061 | 7 903 336 | 43 | 117 s |
-| `FairMut_BugFairnessFoldsLocalCeremony.cfg` | RED `OpAdvancesIsOneActivity` | 57 | 36 | 4 | < 1 s |
+| `Shipped.cfg` (the tree as it stands, `SYMMETRY` on, firmware constants) | **GREEN, exhaustive** | 699 350 223 | 48 679 968 | 55 | **1285 s** |
+| `Historical_E76.cfg` (the seed-lead taken back out) | RED `NoUnmanageableCredential` | 1 578 248 | 164 710 | 13 | 4 s |
+| `Historical_E77.cfg` (the grant back in phase 2 **and** the consumer fix out) | RED `NoAccessibleSecretWithoutGate` | 1 401 426 | 146 249 | 13 | 4 s |
+| 28 × `Mut_*.cfg` | RED, each caught | 65 – 2 757 337 | 36 – 276 265 | 4 – 14 | ≤ 6 s |
+| 28 × `Solo_*.cfg` + 3 structural | RED, each on its **own** target | 65 – 4 635 108 | 36 – 446 278 | 4 – 15 | ≤ 10 s |
+| 3 × `SoloClause_*.cfg` | RED, each on **one clause** | 19 359 – 15 777 443 | 4 294 – 1 450 823 | 8 – 18 | ≤ 30 s |
+| `Fairness.cfg` (`ENABLED OpAdvances => ~Idle`, liveness constants) | **GREEN** | 79 962 957 | 7 602 760 | 43 | 114 s |
+| `FairMut_BugFairnessFoldsLocalCeremony.cfg` | RED `OpAdvancesIsOneActivity` | 57 | 36 | 4 | 1 s |
 | `Seams.cfg` (the second module) | **GREEN, exhaustive** | 6 045 | 410 | 11 | 1 s |
-| 14 × `SeamMut_*.cfg` / 14 × `SeamSolo_*.cfg` | RED, each on its own target | — | 27 – 381 | 3 – 8 | ≤ 1 s |
-| `Store.cfg` | **GREEN, exhaustive** | 4 185 | 364 | 6 | < 1 s |
-| `Lattice.cfg` | **GREEN, exhaustive** | 2 431 | 243 | 11 | < 1 s |
-| `Policies.cfg` (all four applets in one module) | **GREEN, exhaustive** | 45 253 | 2 268 | 14 | 1 s |
-| `Admin.cfg` / `Display.cfg` / `Boot.cfg` / `Transport.cfg` | **GREEN, exhaustive** | 15 – 127 | 5 – 24 | 2 – 5 | < 1 s each |
-| `Liveness.cfg` (reduced constants, `HEAP=12g` from `floors.txt`) | **GREEN** | 85 388 061 | 7 903 336 | 43 | **1591 s** |
-| `Liveness.cfg` at the old 4 GB default | **out of memory** in the temporal check, state search complete | 85 388 061 | 7 903 336 | 43 | 1500 s |
-| 3 × `LiveMut_*.cfg` | RED, each on its own property | 579 360 – 733 606 | 79 706 – 100 162 | — | ≤ 4 s |
+| 14 × `SeamMut_*.cfg` / 14 × `SeamSolo_*.cfg` | RED, each on its own target | 77 – 1 723 | 27 – 204 | 3 – 8 | ≤ 1 s |
+| `Store.cfg` | **GREEN, exhaustive** | 4 185 | 364 | 6 | 1 s |
+| `Lattice.cfg` | **GREEN, exhaustive** | 2 431 | 243 | 11 | 1 s |
+| `Policies.cfg` (all four applets in one module) | **GREEN, exhaustive** | 45 253 | 2 268 | 14 | < 1 s |
+| `Admin.cfg` / `Display.cfg` / `Boot.cfg` / `Transport.cfg` | **GREEN, exhaustive** | 15 – 127 | 5 – 24 | 2 – 5 | ≤ 1 s each |
+| `Liveness.cfg` (reduced constants, `HEAP=12g` from `floors.txt`) | **GREEN** | 79 962 957 | 7 602 760 | 43 | **1320 s** |
+| `Liveness.cfg` at the old 4 GB default (not re-run since) | **out of memory** in the temporal check, state search complete | 85 388 061 | 7 903 336 | 43 | 1500 s |
+| 3 × `LiveMut_*.cfg` | RED, each on its own property | 538 115 – 645 534 | 76 465 – 92 359 | — | 4 s |
 
 Every named baseline above, plus `Fairness.cfg` and `Liveness.cfg`, is an exhaustive
 search and its count is reproducible; every RED row stops at the first
@@ -1138,11 +1138,18 @@ default two over thirteen, 7 at four and at eight; `Admin.cfg`, `Display.cfg` an
 `run-tlc.sh` holds only `distinct` against `floors.txt` — so re-measure it by hand
 with `WORKERS=1 ./run-tlc.sh <cfg>` rather than trusting it to have been held.
 
-**Every row above is from one `./run-tlc.sh all` on the final tree**, which now
-exits non-zero if any row misses what `floors.txt` requires of it. The
-`Shipped.cfg` figure is **bit-identical to the pre-change baseline** — every
-Guard/Policy pair, structural invariant, clause name and recorder this round
-added removed and added exactly zero states.
+**Every row above is from one run on 2026-08-26**: `./run-tlc.sh safety` and
+then `./run-tlc.sh liveness`, which is what `all` does, on an 18-core Apple M5
+Pro at the default `WORKERS=2` and whatever heap `floors.txt` gives each
+configuration. 186 safety rows in **2003 s** and four liveness rows in
+**1334 s**; 19 GREEN, 171 RED, and not one row missed what `floors.txt` requires
+of it — which is what makes the command exit 0 rather than merely finish. The
+one row not from that run is labelled: the 4 GB `Liveness.cfg` OOM is kept as the
+older observation it is. The `Shipped.cfg` state counts are **bit-identical to
+the pre-change baseline** — every Guard/Policy pair, structural invariant, clause
+name and recorder this round added removed and added exactly zero states. Its
+wall clock is not: 539 s was a faster reading of the same search, and 1285 s is
+what this machine took.
 
 The green row is **9× the state space this model carried two rounds ago and 15×
 the wall clock**, and both the growth and the one shrink are fidelity. `ram` and
@@ -1207,12 +1214,11 @@ the wrong reason.
 `kani::cover!` answers on the Kani side: a transition that never fires makes
 every clause guarding it free. It is `COVERAGE=1 ./run-tlc.sh <cfg>` now, and
 it refuses on a zero — see "the dead-action check" above; the seam module fires
-**20 of 20**. An earlier revision measured the FIDO module with `-coverage` and
-found no zero-total row among 41 actions plus `Init`. That measurement has
-**not been repeated since the model reached 50 actions**, and the reason it
-matters is no longer hypothetical: `-coverage` is what pinned `CardReset` firing
-from 330 of 666 states against 666 for each of its siblings, which is the pinned
-trap seen from the other side.
+**20 of 20**. The FIDO module is swept too, at the size it has now rather than
+at the 41 actions an earlier revision measured: **`Init` and all 50 actions fire**
+(2026-08-26, below). The reason it matters is not hypothetical — `-coverage` is
+what pinned `CardReset` firing from 330 of 666 states against 666 for each of its
+siblings, which is the pinned trap seen from the other side.
 
 ## The trusted display — a wait owner and a fourth PIN door
 
@@ -2646,9 +2652,14 @@ run-tlc: DEAD ACTION in Seams.cfg -- never fired: NeverEnabled
 
 Mutation-tested both ways on the seam module: an action written to be
 unreachable is named and the run exits 1; the module as it stands fires **20 of
-20** and exits 0. It is opt-in because coverage costs wall clock, and the FIDO
-module's 48.7 M states have **not** been swept this way — that measurement is one
-command and is still owed.
+20** and exits 0. It is opt-in because coverage costs wall clock — and that is
+now a measured price rather than a reason not to pay it. `COVERAGE=1
+./run-tlc.sh Shipped.cfg` swept the FIDO module's 48.7 M states on 2026-08-26 in
+**1880 s against the plain run's 1285 s**, GREEN over the same 699 350 223
+generated and 48 679 968 distinct, and reported **`Init` and every one of the 50
+actions firing**. The quietest is `ResetFinish` at 2 078 generated; nothing in
+the module is free. The sweep is not a CI row: at 46% on top of the tier's
+longest configuration it belongs where `liveness` does.
 
 ### A bit-identical count is only the signature when *generated* rises
 
@@ -2930,7 +2941,7 @@ All four conjuncts read against the code:
 `OpAdvancesIsOneActivity == ENABLED OpAdvances => ~Idle` is the first row's
 argument as an invariant: if no disjunct can be enabled while the device is
 quiescent, then every disjunct that *is* enabled belongs to the single in-flight
-`op`, and the promise means what its comment says. GREEN over 7 903 336 distinct
+`op`, and the promise means what its comment says. GREEN over 7 602 760 distinct
 states at the liveness constants, for about 5% more wall clock than the plain
 safety run — eighteen `ENABLED` evaluations per state are cheap.
 `BugFairnessFoldsLocalCeremony` is E160 verbatim and falls in **36 distinct
@@ -2952,7 +2963,7 @@ that config was 805 268 distinct states in 118 s, against `Liveness_Full.cfg`'s
 6 664 764 in 1475 s: a measured 15.7× for the same verdict, which is why the
 routine configuration is the small one.
 
-It is **7 903 336 distinct states now**, and the state graph is no longer the
+It grew to **7 903 336 distinct states**, and the state graph stopped being the
 cost. TLC builds a behaviour graph on top of it — **23 710 008 nodes** — and at
 `run-tlc.sh`'s default 4 GB heap the final temporal check **runs out of memory**
 after 1500 s, with the state search already complete. So the reduced constants
@@ -2964,12 +2975,18 @@ it.
 
 **`floors.txt` carries that heap per config now**, so the routine command
 establishes the verdict again: `./run-tlc.sh all` runs `Liveness.cfg` at 12 GB
-and it is **GREEN over 7 903 336 distinct states at depth 43 in 1591 s**, in the
-same matrix run as everything else in the Results table.
+and it is **GREEN over 7 602 760 distinct states at depth 43 in 1320 s**
+(2026-08-26), in the same matrix run as everything else in the Results table.
+The 7 903 336 this section quotes above it is an older reading of the same
+configuration — an exhaustive count is reproducible, so those 300 576 states are
+the model's to explain and not the run's, and nothing on this page says which
+change spent them.
 
 `Liveness_Full.cfg`, the same properties over the safety matrix's 48.7 M states,
-was not attempted: the reduced config already needs 12 GB and 27 minutes. Its
-floor row carries a 24 GB heap it has never been run at.
+is still not attempted: the reduced config already needs 12 GB and 22 minutes,
+and `list_liveness` leaves it off the tier for that reason. Its floor row carries
+a 24 GB heap **no run has asked for** — the one measurement on this page that
+belongs to no machine yet.
 
 The three `LiveMut_*` configs are unaffected either way and all three still fall
 on the property that names them in 4 s each — a counterexample search halts long
