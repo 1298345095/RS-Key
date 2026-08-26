@@ -478,17 +478,48 @@ cannot merge past 42. So the inner check is defence in depth against a shape the
 current tag vocabulary cannot produce: **unreachable**, the same verdict
 co-refutation records for a defect a shipped fix made impossible, not a test gap.
 
-What is a gap is the CCID wrapper. `CcidApplets::factory_wipe` returns whether
-the wipe completed, and its caller turns that into a reboot; replacing the whole
-function with `true` OR with `false` left the suite green. Audit run-32 is what
-the `true` direction costs — a wipe reporting a range clear it never enumerated,
-with the trusted display painting "RS-Key erased" over live credentials.
-`a_completed_factory_wipe_reports_true_and_leaves_nothing` pins the honest
-direction. The other stays **open** and the reason is a fixture: `Env` is wired
-to `RamStorage` and cannot fail, so the wrapper's laundering of a refusal has
-nowhere to be observed. The layer below is covered
-(`rsk-fs::factory_wipe_fails_on_a_truncated_enumeration`); this is the one seam
-between them, and closing it means making `Env` generic over its backend.
+What was a gap is the CCID wrapper, and the two directions came apart under
+re-measurement. `CcidApplets::factory_wipe` returns whether the wipe completed
+and its caller turns that into a reboot; replacing the whole function with `true`
+OR with `false` once left the suite green. Audit run-32 is what the `true`
+direction costs — a wipe reporting a range clear it never enumerated, with the
+trusted display painting "RS-Key erased" over live credentials.
+
+`a_completed_factory_wipe_reports_true_and_leaves_nothing` already kills both of
+those, and the `false` one is worth naming separately: a refused wipe is a
+fail-safe direction, wrong but refusing, and what makes it a kill is the *other*
+assertion — the whole-function replacement erases nothing, so the credential it
+reports on is still there. What survived was the narrower **laundering** mutant,
+`.is_ok()` → `true`: the wipe runs, fails, and the wrapper reports the reboot
+anyway. That one had nowhere to be observed, because `Env` was wired to
+`RamStorage` and cannot fail.
+
+`Env` is generic over its backend now, and
+`a_refused_factory_wipe_is_never_reported_as_a_completed_one` drives both of
+`Fs::factory_wipe`'s refusals through the wrapper — a walk it could not finish,
+and a backend `remove` that errored (`storage::faults::RemoveStuck`) — with the
+credential still live on the medium in each. Driven rather than argued:
+`.is_ok()` → `true` fails exactly that one test of the crate's 77, on "a wipe
+that never enumerated the store must not report the range clear", and each half
+kills it on its own.
+
+The obligation is **flavour-conditional**, and the test carries the same gate the
+function does: `#[cfg(not(feature = "strict-config"))]`, because the strict image
+has no management RESET to wipe with. Dropping that gate is caught by the
+`clippy (strict-config host)` row — `no method named factory_wipe` — and not by
+`cargo test -p rsk-device`, which is the row a reader would expect to own it.
+
+What stays open is the layer below. `Fs::factory_wipe` is still not a producer in
+the store transition map: `RSKeyStore!Next` offers `Put`, `MetaAdd`,
+`MetaDelete`, `Delete`, `Confirm`, `Scan` and `Reboot`, and a factory wipe is
+none of them — it calls `Storage::remove` straight, past `Fs::delete`, so it
+drops no metadata record and runs no `mark_absent`. On the refusal path that is
+visible state: the cache reset at the end of the sweep is never reached, so
+`present`/`decided` and the dynamic-file registry keep counting records the
+medium no longer holds, and the worker does not reboot away from them. Modelling
+it is stage-2's second reset producer, it needs its own actions, mutants and
+verdict-registry entries, and no `check.sh` row runs TLC to falsify them — so it
+is the maintainer's, alongside the registry protection it depends on.
 
 Two size-arithmetic rows in `rsk-devconf` (`CONFIG_TLV_FIXED`, and the room
 computation in `config_tlv`) survive because no test is tight against the
@@ -1027,7 +1058,11 @@ One thing the re-run turned up is **still** unfixed, and is recorded rather than
 closed: **the model has one reset path.** `Fs::factory_wipe` — the Management
 RESET and the on-screen factory reset — is a second producer of the state
 `NoUnmanageableCredential` forbids, and it took the same `first` predicate in the
-same commit. It is unmodelled.
+same commit. It is unmodelled here and in `RSKeyStore`'s map alike — and it has
+an owner now rather than only a record: the maintainer, as stage-2's second reset
+producer, after the verdict-registry protection it depends on. What is closed is
+the seam above it, where the wrapper used to be free to report a refused wipe as
+a completed one.
 
 ### The blindness that regression exposed — closed
 
