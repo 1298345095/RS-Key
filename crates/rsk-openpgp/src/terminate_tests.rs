@@ -424,6 +424,13 @@ fn a_wipe_that_never_converges_stops_inside_its_delete_budget() {
         EF_LOGIN_DATA,
         EF_FP,
     ];
+    // The premise, made checkable rather than argued: `deleted` rises a whole
+    // UNDEAD per pass, so a batch that DIVIDES the budget lets `==` fire on the
+    // nose and this test stops seeing the valve — silently, suite still green.
+    const _: () = assert!(
+        !WIPE_MAX_DELETES.is_multiple_of(UNDEAD.len() as u32),
+        "the batch divides the delete budget, so this test cannot falsify the valve"
+    );
     let (backend, count) = rsk_fs::storage::faults::Undead::new(2 * WIPE_MAX_DELETES);
     let mut fs = Fs::new(backend);
     fs.scan();

@@ -423,6 +423,13 @@ fn reset_sweep_fails_when_storage_does_not_converge() {
 #[test]
 fn a_sweep_that_never_converges_stops_inside_its_delete_budget() {
     const UNDEAD: u16 = 5;
+    // The premise, made checkable rather than argued: `deleted` rises a whole
+    // UNDEAD per pass, so a batch that DIVIDES the budget lets `==` fire on the
+    // nose and this test stops seeing the valve — silently, suite still green.
+    const _: () = assert!(
+        !RESET_MAX_DELETES.is_multiple_of(UNDEAD as u32),
+        "the batch divides the delete budget, so this test cannot falsify the valve"
+    );
     let (backend, count) = Undead::new(2 * RESET_MAX_DELETES);
     let mut fs = Fs::new(backend);
     fs.scan();
