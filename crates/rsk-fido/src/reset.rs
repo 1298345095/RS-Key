@@ -89,7 +89,7 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
 /// because the flash walk can yield multiple stored versions of one fid.
 ///
 /// `Ok(true)` is "the range is clear, and a metadata record over it could not be
-/// dropped" — the caller carries that to the end of the reset rather than stopping,
+/// PROVEN dropped" — the caller carries that to the end of the reset rather than stopping,
 /// for the reason `Fs::force_delete_halves` states.
 /// Refines `RSKeySecurityState!ResetNeverWeakensSurvivingState` — SEC-FIDO-006.
 fn sweep<S: Storage, R: Rng>(

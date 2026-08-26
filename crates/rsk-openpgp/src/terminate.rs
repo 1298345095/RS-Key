@@ -133,10 +133,10 @@ fn wipe_openpgp<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // makes a restored default PW1 useless — but the UIF flags do: `scan_files`
     // re-seeds them to touch-OFF over a private key a surviving DEK can still open.
     let mut deleted = 0u32;
-    // A metadata record that could not be dropped is carried to the end rather than
-    // stopped on, for the reason `Fs::force_delete_halves` states: EF_META is one
-    // blob shared by every applet, so a fault reading it would end the wipe after a
-    // single file — at the same fid on every retry.
+    // A metadata record that could not be PROVEN dropped is carried to the end
+    // rather than stopped on, for the reason `Fs::force_delete_halves` states:
+    // EF_META is one blob shared by every applet, so a fault reading it would end
+    // the wipe after a single file — at the same fid on every retry.
     let mut orphaned = false;
     for gates in [false, true] {
         loop {

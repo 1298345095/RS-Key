@@ -511,7 +511,7 @@ impl<S: Storage> Fs<S> {
     /// the wrapped device seed would outlive the credentials derived from it. Folding
     /// them left that distinction unrepresentable, which is how it was measured at
     /// 0x0987. What the sweep owes instead is both halves: erase the whole range, and
-    /// still answer for the record it could not drop.
+    /// still answer for the record it could not PROVE dropped.
     ///
     /// Refines `RSKeyStore!NoOrphanedMetadata` — SEC-STORE-001, where the drop
     /// landed, and Refines `RSKeyStore!NoSilentOrphan` — SEC-STORE-006, where not.

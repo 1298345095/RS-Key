@@ -442,7 +442,7 @@ fn wipe_piv<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
 /// batch of distinct fids.
 ///
 /// `Ok(true)` is "the range is clear, and an EF_META head over it could not be
-/// dropped" — PIV mints the only heads, so this is the phase where that half is not
+/// PROVEN dropped" — PIV mints the only heads, so this is the phase where that half is not
 /// vacuous. Carried to the end of the wipe rather than stopped on, for the reason
 /// `Fs::force_delete_halves` states.
 fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<bool, Sw> {

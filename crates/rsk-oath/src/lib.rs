@@ -1507,7 +1507,7 @@ fn wipe_oath<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
 /// success only when the enumeration provably completed over an empty range.
 ///
 /// `Ok(true)` is "the range is clear, and a metadata record over it could not be
-/// dropped" — carried to the end of the wipe rather than stopped on, for the reason
+/// PROVEN dropped" — carried to the end of the wipe rather than stopped on, for the reason
 /// `Fs::force_delete_halves` states.
 fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<bool, Sw> {
     let mut deleted = 0u32;
