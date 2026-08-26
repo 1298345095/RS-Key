@@ -1315,7 +1315,10 @@ fn make_credential_requires_pin_for_a_discoverable_credential() {
     // A PIN is set and `rk` is true, but the request carries no pinUvAuthParam →
     // PUAT_REQUIRED. makeCredUvNotRqd (§6.1.2 step 7) does NOT cover a
     // discoverable credential.
-    let mut out = [0u8; 256];
+    // Sized for a SERVED response on purpose: at 256 a mutant that drops the
+    // refusal reports the encoder's `Err(Other)`, which reads as "still refused"
+    // — the credential is minted either way (measured `Ok(770)`).
+    let mut out = [0u8; 1024];
     let mut presence = crate::AlwaysConfirm;
     let mut ctx = Ctx {
         presence: &mut presence,
@@ -1369,7 +1372,7 @@ fn always_uv_overrides_make_cred_uv_not_rqd() {
     // §6.1.2 step 6: alwaysUv makes makeCredUvNotRqd false, so even the
     // non-discoverable request above is refused without a token.
     fs.put(EF_ALWAYS_UV, &[1]).unwrap();
-    let mut out = [0u8; 256];
+    let mut out = [0u8; 1024];
     let mut presence = crate::AlwaysConfirm;
     let mut ctx = Ctx {
         presence: &mut presence,
@@ -1606,9 +1609,11 @@ fn always_uv_requires_user_verification_without_pin() {
     let mut state = crate::FidoState::new();
     // No PIN, but alwaysUv is on → makeCredential still demands UV (a verified
     // pinUvAuthToken) and rejects an up-only request. Without the EF_ALWAYS_UV
-    // guard this same request succeeds, so the assert is mutation-proof.
+    // guard this same request succeeds — `Ok(802)`, measured, which is what the
+    // 1024-byte `out` below is for: at 256 the same mutant reported `Err(Other)`
+    // from the encoder and the kill read as a refusal with a different code.
     fs.put(EF_ALWAYS_UV, &[1]).unwrap();
-    let mut out = [0u8; 256];
+    let mut out = [0u8; 1024];
     let mut presence = crate::AlwaysConfirm;
     let mut ctx = Ctx {
         presence: &mut presence,
