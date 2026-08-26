@@ -56,8 +56,8 @@ $ python3 tla-lint.py         # the two source traps, standalone
 The tiers are drawn by heap, not by taste, and their membership lives in
 `run-tlc.sh` and nowhere else. `deep-checks.yml`'s weekly `formal` row runs
 `safety`; `liveness` is not in CI because `Liveness.cfg` needs the 12g
-`floors.txt` gives it, and 11.1 GB is where that workflow's `kani` `heavy`
-runner has already died twice. The row also fires on any push touching
+`floors.txt` gives it, and that workflow's `kani` `heavy` runner has already
+died twice under a harness that peaks at 19.9 GiB. The row also fires on any push touching
 `formal/`, so a change to the model is checked at once rather than up to a week
 later.
 

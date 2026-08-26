@@ -156,7 +156,8 @@ one() {
 # Membership lives here and nowhere else, the way scripts/kani.sh owns its own.
 # The split is drawn by HEAP, not by taste: everything in `safety` runs at the
 # 4g default, while `Liveness.cfg` needs the 12g `floors.txt` gives it -- and a
-# hosted runner is where kani's 11.1 GB harness already died twice. So `safety`
+# hosted runner is where kani's `heavy` harness already died twice (19.9 GiB
+# measured 2026-08-26; 11.1 GB when this was written). So `safety`
 # is the weekly CI row and `liveness` is run by hand, or wherever 12g is real.
 #
 # `all` is still the union, so a local `./run-tlc.sh all` means what it always did.
