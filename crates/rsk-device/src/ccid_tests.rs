@@ -2,7 +2,11 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
+#[cfg(not(feature = "strict-config"))]
+use crate::tests::TruncatedScan;
 use crate::tests::{Env, TestRng, VendorBoard, apdu, dev_conf, select, sw};
+#[cfg(not(feature = "strict-config"))]
+use rsk_fs::storage::faults::RemoveStuck;
 
 /// The eight AIDs in registration order, so a test can walk the whole set.
 const AIDS: [(&str, &[u8]); 8] = [
@@ -23,11 +27,8 @@ const AIDS: [(&str, &[u8]); 8] = [
 /// reports a range clear it never enumerated, with the trusted display painting
 /// "RS-Key erased" over live credentials.
 ///
-/// This pins the honest direction only: a wipe that really happened answers
-/// `true`. The other one needs a backend that can fail, and `Env` is wired to
-/// `RamStorage` — the layer below already has it
-/// (`rsk-fs::factory_wipe_fails_on_a_truncated_enumeration`); the wrapper's
-/// laundering of that refusal is still unowned.
+/// This pins the honest direction: a wipe that really happened answers `true`.
+/// The refusing direction is the sibling below.
 // `factory_wipe` is a DEFAULT-build entry point; the strict-config image has
 // no management RESET at all.
 #[cfg(not(feature = "strict-config"))]
@@ -44,6 +45,49 @@ fn a_completed_factory_wipe_reports_true_and_leaves_nothing() {
     assert!(
         !env.fs.borrow_mut().has_data(rsk_fido::consts::EF_CRED),
         "and must actually have erased the credential it reported clear"
+    );
+}
+
+/// The refusing direction, which no fixture could observe while `Env` was wired to
+/// `RamStorage`. `Fs::factory_wipe` has exactly two ways to say no — a walk it
+/// could not finish, which must not be reported as a range clear, and a backend
+/// `remove` that errored — and `.is_ok()` has to carry both out to the worker,
+/// whose `reboot(1)` is conditioned on this bool. Laundering either one is a
+/// device that comes up looking factory-clean over live credentials.
+#[cfg(not(feature = "strict-config"))]
+#[test]
+fn a_refused_factory_wipe_is_never_reported_as_a_completed_one() {
+    // The walk faulted before yielding anything, so nothing was deleted either.
+    let env = Env::with_storage(TruncatedScan::new());
+    env.fs
+        .borrow_mut()
+        .put(rsk_fido::consts::EF_CRED, &[0xC0; 32])
+        .unwrap();
+    assert!(
+        !env.ccid().factory_wipe(),
+        "a wipe that never enumerated the store must not report the range clear"
+    );
+    assert!(
+        env.fs.borrow_mut().has_data(rsk_fido::consts::EF_CRED),
+        "and the credential it never saw is still live"
+    );
+
+    // The medium refused one removal. `live` reads the medium, not `Fs`'s present
+    // cache, which a delete marks absent whether or not the backend `remove` ran.
+    let (backend, medium) = RemoveStuck::new();
+    let env = Env::with_storage(backend);
+    env.fs
+        .borrow_mut()
+        .put(rsk_fido::consts::EF_CRED, &[0xC0; 32])
+        .unwrap();
+    medium.refuse(Some(rsk_fido::consts::EF_CRED));
+    assert!(
+        !env.ccid().factory_wipe(),
+        "a wipe the medium refused must not report success"
+    );
+    assert!(
+        medium.live(rsk_fido::consts::EF_CRED),
+        "and the credential the medium kept is still live"
     );
 }
 
