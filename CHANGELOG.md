@@ -160,11 +160,35 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   column out of the rule that makes a gap owe a question; a board in a
   subdirectory was no column though `build.rs` builds it; one `elif` could not
   fail; and the weak `dep?/feat` resolution depended on alphabetical order.
-  **955 of the 1240 cells are `gap` and say so**; every column carrying one owes
+  **958 of the 1240 cells are `gap` and say so**; every column carrying one owes
   the question that would settle it, because a gap with no question is a shrug
-  with a verdict column. 46 cases in `scripts/test_matrix_gate.py`, and the row
+  with a verdict column. 72 cases in `scripts/test_matrix_gate.py`, and the row
   was driven red through `./scripts/check.sh` (EXIT=1 at
   `== build-configuration matrix ==`) rather than only through the function.
+
+  An independent review of the finished guard then found the seventh hole of
+  the shape the six above have, and it is the sharpest: **the machine-checked
+  rule was walked past by writing a STRONGER word.** `equivalent` was refused on
+  a prose basis because it asserts sameness — but `covered` asserts that the
+  evidence was produced *here*, which is more, and it took prose on trust. Every
+  un-placed cell re-declared `covered` was EXIT=0 over 995 of them; so were
+  `conditional` and `out-of-scope`, one word over. **No disposition rests on
+  prose now**: `covered` names the `check.sh` rows that produced it, and a row
+  counts only if it builds *that* column — same cargo features, same build
+  knobs — *and* selects a crate whose Rust carries the property's tag, because
+  a row that merely compiles an image is not evidence about a property.
+  `gate-compiled-out` names the `cfg` site instead of proving the feature exists
+  somewhere (eight store rows were out-of-scope on `firmware-fips` for a PIN
+  policy in rsk-fido); an `equivalent` chain is followed to a `covered` cell and
+  a cycle is refused; a `cargoFlags` token that is not `--features` is a knob
+  rather than nothing, and `cargoFlags= [` is read like the canonical spelling —
+  it erased a *published* flavor's whole feature set; two `mkFirmware` blocks
+  under one `name` no longer replace each other in silence; the artifact is
+  diffed as bytes, so a CRLF rewrite is not "equal"; the axis floors sit at the
+  counts rather than half of them; and `"?"` is no longer a settling question.
+  **One cell moved the other way**: `SEC-DISP-001/002/003 × firmware-display` is
+  a `gap`, not `covered` — its evidence is real but was all produced at the
+  default 4 MB geometry, and that column also pins `flashSize = 16M`.
 
 ### Fixed
 
