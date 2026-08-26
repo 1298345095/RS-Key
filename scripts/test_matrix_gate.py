@@ -121,6 +121,8 @@ name = "Later"
 
 CHECK_SH = """\
 run "clippy (loud)" cargo clippy -p firmware --features loud -- -D warnings
+run_tests "test (screen)" cargo test -p rsk-screen -p firmware --features screen
+run_tests "test (core)" cargo test -p firmware -p rsk-core
 run "build-configuration matrix" python scripts/matrix_gate.py
 """
 
@@ -165,8 +167,9 @@ why = "rsk-screen is dep-gated behind the screen feature."
 properties = ["SEC-B-001"]
 columns = ["firmware-screen"]
 disposition = "covered"
-basis = "stated"
-why = "the only column that compiles the ceremony."
+basis = "check-sh-rows"
+evidence = ["test (screen)"]
+why = "the only column that compiles the ceremony, and the row that runs it."
 
 [[cell]]
 properties = ["SEC-A-001", "SEC-A-002"]
@@ -388,14 +391,41 @@ def test_an_equivalent_cell_with_the_reason_removed_is_rejected(tree, capsys):
 
 
 def test_an_equivalence_asserted_as_prose_is_rejected(tree, capsys):
-    """`stated` is a legal basis for a judgement and never for a sameness: the
-    whole failure mode is an equivalence nobody can check."""
+    """There is no prose basis left in the vocabulary. `stated` was legal for
+    every disposition except `equivalent` — and `covered` asserts MORE than an
+    equivalence does, so writing the stronger word walked straight past the
+    rule: all 955 `gap` cells of the real ledger, re-declared, EXIT=0."""
     tree.edit(
         "assurance/configurations.toml",
         'disposition = "equivalent"\nbasis = "same-cargo-features"',
         'disposition = "equivalent"\nbasis = "stated"',
     )
-    assert "the only sameness this tree can check" in red(tree, capsys)
+    assert "basis `stated` is not one of" in red(tree, capsys)
+
+
+def test_an_equivalence_on_a_basis_that_is_not_a_sameness_is_rejected(tree, capsys):
+    """The bases are real and still not interchangeable: only one of them says
+    two columns compile alike."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'disposition = "equivalent"\nbasis = "same-cargo-features"',
+        'disposition = "equivalent"\nbasis = "check-sh-rows"',
+    )
+    said = red(tree, capsys)
+    assert "`equivalent` may rest on ['same-cargo-features']" in said
+    assert "takes the strongest word in the vocabulary" in said
+
+
+def test_out_of_scope_cannot_rest_on_a_basis_about_the_default_build(tree, capsys):
+    """The same rule one word over, in the direction that WITHDRAWS a claim: an
+    `out-of-scope` says the code or the gate is absent, and both of those are
+    facts about the tree rather than a judgement about it."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'disposition = "out-of-scope"\nbasis = "crate-absent"',
+        'disposition = "out-of-scope"\nbasis = "default-build"',
+    )
+    assert "`out-of-scope` may rest on ['crate-absent', 'gate-compiled-out']" in red(tree, capsys)
 
 
 def test_an_equivalence_naming_no_column_is_rejected(tree, capsys):
@@ -478,6 +508,100 @@ def test_a_compiled_out_gate_no_code_reads_is_rejected(tree, capsys):
     assert "no production Rust gates on it" in red(tree, capsys)
 
 
+def test_covered_on_a_configured_column_owes_the_rows_that_produced_it(tree, capsys):
+    """`covered` is the strongest word in the vocabulary and it rested on
+    nothing: the reviewer re-declared every `gap` cell of the real ledger
+    `covered` and the row printed ok over 995 of them."""
+    tree.edit("assurance/configurations.toml", 'evidence = ["test (screen)"]\n', "")
+    said = red(tree, capsys)
+    assert "and no `evidence`" in said
+    assert "the prose basis this vocabulary dropped" in said
+
+
+def test_covered_naming_a_row_check_sh_does_not_have_is_rejected(tree, capsys):
+    tree.edit(
+        "assurance/configurations.toml",
+        'evidence = ["test (screen)"]',
+        'evidence = ["test (the screen, surely)"]',
+    )
+    assert "which is no scripts/check.sh row" in red(tree, capsys)
+
+
+def test_covered_naming_a_row_that_builds_another_image_is_rejected(tree, capsys):
+    """The half that makes the basis worth having: a row is evidence for THIS
+    column only if it builds this column's features."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'evidence = ["test (screen)"]',
+        'evidence = ["clippy (loud)"]',
+    )
+    said = red(tree, capsys)
+    assert "builds ['loud'] and this column is ['screen']" in said
+    assert "evidence from another image" in said
+
+
+def test_covered_naming_a_row_that_does_not_pin_the_columns_knobs_is_rejected(tree, capsys):
+    """And the other half, without which the basis is VACUOUS on every column
+    whose whole delta is knobs — the six boards, and the geometry siblings."""
+    tree.edit(
+        "nix/firmware.nix",
+        '      name = "firmware-screen";',
+        '      name = "firmware-screen";\n      flashSize = "16M";',
+    )
+    said = red(tree, capsys)
+    assert "does not pin ['FLASH_SIZE=16M']" in said
+    assert "measured another image" in said
+
+
+def test_covered_naming_a_row_that_only_compiles_the_image_is_rejected(tree, capsys):
+    """The sharpest arm of this basis. A row that builds exactly this column
+    still says nothing about THIS property — `build firmware (test, --features
+    no-touch)` would otherwise have re-declared the four presence statements
+    `covered` on the very image that removes the gate they are about."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'evidence = ["test (screen)"]',
+        'evidence = ["clippy (screen build)"]',
+    )
+    tree.edit(
+        "scripts/check.sh",
+        'run "clippy (loud)"',
+        'run "clippy (screen build)" cargo build -p firmware --features screen\n'
+        'run "clippy (loud)"',
+    )
+    said = red(tree, capsys)
+    assert "no row named here selects ['rsk-screen']" in said
+    assert "is not evidence about this property" in said
+
+
+def test_covered_on_a_board_names_a_row_that_builds_that_board(tree, capsys):
+    """A board preset's knobs are `build.rs`'s vocabulary and no row spells them
+    out — a row reaches a board by its NAME, and that is what is checked."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'properties = ["SEC-B-001"]\ncolumns = ["firmware-screen"]\ndisposition = "covered"',
+        'properties = ["SEC-A-001"]\ncolumns = ["board-a"]\ndisposition = "covered"',
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        'evidence = ["test (screen)"]',
+        'evidence = ["test (core)"]',
+    )
+    assert "does not pin ['BOARD=board-a']" in red(tree, capsys)
+
+
+def test_two_check_sh_rows_under_one_label_are_rejected(tree, capsys):
+    """The evidence lookup is by label, so two rows under one of them is a cell
+    naming both and a gate reading one — the `mkFirmware` name collision, one
+    file over."""
+    tree.edit(
+        "scripts/check.sh",
+        'run "clippy (loud)"',
+        'run "test (screen)" cargo test -p firmware --features loud\nrun "clippy (loud)"',
+    )
+    assert "has two rows named 'test (screen)'" in red(tree, capsys)
+
+
 def test_the_default_build_basis_on_a_configured_column_is_rejected(tree, capsys):
     tree.edit(
         "assurance/configurations.toml",
@@ -493,8 +617,8 @@ def test_the_default_build_basis_on_a_configured_column_is_rejected(tree, capsys
 def test_a_sixth_disposition_is_rejected(tree, capsys):
     tree.edit(
         "assurance/configurations.toml",
-        'disposition = "covered"\nbasis = "stated"',
-        'disposition = "probably-fine"\nbasis = "stated"',
+        'disposition = "covered"\nbasis = "check-sh-rows"',
+        'disposition = "probably-fine"\nbasis = "check-sh-rows"',
     )
     assert "disposition `probably-fine` is not one of" in red(tree, capsys)
 
@@ -537,8 +661,8 @@ def test_a_declared_gap_cell_is_rejected(tree, capsys):
     cells and a deleted question, gate green."""
     tree.edit(
         "assurance/configurations.toml",
-        'disposition = "covered"\nbasis = "stated"',
-        'disposition = "gap"\nbasis = "stated"',
+        'disposition = "covered"\nbasis = "check-sh-rows"',
+        'disposition = "gap"\nbasis = "check-sh-rows"',
     )
     said = red(tree, capsys)
     assert "disposition `gap` is not one of" in said

@@ -16,7 +16,13 @@
 # physical-consent gate the P0-launch authorization properties are ABOUT.
 #
 # The five dispositions (roadmap §6 stage 0 п.2):
-#   covered       the registry's evidence was produced on this configuration
+#   covered       the registry's evidence was produced on this configuration.
+#                 On any column but the default build the cell names the
+#                 `check.sh` rows that produced it, and the gate re-derives
+#                 whether those rows really build THIS image — same cargo
+#                 features, same knobs. There is no prose spelling: `covered`
+#                 asserts more than `equivalent` does, and it used to assert it
+#                 on nothing
 #   equivalent    it compiles the property's code as another column does;
 #                 `same_as` names that column and `basis` must be
 #                 `same-cargo-features`, which the gate CHECKS against the
@@ -138,20 +144,6 @@ re-runs puts neither crate in any of these builds, so there is no ceremony to \
 make a claim about. Note what this does NOT say: `waveshare-touch-lcd` is the \
 trusted-display BOARD and still lands here, because a board preset sets knobs \
 and never a cargo feature — the panel pins are compiled as inert constants."""
-
-[[cell]]
-properties = [
-  "SEC-DISP-001", "SEC-DISP-002", "SEC-DISP-003",
-]
-columns = ["firmware-display"]
-disposition = "covered"
-basis = "stated"
-why = """
-The only column that compiles the ceremony, and the one the display evidence \
-was produced on: `formal/Display.cfg`, the `rsk-ui`/`rsk-display` host tests, \
-and the five `check.sh` rows that compile the feature (`clippy (display \
-firmware)`, `clippy (display strong-pin)`, `clippy (display wiring)`, `test \
-(display wiring)`, `build firmware (display)`)."""
 
 [[cell]]
 # A pinned USB identity, and nothing else.
@@ -506,7 +498,13 @@ This column is NOT `default + display`: it also sets `flashSize = 16M` and \
 `ledKind = none`, and it re-routes user presence through the panel's \
 Approve/Deny instead of the button. Each non-display row therefore has to \
 answer three questions, not one — and the flash-geometry half is the same \
-16 MB question the board axis carries."""
+16 MB question the board axis carries. It reaches the three `SEC-DISP-*` rows \
+too, which is why they are `gap` here and not `covered`: the ceremony's \
+evidence — `formal/Display.cfg`, the `rsk-ui`/`rsk-display` host tests and the \
+`check.sh` rows that compile the feature — was every bit of it produced at the \
+DEFAULT 4 MB geometry, and no row in the tree builds `--features display` at \
+`FLASH_SIZE=16M`. Either add that row, or say in a `conditional` what the \
+ceremony claim is conditional on."""
 
 [[question]]
 column = "firmware-2mb"

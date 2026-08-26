@@ -31,6 +31,14 @@ checked: the two columns' derived per-crate cargo-feature closures must be
 equal. `firmware-display` cannot be equivalent to `firmware` under that rule,
 and neither can any `no-touch` package, whatever a reviewer believes.
 
+No disposition rests on prose. Each one asserts something about the tree —
+`covered` that the evidence was produced HERE, `out-of-scope` that the code or
+the gate is absent — so each names a basis the tree can disagree with, and
+[`ALLOWED`] says which. The one unchecked basis this file shipped with was the
+hole the rest of it was built to close: `equivalent` was refused on it because
+it asserts sameness, and `covered` asserts MORE and took it, so every un-placed
+cell could be re-declared `covered` and the row still printed ok.
+
 What this cannot say, deliberately: whether a disposition is RIGHT. `why` is
 prose and no script reads it for truth. What the row keeps honest is that every
 applicable cell has one, that an `equivalent` names a column it really does
@@ -95,10 +103,23 @@ CRATE_ABSENT = "crate-absent"
 GATE_COMPILED_OUT = "gate-compiled-out"
 #: This column IS the default build: no cargo features, no knobs.
 DEFAULT_BUILD = "default-build"
-#: A judgement with no machine-checkable side condition. Refused for
-#: `equivalent`, which is the only disposition that asserts sameness.
-STATED = "stated"
-BASES = (SAME_FEATURES, CRATE_ABSENT, GATE_COMPILED_OUT, DEFAULT_BUILD, STATED)
+#: The cell names `evidence`: `check.sh` rows that build THIS configuration —
+#: same cargo features, same build knobs. `covered` is the strongest word in the
+#: vocabulary and it was the only one resting on nothing, so every un-placed cell
+#: could be re-declared `covered` and the row still printed ok.
+CHECK_SH_ROWS = "check-sh-rows"
+BASES = (SAME_FEATURES, CRATE_ABSENT, GATE_COMPILED_OUT, DEFAULT_BUILD, CHECK_SH_ROWS)
+#: Which bases each disposition may rest on. There is deliberately no unchecked
+#: one left: `stated` used to be legal for everything except `equivalent`, and
+#: writing a STRONGER word than the rule refused — `covered`, or `conditional`,
+#: or `out-of-scope` — retired all 955 `gap` cells at EXIT=0. Every disposition
+#: asserts something about the tree, so the tree has to be able to disagree.
+ALLOWED = {
+    "covered": (DEFAULT_BUILD, CHECK_SH_ROWS),
+    "conditional": (DEFAULT_BUILD, CHECK_SH_ROWS),
+    "equivalent": (SAME_FEATURES,),
+    "out-of-scope": (CRATE_ABSENT, GATE_COMPILED_OUT),
+}
 
 #: The tranches §5 of the roadmap defines. `p0-launch` + `p0b` is the P0 family,
 #: and the P0 family is the matrix's rows; the other two are carried so the
@@ -154,6 +175,11 @@ KNOB = re.compile(r"(?<![\w-])([a-zA-Z][A-Za-z0-9]*)\s*=\s*([^;]+);")
 #: the raw `cargoFlags` list, whose feature half is the feature axis and whose
 #: residual half [`cargo_flags`] re-adds as one knob.
 NOT_A_KNOB = ("name", "cargoFlags")
+#: A `check.sh` row: `run "<label>" <command>`, or the `run_tests` sibling. The
+#: label is how a `covered` cell names its evidence.
+ROW = re.compile(r'^run(?:_tests)?\s+"([^"]+)"\s+(\S.*)$')
+#: A `VAR=value` in a row's `env` prefix — the build knobs that row pins.
+ROW_ENV = re.compile(r"(?<![\w-])([A-Z][A-Z0-9_]*)=(\S+)")
 #: The release workflow's flavor loop.
 PKG_LOOP = re.compile(r"for pkg in ([^;]+); do")
 #: Both of them: the build and the reproducibility rebuild are two lists that
@@ -286,20 +312,60 @@ def manifest_features(root):
     return tuple(tomllib.loads((root / MANIFEST).read_text())["features"])
 
 
+def check_sh_rows(root):
+    """label -> (cargo features, env knobs, command) for every `check.sh` row.
+
+    One reader for both things the ledger asks of `check.sh`: which features
+    reach a build of `firmware`, and whether the row a `covered` cell names
+    builds the column it claims about. Read off each row's CODE — a commented-out
+    row is not a row, and it is not evidence either.
+    """
+    out = {}
+    for _indent, body in gate_lines.logical_lines((root / CHECK).read_text()):
+        found = ROW.match(gate_lines.split_at_comment(body)[0].strip())
+        if not found:
+            continue
+        label, command = found.groups()
+        features = frozenset(
+            feature for group in FEATURE_FLAG.findall(command) for feature in group.split(",")
+        )
+        # The knobs sit in the `env …` prefix, ahead of the cargo they wrap.
+        env = {
+            key: value.strip('"')
+            for key, value in ROW_ENV.findall(command.split(" cargo ", 1)[0])
+        }
+        if label in out:
+            raise ValueError(
+                f"{CHECK} has two rows named {label!r} — a cell's evidence would name"
+                " both and the gate would read one of them"
+            )
+        out[label] = (features, env, command)
+    return out
+
+
 def check_sh_firmware_features(root):
     """Every feature a `check.sh` row hands to a build of `firmware`.
 
     The rule this serves is the roadmap's: a cargo feature with a `check.sh` row
-    and no column. Read off the row's CODE, so a commented-out one is not a row.
+    and no column.
     """
-    found = set()
-    for _indent, body in gate_lines.logical_lines((root / CHECK).read_text()):
-        code = gate_lines.split_at_comment(body)[0]
-        if "cargo " not in code or "firmware" not in gate_lines.packages(code):
-            continue
-        for group in FEATURE_FLAG.findall(code):
-            found.update(group.split(","))
-    return found
+    return {
+        feature
+        for features, _env, command in check_sh_rows(root).values()
+        if "cargo " in command and "firmware" in gate_lines.packages(command)
+        for feature in features
+    }
+
+
+def env_name(knob):
+    """The env var `mkFirmware` hands `build.rs` for the flake argument `knob`.
+
+    Mechanical (`flashSize` -> `FLASH_SIZE`), because the flake writes the pair
+    itself and a table here would go stale beside `build.rs`. A board preset's
+    keys (`flash.size_mb`) are a third vocabulary and deliberately map to
+    nothing: a row reaches a board by its NAME, not by spelling its keys out.
+    """
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", knob).upper()
 
 
 # --- cargo feature resolution ----------------------------------------------
@@ -612,11 +678,13 @@ def check_cell(root, pid, column, entry, by_name, own):
     if basis not in BASES:
         problems.append(f"{where}: basis `{basis}` is not one of {BASES}")
         return problems
-    if disposition == "equivalent" and basis != SAME_FEATURES:
+    if basis not in ALLOWED[disposition]:
         problems.append(
-            f"{where}: `equivalent` on basis `{basis}` — the only sameness this tree can"
-            f" check is `{SAME_FEATURES}`, and a stated one is how a false equivalence ships"
+            f"{where}: `{disposition}` may rest on {list(ALLOWED[disposition])} and this"
+            f" cell says `{basis}` — a basis the tree cannot disagree with is how a"
+            " judgement nobody made takes the strongest word in the vocabulary"
         )
+        return problems
     if basis == SAME_FEATURES:
         other = by_name.get(entry.get("same_as"))
         if other is None:
@@ -662,7 +730,68 @@ def check_cell(root, pid, column, entry, by_name, own):
             f"{where}: basis `{basis}` on a column that enables {sorted(column.features)}"
             f" and sets {sorted(column.knobs)}"
         )
+    if basis == CHECK_SH_ROWS:
+        problems.extend(check_evidence(root, where, pid, column, entry, own))
     return problems
+
+
+def check_evidence(root, where, pid, column, entry, own):
+    """The `check.sh` rows a `covered` cell names, held to the cell it is under.
+
+    Two things, and both are needed. A row is about this COLUMN only if it builds
+    this column — the same cargo features and the same build knobs; features
+    alone are vacuously equal on the six board presets and on every column whose
+    delta is geometry, which is most of them. And a row is about this PROPERTY
+    only if it selects a crate whose production Rust carries the property's tag:
+    without that half, a row that merely COMPILES the image counted, and
+    `build firmware (test, --features no-touch)` re-declared the four presence
+    statements `covered` on the very image that removes their gate.
+
+    What it still cannot say is whether the row MEASURES the property rather than
+    building it — that is the `why`'s job, as everywhere else in this file.
+    """
+    named = entry.get("evidence") or []
+    if not named:
+        return [
+            f"{where}: basis `{CHECK_SH_ROWS}` and no `evidence` — name the rows that"
+            " produced it, or the claim is the prose basis this vocabulary dropped"
+        ]
+    rows, problems, runs_owner = check_sh_rows(root), [], False
+    for label in named:
+        if label not in rows:
+            problems.append(f"{where}: names `{label}`, which is no {CHECK} row")
+            continue
+        features, env, command = rows[label]
+        if features != column.features:
+            problems.append(
+                f"{where}: `{label}` builds {sorted(features)} and this column is"
+                f" {sorted(column.features)} — evidence from another image"
+            )
+        open_knobs = unpinned_knobs(column, env)
+        if open_knobs:
+            problems.append(
+                f"{where}: `{label}` does not pin {open_knobs} — the row ran at other"
+                " build knobs than this column's, so it measured another image"
+            )
+        runs_owner |= bool(own.get(pid, frozenset()) & gate_lines.packages(command))
+    if not runs_owner and not problems:
+        problems.append(
+            f"{where}: no row named here selects {sorted(own.get(pid, frozenset()))},"
+            f" the crate(s) whose production Rust carries {pid} — a row that compiles"
+            " this image is not evidence about this property"
+        )
+    return problems
+
+
+def unpinned_knobs(column, env):
+    """The column's build knobs a row leaves at some other value, as `KEY=value`."""
+    if column.kind == "board":
+        return [] if env.get("BOARD") == column.name else [f"BOARD={column.name}"]
+    return sorted(
+        f"{env_name(key)}={value}"
+        for key, value in column.knobs.items()
+        if env.get(env_name(key)) != value
+    )
 
 
 def knob_delta(column, other):
