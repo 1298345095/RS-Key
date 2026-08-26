@@ -128,12 +128,21 @@ ALLOWED = {
 TRANCHES = ("p0-launch", "p0b", "p1", "out-of-queue")
 ROW_TRANCHES = ("p0-launch", "p0b")
 
-#: Floors, all far under today's counts (19/6/6/40). A derivation that finds
-#: (almost) nothing satisfies every rule below over an empty roster, which is
-#: the shape seven guards in this tree have shipped with.
-FLOOR_PACKAGES = 12
-FLOOR_BOARDS = 4
-FLOOR_ROWS = 30
+#: Floors, AT today's counts rather than under them. A derivation that finds
+#: (almost) nothing satisfies every rule below over an empty roster, which is the
+#: shape seven guards in this tree have shipped with — but 12 against 19 packages
+#: catches only the collapse, never the slide, and losing four boards one at a
+#: time is how an axis quietly stops being an axis. Shrinking one for real is
+#: then a deliberate edit here, in the same diff as the shrink.
+FLOOR_PACKAGES = 19
+FLOOR_BOARDS = 6
+FLOOR_ROWS = 40
+#: A `why` or a settling question shorter than this is a placeholder rather than
+#: prose: `.strip()` alone let `"?"` and `"TODO"` stand as the question that would
+#: settle a whole column. Six, because the ledger's shortest real question is
+#: seven words and its shortest `why` is forty-five. It catches a placeholder;
+#: no script can catch a bad question.
+FLOOR_WORDS = 6
 
 #: A property tag in production Rust. Same two spellings `assurance_gate.py`
 #: validates; read here only for WHICH CRATE owns each property, which is what
@@ -542,8 +551,9 @@ def audit(root):
     if len(kinds["package"]) < FLOOR_PACKAGES or len(kinds["board"]) < FLOOR_BOARDS:
         problems.append(
             f"derived {len(kinds['package'])} package(s) and {len(kinds['board'])} board(s),"
-            f" under the floors of {FLOOR_PACKAGES}/{FLOOR_BOARDS} — the axis derivation"
-            " found (almost) nothing, so every rule below passed over an empty matrix"
+            f" under the floors of {FLOOR_PACKAGES}/{FLOOR_BOARDS} — an axis that shrank"
+            " stopped covering what it used to, and one that collapsed satisfies every"
+            " rule below over an empty matrix. Shrink the floor here in the same diff"
         )
         return problems, "matrix-gate: derivation failed"
 
@@ -604,7 +614,8 @@ def audit(root):
     if len(rows) < FLOOR_ROWS:
         problems.append(
             f"{len(rows)} P0-family row(s), under the floor of {FLOOR_ROWS} — the"
-            " tranche lists shrank, and a matrix with no rows passes every rule"
+            " tranche lists shrank, and a matrix with fewer rows makes fewer claims"
+            " than the one this floor was set at. Shrink the floor here in the same diff"
         )
         return problems, "matrix-gate: derivation failed"
 
@@ -628,6 +639,8 @@ def audit(root):
             continue
         problems.extend(check_cell(root, pid, by_name[column], entry, by_name, own))
 
+    problems.extend(check_chains(placed))
+
     questions = {q.get("column"): q.get("text", "") for q in doc.get("question", [])}
     for column in sorted(set(questions) - set(by_name)):
         problems.append(f"{LEDGER} carries a settling question for `{column}`, which is no column")
@@ -636,10 +649,11 @@ def audit(root):
         open_rows = [pid for pid in rows if (pid, column.name) not in placed]
         if open_rows:
             gaps[column.name] = open_rows
-            if not questions.get(column.name, "").strip():
+            if len(questions.get(column.name, "").split()) < FLOOR_WORDS:
                 problems.append(
                     f"{column.name} has {len(open_rows)} `gap` cell(s) and no settling"
-                    f" question in {LEDGER} — a gap with no question is a shrug"
+                    f" question in {LEDGER} — a gap with no question is a shrug, and"
+                    f" one under {FLOOR_WORDS} words (`?`, `TODO`) is the same shrug"
                 )
     for column in sorted(set(questions) - set(gaps)):
         if column in by_name:
@@ -660,6 +674,48 @@ def audit(root):
     return problems, summary
 
 
+def check_chains(placed):
+    """Every `equivalent` cell, followed until it reaches evidence or does not.
+
+    An equivalence is a claim ABOUT another column: it inherits that column's
+    disposition for the same property, and one step is not where that ends. A
+    chain into a `gap` reaches nobody's judgement (`abrobot-4m` = `abrobot-16m`,
+    whose own cells are undecided) and a closed one never reaches anything at all
+    (`firmware-2mb` = `firmware-16mb` = `firmware-2mb`). Both were EXIT=0.
+    """
+    problems = []
+    for (pid, column), entry in placed.items():
+        if entry.get("disposition") != "equivalent":
+            continue
+        seen, at = [column], entry.get("same_as")
+        while True:
+            if at in seen:
+                problems.append(
+                    f"{pid} × {column}: the `same_as` chain closes on itself"
+                    f" ({' -> '.join(str(c) for c in [*seen, at])}) and reaches no evidence"
+                )
+                break
+            seen.append(at)
+            step = placed.get((pid, at))
+            if step is None:
+                problems.append(
+                    f"{pid} × {column}: `same_as` reaches {pid} × {at}, which is a `gap`"
+                    " — an equivalence to a cell nobody decided is undecided too"
+                )
+                break
+            if step.get("disposition") == "equivalent":
+                at = step.get("same_as")
+                continue
+            if step.get("disposition") != "covered":
+                problems.append(
+                    f"{pid} × {column}: `same_as` reaches a `{step.get('disposition')}`"
+                    f" cell at {pid} × {at} — an equivalence carries that column's"
+                    " disposition, so say THAT one here rather than pointing at it"
+                )
+            break
+    return problems
+
+
 def check_cell(root, pid, column, entry, by_name, own):
     """Every way one cell's disposition disagrees with the tree."""
     where = f"{pid} × {column.name}"
@@ -673,8 +729,11 @@ def check_cell(root, pid, column, entry, by_name, own):
                if disposition == "gap" else "")
         )
         return problems
-    if not entry.get("why", "").strip():
-        problems.append(f"{where}: a disposition with no reason is not one")
+    if len(entry.get("why", "").split()) < FLOOR_WORDS:
+        problems.append(
+            f"{where}: a disposition with no reason is not one — `why` is under"
+            f" {FLOOR_WORDS} words"
+        )
     if basis not in BASES:
         problems.append(f"{where}: basis `{basis}` is not one of {BASES}")
         return problems

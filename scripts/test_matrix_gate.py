@@ -27,8 +27,9 @@ import matrix_gate
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 #: Two images with no features, one with a feature that swaps a gate out, one
-#: that pulls an optional crate in, and one that only pins a knob — the four
-#: shapes the real flake has, in the smallest tree that has all of them.
+#: that pulls an optional crate in, and two that only pin a knob — the four
+#: shapes the real flake has, in the smallest tree that has all of them. The
+#: second pinned one is there so an `equivalent` CHAIN exists to follow.
 FLAKE = """\
 {
   packages = {
@@ -51,6 +52,10 @@ FLAKE = """\
     firmware-pinned = mkFirmware {
       name = "firmware-pinned";
       vidpid = "Pico";
+    };
+    firmware-pinned-too = mkFirmware {
+      name = "firmware-pinned-too";
+      vidpid = "Nitro3";
     };
   };
 }
@@ -158,7 +163,7 @@ why = "the image every measurement was taken on."
 
 [[cell]]
 properties = ["SEC-B-001"]
-columns = ["firmware", "firmware-no-touch", "firmware-pinned", "loud", "board-a"]
+columns = ["firmware", "firmware-no-touch", "firmware-pinned", "firmware-pinned-too", "loud", "board-a"]
 disposition = "out-of-scope"
 basis = "crate-absent"
 why = "rsk-screen is dep-gated behind the screen feature."
@@ -179,6 +184,15 @@ knob_delta = ["vidpid=Pico"]
 disposition = "equivalent"
 basis = "same-cargo-features"
 why = "identical feature closure; the delta is a USB identity pair."
+
+[[cell]]
+properties = ["SEC-A-001", "SEC-A-002"]
+columns = ["firmware-pinned-too"]
+same_as = "firmware-pinned"
+knob_delta = ["vidpid=Nitro3"]
+disposition = "equivalent"
+basis = "same-cargo-features"
+why = "the same pinned identity as firmware-pinned, one step further out."
 
 [[cell]]
 properties = ["SEC-A-001"]
@@ -376,8 +390,8 @@ def test_an_equivalent_cell_with_the_basis_removed_is_rejected(tree, capsys):
     from an `equivalent` cell reddens the row."""
     tree.edit(
         "assurance/configurations.toml",
-        'disposition = "equivalent"\nbasis = "same-cargo-features"',
-        'disposition = "equivalent"',
+        'knob_delta = ["vidpid=Pico"]\ndisposition = "equivalent"\nbasis = "same-cargo-features"',
+        'knob_delta = ["vidpid=Pico"]\ndisposition = "equivalent"',
     )
     assert "basis `None` is not one of" in red(tree, capsys)
 
@@ -398,8 +412,8 @@ def test_an_equivalence_asserted_as_prose_is_rejected(tree, capsys):
     rule: all 955 `gap` cells of the real ledger, re-declared, EXIT=0."""
     tree.edit(
         "assurance/configurations.toml",
-        'disposition = "equivalent"\nbasis = "same-cargo-features"',
-        'disposition = "equivalent"\nbasis = "stated"',
+        'knob_delta = ["vidpid=Pico"]\ndisposition = "equivalent"\nbasis = "same-cargo-features"',
+        'knob_delta = ["vidpid=Pico"]\ndisposition = "equivalent"\nbasis = "stated"',
     )
     assert "basis `stated` is not one of" in red(tree, capsys)
 
@@ -409,8 +423,8 @@ def test_an_equivalence_on_a_basis_that_is_not_a_sameness_is_rejected(tree, caps
     two columns compile alike."""
     tree.edit(
         "assurance/configurations.toml",
-        'disposition = "equivalent"\nbasis = "same-cargo-features"',
-        'disposition = "equivalent"\nbasis = "check-sh-rows"',
+        'knob_delta = ["vidpid=Pico"]\ndisposition = "equivalent"\nbasis = "same-cargo-features"',
+        'knob_delta = ["vidpid=Pico"]\ndisposition = "equivalent"\nbasis = "check-sh-rows"',
     )
     said = red(tree, capsys)
     assert "`equivalent` may rest on ['same-cargo-features']" in said
@@ -466,6 +480,54 @@ def test_a_knob_whose_VALUE_moved_reddens_its_equivalence(tree, capsys):
     assert "vidpid=Dev" in said
 
 
+def test_an_equivalence_chain_that_closes_on_itself_is_rejected(tree, capsys):
+    """`firmware-2mb` = `firmware-16mb` = `firmware-2mb` was EXIT=0: the rule
+    only ever looked one step, and a closed chain reaches nothing at all."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'same_as = "firmware"\nknob_delta = ["vidpid=Pico"]',
+        'same_as = "firmware-pinned-too"\nknob_delta = ["vidpid=Pico"]',
+    )
+    said = red(tree, capsys)
+    assert "chain closes on itself" in said
+    assert "reaches no evidence" in said
+
+
+def test_an_equivalence_to_a_column_that_is_itself_a_gap_is_rejected(tree, capsys):
+    """The other half: `abrobot-4m` = `abrobot-16m`, where the target's own cells
+    on those rows are undecided. An equivalence inherits a disposition, and
+    nobody's judgement is not one."""
+    tree.edit(
+        "assurance/configurations.toml",
+        '''[[cell]]
+properties = ["SEC-A-001", "SEC-A-002"]
+columns = ["firmware-pinned"]
+same_as = "firmware"
+knob_delta = ["vidpid=Pico"]
+disposition = "equivalent"
+basis = "same-cargo-features"
+why = "identical feature closure; the delta is a USB identity pair."
+
+''',
+        "",
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        '[[question]]\ncolumn = "firmware-no-touch"',
+        '[[question]]\ncolumn = "firmware-pinned"\ntext = "is a pinned USB identity a'
+        ' security control at all?"\n\n[[question]]\ncolumn = "firmware-no-touch"',
+    )
+    said = red(tree, capsys)
+    assert "`same_as` reaches SEC-A-001 × firmware-pinned, which is a `gap`" in said
+    assert "an equivalence to a cell nobody decided is undecided too" in said
+
+
+def test_an_equivalence_that_reaches_evidence_two_steps_out_is_accepted(tree):
+    """The green direction: a chain is legal, it just has to END somewhere.
+    `firmware-pinned-too` = `firmware-pinned` = `firmware`, which is `covered`."""
+    assert tree.run() == 0
+
+
 def test_an_equivalence_over_several_columns_at_once_is_rejected(tree, capsys):
     """One cell, one column: the knob delta differs per column, so a cell that
     swept several would carry a delta true of at most one of them."""
@@ -485,9 +547,10 @@ def test_claiming_an_absent_crate_that_is_compiled_in_is_rejected(tree, capsys):
     a label is unrecognised."""
     tree.edit(
         "assurance/configurations.toml",
-        'columns = ["firmware", "firmware-no-touch", "firmware-pinned", "loud", "board-a"]',
-        'columns = ["firmware", "firmware-no-touch", "firmware-pinned", "loud", "board-a",'
-        ' "firmware-screen"]',
+        'columns = ["firmware", "firmware-no-touch", "firmware-pinned",'
+        ' "firmware-pinned-too", "loud", "board-a"]',
+        'columns = ["firmware", "firmware-no-touch", "firmware-pinned",'
+        ' "firmware-pinned-too", "loud", "board-a", "firmware-screen"]',
     )
     said = red(tree, capsys)
     assert "claims SEC-B-001's owners are absent" in said
@@ -729,6 +792,30 @@ def test_a_question_for_a_column_with_nothing_left_to_settle_is_rejected(tree, c
     assert "no `gap` cell left to settle" in red(tree, capsys)
 
 
+def test_a_settling_question_that_is_a_placeholder_is_rejected(tree, capsys):
+    """`.strip()` alone let `"?"` and `"TODO"` stand as the question that would
+    settle a whole column."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'text = "does SEC-A-002 depend on the press indirectly?"',
+        'text = "TODO"',
+    )
+    said = red(tree, capsys)
+    assert "no settling question" in said
+    assert "is the same shrug" in said
+
+
+def test_a_reason_that_is_a_placeholder_is_rejected(tree, capsys):
+    """The same hole one field over: `why` was `.strip()`-checked too, so
+    "believed fine." was a reason."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'why = "identical feature closure; the delta is a USB identity pair."',
+        'why = "believed fine."',
+    )
+    assert "a disposition with no reason" in red(tree, capsys)
+
+
 def test_a_question_for_a_column_that_does_not_exist_is_rejected(tree, capsys):
     tree.edit('assurance/configurations.toml', 'column = "board-a"', 'column = "board-z"')
     assert "which is no column" in red(tree, capsys)
@@ -743,7 +830,25 @@ def test_an_axis_that_derives_to_nothing_is_rejected(tree, capsys):
     tree.write("nix/firmware.nix", "{ packages = { }; }\n")
     said = red(tree, capsys)
     assert "under the floors" in said
-    assert "passed over an empty matrix" in said
+    assert "satisfies every rule below over an empty matrix" in said
+
+
+def test_the_shipped_floors_are_this_tree_s_counts():
+    """A floor of 12 against 19 packages catches a derivation that COLLAPSED and
+    never one that slid: four boards can go one at a time under 4-vs-6. At the
+    count, losing one is red until the floor is edited in the same diff."""
+    cols = matrix_gate.columns(ROOT, matrix_gate.workspace(ROOT))
+    assert matrix_gate.FLOOR_PACKAGES == len([c for c in cols if c.kind == "package"])
+    assert matrix_gate.FLOOR_BOARDS == len([c for c in cols if c.kind == "board"])
+    doc = matrix_gate.ledger(ROOT)
+    tranche = {
+        pid: name
+        for name in matrix_gate.TRANCHES
+        for pid in doc.get("tranche", {}).get(name, [])
+    }
+    rows = [pid for pid, _n in matrix_gate.registry(ROOT)
+            if tranche.get(pid) in matrix_gate.ROW_TRANCHES]
+    assert matrix_gate.FLOOR_ROWS == len(rows)
 
 
 def test_a_row_axis_that_derives_to_nothing_is_rejected(tree, capsys):
