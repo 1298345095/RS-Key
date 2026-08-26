@@ -65,7 +65,12 @@ MODEL_ACTIONS = {
     "LocalPinOk", "SetPinStart", "SetPinClearPpuat", "SetPinWrite",
     "ChangePinStart", "ChangePinClearPpuat", "ChangePinWrite",
     "ChangePinRotateToken", "StopUsingToken", "RegisterStart", "RegisterTouched",
-    "RegisterRefused", "RegisterWriteA", "RegisterWriteB", "AssertStart",
+    "RegisterRefused", "RegisterWriteA", "RegisterWriteB",
+    # The token-less non-discoverable registration. It is UNREACHED by
+    # construction and that is not a gap: the mapper answers these boundaries
+    # from the R4c gate rule, because a served non-discoverable create writes
+    # nothing and the recording cannot tell it from the stutter.
+    "RegisterNdStart", "RegisterNdTouched", "RegisterNdRefused", "AssertStart",
     "AssertFinish", "ConfigOp", "BackupFinalize", "DeviceUnlock",
     "CmBeginViaToken", "CmBeginViaPpuat", "CmNext", "DeleteCredStart",
     "DeleteCredWriteA", "DeleteCredWriteB", "ResetStart", "ResetRefused",

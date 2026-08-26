@@ -68,7 +68,12 @@ CONSTANTS
     BugHostPreemptsLocalWait,     \* the button's owner, taken by a host command
     BugLocalPinIgnoresBudget,     \* crates/rsk-display/src/gates.rs:126-128
     BugPpuatIsAGate,              \* eab4b5c: EF_PAUTHTOKEN in the deferred phase
-    BugPinWriteBeforeRevoke       \* clientpin.rs:214-218, :300-304 -- the order
+    BugPinWriteBeforeRevoke,      \* clientpin.rs:214-218, :300-304 -- the order
+    \* The two halves of the token-less carve-out, one switch each, so a RED
+    \* names which half was load-bearing -- the split TraceSecurity's own
+    \* MutateUvNotRqd / MutateAlwaysUvArm already make one layer out.
+    BugUvNotRqdIgnoresRk,         \* makecredential.rs:543-545 makeCredUvNotRqd
+    BugTokenlessIgnoresAlwaysUv   \* makecredential.rs:537-539 the alwaysUv arm
 
 (* Mutation switches for the LIVENESS properties. Kept apart from the set above *)
 (* because they break no invariant -- a wedge is a perfectly safe state -- so    *)
@@ -136,8 +141,8 @@ Perms    == {"mc", "ga", "cm", "acfg"}
 PermSets == { {}, {"mc","ga"}, {"cm"}, {"acfg"}, {"ga","acfg"} }
 
 Decisions == {"none", "confirm", "cancel", "timeout"}
-OpKinds   == {"none", "assert", "register", "reset", "chpin", "setpin",
-              "delcred"}
+OpKinds   == {"none", "assert", "register", "register-nd", "reset", "chpin",
+              "setpin", "delcred"}
 
 InvNames == { "NoAuthorizationBypass",
               "NoCrossTransportTouchConsumption",
@@ -508,6 +513,44 @@ UvRequired == pin.set \/ gate.alwaysUv
 OpGuard(p, rp)  == IF UvRequired THEN TokenGuardUv(p, rp) ELSE TRUE
 OpPolicy(p, rp) == IF UvRequired THEN TokenPolicy(p, rp) ELSE TRUE
 
+\* THE TOKEN-LESS CARVE-OUT -- makecredential.rs:527-546, the `None` arm of
+\* `enforce_pin`, which `assurance/token_refinement.toml` owns as the `UseMc`
+\* volatile writer and outcome producer. `disc` is the request's `rk`, an INPUT
+\* and not state, which is why the two arms below are a function of it:
+\*   makecredential.rs:537-539 -- CTAP 2.1 6.1.2 steps 6.2/6.4: alwaysUv with no
+\*     way to verify refuses whatever `rk` says;
+\*   makecredential.rs:543-545 -- steps 7/10, makeCredUvNotRqd: with a PIN set a
+\*     DISCOVERABLE credential still needs a token, a non-discoverable one does
+\*     not (issue #51).
+\* Step 6.3's third arm -- a pad UPGRADES a token-less request to built-in UV
+\* rather than refusing it -- is out of scope with the rest of built-in UV, and
+\* the guard is sound without it only because this model is the BUTTON build:
+\* `builtin_uv_enabled` is false there, so :532 never takes.
+\*
+\* Guard and Policy, not one predicate, for the reason ConfigGuard/ConfigPolicy
+\* gives: the Guard is what the Rust tests and the switches live in it, the
+\* Policy is what 6.1.2 requires and nothing mutates it. Fold them together and
+\* both mutants below become unfalsifiable -- a widened gate would simply widen
+\* the requirement with it.
+McTokenlessGuard(disc) ==
+    /\ (BugTokenlessIgnoresAlwaysUv \/ ~gate.alwaysUv)
+    /\ (BugUvNotRqdIgnoresRk \/ ~(pin.set /\ disc))
+    \* `in_use`, and it is the ONE conjunct that is not in the cited Rust. The
+    \* carve-out itself does not test it; what does is state.rs:530, where
+    \* `consume_after_user_presence` is a no-op unless a token is in use. Above
+    \* that line the ND touch SPENDS a live token without binding it -- an
+    \* `Ops` edge tier A has no word for, its `UseMc` requiring both
+    \* `permissionMc` and the rpId binding this path never makes. So the model
+    \* takes the states where the two agree exactly and leaves the other as a
+    \* named narrowing (formal/README.md), rather than guessing at a refinement.
+    /\ ~tok.live
+
+\* The requirement, with the scope conjunct MIRRORED rather than dropped: taking
+\* `~tok.live` out of the Guard alone would then read as a bypass at every such
+\* step, which is the right answer -- that widening owes tier A an `Ops` edge
+\* first, and this is what refuses to let it land quietly.
+McTokenlessPolicy(disc) == ~gate.alwaysUv /\ ~(pin.set /\ disc) /\ ~tok.live
+
 \* The names ONE admitted-but-unauthorized token step records. The four sibling
 \* call sites used to disagree -- makeCredential/getAssertion wrote both,
 \* authenticatorConfig only the first, the two credentialManagement sites only
@@ -815,8 +858,15 @@ RegisterStart(r, t) ==
     \* seed to open it once ResetAborts could strand a seedless running device.
     /\ SeedReachable
     /\ ~(gate.alwaysUv /\ ~pin.set)          \* alwaysUv with no PIN fails closed
-    /\ OpGuard("mc", r)
-    /\ viol' = (IF OpPolicy("mc", r) THEN viol ELSE viol \cup TokenBypass)
+    \* The carve-out at `rk = TRUE`, where 6.1.2 step 10 does NOT apply: the
+    \* disjunct is a strict subset of `OpGuard`'s own `~UvRequired` arm and so
+    \* buys the shipped tree no state at all. It exists to be MUTATED --
+    \* BugUvNotRqdIgnoresRk drops the `disc` conjunct and a discoverable
+    \* registration is then served with a PIN set and no token, which is the
+    \* defect deleting makecredential.rs:543-545 makes.
+    /\ (OpGuard("mc", r) \/ McTokenlessGuard(TRUE))
+    /\ viol' = (IF OpPolicy("mc", r) \/ McTokenlessPolicy(TRUE)
+                  THEN viol ELSE viol \cup TokenBypass)
          \cup (IF ButtonFreePolicy THEN {} ELSE {"NoAuthorizationBypass"})
     /\ pres' = OpenWaitFor(t)
     /\ op' = [kind |-> "register", t |-> t, rp |-> r, step |-> 0]
@@ -873,6 +923,54 @@ RegisterWriteB ==
     /\ op' = NoOp
     /\ UNCHANGED << pin, gate, lock, tok, plat, walk, sys, snap, upSpent,
                     viol, ram >>
+
+\* THE NON-DISCOVERABLE REGISTRATION, and the reason it is not `RegisterStart`
+\* with a flag: it writes NOTHING. makecredential.rs:777-778 stores only under
+\* `req.rk`, and makecredential.rs:752-754 says why -- "a non-discoverable
+\* credential keeps no on-device state at all". So there is no `rp` to carry
+\* either: `store` is exactly what it observes per relying party, and a
+\* credential the device does not record is one it cannot tell apart from
+\* another RP's. `rp |-> NoRp` is that fact, not a reduction for the state count.
+\*
+\* This is the widening TraceSecurity's R4c argued for. Until it, `Next` never
+\* explored the carve-out -- `OpGuard("mc", r)` is TRUE only where no PIN is
+\* set, so the exhaustive model met a token-less registration only on a
+\* PIN-less key, and the one region a defect in 6.1.2 step 10 could live in was
+\* reachable on the device and not in the model.
+RegisterNdStart(t) ==
+    /\ Idle
+    /\ ButtonFreeGuard
+    /\ SeedReachable                         \* the box derives from the seed too
+    /\ McTokenlessGuard(FALSE)
+    /\ viol' = (IF McTokenlessPolicy(FALSE) THEN viol ELSE viol \cup TokenBypass)
+         \cup (IF ButtonFreePolicy THEN {} ELSE {"NoAuthorizationBypass"})
+    /\ pres' = OpenWaitFor(t)
+    /\ op' = [kind |-> "register-nd", t |-> t, rp |-> NoRp, step |-> 0]
+    /\ UNCHANGED << pin, gate, store, lock, tok, plat, walk, sys, snap,
+                    upSpent, ram >>
+
+\* One step and not two, because there is no write to order after the touch --
+\* the response is all that follows it. `tok` is UNCHANGED rather than
+\* `ConsumedTok`: the guard admits only `~tok.live`, where state.rs:530 makes
+\* `consume_after_user_presence` a no-op, so the two are the same function here
+\* and the equality is what lets tier A read this as a `Noop`.
+RegisterNdTouched ==
+    /\ op.kind = "register-nd" /\ op.step = 0
+    /\ TouchGuard
+    /\ viol' = IF TouchPolicy THEN viol
+                              ELSE viol \cup {"NoAuthorizationBypass"}
+    /\ upSpent' = TRUE
+    /\ pres' = ClosedWait(pres)
+    /\ op' = NoOp
+    /\ UNCHANGED << pin, gate, store, lock, tok, plat, walk, sys, snap, ram >>
+
+RegisterNdRefused ==
+    /\ op.kind = "register-nd" /\ op.step = 0
+    /\ pres.granted \in {"cancel", "timeout"}
+    /\ pres' = ClosedWait(pres)
+    /\ op' = NoOp
+    /\ UNCHANGED << pin, gate, store, lock, tok, plat, walk, sys, snap,
+                    upSpent, viol, ram >>
 
 \* getassertion.rs:382-390. Needs PERM_GA, the rpId binding, and a touch.
 AssertStart(r, t) ==
@@ -1370,6 +1468,8 @@ Next ==
     \/ ChangePinRotateToken \/ StopUsingToken
     \/ \E r \in RPs, t \in Transports : RegisterStart(r, t)
     \/ RegisterTouched \/ RegisterRefused \/ RegisterWriteA \/ RegisterWriteB
+    \/ \E t \in Transports : RegisterNdStart(t)
+    \/ RegisterNdTouched \/ RegisterNdRefused
     \/ \E r \in RPs, t \in Transports : AssertStart(r, t)
     \/ AssertFinish \/ ConfigOp \/ BackupFinalize \/ DeviceUnlock
     \/ \E ch \in Channels, r \in RPs \cup {NoRp} : CmBeginViaToken(ch, r)
@@ -1388,7 +1488,8 @@ Spec == Init /\ [][Next]_vars
 TokenOutcomeActions ==
     {"GetPinToken", "WrongPin", "MintPpuat", "LocalPinWrong", "LocalPinOk",
      "SetPinWrite", "ChangePinWrite", "RegisterTouched", "RegisterRefused",
-     "RegisterWriteB", "AssertFinish", "ConfigOp", "BackupFinalize",
+     "RegisterWriteB", "RegisterNdTouched", "RegisterNdRefused",
+     "AssertFinish", "ConfigOp", "BackupFinalize",
      "DeviceUnlock", "CmBeginViaToken", "CmBeginViaPpuat", "CmNext",
      "DeleteCredStart", "ResetRefused", "ResetFinish", "ResetAborts"}
 
@@ -1416,7 +1517,7 @@ TokenOutcomeActions ==
 \* WHAT MAKES THIS DISJUNCTION SOUND, and it is the thing E160 got wrong one
 \* action over: `WF_vars(A \/ B)` promises only that SOME disjunct fires, which
 \* is a fair reading of "the in-flight sequence advances" exactly while every
-\* disjunct belongs to the SAME sequence. Every one of the eighteen is gated on
+\* disjunct belongs to the SAME sequence. Every one of the twenty is gated on
 \* `op.kind`, and `Idle` gates every *Start, so there is only ever one. Fold in
 \* an action that can be enabled beside a sequence -- which is precisely what
 \* folding `LocalCeremonyEnds` in here did -- and the promise is satisfied by the
@@ -1427,6 +1528,7 @@ TokenOutcomeActions ==
 OpAdvances ==
     \/ (BugFairnessFoldsLocalCeremony /\ LocalCeremonyEnds)
     \/ RegisterTouched \/ RegisterRefused \/ RegisterWriteA \/ RegisterWriteB
+    \/ RegisterNdTouched \/ RegisterNdRefused
     \/ AssertFinish
     \/ SetPinClearPpuat \/ SetPinWrite
     \/ ChangePinClearPpuat \/ ChangePinWrite \/ ChangePinRotateToken
@@ -1476,7 +1578,7 @@ EveryWalkCloses == walk.open ~> ~walk.open
 \* then every disjunct that IS enabled belongs to the single in-flight `op`, and
 \* `WF_vars(OpAdvances)` means what its comment says. This is a safety invariant
 \* over `Spec`, not a temporal property -- Fairness.cfg checks it at the liveness
-\* constants, where `ENABLED` over eighteen actions is affordable.
+\* constants, where `ENABLED` over twenty actions is affordable.
 \*
 \* The other three conjuncts are single actions and need no such argument;
 \* formal/README.md carries the audit of all four.

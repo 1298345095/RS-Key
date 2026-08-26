@@ -24,7 +24,8 @@ BUGS=(BugResetGatesFirst BugCredBeforeRp BugTokenSurvivesPinChange
       BugSeedDoesNotLead BugNoTouchRequired BugStateResetAfterWipe
       BugPanelCancelable BugUnscopedOtpCancel BugLocalPinKeepsToken
       BugSetPinOverExisting BugHostPreemptsLocalWait BugLocalPinIgnoresBudget
-      BugPpuatIsAGate BugPinWriteBeforeRevoke)
+      BugPpuatIsAGate BugPinWriteBeforeRevoke
+      BugUvNotRqdIgnoresRk BugTokenlessIgnoresAlwaysUv)
 
 # Mutants whose defect the shipped seed-lead makes unreachable: they rebuild a
 # pre-0x08BF ordering bug, so their configuration must be the pre-0x08BF tree.
@@ -72,6 +73,12 @@ target_inv() {
     BugLocalPinIgnoresBudget)   echo NoAuthorizationBypass ;;
     BugPpuatIsAGate)            echo NoAccessibleSecretWithoutGate ;;
     BugPinWriteBeforeRevoke)    echo NoTokenAfterInvalidation ;;
+    # The two halves of makecredential.rs's token-less carve-out. Both let an
+    # operation the requirement forbids complete on the touch alone, which is
+    # NoAuthorizationBypass and nothing narrower -- neither touches a grant that
+    # was ever issued, so neither is NoTokenAfterInvalidation.
+    BugUvNotRqdIgnoresRk)       echo NoAuthorizationBypass ;;
+    BugTokenlessIgnoresAlwaysUv) echo NoAuthorizationBypass ;;
   esac
 }
 
@@ -121,10 +128,11 @@ emit() { # $1 = cfg, $2 = bug switch (""), $3 = sweep fix, $4 = ppuat fix
     # MODEL VALUES, not strings, because `SYMMETRY` needs them -- and the
     # symmetry is what pays for the two constants below being the firmware's
     # own. Quotienting the interchangeable relying parties and channels takes
-    # 61 215 504 distinct states to 25 829 584, so MAX_PIN_RETRIES = 8 and
-    # PIN_MISMATCH_LIMIT = 3 (consts.rs:364,368) cost 48 679 968 -- still
-    # fewer than the reduced 3 : 2 explored before, with all thirty mutants
-    # still RED. The README's "an argument, not a proof" is now a measurement.
+    # 61 215 504 distinct states to 25 829 584, which is what let MAX_PIN_RETRIES
+    # = 8 and PIN_MISMATCH_LIMIT = 3 (consts.rs:364,368) be affordable at all.
+    # They cost 77 563 872 now -- MORE than the reduced 3 : 2 explored before the
+    # quotient, the token-less registration having been folded in since. The
+    # mechanism is the measurement; the margin was, and is not.
     echo "    RPs = {r1, r2}"
     echo "    Channels = {c1, c2}"
     echo "    MaxRetries = 8"

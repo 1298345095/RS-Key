@@ -35,17 +35,20 @@
 \* Columns: <module>  <scope constant>  <measured minimum, or - >  <invariant, or - >
 
 \* --- RSKeySecurityState ----------------------------------------------------
-\* Measured over the 28 mutants and 2 historical configurations, one constant
-\* reduced at a time with the rest left shipped.
+\* Measured over the 28 mutants and 2 historical configurations the roster then
+\* held, one constant reduced at a time with the rest left shipped. It holds 30
+\* now: the two token-less makeCredential mutants were driven against these
+\* minima afterwards rather than assumed to fit, and move neither of them.
 \* The witness: BugCmWalkIgnoresChannel explores the whole space at one channel
 \* without a counterexample, and falls at two.
 RSKeySecurityState     Channels               2   NoAuthorizationBypass
-\* Every one of the thirty fires with a SINGLE relying party -- including the two
-\* registration-order mutants. The module comment asks for ">= 2 to exercise
+\* Every one of the thirty-two fires with a SINGLE relying party -- including the
+\* two registration-order mutants, and BugUvNotRqdIgnoresRk, whose whole defect is
+\* a registration that writes one. The module comment asks for ">= 2 to exercise
 \* rpId binding"; no mutant in the roster backs that, and the honest record says
 \* so rather than repeating the claim.
 RSKeySecurityState     RPs                    1   NoUnmanageableCredential
-\* All thirty fire at MaxClock = 0 as well, but that scope is degenerate: the
+\* All thirty-two fire at MaxClock = 0 as well, but that scope is degenerate: the
 \* clock has one value, `Tick` is never enabled, and COVERAGE=1 names it
 \* (DEAD ACTION, measured GREEN over 29 512 104 distinct). 1 is the smallest
 \* scope at which the constant means anything, so 1 is what is recorded.

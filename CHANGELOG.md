@@ -40,6 +40,57 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The model refused a registration the firmware serves.** CTAP 2.1 §6.1.2
+  steps 7/10 — `makeCredUvNotRqd` — create a NON-discoverable credential on the
+  touch alone even where a PIN is set
+  (`crates/rsk-fido/src/makecredential.rs:543-545`), and `RSKeySecurityState`'s
+  `RegisterStart` conjoined `OpGuard("mc", r)`, which is `TRUE` only where
+  `~UvRequired`. So the exhaustive model met a token-less registration only on a
+  PIN-less key and **never the carve-out itself** — the one region a defect in
+  step 10 could live in was reachable on the device and not in `Next`.
+  `TraceSecurity`'s R4c had been stating the rule against a recorded session
+  since the gate grid closed, and its own comment named folding it in as the
+  next widening. Folded in: `RegisterNdStart` / `RegisterNdTouched` /
+  `RegisterNdRefused`, which write nothing because
+  `makecredential.rs:777-778` stores only under `req.rk`, and carry no `rp` for
+  the same reason — a credential the device does not record is one it cannot
+  tell from another RP's. `Shipped.cfg` stays **GREEN, exhaustive**, at
+  77 563 872 distinct against 48 679 968 and depth 55 -> 58.
+  **Falsifiable at both halves, one switch each**, the split `TraceSecurity`
+  already draws with `MutateUvNotRqd` / `MutateAlwaysUvArm`:
+  `BugUvNotRqdIgnoresRk` (the carve-out forgets it is non-discoverable only, so
+  a resident credential is created with a PIN set and no token) and
+  `BugTokenlessIgnoresAlwaysUv` (§6.1.2 steps 6.2/6.4 dropped). Each is RED on
+  `NoAuthorizationBypass`, and they fall at DIFFERENT actions — the first at
+  `RegisterStart`, the second at the new `RegisterNdStart` — so a RED names
+  which half was load-bearing. `McTokenlessGuard`/`McTokenlessPolicy` is a
+  Guard/Policy pair for that reason: fold them together and a widened gate widens
+  the requirement with it, and neither mutant can fire.
+  **The tie to the production owner is a `check.sh` row, not a sentence.** Both
+  code co-mutants patch `makecredential.rs::enforce_pin` — the function item 9's
+  rescan registered in `assurance/token_refinement.toml` twice, as the `UseMc`
+  volatile writer and as its outcome producer — and `comutate.py --lint`
+  re-resolves both anchors against the tree on every run. Both measure `killed`
+  (28/30 code-level kills now).
+  **Read for direction, not for colour:** the kill first reported
+  `Err(Other)` against `Err(PuatRequired)`, which reads as "still refused". It
+  was the response encoder running out of a 256-byte buffer *after* the gate had
+  already let the request through; sized for a served response the same tests
+  report `Ok(770)` and `Ok(802)` — a credential minted. The three refusal tests
+  in `makecredential_tests.rs` carry 1024-byte buffers now, so the mutant's
+  evidence is the registration and not a changed status code.
+  **What stays narrow is one conjunct, and it is named:** `~tok.live`. Above
+  `state.rs:530` the same touch SPENDS a live token without binding it, and tier
+  A has no word for that edge — its `UseMc` admits an authorized event only
+  under `~pinSet \/ (live /\ permissionMc)` and its `Consumed` requires the rpId
+  binding this path never makes. Under `~tok.live`,
+  `consume_after_user_presence` is a no-op, so B and the firmware agree exactly
+  and the refinement clause is `Noop`, an equality rather than a widening of A.
+  Widening A belongs to the token-refinement work and is recorded in
+  `formal/README.md` with the other places the model is narrower than the
+  firmware. No `bcdDevice` bump: the only Rust that moved is behind
+  `#[cfg(test)]`.
+
 - **The two EF_META fault sites are Kani harnesses now, and the two registry rows
   they belong to did not move.** `docs/store-refinement.md` had measured a win and
   recorded it as not taken: a probe that does nothing but `meta_add` fails under

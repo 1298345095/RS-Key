@@ -242,7 +242,7 @@ Both carry their companion from a `companion_bug` table in `gen-configs.sh`. A
 mutant that stops firing because a fix subsumed it is worth knowing; a mutant
 that stops firing silently is the failure this file exists to avoid.
 
-**28 of 28 mutants are caught, each by the invariant that names it**, and 3 of 3
+**30 of 30 mutants are caught, each by the invariant that names it**, and 3 of 3
 liveness mutants by the property that names them, and the one fairness-shape
 mutant by `OpAdvancesIsOneActivity`.
 `NoAccessibleSecretWithoutGate` is the one invariant no switch names as its
@@ -693,13 +693,15 @@ a nineteenth field stops the crate compiling — driven, and the compiler answer
 | 21 | `BugStateResetAfterWipe` | `ResetNeverWeakensSurvivingState` | RED | **co-refuted** |
 | 22 | `BugStopUsingKeepsPerms` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
 | 23 | `BugTokenSurvivesPinChange` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
-| 24 | `BugTouchNotSpent` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
-| 25 | `BugUnscopedCancel` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
-| 26 | `BugUnscopedOtpCancel` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
-| 27 | `BugWarmResetReopensWindow` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 28 | `BugWrongPinKeepsToken` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
+| 24 | `BugTokenlessIgnoresAlwaysUv` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 25 | `BugTouchNotSpent` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
+| 26 | `BugUnscopedCancel` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
+| 27 | `BugUnscopedOtpCancel` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
+| 28 | `BugUvNotRqdIgnoresRk` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 29 | `BugWarmResetReopensWindow` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 30 | `BugWrongPinKeepsToken` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
 
-**Measured phase-2 fidelity:** 26/28 code-level kills; 2 unreachable by construction; 0 open gaps; 0 pending.
+**Measured phase-2 fidelity:** 28/30 code-level kills; 2 unreachable by construction; 0 open gaps; 0 pending.
 <!-- phase2-comutants:end -->
 
 That last one is not a formality. `NoAccessibleSecretWithoutGate` was repaired
@@ -1104,29 +1106,40 @@ Round two's "no, in two independent ways" was exact.
 
 | Configuration | Verdict | States generated | Distinct | Depth | Wall |
 |---|---|---|---|---|---|
-| `Shipped.cfg` (the tree as it stands, `SYMMETRY` on, firmware constants) | **GREEN, exhaustive** | 699 350 223 | 48 679 968 | 55 | **1285 s** |
-| `Historical_E76.cfg` (the seed-lead taken back out) | RED `NoUnmanageableCredential` | 1 578 248 | 164 710 | 13 | 4 s |
-| `Historical_E77.cfg` (the grant back in phase 2 **and** the consumer fix out) | RED `NoAccessibleSecretWithoutGate` | 1 401 426 | 146 249 | 13 | 4 s |
-| 28 × `Mut_*.cfg` | RED, each caught | 65 – 2 757 337 | 36 – 276 265 | 4 – 14 | ≤ 6 s |
-| 28 × `Solo_*.cfg` + 3 structural | RED, each on its **own** target | 65 – 4 635 108 | 36 – 446 278 | 4 – 15 | ≤ 10 s |
-| 3 × `SoloClause_*.cfg` | RED, each on **one clause** | 19 359 – 15 777 443 | 4 294 – 1 450 823 | 8 – 18 | ≤ 30 s |
-| `Fairness.cfg` (`ENABLED OpAdvances => ~Idle`, liveness constants) | **GREEN** | 79 962 957 | 7 602 760 | 43 | 114 s |
-| `FairMut_BugFairnessFoldsLocalCeremony.cfg` | RED `OpAdvancesIsOneActivity` | 57 | 36 | 4 | 1 s |
+| `Shipped.cfg` (the tree as it stands, `SYMMETRY` on, firmware constants) | **GREEN, exhaustive** | 986 836 197 | 77 563 872 | 58 | **2034 s** |
+| `Historical_E76.cfg` (the seed-lead taken back out) | RED `NoUnmanageableCredential` | 1 875 183 | 219 676 | 13 | 5 s |
+| `Historical_E77.cfg` (the grant back in phase 2 **and** the consumer fix out) | RED `NoAccessibleSecretWithoutGate` | 1 659 821 | 194 756 | 13 | 5 s |
+| 30 × `Mut_*.cfg` | RED, each caught | 89 – 3 375 897 | 40 – 377 425 | 4 – 14 | ≤ 7 s |
+| 30 × `Solo_*.cfg` + 3 structural | RED, each on its **own** target | 89 – 5 819 170 | 40 – 626 086 | 4 – 15 | ≤ 12 s |
+| 3 × `SoloClause_*.cfg` | RED, each on **one clause** | 23 289 – 20 472 144 | 5 334 – 2 062 378 | 8 – 18 | ≤ 41 s |
+| `Fairness.cfg` (`ENABLED OpAdvances => ~Idle`, liveness constants) | **GREEN** | 105 147 241 | 10 720 348 | 46 | 162 s |
+| `FairMut_BugFairnessFoldsLocalCeremony.cfg` | RED `OpAdvancesIsOneActivity` | 73 | 40 | 4 | 1 s |
 | `Seams.cfg` (the second module) | **GREEN, exhaustive** | 6 045 | 410 | 11 | 1 s |
 | 14 × `SeamMut_*.cfg` / 14 × `SeamSolo_*.cfg` | RED, each on its own target | 77 – 1 723 | 27 – 204 | 3 – 8 | ≤ 1 s |
 | `Store.cfg` | **GREEN, exhaustive** | 4 185 | 364 | 6 | 1 s |
 | `Lattice.cfg` | **GREEN, exhaustive** | 2 431 | 243 | 11 | 1 s |
 | `Policies.cfg` (all four applets in one module) | **GREEN, exhaustive** | 45 253 | 2 268 | 14 | < 1 s |
 | `Admin.cfg` / `Display.cfg` / `Boot.cfg` / `Transport.cfg` | **GREEN, exhaustive** | 15 – 127 | 5 – 24 | 2 – 5 | ≤ 1 s each |
-| `Liveness.cfg` (reduced constants, `HEAP=12g` from `floors.txt`) | **GREEN** | 79 962 957 | 7 602 760 | 43 | **1320 s** |
+| `Liveness.cfg` (reduced constants, `HEAP=12g` from `floors.txt`) | **GREEN** | 105 147 241 | 10 720 348 | 46 | **1837 s** |
 | `Liveness.cfg` at the old 4 GB default (not re-run since) | **out of memory** in the temporal check, state search complete | 85 388 061 | 7 903 336 | 43 | 1500 s |
-| 3 × `LiveMut_*.cfg` | RED, each on its own property | 538 115 – 645 534 | 76 465 – 92 359 | — | 4 s |
+| 3 × `LiveMut_*.cfg` | RED, each on its own property | 499 272 – 620 598 | 74 084 – 92 966 | — | 4 s |
 
 Every named baseline above, plus `Fairness.cfg` and `Liveness.cfg`, is an exhaustive
 search and its count is reproducible; every RED row stops at the first
 counterexample, so its count is **worker-scheduling dependent** and moves between
 runs of the identical command. The verdict and the invariant are the result; the
 count says how deep TLC had to go, roughly.
+
+**"Exhaustive" is a fingerprint claim, and the estimate moves with the count.**
+TLC hashes states, so at the end of `Shipped.cfg` it prints its own odds of
+having missed one: **`.0038` optimistic, `4.2E-5` off the actual fingerprints**
+at 77 563 872 distinct (2026-08-26). The optimistic figure is a closed form in
+the count, so it rises with the model by construction; the empirical one does
+not even repeat — two runs of the identical configuration, same 77 563 872
+distinct, reported `.0014` and `4.2E-5`. Nothing in this tree compares either
+and no floor reads them. They are recorded so the word above stays a measurement,
+and so the next widening asks whether the default fingerprint set is still the
+right instrument rather than assuming it.
 
 TLC's reported *depth* is worker-dependent on a GREEN exhaustive row too — it is
 the deepest BFS level the workers opened, which overshoots the graph's diameter
@@ -1141,17 +1154,18 @@ with `WORKERS=1 ./run-tlc.sh <cfg>` rather than trusting it to have been held.
 **Every row above is from one run on 2026-08-26**: `./run-tlc.sh safety` and
 then `./run-tlc.sh liveness`, which is what `all` does, on an 18-core Apple M5
 Pro at the default `WORKERS=2` and whatever heap `floors.txt` gives each
-configuration. 186 safety rows in **2003 s** and four liveness rows in
-**1334 s**; 19 GREEN, 171 RED, and not one row missed what `floors.txt` requires
+configuration. 190 safety rows in **2916 s** and four liveness rows in
+**1849 s**; 19 GREEN, 175 RED, and not one row missed what `floors.txt` requires
 of it — which is what makes the command exit 0 rather than merely finish. Every
 column but Depth, that is: that one stays the `WORKERS=1` reading the paragraph
 below explains, so `Store.cfg` says 6 where a two-worker run says 7. The
 one row not from that run is labelled: the 4 GB `Liveness.cfg` OOM is kept as the
-older observation it is. The `Shipped.cfg` state counts are **bit-identical to
-the pre-change baseline** — every Guard/Policy pair, structural invariant, clause
-name and recorder this round added removed and added exactly zero states. Its
-wall clock is not: 539 s was a faster reading of the same search, and 1285 s is
-what this machine took.
+older observation it is. `Shipped.cfg`'s state count was **bit-identical across
+the whole Guard/Policy round** — every pair, structural invariant, clause name
+and recorder it added removed and added exactly zero states, and 539 s, 1285 s
+and 2034 s are three readings of searches that were the same size or, for the
+last, deliberately not: the token-less registration is the first change since
+that took the count off 48 679 968.
 
 The green row is **9× the state space this model carried two rounds ago and 15×
 the wall clock**, and both the growth and the one shrink are fidelity. `ram` and
@@ -1179,10 +1193,16 @@ They used to be 3 : 2, and the reduction was the largest standing question on
 this page. `SYMMETRY` is what answered it. Relying parties and channels are
 interchangeable — no action, invariant or initial state names one — so TLC may
 quotient by `Permutations`, and doing so takes the reduced-constant run from
-61 215 504 distinct to 25 829 584. The firmware's real constants then cost
-**48 679 968, still fewer than the 61 215 504 the reduced scope explored
-before**, at depth 55 rather than 50, and all thirty mutants stay RED on their
-own invariant. Symmetry is applied to the safety configurations only: TLC's
+61 215 504 distinct to 25 829 584, and the firmware's real constants then cost
+48 679 968 at depth 55 — fewer than the 61 215 504 the reduced scope explored
+before. **That headline no longer holds, and the reason is an action rather than
+a constant.** The token-less non-discoverable registration takes the same
+configuration to **77 563 872 at depth 58**, past the 61 215 504 the comparison
+was made against; the two quotient figures above are the pre-widening reading
+and were NOT re-measured, so what stands is the mechanism — symmetry is what
+buys the real constants — and not the margin. All thirty-two mutant and
+historical configurations stay RED on their own invariant. Symmetry is applied
+to the safety configurations only: TLC's
 liveness check is not sound under it, so `Liveness*` and `Fairness*` keep their
 own smaller constants and no symmetry. The floor did not move — 20 000 000 is
 still under the measurement, and stricter than the "near a third" rule, which is
@@ -1217,7 +1237,7 @@ the wrong reason.
 every clause guarding it free. It is `COVERAGE=1 ./run-tlc.sh <cfg>` now, and
 it refuses on a zero — see "the dead-action check" above; the seam module fires
 **21 of 21**. The FIDO module is swept too, at the size it has now rather than
-at the 41 actions an earlier revision measured: **`Init` and all 50 actions fire**
+at the 41 actions an earlier revision measured: **`Init` and all 53 actions fire**
 (2026-08-26, below). The reason it matters is not hypothetical — `-coverage` is
 what pinned `CardReset` firing from 330 of 666 states against 666 for each of its
 siblings, which is the pinned trap seen from the other side.
@@ -2218,11 +2238,14 @@ the reason nobody had noticed: the runner's `Invariant [A-Za-z]+ is violated`
 matched **no** name with a digit in it, so every `R4*` row had been printing the
 raw error line in its verdict column since the day it was written.
 
-The rules are stated in `TraceSecurity.tla` and not in `RSKeySecurityState.tla`,
-because `Next` still does not carry a token-less registration as a behaviour —
-the exhaustive model never explores one, and that is listed with the other places
-the model is narrower than the firmware. Folding it in is the next widening; the
-replay is what made the gap visible.
+The rules stay in `TraceSecurity.tla` and the model has the behaviour now — the
+two are not the same evidence. `Next` gained `RegisterNdStart` and the
+`McTokenlessGuard` disjunct at `RegisterStart`, so the carve-out is explored
+EXHAUSTIVELY; R4c is what holds the seven recorded boundaries to their measured
+answer. A served non-discoverable create writes nothing, so the recording cannot
+tell the new action from the stutter it also permits — which is why the replay
+keeps mapping these to `TraceStutter` and answering from the rule. The replay is
+what made the gap visible, and the widening is what closed it.
 
 **AMBIGUOUS is 0 and the floor now says so**, together with `@TraceSecurityGatesMin`
 — without a floor on the gate boundaries R4c goes vacuous the moment a re-record
@@ -2431,7 +2454,7 @@ memory at the 4 GB default *after* its state search completes, which had left
 `./run-tlc.sh all` reporting a red row for a property that is true.
 
 **5. The configurations against their generator** (`scripts/config_gen_gate.py`,
-the `generated TLC configs` row). 191 of the 192 `.cfg` files open with
+the `generated TLC configs` row). 195 of the 196 `.cfg` files open with
 "Generated by formal/gen-configs.sh -- do not edit by hand", and until that row
 nothing made the sentence true. Two edits were silent, and the first was
 measured by a reviewer, not imagined: **delete all three
@@ -2447,7 +2470,7 @@ describes. Falsified through the row itself, exit codes taken with no pipe:
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `191 generated configuration(s) reproduce byte-for-byte, 1 hand-written` | 0 |
+| the tree as it stands | `195 generated configuration(s) reproduce byte-for-byte, 1 hand-written` | 0 |
 | one `BootCarryMut_*.cfg` deleted | `… writes it and formal/ does not have it` | **1** |
 | `MaxWeak = 2` → `1` inside one generated file | `differs … line 5: generator writes '    MaxWeak = 2', the tree has '    MaxWeak = 1'` | **1** |
 | the same edit made in the *generator* instead | 13 rows `differs …` — every `Boot*` configuration | **1** |
@@ -2457,7 +2480,7 @@ describes. Falsified through the row itself, exit codes taken with no pipe:
 | `TokenExport.cfg` given the generated header | `tells its next reader not to edit the one file they may` | **1** |
 | the generator made to die mid-run | `formal/gen-configs.sh exited 1: <its stderr>`, and nothing else | **1** |
 | the generator made to write nothing | `wrote 0 configurations, under the floor of 100` | **1** |
-| the header rewritten in the generator, tree regenerated to agree | 191 rows `writes it without the … header` | **1** |
+| the header rewritten in the generator, tree regenerated to agree | 195 rows `writes it without the … header` | **1** |
 | `TokenExport.cfg` generated as well as carved out | `registered hand-written but … writes it` | **1** |
 | one generated file rewritten with CRLF | `line 1: …` — bytes, not decoded text | **1** |
 | its final newline removed | `every line they share is equal; … 12 part(s) … 11` | **1** |
@@ -2465,7 +2488,7 @@ describes. Falsified through the row itself, exit codes taken with no pipe:
 The last four are the first review's, and the first two of them are the family
 this tree keeps shipping: **the header rule ran in one direction only.** The row
 is named after making "do not edit by hand" true and it asked that question of
-the ONE hand-written file, never of the 191 — rewrite the generator's header,
+the ONE hand-written file, never of the 195 — rewrite the generator's header,
 regenerate, and every configuration stopped telling its reader anything while the
 row said ok. The `HAND_WRITTEN` docstring promised both directions and the second
 was not implemented at all. Neither was reachable from the ten cases above,
@@ -2559,7 +2582,7 @@ to itself.
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `191 configuration(s) held to 55 entries (25 wildcard families covering 161), 6 ratchets, 1 exempt` | 0 |
+| the tree as it stands | `195 configuration(s) held to 55 entries (25 wildcard families covering 165), 6 ratchets, 1 exempt` | 0 |
 | `SeamMut_*.cfg` `RED` → `GREEN` | `… requires GREEN, but the configuration switches BugAdminOpensKeyOps on and so owes RED` | **1** |
 | the `SeamSolo_*.cfg` row deleted | `no verdict entry in formal/floors.txt and no registered exemption` | **1** |
 | a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 14 configuration(s) first `` | **1** |
@@ -2605,7 +2628,7 @@ spellings defeat that — a trailing `\*` comment and a value wrapped onto the n
 line. Measured end to end against real TLC, not read off the source: `Boot.cfg`
 carrying `BugMarkerBeforeScrub = TRUE  \* E-arm kept` gave `run-tlc.sh`
 `RED: MarkerNeverLies … !! expected GREEN` while this row printed
-`ok — 191 configuration(s)` and exited 0 — a defect switched on in a **baseline**
+`ok — 195 configuration(s)` and exited 0 — a defect switched on in a **baseline**
 configuration, passing the merge gate and dying six days later. Routed through
 `gen-configs.sh` instead of edited by hand, `config_gen_gate.py` stayed green
 too, so nothing else was a backstop. A switch value that is neither `TRUE` nor
@@ -2656,14 +2679,21 @@ Mutation-tested both ways on the seam module: an action written to be
 unreachable is named and the run exits 1; the module as it stands fires **21 of
 21** and exits 0 (re-measured 2026-08-26; it was 20 before `0f71fdb`). It is opt-in because coverage costs wall clock — and that is
 now a measured price rather than a reason not to pay it. `COVERAGE=1
-./run-tlc.sh Shipped.cfg` swept the FIDO module's 48.7 M states on 2026-08-26 in
-**1878 s against the plain run's 1285 s**, GREEN over the same 699 350 223
-generated and 48 679 968 distinct, and its final coverage report is **`Init` and
-every one of the 50 actions firing**. The quietest is `ResetFinish` at 3 456
+./run-tlc.sh Shipped.cfg` swept the FIDO module's 77.6 M states on 2026-08-26 in
+**2804 s against the plain run's 2034 s**, GREEN over the same 986 836 197
+generated and 77 563 872 distinct, and its final coverage report is **`Init` and
+every one of the 53 actions firing**. The three the token-less registration added
+are among the busiest — `RegisterNdStart` at 2 800 743 distinct of 11 677 920
+generated — and `RegisterNdRefused` contributes 0 distinct off 7 785 280 firings,
+which is what a `0:N` row means and is not the `N:0` the dead-action check
+refuses. The quietest is still `ResetFinish` at 3 456
 generated for 2 distinct; nothing in the module is free. Read the FINAL report
-and not an intermediate one — TLC prints six here, and the early ones are
-partial counts that look like a quieter action. The sweep is not a CI row: at
-46% on top of the tier's longest configuration it belongs where `liveness` does.
+and not an intermediate one — TLC prints EIGHT here now, and the early ones are
+partial counts that look like a quieter action. That warning was paid for twice:
+a first attempt at this sweep was cut off at 51 M of 77.6 M and left five such
+reports in the log, every one of which would have read as a finished measurement.
+The sweep is not a CI row: at
+38% on top of the tier's longest configuration it belongs where `liveness` does.
 
 ### A bit-identical count is only the signature when *generated* rises
 
@@ -2696,7 +2726,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-REF-002` | `R1oTokenOutcomes` | MODELLED-ONLY | `RSKeyTokenRefinement` | — | 0 | 0 | 0 | 0 | 0 | 0 |
 | `SEC-REF-003` | `R1oOutcomeCoverage` | MODELLED-ONLY | `RSKeyTokenRefinement` | — | 0 | 0 | 0 | 0 | 0 | 0 |
 | `SEC-REF-004` | `R4bEventConsensus` | MODELLED-ONLY | `TraceSecurity` | — | 0 | 0 | 0 | 0 | 0 | 0 |
-| `SEC-FIDO-001` | `NoAuthorizationBypass` | BOUNDED | `RSKeySecurityState` | — | 2 | 9 | 9 | 1 | 0 | 0 |
+| `SEC-FIDO-001` | `NoAuthorizationBypass` | BOUNDED | `RSKeySecurityState` | — | 2 | 11 | 11 | 1 | 0 | 0 |
 | `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | BOUNDED | `RSKeySecurityState` | — | 2 | 5 | 5 | 2 | 0 | 0 |
 | `SEC-FIDO-003` | `NoTokenAfterInvalidation` | BOUNDED | `RSKeySecurityState` | — | 3 | 7 | 6 | 2 | 1 | 0 |
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | MODELLED-ONLY | `RSKeySecurityState` | `RSKeyStore` | 2 | 2 | 1 | 0 | 0 | 0 |
@@ -2871,15 +2901,24 @@ than a settled abstraction.
 - **The button build only** (`presence.shows_confirm() = FALSE`), so the reset
   window always applies; a display build bypasses it by design (`reset.rs:37`)
   and that path is unmodelled.
-- **A registration with a PIN set and no token is not a behaviour of `Next`.**
-  CTAP 2.1 §6.1.2 steps 7/10 serve a NON-discoverable credential on presence
-  alone even where a PIN is set (`makecredential.rs:540-546`). `RegisterStart`
-  conjoins `OpGuard("mc", r)`, which is `TRUE` when `~UvRequired` — so the model
-  does explore a token-less registration on a PIN-less key, and never the
-  carve-out itself, which is exactly the region a defect in it would live in. The
-  rule is stated and checked, but only against a recorded session
-  (`TraceSecurity!McTokenlessRefused`, R4c); the replay is what made the gap
-  visible, and folding it into `Next` is the widening it argues for.
+- **A registration with a PIN set and no token — CLOSED, and what is left of it
+  is one conjunct.** CTAP 2.1 §6.1.2 steps 7/10 serve a NON-discoverable
+  credential on presence alone even where a PIN is set
+  (`makecredential.rs:543-545`), and `Next` carries it now:
+  `RegisterNdStart` / `RegisterNdTouched` / `RegisterNdRefused`, guarded by
+  `McTokenlessGuard(FALSE)`. It writes nothing, because
+  `makecredential.rs:777-778` stores only under `req.rk`, so it carries no `rp`
+  either. What stays narrow is the `~tok.live` conjunct in that guard: above
+  `state.rs:530` the same touch SPENDS a live token without binding it, and tier
+  A has no word for that edge — its `UseMc` admits an authorized event only
+  under `~pinSet \/ (live /\ permissionMc)` and its `Consumed` requires the rpId
+  binding this path never makes. So the model takes the states where B and the
+  firmware agree exactly (`consume_after_user_presence` is a no-op there) and
+  leaves widening tier A to the stage-4 token-refinement work. Falsifiable at
+  both halves: `Solo_BugUvNotRqdIgnoresRk.cfg` (a discoverable credential served
+  token-lessly with a PIN set) and `Solo_BugTokenlessIgnoresAlwaysUv.cfg`
+  (§6.1.2 steps 6.2/6.4 dropped), each RED on `NoAuthorizationBypass`, each with
+  a code co-mutant in the same function.
 - **`largeBlobs`, `getNextAssertion`, the MSE seed-backup channel, built-in UV
   and the trusted-display flows are absent.** They carry their own
   channel-ownership rules (`state.rs:33-51`, `:326-333`) that this model does
@@ -2945,10 +2984,10 @@ All four conjuncts read against the code:
 `OpAdvancesIsOneActivity == ENABLED OpAdvances => ~Idle` is the first row's
 argument as an invariant: if no disjunct can be enabled while the device is
 quiescent, then every disjunct that *is* enabled belongs to the single in-flight
-`op`, and the promise means what its comment says. GREEN over 7 602 760 distinct
+`op`, and the promise means what its comment says. GREEN over 10 720 348 distinct
 states at the liveness constants, for about 5% more wall clock than the plain
-safety run — eighteen `ENABLED` evaluations per state are cheap.
-`BugFairnessFoldsLocalCeremony` is E160 verbatim and falls in **36 distinct
+safety run — twenty `ENABLED` evaluations per state are cheap.
+`BugFairnessFoldsLocalCeremony` is E160 verbatim and falls in **40 distinct
 states at depth 4**, where the liveness layer needed 423 900 states and a
 temporal check to see the same defect.
 
@@ -2979,12 +3018,16 @@ it.
 
 **`floors.txt` carries that heap per config now**, so the routine command
 establishes the verdict again: `./run-tlc.sh all` runs `Liveness.cfg` at 12 GB
-and it is **GREEN over 7 602 760 distinct states at depth 43 in 1320 s**
+and it is **GREEN over 10 720 348 distinct states at depth 46 in 1837 s**
 (2026-08-26), in the same matrix run as everything else in the Results table.
-The 7 903 336 this section quotes above it is an older reading of the same
-configuration — an exhaustive count is reproducible, so those 300 576 states are
+This section quotes two older readings of the same configuration, 7 903 336 and
+then 7 602 760 — an exhaustive count is reproducible, so those 300 576 states are
 the model's to explain and not the run's, and nothing on this page says which
-change spent them.
+change spent them. The jump from there to 10 720 348 is explained: it is the
+token-less non-discoverable registration entering `Next`. **The heap headroom
+went with it.** The behaviour graph was 23 710 008 nodes when 12 GB was chosen
+against a 4 GB failure; the state graph is 41% bigger now and 12 GB still holds,
+but the margin that number was picked with is no longer the margin it has.
 
 `Liveness_Full.cfg`, the same properties over the safety matrix's 48.7 M states,
 is still not attempted: the reduced config already needs 12 GB and 22 minutes,

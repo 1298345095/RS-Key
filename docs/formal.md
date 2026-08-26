@@ -223,8 +223,8 @@ enumerating crates from memory has already missed four of them.
 ```sh
 nix develop                       # pins TLC and exports TLA2TOOLS_JAR
 cd formal
-./run-tlc.sh safety               # model + mutants + floors: 186 rows, 2003 s
-./run-tlc.sh liveness             # the temporal half: 4 rows, 1334 s, 12g heap
+./run-tlc.sh safety               # model + mutants + floors: 190 rows, 2916 s
+./run-tlc.sh liveness             # the temporal half: 4 rows, 1849 s, 12g heap
 ./run-tlc.sh all                  # both
 ./run-tlc.sh Shipped.cfg          # one configuration
 ./run-tlc.sh --tiers              # what each tier runs, for the gate
@@ -232,14 +232,17 @@ python3 ../scripts/assurance_gate.py   # the registry, held against the tree
 python3 ../scripts/assurance_gate.py --write-readme  # refresh its README table
 python3 ../scripts/comutate.py --lint  # closed roster + patch/table freshness
 python3 ../scripts/comutate.py run     # re-inject the whole live defect roster
-python3 ../scripts/comutate.py run --write-readme  # measure + refresh 28 rows
+python3 ../scripts/comutate.py run --write-readme  # measure + refresh 30 rows
 ```
 
 Both timings are one run each on 2026-08-26, on an 18-core Apple M5 Pro at the
-default `WORKERS=2`: 19 GREEN, 171 RED, no row short of its floor. CI runs the
+default `WORKERS=2`: 19 GREEN, 175 RED, no row short of its floor. CI runs the
 `safety` tier weekly (`deep-checks.yml`, the `formal` job) and on any push
 touching `formal/`, so an edit to the model is checked at once — measured there
-too, at 1 h 14 m 47 s against the job's 120-minute cap (run 32684551258). The
+too, at 1 h 14 m 47 s against the job's 120-minute cap (run 32684551258), on the
+tree as it stood before the token-less `makeCredential` widening took the local
+tier from 2003 s to 2916 s. `docs/testing.md` carries what that does to the
+margin. The
 `liveness` tier is deliberately not in CI: `Liveness.cfg` needs the 12 GB heap
 `floors.txt` records for it, and a hosted runner has already died under less, so
 it is run by hand on the machine above.

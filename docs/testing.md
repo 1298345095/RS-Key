@@ -503,20 +503,30 @@ nix develop            # exports TLA2TOOLS_JAR; the JVM comes with it
 cd formal && ./gen-configs.sh && ./run-tlc.sh safety   # the tier CI runs
 ```
 
-`safety` is the nine shipped models, the 76 mutation switches that have a
-configuration family of their own (77 `Bug*` switches exist; `BugDeadTokenAuthorized`
+`safety` is the nine shipped models, the 78 mutation switches that have a
+configuration family of their own (79 `Bug*` switches exist; `BugDeadTokenAuthorized`
 has none), floors and the vacuity check —
 `deep-checks.yml`'s weekly `formal` row, which also fires on any push touching
 `formal/`. `liveness` is the temporal half and is not in CI: it needs a 12g
 heap. `all` is both. Tier membership lives in `formal/run-tlc.sh`.
 
 Both tiers are measured runs, not sums. On 2026-08-26, on the same Apple M5 Pro
-as the Kani table above, `safety` came back over **186 configurations in 2003 s
-— 18 GREEN, 168 RED, and not one row that missed what `floors.txt` asks of it**;
-`liveness` took **1334 s** for its four, `Liveness.cfg` GREEN over 7 602 760
+as the Kani table above, `safety` came back over **190 configurations in 2916 s
+— 18 GREEN, 172 RED, and not one row that missed what `floors.txt` asks of it**;
+`liveness` took **1849 s** for its four, `Liveness.cfg` GREEN over 10 720 348
 distinct states at the 12g heap that file gives it. CI has the `safety` half:
 `deep-checks.yml` run 32684551258 discharged it in 1 h 14 m 47 s against a
-120-minute cap. `liveness` has no CI row and is the maintainer's, and
+120-minute cap.
+
+> **That cap is the thing to watch, and the margin just shrank.** `safety` was
+> 2003 s here before the token-less `makeCredential` widening and is 2916 s
+> after it — `Shipped.cfg` alone went 48 679 968 distinct to 77 563 872. The CI
+> figure above was measured on the older tree; scaled by the same 1.46 it lands
+> near **1 h 49 m against the 120-minute cap**, so the row has minutes of
+> headroom rather than the three quarters of an hour it used to. Nothing has
+> timed out — this is a projection off one local ratio, not a measurement of the
+> runner — but the next model widening should re-measure the CI row before
+> assuming it fits. `liveness` has no CI row and is the maintainer's, and
 `Liveness_Full.cfg` is nobody's yet — `floors.txt` reserves it a 24 GB heap that
 no run has asked for.
 

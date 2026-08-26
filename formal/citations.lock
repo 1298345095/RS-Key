@@ -110,7 +110,9 @@ formal/README.md	crates/rsk-fido/src/makecredential.rs	513-516	if !ctx.state.ver
 formal/README.md	crates/rsk-fido/src/makecredential.rs	516-516	|| !ctx.state.user_verified()	|| !ctx.state.user_verified()
 formal/README.md	crates/rsk-fido/src/makecredential.rs	528-536	let always_uv = crate::config::always_uv_enabled(ctx.fs);	// always an advertised option ID here, so the code is PUAT_REQUIRED.
 formal/README.md	crates/rsk-fido/src/makecredential.rs	540-546	// makeCredUvNotRqd (§6.1.2 steps 7/10): with a PIN configured a	Ok(UvOutcome::NONE)
+formal/README.md	crates/rsk-fido/src/makecredential.rs	543-545	if pin_set && req.rk {	}
 formal/README.md	crates/rsk-fido/src/makecredential.rs	660-661	// naming the rp being registered ([`needs_confirm`]).	if verified.needs_confirm(ctx.presence.shows_confirm()) {
+formal/README.md	crates/rsk-fido/src/makecredential.rs	777-778	if req.rk	&& credential_store(
 formal/README.md	crates/rsk-fido/src/passkeys.rs	90-152	pub fn for_each_rp<S, F>(dev: &Device, fs: &mut Fs<S>, mut f: F) -> usize	}
 formal/README.md	crates/rsk-fido/src/reset.rs	36-95	pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {	}
 formal/README.md	crates/rsk-fido/src/reset.rs	37-37	if !ctx.presence.shows_confirm() && !in_reset_window(ctx) {	if !ctx.presence.shows_confirm() && !in_reset_window(ctx) {
@@ -139,6 +141,7 @@ formal/README.md	crates/rsk-fido/src/state.rs	426-436	pub fn reset(&mut self) {	
 formal/README.md	crates/rsk-fido/src/state.rs	488-502	/// `resetPinUvAuthToken`: new random token, cleared permissions / flags. The	}
 formal/README.md	crates/rsk-fido/src/state.rs	523-535	/// The CTAP 2.1 §6.5.5.7 post-user-presence triad — `clearUserPresentFlag()`,	}
 formal/README.md	crates/rsk-fido/src/state.rs	527-533	/// authenticatorConfig can't ride the touch (GHSA-wqjm-653g-hgw3). The token	self.paut.user_verified = false;
+formal/README.md	crates/rsk-fido/src/state.rs	530-530	if self.paut.in_use {	if self.paut.in_use {
 formal/README.md	crates/rsk-fido/src/state.rs	547-562	/// `stopUsingPinUvAuthToken` — drop the in-use state, permissions, and	}
 formal/README.md	crates/rsk-fido/src/state.rs	552-553	self.paut.in_use = false;	self.paut.permissions = 0;
 formal/README.md	crates/rsk-fido/src/state.rs	596-609	/// Expire an in-use token once its usage timer has run out (CTAP 2.1	}
@@ -372,6 +375,11 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/lib.rs	104-108	pub fn load_key
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	511-519	Some(param) => {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	513-516	if !ctx.state.verify_token(proto, req.client_data_hash, param)	|| !ctx.state.user_verified()
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	521-523	if !ctx.state.paut.has_rp_id {	ctx.state.paut.has_rp_id = true;
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	527-546	None => {	Ok(UvOutcome::NONE)
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	537-539	if always_uv {	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	543-545	if pin_set && req.rk {	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	752-754	// resident record. A non-discoverable credential keeps no on-device state at	// an absent input returns nothing, the "MUST NOT return unsolicited output".
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	777-778	if req.rk	&& credential_store(
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	36-95	pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	43-51	match ctx	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	57-66	// Two phases for the sweeps, for the reason `rsk_piv::files::wipe_piv` and	ctx.state.reset();
@@ -403,6 +411,7 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	373-383	ephemeral: [0
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	442-458	mismatches: self.new_pin_mismatches,	self.regenerate(rng);
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	525-539	/// once a makeCredential / getAssertion user-presence test succeeds. Spends the	/// stays inert (GHSA-wqjm-653g-hgw3); folding the guard in here keeps the caller
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	529-529	pub fn consume_after_user_presence(&mut self) {	pub fn consume_after_user_presence(&mut self) {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	530-530	if self.paut.in_use {	if self.paut.in_use {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	552-553	self.paut.in_use = false;	self.paut.permissions = 0;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	560-571	// cursor must die with the token that granted it.	/// command", where *exclusively preceded* means "no other authenticator
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	566-571	/// large blob.	/// command", where *exclusively preceded* means "no other authenticator
@@ -467,6 +476,8 @@ formal/TraceSecurity.tla	crates/rsk-fido/src/clientpin.rs	609-609	ctx.presence.u
 formal/TraceSecurity.tla	crates/rsk-fido/src/config.rs	317-317	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
 formal/TraceSecurity.tla	crates/rsk-fido/src/makecredential.rs	528-546	let always_uv = crate::config::always_uv_enabled(ctx.fs);	Ok(UvOutcome::NONE)
 formal/TraceSecurity.tla	crates/rsk-fido/src/reset.rs	216-216	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	537-539	if always_uv {	}
+formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	543-545	if pin_set && req.rk {	}
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1183-1190	/// Drop the VALIDATE result on deselect / card reset, so a later session must	}
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1219-1220	self.validated = !code_set;	self.otp_pin_verified = false;
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	250-252	if !putdata::write_authorized(&self.sess, fid) {	}
