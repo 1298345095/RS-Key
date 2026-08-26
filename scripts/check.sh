@@ -632,6 +632,11 @@ run "TLA verdict registry"     python scripts/verdict_gate.py
 run "comutants lint"           python scripts/comutate.py --lint
 run "seam trace map"           python scripts/trace_map.py
 run "security trace refinement" python scripts/security_trace.py --check-data formal/TraceSecurityData.tla formal/traces/security-phase4.jsonl
+# A `"Name" \notin viol` clause is only as strong as the set of actions that
+# write the name, and this model named that set in a COMMENT that said eleven.
+# It is 21, over 24 routes -- and three of them record TWICE, so a name-set
+# equality stays green over a half-deleted guard. This derives both.
+run "ghost completeness"       python scripts/ghost_gate.py
 run "token refinement export" ./scripts/token_refinement.sh --check
 run "token refinement completeness" python scripts/token_refinement_gate.py
 # The two guards above decide whether the gate covers the tree, and neither had

@@ -1604,12 +1604,12 @@ OpAdvancesIsOneActivity == ENABLED OpAdvances => ~Idle
 \* gate requires -- the token and its permission, the retry budget, the soft
 \* lock, the reset window, the walk's owning channel.
 \*
-\* Ghost half: the reset window (ResetStart), the walk's owning channel
-\* (CmNext), the retry budget and soft lock (PinAttempt, hence GetPinToken /
-\* WrongPin / MintPpuat / ChangePinStart), and a token step admitted against
-\* policy (RegisterStart, AssertStart, ConfigOp, CmBeginViaToken,
-\* CmBeginViaPpuat, DeleteCredStart, via TokenBypass). Those eleven are the
-\* whole list; no other action is gated by an authorization.
+\* Ghost half: the reset window, the walk's owning channel, the retry budget and
+\* soft lock, the touch, and a token step admitted against policy. WHICH actions
+\* record it is DERIVED and owned in assurance/ghost_actions.toml, held there by
+\* scripts/ghost_gate.py -- 21 actions over 24 routes. This comment used to name
+\* them and called the list eleven; it named nine of the 21 nowhere and nothing
+\* compared the sentence to the set, which is the shape a ghost clause fails in.
 NoAuthorizationBypass ==
     /\ "NoAuthorizationBypass" \notin viol
     \* CTAP 2.1 6.5.5.7: once a user-presence test is spent the token carries

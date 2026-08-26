@@ -40,6 +40,25 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **`NoAuthorizationBypass`'s ghost clause is mechanised, not asserted.** The
+  invariant leads with what can be read out of state and keeps a ghost — `"…"
+  \notin viol` — only for the part that is genuinely about a STEP, which makes
+  it exactly as strong as the completeness of the actions that write the name.
+  The model named those actions in a comment and called the list **eleven**. The
+  tree has **21, over 24 routes**, and nine of them the comment named nowhere.
+  `scripts/ghost_gate.py` derives both out of the module — the actions `Next`
+  reaches, the aliases that stand for the name (`TokenBypass`), the routes inside
+  each `viol'` assignment, and a helper's routes inherited by its callers, which
+  is how `PinAttempt`'s one route reaches `GetPinToken`, `WrongPin`, `MintPpuat`
+  and `ChangePinStart` — and holds them against `assurance/ghost_actions.toml`
+  both ways. **Routes are counted rather than names** because `RegisterStart`,
+  `RegisterNdStart` and `AssertStart` each record by two independent routes: a
+  name-set equality is green after one of the two is deleted, over a
+  half-deleted guard. A second axis holds the `*Policy` operators each assignment
+  consults, so a route kept and its guard swapped is a finding rather than an
+  edit. The mutation table drives all 24 single-route deletions and all 21
+  delete-every-route cases against the real module.
+
 - **Tier A of the authorization slice now has an oracle that is not the model
   it checks.** `formal/RSKeyTokenGate.tla` carries `RequiredGate`, one line per
   abstract operation, transcribed from CTAP 2.3 §6.1/§6.2/§6.5/§6.6/§6.8/§6.11 —
