@@ -999,6 +999,14 @@ def render(root):
         " surface with no flake package at all, and the board axis changes the flash"
         " geometry on which a whole KV store once survived a \"successful\" wipe.",
         "",
+        "These are the **committed** configurations, not the buildable ones. Every"
+        " `mkFirmware` knob falls back to a like-named environment variable and"
+        " `lib.mkFirmware` is exported, so `FLASH_SIZE=2M nix build --impure .#firmware`"
+        " is an image no column below describes — including under a disposition whose"
+        " reason says \"no cargo feature and no build knob\". What this page disposes of"
+        " is what the flake ships and what CI builds; a one-off `--impure` combination"
+        " is outside it by construction.",
+        "",
         "| Disposition | Code | Means |",
         "|---|---|---|",
         "| `covered` | `cov` | the evidence the registry records was produced on this configuration |",
