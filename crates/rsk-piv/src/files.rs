@@ -482,3 +482,7 @@ fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<bool, Sw> 
         }
     }
 }
+
+#[cfg(test)]
+#[path = "files_tests.rs"]
+mod tests;

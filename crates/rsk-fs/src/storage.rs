@@ -264,4 +264,68 @@ pub mod faults {
             self.inner.borrow_mut().for_each_key(f)
         }
     }
+
+    /// A RAM medium whose `remove` ANSWERS `Ok` and leaves the record standing, so
+    /// `for_each_key` keeps yielding what the sweep just deleted. This is the fault
+    /// the four applet wipes' delete budget exists for, and the one a REFUSED
+    /// removal cannot produce: [`RemoveStuck`] errors, which stops a sweep at its
+    /// `?` before the budget is ever consulted.
+    ///
+    /// The records really die once `ceiling` removals have been served, and that is
+    /// what makes the budget's failure READABLE rather than a timeout: a sweep whose
+    /// backstop has stopped guarding converges there and reports success over a
+    /// range it never cleared, instead of spinning until the suite is killed.
+    pub struct Undead {
+        inner: RamStorage,
+        served: Rc<Cell<u32>>,
+        ceiling: u32,
+    }
+
+    /// The other end of an [`Undead`]: how much of its budget the sweep spent.
+    pub struct UndeadCount {
+        served: Rc<Cell<u32>>,
+    }
+
+    impl Undead {
+        pub fn new(ceiling: u32) -> (Self, UndeadCount) {
+            let served = Rc::new(Cell::new(0));
+            (
+                Self {
+                    inner: RamStorage::new(),
+                    served: served.clone(),
+                    ceiling,
+                },
+                UndeadCount { served },
+            )
+        }
+    }
+
+    impl UndeadCount {
+        /// Removals the medium was asked for.
+        pub fn removals(&self) -> u32 {
+            self.served.get()
+        }
+    }
+
+    impl Storage for Undead {
+        fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+            self.inner.read(fid, buf)
+        }
+        fn write(&mut self, fid: u16, data: &[u8]) -> Result<()> {
+            self.inner.write(fid, data)
+        }
+        fn remove(&mut self, fid: u16) -> Result<()> {
+            self.served.set(self.served.get() + 1);
+            if self.served.get() > self.ceiling {
+                return self.inner.remove(fid);
+            }
+            Ok(())
+        }
+        fn size(&mut self, fid: u16) -> Option<usize> {
+            self.inner.size(fid)
+        }
+        fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+            self.inner.for_each_key(f)
+        }
+    }
 }

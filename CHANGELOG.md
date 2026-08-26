@@ -192,6 +192,37 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The reset runaway valve was falsifiable in none of its four applets, and the
+  reason was the batch, not the cardinality.** `deleted > RESET_MAX_DELETES` is
+  each wipe's progress guard; mutating `>` to `==` lets `deleted` — which rises a
+  whole batch at a time — step *past* the budget without ever equalling it, and the
+  valve stops guarding. It had stood open since D2.4 as "not drivable at
+  `4 × 256 + 15`", and that diagnosis was wrong: a medium that answers `Ok` to
+  `remove` and keeps the record runs 1039 deletions out of **five** files, no
+  shipped-cardinality array required. What actually made it undrivable is that the
+  two runaways the tree already had re-yield exactly **one** fid — and 1 divides
+  every budget, so the mutant merely trips one delete early and
+  `reset_sweep_fails_when_storage_does_not_converge` (FIDO) and
+  `reset_reports_failure_when_the_sweep_cannot_converge` (PIV) pass it by
+  construction. OATH and OpenPGP reached the valve with nothing at all: their fault
+  backends *error*, which stops the sweep at a `?` above it.
+  One fixture for the class — `rsk_fs::storage::faults::Undead`, whose records die
+  only after a stated ceiling so a valve that has stopped guarding *converges and
+  answers success* instead of hanging the suite — and one test per applet over
+  **five** undead records, 5 dividing none of 1039 · 257 · 768 · 512. Driven: `==`
+  at each of the four valves turns exactly one test red, and the failure reads
+  `left: Ok(..) right: Err(..)` — success reported over a range the sweep never
+  cleared, which is the defect and not its inverse. The budget assertion beside it
+  has its own isolating mutation (`> RESET_MAX_DELETES` → `> 2 * RESET_MAX_DELETES`:
+  "the valve let the sweep spend 2075 deletions on a budget of 1039"). `>` → `>=`
+  stays a **conformance** verdict, recorded separately and measured green in all
+  four: it differs from `>` only where `deleted` lands exactly on the budget, which
+  a non-dividing batch rules out.
+  `bcdDevice -> 0x098D`: no behaviour change and no line of this can reach the
+  image — `storage::faults` is `#[cfg(any(test, feature = "test-util"))]` — but the
+  bcd row counts `crates/rsk-fs/src/storage.rs` wholesale, because the file is a
+  plain module even where its contents are gated.
+
 - **Eleven more citations in the same class, found by sweeping it instead of
   fixing the three that were reported.** The class is every `reset.rs` and
   `is_*_fid` citation the model carries: 59 read by hand against the code they

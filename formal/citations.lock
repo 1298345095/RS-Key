@@ -166,6 +166,7 @@ formal/README.md	crates/rsk-oath/src/lib.rs	524-526	// states left a host unable
 formal/README.md	crates/rsk-oath/src/lib.rs	1134-1135	self.validated = false;	self.otp_pin_verified = false;
 formal/README.md	crates/rsk-oath/src/lib.rs	1185-1189	/// `select` recomputes `validated` from whether a code is set.	self.chain = Chain::None;
 formal/README.md	crates/rsk-oath/src/lib.rs	1187-1187	self.validated = false;	self.validated = false;
+formal/README.md	crates/rsk-oath/src/lib.rs	1534-1534	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
 formal/README.md	crates/rsk-openpgp/src/internalaut.rs	45-48	// §7.2.13 names PW1 no. 82 and nothing else; PW3 used to stand in, and a	return Err(Sw::SECURITY_STATUS_NOT_SATISFIED);
 formal/README.md	crates/rsk-openpgp/src/keys.rs	405-409	/// Bump the 3-byte big-endian PSO:CDS counter. If the PW-status "PW1 valid for	if fs.read(EF_PW_PRIV, &mut pw).is_some() && pw[0] == 0 {
 formal/README.md	crates/rsk-openpgp/src/lib.rs	335-338	/// valid AID and an ICC power cycle clear them (the dispatcher's `deselect`).	self.reset_session();
@@ -181,9 +182,11 @@ formal/README.md	crates/rsk-openpgp/src/pin.rs	793-793	if data.len() <= rc_len {
 formal/README.md	crates/rsk-openpgp/src/pso.rs	80-92	(0x9E, 0x9A) => {	if !sess.has_pw2 {
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	59-65	pub fn write_authorized(sess: &Session, fid: u16) -> bool {	}
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	181-183	if matches!(fid, EF_UIF_SIG | EF_UIF_DEC | EF_UIF_AUT) {	if let Some(n) = fs.read(target, &mut cur)
+formal/README.md	crates/rsk-openpgp/src/terminate.rs	182-182	if deleted > WIPE_MAX_DELETES {	if deleted > WIPE_MAX_DELETES {
 formal/README.md	crates/rsk-piv/src/auth.rs	57-65	/// skips the PIN; listing known gated values made unknown bytes ungated.	}
 formal/README.md	crates/rsk-piv/src/auth.rs	63-63	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,
 formal/README.md	crates/rsk-piv/src/auth.rs	113-117	/// nothing clears the PIN's own status — 9B included, hence `is_key`.	self.sess.pin_fresh = false;
+formal/README.md	crates/rsk-piv/src/files.rs	472-472	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
 formal/README.md	crates/rsk-piv/src/lib.rs	183-186	fn set_pin(&mut self, verified: bool) {	}
 formal/README.md	crates/rsk-piv/src/lib.rs	199-203	self.clear_challenge();	pub struct PivApplet<'a> {
 formal/README.md	crates/rsk-piv/src/lib.rs	365-368	if !reselect {	// The default PIN/PUK/retry/mgmt/attestation files are provisioned once

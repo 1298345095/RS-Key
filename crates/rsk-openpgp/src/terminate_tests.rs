@@ -402,3 +402,42 @@ fn a_wipe_that_aborted_in_phase_one_is_reseeded_without_touching_a_single_seeded
         );
     }
 }
+
+/// `WIPE_MAX_DELETES` is the sweep's progress guard — the comment on it names
+/// itself PIV's mirror — and nothing reached it here: `DyingStorage` ERRORS once
+/// its budget runs out, which stops the wipe at a `?` before the valve is ever
+/// consulted. So the one fault the budget exists for, a medium that answers `Ok`
+/// and keeps the record, was undriven in this applet and in OATH.
+///
+/// `deleted` rises a whole batch at a time, so `>` → `==` lets it step PAST the
+/// budget without ever equalling it and the valve stops guarding. Five undead
+/// records: 5 divides none of the four applets' budgets (512 · 768 · 257 · 1039),
+/// which is the point — FIDO's and PIV's runaways re-yield ONE fid, and 1 divides
+/// everything, so the mutant trips one delete early there and both of those tests
+/// pass it by construction.
+#[test]
+fn a_wipe_that_never_converges_stops_inside_its_delete_budget() {
+    const UNDEAD: [u16; 5] = [
+        EF_PK_SIG.get(),
+        EF_PK_DEC.get(),
+        EF_PK_AUT.get(),
+        EF_LOGIN_DATA,
+        EF_FP,
+    ];
+    let (backend, count) = rsk_fs::storage::faults::Undead::new(2 * WIPE_MAX_DELETES);
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    for fid in UNDEAD {
+        fs.put(fid, &[0xAB; 40]).unwrap();
+    }
+    assert_eq!(
+        wipe_openpgp(&mut fs),
+        Err(Sw::MEMORY_FAILURE),
+        "a wipe the medium never lets converge must fail, not run on"
+    );
+    assert!(
+        count.removals() <= WIPE_MAX_DELETES,
+        "the valve let the wipe spend {} deletions on a budget of {WIPE_MAX_DELETES}",
+        count.removals()
+    );
+}

@@ -7,7 +7,7 @@ use crate::consts::{EF_BACKUP_SEALED, EF_CRED, EF_LARGEBLOB, EF_PIN, EF_RP, RESE
 use crate::seed::{bump_sign_counter, get_sign_counter, load_keydev};
 use rsk_crypto::Device;
 use rsk_fs::Fs;
-use rsk_fs::storage::faults::{MetaStuck, RemoveStuck};
+use rsk_fs::storage::faults::{MetaStuck, RemoveStuck, Undead};
 use rsk_fs::storage::ram::RamStorage;
 
 struct SeqRng(u64);
@@ -404,6 +404,52 @@ fn reset_sweep_fails_when_storage_does_not_converge() {
         now_ms: 0,
     };
     assert_eq!(sweep(&mut ctx, is_fido_fid), Err(CtapError::Other));
+}
+
+/// The valve above it — `deleted > RESET_MAX_DELETES` — is the sweep's progress
+/// guard, and the batch it counts in decides whether that guard can be falsified
+/// at all. `deleted` rises a whole batch at a time, so `>` → `==` lets it step PAST
+/// the budget without ever equalling it and the valve stops guarding. But only
+/// when the batch does not DIVIDE the budget: `reset_sweep_fails_when_storage_does_not_converge`
+/// above re-yields ONE fid, and 1 divides everything, so the mutant trips at 1039
+/// instead of 1040 and that test passes it by construction. PIV's
+/// `reset_reports_failure_when_the_sweep_cannot_converge` is the same shape and the
+/// same blindness; OATH and OpenPGP had no runaway at all.
+///
+/// Five undead records instead — 5 divides none of the four budgets (1039 · 257 ·
+/// 768 · 512), so the mutant walks past its own and is stopped only by the
+/// fixture's ceiling. That ceiling is what makes the failure READABLE: without it
+/// the mutation hangs the suite instead of failing it.
+#[test]
+fn a_sweep_that_never_converges_stops_inside_its_delete_budget() {
+    const UNDEAD: u16 = 5;
+    let (backend, count) = Undead::new(2 * RESET_MAX_DELETES);
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    for i in 0..UNDEAD {
+        fs.put(EF_CRED + i, &[0xC0; 8]).unwrap();
+    }
+    let mut rng = SeqRng(5);
+    let mut state = FidoState::new();
+    let mut presence = crate::AlwaysConfirm;
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev: dev(),
+        fs: &mut fs,
+        rng: &mut rng,
+        state: &mut state,
+        now_ms: 0,
+    };
+    assert_eq!(
+        sweep(&mut ctx, is_fido_fid),
+        Err(CtapError::Other),
+        "a sweep the medium never lets converge must fail, not run on"
+    );
+    assert!(
+        count.removals() <= RESET_MAX_DELETES,
+        "the valve let the sweep spend {} deletions on a budget of {RESET_MAX_DELETES}",
+        count.removals()
+    );
 }
 
 /// `RESET_MAX_DELETES` is written as `4 * MAX_RESIDENT_CREDENTIALS + 15`, and the

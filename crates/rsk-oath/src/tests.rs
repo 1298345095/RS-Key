@@ -2,6 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
+use rsk_fs::storage::faults::Undead;
 use rsk_fs::storage::ram::RamStorage;
 
 /// PUT's body grammar — a rule per field, a measured card cell per rule. Hung
@@ -1953,6 +1954,37 @@ fn a_completed_reset_clears_credentials_and_the_code() {
     assert!(!fs.has_data(EF_OATH_CODE.get()));
     assert!(!fs.has_data(EF_OTP_PIN));
     assert!((0..5u16).all(|i| !fs.has_data(EF_OATH_CRED + i)));
+}
+
+/// `RESET_MAX_DELETES` is the sweep's progress guard, and OATH had nothing that
+/// reached it: `TornStorage` above ERRORS once its budget runs out, which stops the
+/// sweep at the `?` before the valve is ever consulted. So the one fault the budget
+/// exists for — a medium that answers `Ok` and keeps the record — was undriven here.
+///
+/// `deleted` rises a whole batch at a time, so `>` → `==` lets it step PAST the
+/// budget without ever equalling it. Five undead records: 5 divides none of the
+/// four applets' budgets (257 · 768 · 512 · 1039), which is the whole point —
+/// FIDO's and PIV's runaways re-yield ONE fid, and 1 divides everything, so the
+/// mutant trips one delete early there and both tests pass it by construction.
+#[test]
+fn a_sweep_that_never_converges_stops_inside_its_delete_budget() {
+    const UNDEAD: u16 = 5;
+    let (backend, count) = Undead::new(2 * RESET_MAX_DELETES);
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    for i in 0..UNDEAD {
+        fs.put(EF_OATH_CRED + i, &[0x11; 24]).unwrap();
+    }
+    assert_eq!(
+        sweep(&mut fs, is_oath_cred_fid),
+        Err(Sw::MEMORY_FAILURE),
+        "a sweep the medium never lets converge must fail, not run on"
+    );
+    assert!(
+        count.removals() <= RESET_MAX_DELETES,
+        "the valve let the sweep spend {} deletions on a budget of {RESET_MAX_DELETES}",
+        count.removals()
+    );
 }
 
 /// An OTP PIN the owner set must be required before the password-safe secrets
