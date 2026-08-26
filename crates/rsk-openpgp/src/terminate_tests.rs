@@ -29,6 +29,21 @@ fn seeded() -> Fs<RamStorage> {
     fs
 }
 
+/// Every fid `scan_files` seeds, DERIVED by running it over an empty medium
+/// rather than named. A watch list narrower than the function under test is what
+/// let `EF_KDF` and `EF_SIG_COUNT` be re-seeded beside a live key unnoticed.
+fn records_scan_files_seeds() -> Vec<u16> {
+    let mut fs = seeded();
+    let mut fids: Vec<u16> = Vec::new();
+    fs.for_each_key(&mut |fid| {
+        if !fids.contains(&fid) {
+            fids.push(fid);
+        }
+    });
+    fids.sort_unstable();
+    fids
+}
+
 fn apdu() -> Apdu<'static> {
     Apdu {
         cla: 0x00,
@@ -64,32 +79,38 @@ fn openpgp_fids_classified_disjoint_from_fido() {
 }
 
 /// The device-wide `Fs::factory_wipe` defers each applet's gate records to a second
-/// phase, and it can only defer what the applet exports. The set has to be exactly
-/// the PW records `scan_files` re-seeds, and every one of them has to be a fid this
-/// applet actually owns — a gate arm naming someone else's fid would defer a record
-/// another applet's phase-1 sweep already accounts for (audit run-36).
+/// phase, and it can only defer what the applet exports. The set has to cover every
+/// record `scan_files` re-seeds — DERIVED from that function here, because a list
+/// narrower than it is what let `EF_KDF` be re-seeded to KDF-none beside a live
+/// private key — and every member has to be a fid this applet actually owns: a gate
+/// arm naming someone else's fid would defer a record another applet's phase-1
+/// sweep already accounts for (audit run-36).
 #[test]
-fn the_gate_set_is_the_pw_records_and_all_are_openpgp_owned() {
-    for fid in [
-        EF_PW1,
-        EF_RC,
-        EF_PW3,
-        EF_PW_PRIV,
-        EF_PW_RETRIES,
-        // The UIF flags are `scan_files`-re-seeded to touch-OFF, so they gate a key
-        // a surviving DEK can still open — the OpenPGP analog of FIDO's alwaysUv.
-        EF_UIF_SIG,
-        EF_UIF_DEC,
-        EF_UIF_AUT,
-    ] {
-        assert!(is_openpgp_gate_fid(fid), "{fid:#06x} gates the applet");
+fn every_record_scan_files_reseeds_is_swept_last_and_openpgp_owned() {
+    for fid in records_scan_files_seeds() {
+        // The two DEK copies are the exception that carries the rule: they ARE the
+        // secret, so they lead the wipe, and `scan_files` re-mints them only with
+        // both PW verifiers absent — a state no phase-1 abort can leave behind.
+        if fid == EF_DEK_PW1.get() || fid == EF_DEK_PW3.get() {
+            continue;
+        }
+        assert!(
+            is_openpgp_gate_fid(fid),
+            "{fid:#06x} is re-seeded by scan_files yet swept in phase 1"
+        );
         assert!(
             is_openpgp_fid(fid),
             "{fid:#06x} is deferred but not OpenPGP-owned"
         );
     }
+    // The one PW verifier `scan_files` never seeds — the reset code stays deactivated
+    // until PUT DATA 0xD3 — so the derivation above cannot see it.
+    assert!(
+        is_openpgp_gate_fid(EF_RC),
+        "the RC verifier must be deferred"
+    );
     // FIDO's EF_PIN (0x1080) interleaves with OpenPGP PW1 (0x1081) in the 0x10xx
-    // region; the gate set must not reach across into it.
+    // region; the deferred set must not reach across into it.
     assert!(!is_openpgp_gate_fid(0x1080));
     // Secrets, not gates: deferring these would invert the rule.
     for fid in [EF_PK_SIG.get(), EF_DEK, EF_LOGIN_DATA] {
@@ -313,47 +334,45 @@ fn a_completed_wipe_reseeds_the_applet_even_when_a_record_could_not_be_proven_dr
     );
 }
 
-/// The unconditional re-seed is only safe because the gate records go LAST. A sweep
-/// that failed in phase 1 never reached them, so `scan_files` finds the owner's
-/// verifiers and UIF flags present and writes nothing — it cannot put a touch-OFF
-/// UIF flag back over a private key the surviving DEK can still open.
+/// The unconditional re-seed is only safe because every record `scan_files` seeds
+/// goes LAST. A sweep that failed in phase 1 never reached them, so `scan_files`
+/// finds the owner's values present and writes nothing — no touch-OFF UIF flag and
+/// no KDF-none back over a private key the surviving DEK can still open.
 ///
-/// Returns the answer, the imported secret still live ON THE MEDIUM, and the gate
-/// records that changed across the whole command.
-fn terminate_with_a_refused_secret_removal() -> (Sw, bool, Vec<&'static str>) {
+/// Returns the answer, the imported secret still live ON THE MEDIUM, and every
+/// record `scan_files` seeds that changed across the whole command.
+fn terminate_with_a_refused_secret_removal() -> (Sw, bool, Vec<String>) {
     let (backend, medium) = rsk_fs::storage::faults::RemoveStuck::new();
     let mut fs = Fs::new(backend);
     fs.scan();
     scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
     fs.put(EF_PK_SIG.get(), &[0xAB; 40]).unwrap();
-    // Touch-ON, the state `scan_files` would overwrite with UIF_DEFAULT if it ever
-    // wrote over a live record: the OpenPGP analog of FIDO's alwaysUv.
+    // Owner-set values `scan_files`' defaults would overwrite: touch-ON (the
+    // OpenPGP analog of FIDO's alwaysUv), a KDF the PW verifiers are taken over,
+    // and a signature counter that only ever climbs.
     fs.put(EF_UIF_SIG, &[0x01, 0x20]).unwrap();
-    let gates: [(&'static str, u16); 7] = [
-        ("PW1", EF_PW1),
-        ("PW3", EF_PW3),
-        ("PW_PRIV", EF_PW_PRIV),
-        ("PW_RETRIES", EF_PW_RETRIES),
-        ("UIF_SIG", EF_UIF_SIG),
-        ("UIF_DEC", EF_UIF_DEC),
-        ("UIF_AUT", EF_UIF_AUT),
-    ];
-    let before: Vec<Option<Vec<u8>>> = gates
-        .iter()
-        .map(|&(_, fid)| read_all(&mut fs, fid))
-        .collect();
+    fs.put(EF_KDF, &[0x81, 0x01, 0x03, 0x82, 0x01, 0x08])
+        .unwrap();
+    fs.put(EF_SIG_COUNT, &[0x00, 0x12, 0x34]).unwrap();
+    fs.put(EF_SEX, &[0x31]).unwrap();
+    let watched = records_scan_files_seeds();
+    let before: Vec<Option<Vec<u8>>> = watched.iter().map(|&fid| read_all(&mut fs, fid)).collect();
 
     medium.refuse(Some(EF_PK_SIG.get()));
     let answered = terminate_df(&dev(), &mut fs, &mut CountRng(9), true, &apdu());
     medium.refuse(None);
 
-    let mut changed = Vec::new();
-    for (&(name, fid), was) in gates.iter().zip(before) {
-        if read_all(&mut fs, fid) != was {
-            changed.push(name);
+    // Removing a record is what the wipe is FOR, so an absent one is not a finding;
+    // a record still standing on a value the owner never wrote is, because that
+    // value can only have come from the re-seed (EF_DEK_PW3 is deleted here).
+    let mut defaulted = Vec::new();
+    for (&fid, was) in watched.iter().zip(before) {
+        let now = read_all(&mut fs, fid);
+        if now.is_some() && now != was {
+            defaulted.push(format!("{fid:#06x} {was:02x?} -> {now:02x?}"));
         }
     }
-    (answered, medium.live(EF_PK_SIG.get()), changed)
+    (answered, medium.live(EF_PK_SIG.get()), defaulted)
 }
 
 fn read_all<S: rsk_fs::Storage>(fs: &mut Fs<S>, fid: u16) -> Option<Vec<u8>> {
@@ -363,12 +382,17 @@ fn read_all<S: rsk_fs::Storage>(fs: &mut Fs<S>, fid: u16) -> Option<Vec<u8>> {
 }
 
 #[test]
-fn a_wipe_that_aborted_in_phase_one_is_reseeded_without_touching_a_single_gate_record() {
-    assert_eq!(
-        terminate_with_a_refused_secret_removal(),
-        (Sw::MEMORY_FAILURE, true, vec![]),
-        "phase 1 stopped on the refused removal, so the private key is still there \
-         and the answer says so — and the re-seed that now runs anyway must not have \
-         put a default verifier or a touch-OFF UIF flag over it"
-    );
+fn a_wipe_that_aborted_in_phase_one_is_reseeded_without_touching_a_single_seeded_record() {
+    // WHICH records phase 1 reached before the refusal is a fresh flash-ring order
+    // per run (`RamStorage` walks a HashMap), so one run samples one abort point.
+    // The phase assignment that makes every one of them safe is asserted above.
+    for _ in 0..16 {
+        assert_eq!(
+            terminate_with_a_refused_secret_removal(),
+            (Sw::MEMORY_FAILURE, true, Vec::<String>::new()),
+            "phase 1 stopped on the refused removal, so the private key is still \
+             there and the answer says so — and the re-seed that now runs anyway \
+             must not have put a factory default over any record the owner holds"
+        );
+    }
 }

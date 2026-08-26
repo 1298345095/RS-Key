@@ -435,14 +435,14 @@ why = "the generic DO writer's empty-body clear. The host reads every one of the
 
 [[site]]
 file = "crates/rsk-openpgp/src/terminate.rs"
-line = 174
+line = 188
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
 class = "wipe-sweep"
 metadata = "none"
 disposition = "must-read"
-why = "TERMINATE DF's sweep, secrets before the UIF gates scan_files would re-seed. OpenPGP fids carry no EF_META head, so the record half is only ever the shared blob being unreadable — deferred, because terminate_df skips the re-seed on a failed wipe and an early stop left the private-key records on the card. The phase above already refuses to call a truncated walk an empty range."
+why = "TERMINATE DF's sweep, secrets before every record scan_files re-seeds. OpenPGP fids carry no EF_META head, so the record half is only ever the shared blob being unreadable — deferred, because an early stop left the private-key records on the card, and the re-seed that now runs whatever the sweep answered cannot reach a deferred record. The phase above already refuses to call a truncated walk an empty range."
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"

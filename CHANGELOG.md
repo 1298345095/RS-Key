@@ -192,6 +192,27 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **A TERMINATE DF that failed with the private key still on the card wrote
+  factory defaults over the owner's KDF, signature counter and cardholder data.**
+  The re-seed became unconditional at 0x098A on the argument that "the gate
+  records go last" — but `is_openpgp_gate_fid` named five of the ~ten records
+  `scan_files` writes, and `EF_KDF`, `EF_SIG_COUNT` and `EF_SEX` were swept in
+  phase 1, the only phase that can stop with secrets still on the medium.
+  Measured on a wipe refused at `EF_PK_SIG`: `EF_KDF` `81 01 03 82 01 08` →
+  `81 01 00` (KDF: none), `EF_SIG_COUNT` `00 12 34` → `00 00 00`, `EF_SEX` `31`
+  → `39`. The KDF one locks the owner out of a key that is still there: PW1 and
+  PW3 are verified over the KDF *output*, so a card advertising KDF-none makes
+  `gpg` send the raw passphrase and spend both retry counters. All three are
+  deferred to phase 2 now, which also covers the device-wide `Fs::factory_wipe`
+  — a torn one there reaches the same end state at the next boot's `scan_files`.
+  A clean wipe is unchanged: both phases still delete everything and the re-seed
+  still restores every default, so no status word moves on any non-fault path.
+  The measurement in the entry below was the same shape as the defect: its watch
+  list held the seven gate records while the function under test wrote ten. It is
+  derived from `scan_files` itself now — run over an empty medium, its live fids
+  *are* the set — so a record added there without a phase decision fails the
+  suite. **bcdDevice → 0x098C.**
+
 - **`authenticatorReset`'s seed loop still reached the exact end state the
   metadata repair exists to remove, and still made no progress on a retry.** The
   reason a sweep must stop on a refused backend removal is that `for_each_key`
