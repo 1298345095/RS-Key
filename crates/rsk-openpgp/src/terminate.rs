@@ -137,6 +137,11 @@ pub fn is_openpgp_gate_fid(fid: u16) -> bool {
 /// bounds a pathological store (mirrors PIV's `RESET_MAX_DELETES`).
 const WIPE_MAX_DELETES: u32 = 512;
 
+/// Fids one [`wipe_openpgp`] pass collects before deleting them. Named because the
+/// wrap to a second pass is a code path, and the test that crosses it has to size
+/// its fixture off this rather than off a copy of the number.
+const SWEEP_BATCH: usize = 64;
+
 /// Delete every live OpenPGP file. Batched because `for_each_key` cannot delete
 /// mid-iteration; each round deletes ≥1 key, so it converges (mirrors the FIDO and
 /// PIV resets — including their two hardening rules, which this sweep predates:
@@ -156,7 +161,7 @@ fn wipe_openpgp<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     let mut orphaned = false;
     for gates in [false, true] {
         loop {
-            let mut keys = [0u16; 64];
+            let mut keys = [0u16; SWEEP_BATCH];
             let mut k = 0usize;
             let complete = fs.for_each_key(&mut |fid| {
                 if is_openpgp_fid(fid)

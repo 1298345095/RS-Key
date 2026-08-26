@@ -449,6 +449,41 @@ fn a_wipe_that_never_converges_stops_inside_its_delete_budget() {
     );
 }
 
+/// The wrap to a second batch, which nothing in this crate crossed: every fixture
+/// above puts FIVE records live against a [`SWEEP_BATCH`] of 64, so the bound that
+/// keeps `keys[k]` in range was untested — and what breaks it is an out-of-bounds
+/// index in a `no_std` image, not a wrong answer. Measured: delete
+/// `k < keys.len()` and this crate reported 199 passed, 0 failed. OATH's sweep is
+/// the same shape and had the same hole; FIDO, PIV and `Fs::factory_wipe` already
+/// have this test. Sweep by class, not by site.
+///
+/// The fill lives in `is_openpgp_fid`'s `0x7f00..0x8000` window because it has to
+/// land in phase 1: `is_openpgp_gate_fid` names nothing there, so all of it wraps
+/// the batch that the eleven phase-2 records never would. Sized OFF the batch, and
+/// held to the window — a fill that outgrew it would survive the wipe honestly and
+/// report the wrap as broken.
+#[test]
+fn a_wipe_clears_more_files_than_one_batch_holds() {
+    const WINDOW: u16 = 0x7f00;
+    const WINDOW_LEN: u16 = 0x8000 - WINDOW;
+    const FILL: u16 = SWEEP_BATCH as u16 + 16;
+    const _: () = assert!(FILL as u32 <= WIPE_MAX_DELETES && FILL <= WINDOW_LEN);
+    let mut fs = Fs::new(RamStorage::new());
+    fs.scan();
+    for i in 0..FILL {
+        assert!(!is_openpgp_gate_fid(WINDOW + i));
+        fs.put(WINDOW + i, &[0xAB; 40]).unwrap();
+    }
+    assert_eq!(wipe_openpgp(&mut fs), Ok(()));
+    for i in 0..FILL {
+        assert!(
+            !fs.has_data(WINDOW + i),
+            "0x{:04X} survived a wipe that spans two batches",
+            WINDOW + i
+        );
+    }
+}
+
 /// An un-yielded fid is not an absent fid: a walk the medium truncated must fail the
 /// wipe rather than read the empty batch as "the range is clear" — which is a wipe
 /// answering success over key material it never looked at.

@@ -303,7 +303,7 @@ why = "VERIFY PIN raises the same validated flag VALIDATE does, so an OTP-PIN th
 
 [[site]]
 file = "crates/rsk-oath/src/lib.rs"
-line = 1538
+line = 1543
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -435,7 +435,7 @@ why = "the generic DO writer's empty-body clear. The host reads every one of the
 
 [[site]]
 file = "crates/rsk-openpgp/src/terminate.rs"
-line = 188
+line = 193
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"

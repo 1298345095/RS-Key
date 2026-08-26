@@ -2025,6 +2025,36 @@ fn a_refused_removal_stops_the_sweep_instead_of_spinning_into_the_valve() {
     );
 }
 
+/// The wrap to a second batch, which nothing in this crate crossed: every fixture
+/// above puts FIVE records live against a [`SWEEP_BATCH`] of 32, so the bound that
+/// keeps `fids[n]` in range was untested — and what breaks it is an out-of-bounds
+/// index in a `no_std` image, not a wrong answer. Measured: delete
+/// `n < fids.len()` and this crate reported 120 passed, 0 failed. `rsk-openpgp`'s
+/// wipe is the same shape and had the same hole; FIDO, PIV and `Fs::factory_wipe`
+/// already have this test. Sweep by class, not by site.
+///
+/// Sized OFF the batch: a fill copied as 48 would stop crossing the wrap the day
+/// the batch widened, with this test still green — the defect this whole series is
+/// about.
+#[test]
+fn a_sweep_clears_more_credentials_than_one_batch_holds() {
+    const FILL: u16 = SWEEP_BATCH as u16 + 16;
+    const _: () = assert!(FILL as u32 <= RESET_MAX_DELETES && FILL <= MAX_OATH_CRED);
+    let mut fs = Fs::new(RamStorage::new());
+    fs.scan();
+    for i in 0..FILL {
+        fs.put(EF_OATH_CRED + i, &[0x11; 24]).unwrap();
+    }
+    assert_eq!(sweep(&mut fs, is_oath_cred_fid), Ok(false));
+    for i in 0..FILL {
+        assert!(
+            !fs.has_data(EF_OATH_CRED + i),
+            "0x{:04X} survived a sweep that spans two batches",
+            EF_OATH_CRED + i
+        );
+    }
+}
+
 /// An un-yielded fid is not an absent fid: a walk the medium truncated must fail the
 /// sweep rather than read the empty batch as "the range is clear" — which is a wipe
 /// answering success over key material it never looked at.

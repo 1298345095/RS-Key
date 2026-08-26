@@ -192,6 +192,25 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The sweep class has five members and the entry below closed three.** An
+  adversarial review of that commit ran `grep -B3 for_each_key` over `crates/` and
+  found six batched collectors, not three: `rsk-rescue`'s already derives its test
+  fixture from `FS_USAGE_WINDOW`, but **`rsk_oath`'s `sweep` (`[0u16; 32]`) and
+  `wipe_openpgp` (`[0u16; 64]`) had no wrap test at all** — every fixture in both
+  suites puts FIVE records live, so the bound that keeps `fids[n]` / `keys[k]` in
+  range was never approached. Measured: delete `n < fids.len()` and `k <
+  keys.len()` and the two crates report **120 passed, 0 failed** and **199 passed,
+  0 failed**. That is worse than the three that were fixed, which at least had a
+  test with a stale premise, and it is reachable rather than theoretical — OATH's
+  255 credential slots exceed a 32-fid batch, so a full card's RESET would index
+  past it in a `no_std` image. Both batches are named `SWEEP_BATCH` now, and each
+  crate has the wrap test its three siblings already had, sized off the constant.
+  Driven: with the bound deleted the two new tests are the *only* failures in
+  their suites (120/1 and 199/1), panicking `index out of bounds: the len is 32 /
+  64`; at a batch of 128 / 200 the fill follows and they still panic; and a batch
+  past the fixture's own fid window is a compile error rather than a misleading
+  survival.
+
 - **Three more boundary probes copied from constants they could not see.** Each
   test straddles an edge that arithmetic elsewhere decides, and each wrote the
   answer down instead of deriving it, so an ordinary edit to the source constant

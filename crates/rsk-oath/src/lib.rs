@@ -1484,6 +1484,11 @@ pub fn is_oath_lock_fid(fid: u16) -> bool {
 /// removed.
 const RESET_MAX_DELETES: u32 = 257;
 
+/// Fids one [`sweep`] pass collects before deleting them. Named because the wrap
+/// to a second pass is a code path, and the test that crosses it has to size its
+/// fixture off this rather than off a copy of the number.
+const SWEEP_BATCH: usize = 32;
+
 /// Delete every live OATH record, and say so only when the sweep provably
 /// completed. Mirrors `rsk_piv::files::wipe_piv`: batched because `for_each_key`
 /// cannot delete mid-iteration, de-duped because it yields one entry per stored
@@ -1513,7 +1518,7 @@ fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<bool, Sw> 
     let mut deleted = 0u32;
     let mut orphaned = false;
     loop {
-        let mut fids = [0u16; 32];
+        let mut fids = [0u16; SWEEP_BATCH];
         let mut n = 0;
         let complete = fs.for_each_key(&mut |fid| {
             if pred(fid) && n < fids.len() && !fids[..n].contains(&fid) {
