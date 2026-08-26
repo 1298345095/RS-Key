@@ -407,6 +407,11 @@ fn is_piv_secret_fid(fid: u16) -> bool {
 /// each phase separately, which is strictly tighter than the old single sweep.
 const RESET_MAX_DELETES: u32 = 768;
 
+/// Fids one [`sweep`] pass collects before deleting them. Named because the wrap
+/// to a second pass is a code path, and the test that crosses it has to size its
+/// fixture off this rather than off a copy of the number.
+pub(crate) const SWEEP_BATCH: usize = 32;
+
 /// Factory-reset the applet: delete every PIV file and meta record
 /// (`is_piv_fid`), then re-create the defaults. Scoped to the PIV fid range —
 /// the other applets' data must survive a PIV reset.
@@ -449,7 +454,7 @@ fn sweep<S: Storage>(fs: &mut Fs<S>, pred: fn(u16) -> bool) -> Result<bool, Sw> 
     let mut deleted = 0u32;
     let mut orphaned = false;
     loop {
-        let mut fids = [0u16; 32];
+        let mut fids = [0u16; SWEEP_BATCH];
         let mut n = 0;
         let complete = fs.for_each_key(&mut |fid| {
             if pred(fid) && n < fids.len() && !fids[..n].contains(&fid) {

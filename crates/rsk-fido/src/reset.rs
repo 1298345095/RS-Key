@@ -23,6 +23,11 @@ use crate::{Ctx, Rng};
 /// 256-slot ranges and 15 fixed records, so a converging sweep cannot exceed this.
 const RESET_MAX_DELETES: u32 = 4 * MAX_RESIDENT_CREDENTIALS as u32 + 15;
 
+/// Fids one [`sweep`] pass collects before deleting them. Named because the wrap
+/// to a second pass is a code path, and the test that crosses it has to size its
+/// fixture off this rather than off a copy of the number.
+const SWEEP_BATCH: usize = 64;
+
 /// `authenticatorReset`: factory-reset the FIDO applet. Replies with only the
 /// status byte. Also the documented recovery from a soft lock with a lost lock
 /// key: `EF_KEY_DEV_ENC` leads the wipe with the seed it wraps and a fresh seed is
@@ -105,7 +110,7 @@ fn sweep<S: Storage, R: Rng>(
     let mut deleted = 0u32;
     let mut orphaned = false;
     loop {
-        let mut keys = [0u16; 64];
+        let mut keys = [0u16; SWEEP_BATCH];
         let mut n = 0usize;
         let complete = ctx.fs.for_each_key(&mut |fid| {
             if pred(fid) && n < keys.len() && !keys[..n].contains(&fid) {

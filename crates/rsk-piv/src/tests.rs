@@ -5074,9 +5074,13 @@ fn reset_sweeps_more_files_than_one_batch() {
         );
         assert_eq!(sw, Sw::OK);
     }
+    // Read off the sweep, not copied: this guard named an `8 × 32` budget the
+    // sweep stopped having (progress is counted in DELETED FILES now, against
+    // `RESET_MAX_DELETES`), so it held a number nothing could move and left the
+    // wrap it is here for free to slide out from under the fill.
     assert!(
-        piv_fids(&mut fs).len() > 256,
-        "the fill must exceed the old 8x32 sweep budget"
+        piv_fids(&mut fs).len() > files::SWEEP_BATCH,
+        "the fill no longer spans more than one sweep batch"
     );
 
     // Block both references, then RESET.

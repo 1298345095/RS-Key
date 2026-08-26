@@ -1229,15 +1229,20 @@ fn a_torn_reset_never_leaves_the_session_running_on_a_wiped_seed() {
 
 #[test]
 fn a_reset_sweeps_more_secrets_than_one_batch_holds() {
-    // `sweep` deletes in 64-key batches, and nothing drove it past the first
-    // one: the bound that keeps `keys[n]` in range was untested, and the
+    // `sweep` deletes in [`SWEEP_BATCH`] batches, and nothing drove it past the
+    // first one: the bound that keeps `keys[n]` in range was untested, and the
     // mutation that breaks it is an out-of-bounds index, not a wrong answer.
     // PIV has this test for its own reset (`reset_sweeps_more_files_than_one_batch`);
     // FIDO's sweep is the same shape and had none — sweep by class, not by site.
+    //
+    // Sized OFF the batch, not off a copy of it: a widened batch would otherwise
+    // swallow the whole fill in one pass and leave this green over the untested
+    // wrap it exists to cross.
+    const FILL: u16 = SWEEP_BATCH as u16 + 16;
     let mut fs = Fs::new(RamStorage::new());
     let mut rng = SeqRng(3);
     ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
-    for i in 0..80u16 {
+    for i in 0..FILL {
         fs.put(EF_CRED + i, &[0xC0; 8]).unwrap();
     }
     let mut state = FidoState::new();
@@ -1253,7 +1258,7 @@ fn a_reset_sweeps_more_secrets_than_one_batch_holds() {
         };
         reset(&mut ctx).unwrap();
     }
-    for i in 0..80u16 {
+    for i in 0..FILL {
         assert!(
             !fs.has_data(EF_CRED + i),
             "0x{:04X} survived a reset that spans two batches",

@@ -444,15 +444,20 @@ fn an_empty_record_is_not_data() {
 
 #[test]
 fn a_factory_wipe_clears_more_keys_than_one_batch_holds() {
-    // `factory_wipe` deletes in 64-key batches. Nothing drove it past the first
-    // one, so the bound that keeps `batch[n]` in range was untested — and the
-    // mutation that breaks it is an out-of-bounds index, not a wrong answer.
+    // `factory_wipe` deletes in [`WIPE_BATCH`] batches. Nothing drove it past the
+    // first one, so the bound that keeps `batch[n]` in range was untested — and
+    // the mutation that breaks it is an out-of-bounds index, not a wrong answer.
+    //
+    // Sized OFF the batch, not off a copy of it: a widened batch would otherwise
+    // swallow the whole fill in one pass and leave this green over the untested
+    // wrap it exists to cross.
+    const FILL: u16 = 2 * WIPE_BATCH as u16 + 22;
     let mut fs = fs();
-    for i in 0..150u16 {
+    for i in 0..FILL {
         fs.put(0xCC00 + i, b"x").unwrap();
     }
     fs.factory_wipe(|_| false, |_| false, |_| false).unwrap();
-    for i in 0..150u16 {
+    for i in 0..FILL {
         assert!(
             !fs.has_data(0xCC00 + i),
             "0x{:04X} survived the wipe",

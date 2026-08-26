@@ -192,6 +192,24 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **Three sweep tests spanned a batch that was a bare literal none of them could
+  see.** `rsk_fido`'s reset sweep, `Fs::factory_wipe` and `rsk_piv`'s
+  `wipe_piv` each collect fids in a fixed-size batch, and each has a test whose
+  only job is to cross the wrap to a second pass — the bound that keeps `keys[n]`
+  in range is untested otherwise, and what breaks it is an out-of-bounds index,
+  not a wrong answer. All three sized their fixture off a **copy** of the number:
+  80 against `[0u16; 64]`, 150 against `[0u16; 64]`, and PIV's guard against an
+  `8 × 32` delete budget the sweep stopped having (progress is counted in deleted
+  files against `RESET_MAX_DELETES` now). Measured: widen the FIDO batch to 128
+  and the honest tree is green — *and so is the same tree with the bound deleted*;
+  `[0u16; 256]` does it to `factory_wipe`, `[0u16; 320]` to PIV. The batch is a
+  named constant in each of the three now (`SWEEP_BATCH`, `WIPE_BATCH`,
+  `files::SWEEP_BATCH`) and the fixtures are derived from it, so a widening either
+  carries the fill with it or turns the row red. Driven: at batch 128 / 256 the
+  deleted bound now panics `index out of bounds: the len is 128 but the index is
+  128` (and 256), and PIV at batch 320 fails "the fill no longer spans more than
+  one sweep batch". Refactor plus test wiring, no behaviour change.
+
 - **An adversarial review of the entry below found three more lines of the same
   four-applet sweep that no test could falsify, and one premise the new tests
   rest on that nothing asserted.**

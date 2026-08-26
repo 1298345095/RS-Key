@@ -35,6 +35,11 @@ const FID_PRESENT_BYTES: usize = 3;
 #[cfg(not(kani))]
 const _: () = assert!(((u16::MAX >> 3) as usize) < FID_PRESENT_BYTES);
 
+/// Fids one [`Fs::factory_wipe`] pass collects before removing them. Named
+/// because the wrap to a second pass is a code path, and the test that crosses it
+/// has to size its fixture off this rather than off a copy of the number.
+const WIPE_BATCH: usize = 64;
+
 /// The two answers a removal gives, kept apart for the callers that must act on
 /// them differently. [`Fs::force_delete`] folds them into one `Result`, which is
 /// the right default; a reset sweep cannot use it, because the two failures pull
@@ -374,7 +379,7 @@ impl<S: Storage> Fs<S> {
         };
         for phase in 0..3 {
             loop {
-                let mut batch = [0u16; 64];
+                let mut batch = [0u16; WIPE_BATCH];
                 let mut n = 0usize;
                 let complete = self.storage.for_each_key(&mut |fid| {
                     if !preserve(fid) && phase_of(fid) == phase && n < batch.len() {
