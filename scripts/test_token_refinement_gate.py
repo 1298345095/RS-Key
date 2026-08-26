@@ -72,7 +72,12 @@ impl FidoState {
 }
 """
 
+CONSTS = """pub const EF_PIN: u16 = 0x1080;
+pub const EF_PAUTHTOKEN: KeyFid = KeyFid::new(0x1091);
+"""
+
 LIB = """pub mod state;
+pub mod consts;
 pub mod state_assurance;
 
 #[cfg(test)]
@@ -114,6 +119,7 @@ class Tree:
         self.write("assurance/token_refinement.toml", MANIFEST)
         self.write("crates/rsk-fido/src/lib.rs", LIB)
         self.write("crates/rsk-fido/src/state.rs", STATE)
+        self.write("crates/rsk-fido/src/consts.rs", CONSTS)
         self.write("crates/rsk-fido/src/state_assurance.rs", PROJECTION)
         self.write("crates/rsk-fido/src/harness.rs", "")
         self.write("crates/rsk-fs/src/fs.rs", STORE)
@@ -210,6 +216,23 @@ def test_the_persistent_domain_is_derived_from_the_projection(tree: Tree):
         # The MAC without the mask — the bypass shape the permission query alone
         # cannot see.
         ("fn stray() { if !state.verify_token(p, d, m) { fail(); } }\n", "outcome: unowned"),
+        # Every shape below was written by an adversarial review of this gate and
+        # was NOT flagged when it ran. A receiver is an expression, not one word.
+        ("fn stray() { let _ = Fs::put(&mut ctx.fs, EF_PIN, &[]); }\n", "persistent: unowned"),
+        ("fn stray() { let _ = Fs::delete(c.fs, EF_PIN); }\n", "persistent: unowned"),
+        # The fid as the number the constant is defined as.
+        ("fn stray() { let _ = fs.delete(0x1080); }\n", "persistent: unowned"),
+        ("fn stray() { let _ = fs.delete_key(0x1091); }\n", "persistent: unowned"),
+        # Replacing the whole token, which touches no `.paut.<field>` at all.
+        ("fn stray(s: &mut S) { let _ = mem::take(&mut s.paut); }\n", "volatile: unowned"),
+        ("fn stray(s: &mut S) { mem::swap(&mut s.paut, o); }\n", "volatile: unowned"),
+        ("fn stray(s: &mut S) { let t = &mut s.paut; t.in_use = true; }\n", "volatile: unowned"),
+        # A parenthesised permission set, and the primitive called as a path.
+        ("fn stray(s: &S) -> bool { s.paut.permissions & (PERM_ACFG | PERM_MC) != 0 }\n", "outcome: unowned"),
+        ("fn stray(s: &S) -> bool { PERM_ACFG & s.paut.permissions != 0 }\n", "outcome: unowned"),
+        ("fn stray(s: &S) -> bool { FidoState::verify_token(s, p, d, m) }\n", "outcome: unowned"),
+        # The six in-place mutators beside `copy_from_slice`.
+        ("fn stray(s: &mut S) { s.paut.rp_id_hash.fill(0); }\n", "volatile: unowned"),
     ],
 )
 def test_an_unowned_concrete_site_fails(tree: Tree, body: str, finding: str):
@@ -408,3 +431,87 @@ def test_main_reports_every_finding_and_exits_nonzero(tree: Tree, monkeypatch, c
     monkeypatch.setattr(token_refinement_gate, "ROOT", tree.root)
     assert token_refinement_gate.main() == 1
     assert "unowned concrete site" in capsys.readouterr().err
+
+
+def test_replacing_the_whole_state_is_a_token_write(tree: Tree):
+    """`FidoState::reset` is `*self = Self::new()` — every abstract bit at once."""
+    tree.append("crates/rsk-fido/src/state.rs", "fn stray(&mut self) { *self = Self::new(); }\n")
+    assert only(tree.findings(), "volatile: unowned concrete site crates/rsk-fido/src/state.rs::stray")
+
+
+def test_replacing_the_whole_state_cannot_be_a_stutter(tree: Tree):
+    tree.append("crates/rsk-fido/src/state.rs", "fn stray(&mut self) { *self = Self::new(); }\n")
+    tree.own("volatile_writer", "stray", 'disposition = "stutter"\nwhy = "no"\n')
+    assert only(tree.findings(), "writes abstract state and is not a step")
+
+
+@pytest.mark.parametrize(
+    "desync",
+    [
+        "fn spacer() { let _b = '{'; }\n",
+        "fn spacer() { /* { */ }\n",
+        'fn spacer() { let _s = "}"; }\n',
+    ],
+)
+def test_a_brace_inside_a_literal_does_not_swallow_the_next_writer(tree: Tree, desync: str):
+    """One char literal desynchronises the depth counter, and every writer after
+    it in the file joins the previous function's body — silently."""
+    tree.append("crates/rsk-fido/src/state.rs", desync)
+    tree.append("crates/rsk-fido/src/state.rs", "fn stray() { state.paut.in_use = true; }\n")
+    assert only(tree.findings(), "volatile: unowned concrete site crates/rsk-fido/src/state.rs::stray")
+
+
+def test_a_writer_written_inside_a_string_is_not_a_writer(tree: Tree):
+    tree.append(
+        "crates/rsk-fido/src/state.rs",
+        'fn stray() { log("fs.put(EF_PIN, &[]) and paut.in_use = true"); }\n',
+    )
+    assert tree.findings() == []
+
+
+def test_a_nested_fn_belongs_to_the_function_that_contains_it(tree: Tree):
+    """Bodies close on brace depth, so `inner` is part of `outer` — the run-to-the-
+    next-`fn` form reports `inner` instead, and this is what tells them apart."""
+    tree.append(
+        "crates/rsk-fido/src/state.rs",
+        "fn outer() {\n    fn inner() { state.paut.in_use = true; }\n}\n",
+    )
+    assert only(tree.findings(), "volatile: unowned concrete site crates/rsk-fido/src/state.rs::outer")
+
+
+@pytest.mark.parametrize("spelling", ["pub fn", "pub(crate) fn", "pub async fn"])
+def test_every_public_spelling_of_a_store_mutator_counts(tree: Tree, spelling: str):
+    """`pub(crate) fn` appears 149 times in this tree; a second, narrower `pub fn`
+    pattern here would drop such a method out of the derived write API in silence."""
+    tree.append(
+        "crates/rsk-fs/src/fs.rs",
+        f"\nimpl<S: Storage> Fs<S> {{\n    {spelling} scribble(&mut self, fid: u16) -> Result<()> {{\n"
+        "        self.storage.write(fid, &[])\n    }\n}\n",
+    )
+    tree.append("crates/rsk-fido/src/state.rs", "fn stray() { fs.scribble(EF_PIN); }\n")
+    assert only(tree.findings(), "persistent: unowned concrete site crates/rsk-fido/src/state.rs::stray")
+
+
+def test_a_private_store_helper_is_not_part_of_the_write_api(tree: Tree):
+    tree.append(
+        "crates/rsk-fs/src/fs.rs",
+        "\nimpl<S: Storage> Fs<S> {\n    fn scribble(&mut self, fid: u16) -> Result<()> {\n"
+        "        self.storage.write(fid, &[])\n    }\n}\n",
+    )
+    tree.append("crates/rsk-fido/src/state.rs", "fn stray() { fs.scribble(EF_PIN); }\n")
+    assert tree.findings() == []
+
+
+def test_the_module_import_and_not_the_two_names_scopes_the_foreign_sweep(tree: Tree):
+    tree.write(
+        "crates/rsk-device/src/ctap.rs",
+        "use rsk_fido::consts;\n\nfn stray() { fs.delete(consts::EF_PIN); }\n",
+    )
+    assert only(tree.findings(), "foreign: unowned concrete site crates/rsk-device/src/ctap.rs::stray")
+
+
+def test_a_file_reached_both_gated_and_plain_is_production(tree: Tree):
+    tree.write("crates/rsk-fido/src/harness.rs", "fn stray() { state.paut.in_use = true; }\n")
+    tree.replace("crates/rsk-fido/src/lib.rs", "pub mod state;", "pub mod state;\npub mod harness;")
+    tree.own("volatile_writer", "stray", 'op = "IssueToken"\n', file="crates/rsk-fido/src/harness.rs")
+    assert tree.findings() == []

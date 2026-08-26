@@ -53,6 +53,14 @@ file = "crates/rsk-fido/src/getassertion.rs"
 function = "enforce_pin"
 op = "UseGa"
 
+# `authenticatorReset`'s session wipe, which is `*self = Self::new()` — every
+# abstract bit at once and not one `.paut.` in sight. Found by an adversarial
+# review of the rescan that missed it: the query was written for field writes.
+[[volatile_writer]]
+file = "crates/rsk-fido/src/state.rs"
+function = "reset"
+op = "RevokeToken"
+
 # CTAP 2.1 §6.5.5.7's rolling inactivity window: it defers the deadline
 # `expire_stale_token` enforces, so a token lives longer for it having run. That
 # is security-visible and it is not an abstract step — α reads `in_use`,

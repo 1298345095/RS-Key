@@ -83,7 +83,7 @@ it implements, `stutter` moves security-visible state A does not observe,
 `out-of-scope` is a real gate outside A's vocabulary, and the gate derives which
 of those a site *can* be from what it writes.
 
-Two of them are configuration-conditional, and the `column` field names the
+Three of them are configuration-conditional, and the `column` field names the
 `docs/assurance-matrix.md` column that makes them so. The panel's set-PIN and
 PIN-check doors onto `EF_PIN` exist only where `firmware-display` pulls in
 `rsk-display`; the `authenticatorLargeBlobs` write gate — the one authorization
