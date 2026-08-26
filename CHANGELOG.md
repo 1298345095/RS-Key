@@ -40,6 +40,27 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **Three quarters of `NoAuthorizationBypass` had no ownership ledger, and now
+  do.** The invariant is four clauses — the token and its permission, the retry
+  budget's soft lock, the reset window, the walk's owning channel — and
+  `assurance/token_refinement.toml` owned only the first, so "the ledger covers
+  the property" was a sentence about a quarter of it.
+  `scripts/token_refinement_gate.py` gains three GUARD axes beside its three
+  writer axes, and every site is derived: the walk's guard is a `CredMgmtState`
+  method that compares the cursor's channel with the request's; the soft lock's
+  vocabulary — its wire type and the two `FidoState` fields it is made of — comes
+  out of `FidoState::pin_lock` itself; the window's guard is the `reset.rs`
+  predicate that reads both halves of the power-up. **The scan covers three
+  units, not one, and that is a measurement rather than a preference:
+  `pin_lock`/`restore_pin_lock` have ZERO callers inside `rsk-fido`** — the board
+  marshals the lock across a warm reset — so an applet-only scan derives 2 sites
+  of 12 and silently loses the half the clause is about. Each axis carries a
+  floor, which is the rule the file did not have before: a derivation that finds
+  nothing satisfies every other rule over the empty set. 18 new owned sites, each
+  `out-of-scope` with its formal basis, because tier A carries no channel, no
+  retry counter, no soft lock and no clock — the complementary source obligation
+  the A map names.
+
 - **`NoAuthorizationBypass`'s ghost clause is mechanised, not asserted.** The
   invariant leads with what can be read out of state and keeps a ghost — `"…"
   \notin viol` — only for the part that is genuinely about a STEP, which makes

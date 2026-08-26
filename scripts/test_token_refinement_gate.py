@@ -29,6 +29,30 @@ op = "SetPin"
 file = "crates/rsk-fido/src/state.rs"
 function = "authorize"
 op = "UseMc"
+
+[[walk_owner]]
+file = "crates/rsk-fido/src/state.rs"
+function = "may_walk_rps"
+disposition = "out-of-scope"
+why = "fixture: a guard maps to no A operation"
+
+[[softlock_owner]]
+file = "crates/rsk-fido/src/state.rs"
+function = "pin_lock"
+disposition = "out-of-scope"
+why = "fixture: a guard maps to no A operation"
+
+[[softlock_owner]]
+file = "crates/rsk-fido/src/state.rs"
+function = "restore_pin_lock"
+disposition = "out-of-scope"
+why = "fixture: a guard maps to no A operation"
+
+[[reset_window_owner]]
+file = "crates/rsk-fido/src/reset.rs"
+function = "in_reset_window"
+disposition = "out-of-scope"
+why = "fixture: a guard maps to no A operation"
 """
 
 STATE = """pub const PERM_MC: u8 = 0x01;
@@ -54,6 +78,32 @@ fn persist() {
 
 fn authorize() {
     let authorized = state.paut.permissions & PERM_MC != 0;
+}
+
+pub struct PinLock {
+    pub engaged: bool,
+    pub mismatches: u8,
+}
+
+pub fn may_walk_rps(&self, channel: u32) -> bool {
+    self.channel == channel && self.rp_counter <= self.rp_total
+}
+
+pub fn pin_lock(&self) -> PinLock {
+    PinLock {
+        engaged: self.needs_power_cycle,
+        mismatches: self.new_pin_mismatches,
+    }
+}
+
+pub fn restore_pin_lock(&mut self, lock: PinLock) {
+    self.needs_power_cycle = lock.engaged;
+}
+"""
+
+# The reset window's guard, in the file the derivation reads it out of.
+RESET = """fn in_reset_window(ctx: &Ctx) -> bool {
+    !ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 }
 """
 
@@ -119,6 +169,7 @@ class Tree:
         self.write("assurance/token_refinement.toml", MANIFEST)
         self.write("crates/rsk-fido/src/lib.rs", LIB)
         self.write("crates/rsk-fido/src/state.rs", STATE)
+        self.write("crates/rsk-fido/src/reset.rs", RESET)
         self.write("crates/rsk-fido/src/consts.rs", CONSTS)
         self.write("crates/rsk-fido/src/state_assurance.rs", PROJECTION)
         self.write("crates/rsk-fido/src/harness.rs", "")
@@ -148,7 +199,21 @@ class Tree:
         )
 
     def findings(self) -> list[str]:
-        return token_refinement_gate.audit(self.root)[0]
+        """The gate over this fixture, with the floors scaled to it.
+
+        The floors are calibrated on the real tree — 4 walk sites, 12 soft-lock,
+        2 window — and this tree carries one family member each on purpose: the
+        arms below are about the RULES, and a floor written for the checkout
+        would make every one of them red for the fixture's size. The floors
+        themselves are falsified against the real numbers in
+        `test_a_derivation_that_finds_nothing_trips_its_own_floor`.
+        """
+        was = token_refinement_gate.FLOORS
+        token_refinement_gate.FLOORS = dict.fromkeys(token_refinement_gate.AXES, 1)
+        try:
+            return token_refinement_gate.audit(self.root)[0]
+        finally:
+            token_refinement_gate.FLOORS = was
 
 
 @pytest.fixture
@@ -422,6 +487,9 @@ def test_test_kani_and_generated_files_are_not_production_axes(tree: Tree):
 
 def test_main_prints_a_nonempty_success_summary(tree: Tree, monkeypatch, capsys):
     monkeypatch.setattr(token_refinement_gate, "ROOT", tree.root)
+    monkeypatch.setattr(
+        token_refinement_gate, "FLOORS", dict.fromkeys(token_refinement_gate.AXES, 1)
+    )
     assert token_refinement_gate.main() == 0
     assert capsys.readouterr().out.startswith("token-refinement-gate: GREEN")
 
@@ -429,6 +497,9 @@ def test_main_prints_a_nonempty_success_summary(tree: Tree, monkeypatch, capsys)
 def test_main_reports_every_finding_and_exits_nonzero(tree: Tree, monkeypatch, capsys):
     tree.append("crates/rsk-fido/src/state.rs", "fn stray() { state.paut.in_use = true; }\n")
     monkeypatch.setattr(token_refinement_gate, "ROOT", tree.root)
+    monkeypatch.setattr(
+        token_refinement_gate, "FLOORS", dict.fromkeys(token_refinement_gate.AXES, 1)
+    )
     assert token_refinement_gate.main() == 1
     assert "unowned concrete site" in capsys.readouterr().err
 
@@ -515,3 +586,102 @@ def test_a_file_reached_both_gated_and_plain_is_production(tree: Tree):
     tree.replace("crates/rsk-fido/src/lib.rs", "pub mod state;", "pub mod state;\npub mod harness;")
     tree.own("volatile_writer", "stray", 'op = "IssueToken"\n', file="crates/rsk-fido/src/harness.rs")
     assert tree.findings() == []
+
+
+# ---- the three guard axes ----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "axis,removal",
+    [
+        ("walk", ("crates/rsk-fido/src/state.rs", "self.channel == channel", "true")),
+        ("reset_window", ("crates/rsk-fido/src/reset.rs", "RESET_WINDOW_MS", "0")),
+    ],
+)
+def test_a_derivation_that_finds_nothing_trips_its_own_floor(tree: Tree, axis, removal):
+    """Every rule on an axis passes over an empty roster, which is the shape a
+    verdict column cannot show. Run at the REAL floors, so what is falsified is
+    the number this file ships and not a fixture-sized stand-in."""
+    path, old, new = removal
+    tree.replace(path, old, new)
+    findings = token_refinement_gate.audit(tree.root)[0]
+    assert contains(findings, f"{axis}: 0 site(s) derived, under the floor of"), findings
+
+
+@pytest.mark.parametrize(
+    "axis,file,function",
+    [
+        ("walk", "crates/rsk-fido/src/state.rs", "may_walk_rps"),
+        ("softlock", "crates/rsk-fido/src/state.rs", "pin_lock"),
+        ("reset_window", "crates/rsk-fido/src/reset.rs", "in_reset_window"),
+    ],
+)
+def test_an_unowned_guard_site_fails(tree: Tree, axis, file, function):
+    tree.replace(
+        "assurance/token_refinement.toml", f'function = "{function}"', 'function = "gone"'
+    )
+    findings = tree.findings()
+    assert contains(findings, f"{axis}: unowned concrete site {file}::{function}"), findings
+    assert contains(findings, f"{axis}: stale owner {file}::gone"), findings
+
+
+def test_a_caller_of_a_guard_is_a_site_of_its_family(tree: Tree):
+    """The derivation is guards AND callers: `may_walk_rps` has one production
+    caller and it is one frame out, in `credmgmt.rs`."""
+    tree.write(
+        "crates/rsk-fido/src/credmgmt.rs",
+        "fn enumerate_rps() {\n    if !state.cm.may_walk_rps(state.channel) { return; }\n}\n",
+    )
+    assert only(
+        tree.findings(),
+        "walk: unowned concrete site crates/rsk-fido/src/credmgmt.rs::enumerate_rps",
+    ), tree.findings()
+
+
+def test_a_board_half_that_only_names_the_wire_type_is_a_site(tree: Tree):
+    """`Hooks::store_pin_lock` calls neither guard — it takes the lock BY TYPE.
+    Measured: `pin_lock` and `restore_pin_lock` have zero callers inside the
+    applet, so a family derived from calls alone loses the whole board half."""
+    tree.write(
+        "crates/rsk-device/src/lib.rs",
+        "pub mod ctap;\nfn store_pin_lock(&mut self, _lock: PinLock) {}\n",
+    )
+    assert only(
+        tree.findings(),
+        "softlock: unowned concrete site crates/rsk-device/src/lib.rs::store_pin_lock",
+    ), tree.findings()
+
+
+def test_the_soft_locks_fields_are_read_out_of_its_accessor(tree: Tree):
+    """The two `FidoState` fields are named once in the tree, in `pin_lock`, and
+    naming them here would be twice."""
+    tree.replace(
+        "crates/rsk-fido/src/state.rs",
+        "engaged: self.needs_power_cycle",
+        "engaged: self.other",
+    )
+    assert contains(tree.findings(), "the soft lock's field derivation yielded"), tree.findings()
+
+
+def test_a_guard_may_not_claim_an_operation(tree: Tree):
+    """A guard writes no token field, so it implements no A step: tier A carries
+    no channel, no retry counter and no clock."""
+    tree.replace(
+        "assurance/token_refinement.toml",
+        'function = "may_walk_rps"\ndisposition = "out-of-scope"',
+        'function = "may_walk_rps"\nop = "UseMc"\ndisposition = "out-of-scope"',
+    )
+    assert contains(tree.findings(), "is out-of-scope and still names an op"), tree.findings()
+
+
+def test_the_soft_lock_family_scanned_over_the_applet_alone_trips_its_floor(monkeypatch):
+    """The measured reason the guard axes scan three units and not one: on the
+    real tree `pin_lock` and `restore_pin_lock` have ZERO callers inside
+    `rsk-fido`, so the applet-only scan derives 2 sites of 12 and loses the whole
+    board half — the marshalling across the warm reset that the clause is about.
+    A floor is what turns that into a red row rather than a shorter roster."""
+    monkeypatch.setattr(
+        token_refinement_gate, "UNITS", ((token_refinement_gate.FIDO, "lib.rs"),)
+    )
+    findings = token_refinement_gate.audit(token_refinement_gate.ROOT)[0]
+    assert contains(findings, "softlock: 2 site(s) derived, under the floor of 8"), findings

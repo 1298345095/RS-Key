@@ -45,7 +45,42 @@ MATRIX = Path("docs/assurance-matrix.md")
 
 # Roadmap stage 4 п.4: every production writer is one of these three.
 DISPOSITIONS = ("step", "stutter", "out-of-scope")
-AXES = ("volatile_writer", "persistent_writer", "outcome_producer")
+#: Three writer axes and three GUARD axes. The token half was ledgered and the
+#: other three clauses of `NoAuthorizationBypass` — the walk's owning channel,
+#: the retry budget's soft lock and the reset window — were owned nowhere at all,
+#: which is what made "the ledger covers the property" a sentence about one
+#: quarter of it. Their sites are guards rather than writers, so they get their
+#: own axes rather than a column: a guard writes no token field, and every rule
+#: on the writer axes reads one.
+AXES = (
+    "volatile_writer",
+    "persistent_writer",
+    "outcome_producer",
+    "walk_owner",
+    "softlock_owner",
+    "reset_window_owner",
+)
+RESET = FIDO / "reset.rs"
+#: The three units the guard axes reach. The soft lock is marshalled across a
+#: warm reset by the BOARD — `FidoState::pin_lock` has ZERO callers inside
+#: `rsk-fido`, measured — so a family scanned with `catalogue()` alone derives an
+#: empty roster and every rule below passes over it.
+UNITS = (
+    (FIDO, "lib.rs"),
+    (Path("crates/rsk-device/src"), "lib.rs"),
+    (Path("firmware/src"), "main.rs"),
+)
+#: A roster cannot derive to nothing without someone saying so. Set under the
+#: measured counts so ordinary movement does not trip them and a derivation that
+#: stopped reading does.
+FLOORS = {
+    "volatile_writer": 6,
+    "persistent_writer": 8,
+    "outcome_producer": 5,
+    "walk_owner": 3,
+    "softlock_owner": 8,
+    "reset_window_owner": 2,
+}
 
 FN = re.compile(
     r"^\s*(?:pub(?:\([^)]*\))?\s+)?"
@@ -119,11 +154,15 @@ def test_only_sources(root: Path) -> set[str]:
     """
     known = {
         path.relative_to(root).as_posix(): path.read_text(encoding="utf-8")
-        for path in (root / FIDO).rglob("*.rs")
+        for unit, _ in UNITS
+        for path in (root / unit).rglob("*.rs")
     }
-    root_rel = (FIDO / "lib.rs").as_posix()
     seen, gated = set(), set()
-    queue = [(root_rel, False)] if root_rel in known else []
+    queue = [
+        (rel, False)
+        for unit, entry in UNITS
+        if (rel := (unit / entry).as_posix()) in known
+    ]
     while queue:
         rel, is_gated = queue.pop()
         if (rel, is_gated) in seen:
@@ -298,6 +337,81 @@ def discovered_persistent(code: dict, writers: set[str], keys: set[str]) -> tupl
     return direct | reached | handing, reached
 
 
+#: The channel test IS the walk guard: a `CredMgmtState` method that compares the
+#: cursor's owner with the request's. Derived rather than named, so a third walk
+#: arriving with the same shape arrives as an unowned site.
+CHANNEL_TEST = re.compile(r"self\.channel\s*==\s*channel")
+#: §6.6's window is the only predicate in `reset.rs` that reads both halves of the
+#: power-up: the boot's own origin and the deadline.
+WINDOW = ("warm_boot", "RESET_WINDOW_MS")
+#: The soft lock's accessor, and the anchor both halves of its vocabulary come
+#: out of: its RETURN TYPE is the wire form the board carries across a reset, and
+#: its BODY names the two `FidoState` fields the lock is made of.
+LOCK_ACCESSOR = "pin_lock"
+RETURNS = re.compile(r"->\s*(\w+)")
+
+
+def walk_guards(root: Path) -> list[str]:
+    """The `CredMgmtState` methods that are the channel test."""
+    return sorted(
+        name
+        for name, body in functions((root / STATE).read_text(encoding="utf-8"))
+        if CHANNEL_TEST.search(body)
+    )
+
+
+def window_guards(root: Path) -> list[str]:
+    """The `reset.rs` predicate keyed on the power-up."""
+    return sorted(
+        name
+        for name, body in functions((root / RESET).read_text(encoding="utf-8"))
+        if all(word in body for word in WINDOW)
+    )
+
+
+def lock_vocabulary(root: Path) -> tuple[str, list[str], list[str]]:
+    """(the lock's wire type, the fields it is made of, the methods that move it).
+
+    All three out of `FidoState::pin_lock`: naming the type here as well would be
+    the second spelling this whole file exists to delete.
+    """
+    bodies = dict(functions((root / STATE).read_text(encoding="utf-8")))
+    accessor = bodies[LOCK_ACCESSOR]
+    kind = RETURNS.search(accessor).group(1)
+    fields = sorted(set(re.findall(r"self\.(\w+)", accessor)))
+    return kind, fields, sorted(n for n, b in bodies.items() if re.search(rf"\b{kind}\b", b))
+
+
+def guard_sites(root: Path, guards: list[str], kind: str | None) -> set[tuple[str, str]]:
+    """The guards themselves and every production function that calls one.
+
+    Scanned over `UNITS` rather than `crates/rsk-fido` alone, and the reason is
+    the measurement: `pin_lock` / `restore_pin_lock` have no caller inside the
+    applet at all. `kind`, where a family has one, also catches a board half that
+    only ever names the wire TYPE — `Hooks::store_pin_lock` calls neither guard.
+    """
+    # An EMPTY vocabulary must derive NOTHING, and `\b(?:)\s*[(<]` derives
+    # everything — it matches any open paren, so a family whose derivation
+    # stopped reading would own the whole tree and its floor would never trip.
+    # Measured on this file's own fixture, which is where the floor arms found it.
+    call = re.compile(r"\b(?:" + "|".join(guards) + r")\s*[(<]") if guards else None
+    named = re.compile(rf"\b{kind}\b") if kind else None
+    found: set[tuple[str, str]] = set()
+    for unit, _ in UNITS:
+        for path in sorted((root / unit).rglob("*.rs")):
+            if path.name.endswith(("_tests.rs", "_kani.rs")):
+                continue
+            rel = str(path.relative_to(root))
+            for name, body in functions(path.read_text(encoding="utf-8")):
+                if (
+                    name in guards
+                    or (call and call.search(body))
+                    or (named and named.search(body))
+                ):
+                    found.add((rel, name))
+    return found
+
+
 def foreign_writers(root: Path, writers: set[str], keys: set[str]) -> list[str]:
     """Token-record writes outside `rsk-fido`, which the scan otherwise assumes away.
 
@@ -402,7 +516,17 @@ def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per
     outcomes, outcomes_seen = discovered_outcomes(code, perms, seen_perms)
     spellings = key_spellings(root, keys)
     persistent, generic = discovered_persistent(code, writers, spellings)
+    kind, lock_fields, lock_methods = lock_vocabulary(root)
+    if lock_fields != ["needs_power_cycle", "new_pin_mismatches"]:
+        findings.append(f"the soft lock's field derivation yielded {lock_fields!r}")
     found = {
+        # `None` on all three guard axes: alpha reads `paut.in_use`,
+        # `permissions` and `has_rp_id`, and a guard writes none of them. The
+        # visibility rule has nothing to say here, and saying it anyway would
+        # make every one of these a step over state the abstraction cannot see.
+        "walk_owner": (guard_sites(root, walk_guards(root), None), None),
+        "softlock_owner": (guard_sites(root, lock_methods, kind), None),
+        "reset_window_owner": (guard_sites(root, window_guards(root), None), None),
         "volatile_writer": (volatile, volatile_seen),
         # `None`: presence is what alpha reads of these records, and no regex
         # here can tell a write that changes it from one that rewrites in place.
@@ -413,8 +537,15 @@ def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per
     gated = test_only_sources(root)
     columns = matrix_columns(root)
     for axis in AXES:
-        label = axis.removesuffix("_writer").removesuffix("_producer")
+        label = axis.removesuffix("_writer").removesuffix("_producer").removesuffix("_owner")
         entries = data.get(axis, [])
+        if len(found[axis][0]) < FLOORS[axis]:
+            findings.append(
+                f"{label}: {len(found[axis][0])} site(s) derived, under the floor of"
+                f" {FLOORS[axis]} — the derivation stopped reading the tree, and every"
+                " rule below passes over the empty set"
+            )
+            continue
         compare_axis(label, found[axis][0], owners(entries), findings)
         for entry in entries:
             site = (entry["file"], entry["function"])
@@ -442,6 +573,9 @@ def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per
         f"volatile={len(volatile)}/{len(volatile_seen)} "
         f"persistent={len(persistent)}/{len(generic)} "
         f"outcomes={len(outcomes)}/{len(outcomes_seen)} "
+        f"walk={len(found['walk_owner'][0])} "
+        f"softlock={len(found['softlock_owner'][0])} "
+        f"window={len(found['reset_window_owner'][0])} "
         f"testonly={len(scanned & gated)}"
     )
     return findings, summary
