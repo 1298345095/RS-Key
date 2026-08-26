@@ -380,7 +380,7 @@ why = "and after an ordinary staged commit. All three are the one record load_de
 
 [[site]]
 file = "crates/rsk-openpgp/src/pin.rs"
-line = 871
+line = 879
 call = "let verifier = fs.delete(EF_RC).is_ok();"
 verb = "delete"
 answer = "read"
@@ -391,7 +391,7 @@ why = "the RC verifier is what RESET RETRY P1=0 walks in through, and init's rep
 
 [[site]]
 file = "crates/rsk-openpgp/src/pin.rs"
-line = 872
+line = 880
 call = "let dek = fs.delete_key(EF_DEK_RC).is_ok();"
 verb = "delete_key"
 answer = "read"

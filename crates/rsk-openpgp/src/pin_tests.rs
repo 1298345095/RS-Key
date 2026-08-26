@@ -1596,3 +1596,17 @@ fn clearing_the_reset_code_answers_for_a_reset_code_that_survives() {
         "the reset code outlived the command that says it cleared it"
     );
 }
+
+/// `put_reset_code`'s clear arm folds `set_pin_retry_counter`'s failures into the
+/// delete answer, and says so because only one of the three is reachable. This is
+/// the half of that claim a script can hold: the shipped record has to be long
+/// enough for every counter index, or the fold starts hiding a real `idx >= n`.
+#[test]
+fn pw_status_default_holds_every_retry_counter() {
+    for fid in [EF_PW1, EF_RC, EF_PW3] {
+        assert!(
+            pw_retry_idx(fid) < crate::files::PW_STATUS_DEFAULT.len(),
+            "{fid:#06x}'s retry counter is past the end of the shipped EF_PW_PRIV"
+        );
+    }
+}

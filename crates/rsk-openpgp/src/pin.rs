@@ -868,6 +868,14 @@ pub fn put_reset_code<S: Storage>(
         // it are what RESET RETRY P1=0 walks in through, so a `9000` over a survivor
         // revokes a credential only on paper. `init`'s repair pass reaches the
         // FACTORY reset code alone, so nothing else on the card clears a set one.
+        //
+        // The third is not a delete, and folding its other two failures into `6581`
+        // is deliberate: `set_pin_retry_counter`'s REFERENCE_NOT_FOUND would name
+        // EF_PW_PRIV, a record PUT DATA `0xD3` never mentions.
+        //
+        // Neither is reachable anyway — every writer puts back `&pw[..n]` or the
+        // whole default, so the record cannot shorten past the RC index. The half
+        // of that a test can hold is in `pin_tests.rs`.
         let verifier = fs.delete(EF_RC).is_ok();
         let dek = fs.delete_key(EF_DEK_RC).is_ok();
         let counter = set_pin_retry_counter(fs, EF_RC, 0).is_ok();
