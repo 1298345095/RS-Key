@@ -217,6 +217,47 @@ impl Storage for TruncatedScan {
     }
 }
 
+/// A backend that refuses every `write` and serves every read. `RamStorage` cannot
+/// fail, so a wrapper that folds a store error into a bool — `ctap_mgmt`'s WRITE
+/// CONFIG ack — is unobservable over it, and `.is_ok()` → `true` there leaves all
+/// 77 tests green while a refused `persist_dev_conf` is acked to ykman as a written
+/// config.
+///
+/// Local rather than in `rsk_fs::storage::faults`, unlike the two fault mediums the
+/// applet sweeps share: one crate needs this shape, and that module's cost is a bcd
+/// digit, because the counter's row reads FILES and `storage.rs` is a plain module
+/// even where its contents are gated. [`TruncatedScan`] above is local for the same
+/// reason. It carries the same gate too — WRITE CONFIG is a DEFAULT-build arm.
+#[cfg(not(feature = "strict-config"))]
+#[derive(Default)]
+pub struct WriteStuck(RamStorage);
+
+#[cfg(not(feature = "strict-config"))]
+impl WriteStuck {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(not(feature = "strict-config"))]
+impl Storage for WriteStuck {
+    fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+        self.0.read(fid, buf)
+    }
+    fn write(&mut self, _fid: u16, _data: &[u8]) -> rsk_sdk::error::Result<()> {
+        Err(rsk_sdk::error::Error::MemoryFatal)
+    }
+    fn remove(&mut self, fid: u16) -> rsk_sdk::error::Result<()> {
+        self.0.remove(fid)
+    }
+    fn size(&mut self, fid: u16) -> Option<usize> {
+        self.0.size(fid)
+    }
+    fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+        self.0.for_each_key(f)
+    }
+}
+
 /// Everything a handler borrows, owned for the test's lifetime. Generic over the
 /// backend because [`RamStorage`] cannot fail: a wrapper that folds a store error
 /// into a `bool` is only observable over one that can (`rsk_fs::storage::faults`,

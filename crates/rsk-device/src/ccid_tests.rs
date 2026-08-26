@@ -2,9 +2,9 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
-#[cfg(not(feature = "strict-config"))]
-use crate::tests::TruncatedScan;
 use crate::tests::{Env, TestRng, VendorBoard, apdu, dev_conf, select, sw};
+#[cfg(not(feature = "strict-config"))]
+use crate::tests::{TruncatedScan, WriteStuck};
 #[cfg(not(feature = "strict-config"))]
 use rsk_fs::storage::faults::RemoveStuck;
 
@@ -298,6 +298,32 @@ fn write_config_over_the_fido_transport_round_trips() {
     assert!(
         ccid.ctap_mgmt(0x42, &[]).is_some(),
         "and READ still answers"
+    );
+}
+
+/// The ack is all the host hears, and `.is_ok()` is all that decides it: mutating
+/// it to `true` left all 77 tests green, because both cases above refuse on FRAMING
+/// and never reach the fold. So a `persist_dev_conf` the medium refused was acked
+/// to ykman as a written config, and the host then reports a capability set the
+/// card does not have — the same laundering shape as `factory_wipe`'s bool.
+///
+/// The opposite direction is a SEPARATE verdict and is already owned: `.is_ok()` →
+/// `false` fails `write_config_over_the_fido_transport_round_trips` (76 passed, 1
+/// failed), so a refusal over a write that succeeded cannot ship either.
+#[cfg(not(feature = "strict-config"))]
+#[test]
+fn a_refused_config_write_is_never_acked_as_a_written_one() {
+    let env = Env::with_storage(WriteStuck::new());
+    let mut ccid = env.ccid();
+    let blob = dev_conf(rsk_devconf::CAP_FIDO2 | rsk_devconf::CAP_PIV);
+    assert!(
+        ccid.ctap_mgmt(0x43, &blob).is_none(),
+        "a config the medium refused must not be acked as stored"
+    );
+    assert_eq!(
+        rsk_devconf::read_enabled_caps(&mut env.fs.borrow_mut()),
+        rsk_devconf::SUPPORTED_CAPS,
+        "and the card still reports what it actually has"
     );
 }
 
