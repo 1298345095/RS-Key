@@ -176,8 +176,15 @@ def test_a_comment_is_not_an_invocation():
 
 
 def test_the_mutation_tables_are_collected():
-    """`check.sh` collects the directory, so a new table is registered by name."""
-    runs = [m.group(1) for m in COLLECTS.finditer(check_sh())]
+    """`check.sh` collects the directory, so a new table is registered by name.
+
+    Over each row's CODE, like every other rule here: reading the raw text left a
+    `#` in front of the `pytest scripts` row switching off every mutation table in
+    the tree with this suite green. That is the third place the comment-cut was
+    owed and the second time it was missed.
+    """
+    code = [gate_lines.split_at_comment(body)[0] for _indent, body in gate_lines.logical_lines(check_sh())]
+    runs = [m.group(1) for line in code for m in COLLECTS.finditer(line)]
     assert any("scripts" in words for words in runs), runs
 
 
