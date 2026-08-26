@@ -119,6 +119,7 @@ pub mod faults {
     use super::ram::RamStorage;
     use super::*;
     use crate::EF_META;
+    use rsk_sdk::error::Error;
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
 
@@ -198,6 +199,69 @@ pub mod faults {
         /// The whole point: a FAILED read must not be memoised as absence.
         fn last_error(&self) -> bool {
             self.err
+        }
+    }
+
+    /// A RAM medium whose `remove` refuses one chosen fid while every other value
+    /// still deletes — the other half of a [`MetaStuck`], and the one a sweep must
+    /// stop on. [`crate::Fs::force_delete_halves`] removes UNCONDITIONALLY, so the
+    /// refusal reaches a delete loop even at a fid that was never live.
+    pub struct RemoveStuck {
+        inner: Rc<RefCell<RamStorage>>,
+        refused: Rc<Cell<Option<u16>>>,
+    }
+
+    /// The other end of a [`RemoveStuck`]: arms the fault, and reads the medium
+    /// past `Fs`'s present cache, which a delete marks absent whether or not the
+    /// backend `remove` ran.
+    pub struct RemoveMedium {
+        inner: Rc<RefCell<RamStorage>>,
+        refused: Rc<Cell<Option<u16>>>,
+    }
+
+    impl RemoveStuck {
+        pub fn new() -> (Self, RemoveMedium) {
+            let inner = Rc::new(RefCell::new(RamStorage::new()));
+            let refused = Rc::new(Cell::new(None));
+            (
+                Self {
+                    inner: inner.clone(),
+                    refused: refused.clone(),
+                },
+                RemoveMedium { inner, refused },
+            )
+        }
+    }
+
+    impl RemoveMedium {
+        /// Refuse `remove` for `fid` (`None` clears the fault).
+        pub fn refuse(&self, fid: Option<u16>) {
+            self.refused.set(fid);
+        }
+        /// Whether `fid` still has a value ON THE MEDIUM.
+        pub fn live(&self, fid: u16) -> bool {
+            self.inner.borrow_mut().exists(fid)
+        }
+    }
+
+    impl Storage for RemoveStuck {
+        fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+            self.inner.borrow_mut().read(fid, buf)
+        }
+        fn write(&mut self, fid: u16, data: &[u8]) -> Result<()> {
+            self.inner.borrow_mut().write(fid, data)
+        }
+        fn remove(&mut self, fid: u16) -> Result<()> {
+            if self.refused.get() == Some(fid) {
+                return Err(Error::MemoryFatal);
+            }
+            self.inner.borrow_mut().remove(fid)
+        }
+        fn size(&mut self, fid: u16) -> Option<usize> {
+            self.inner.borrow_mut().size(fid)
+        }
+        fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+            self.inner.borrow_mut().for_each_key(f)
         }
     }
 }

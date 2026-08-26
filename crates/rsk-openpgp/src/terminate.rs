@@ -87,13 +87,15 @@ pub fn terminate_df<S: Storage>(
     }
     // A sweep that could not prove it cleared the range must not report success — the
     // host would file the card as factory-reset over surviving private-key records.
-    if let Err(sw) = wipe_openpgp(fs) {
-        return sw;
+    let wiped = wipe_openpgp(fs);
+    // Re-seed even when the sweep failed, the rule `rsk_piv::files::reset_files`
+    // states: an applet with no EF_PW_PRIV answers 6A88 to every later TERMINATE,
+    // and only a reboot runs `scan_files` again. Safe — the gate records go last.
+    let ensured = scan_files(dev, fs, rng).map_err(|_| Sw::MEMORY_FAILURE);
+    match wiped.and(ensured) {
+        Ok(()) => Sw::OK,
+        Err(sw) => sw,
     }
-    if scan_files(dev, fs, rng).is_err() {
-        return Sw::MEMORY_FAILURE;
-    }
-    Sw::OK
 }
 
 /// The records that *gate* the applet: the three PW verifiers, the retry/status

@@ -192,6 +192,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **A TERMINATE DF that erased the whole applet and then locked it out until the
+  next reboot.** The sweep gained a THIRD outcome at 0x0989 — the range is clear,
+  one metadata drop could not be *proven* — inside a two-valued return, and
+  `terminate_df` collapsed it with the ABORTED case, so a completed wipe skipped
+  `scan_files`. Nothing else runs it: boot and TERMINATE are its only two callers.
+  The card was left with no `EF_PW_PRIV`, and every later TERMINATE answered
+  `6A88` for the rest of the power cycle — the commit's own root-cause pattern,
+  one layer up. Measured over ONE transient EF_META read fault with the medium
+  healthy afterwards: `first=6581 reprovisioned=[] retry=6A88`, and a persistent
+  fault gave the same row, so the status word named the wrong cause in both.
+  `rsk_piv::files::reset_files` has answered `wiped.and(ensured)` since 0x0987
+  with a comment naming this hazard verbatim; the OpenPGP sibling does now too,
+  and the same fixture reads `first=6581 reprovisioned=[PW1, PW3, PW_PRIV,
+  PW_RETRIES] retry=9000` transient and `retry=6581` persistent — usable again,
+  and still honest about the medium. Re-seeding unconditionally is safe because
+  the gate records go last, and that is measured rather than argued: over a wipe
+  refused in phase 1 all seven gate records survive and `scan_files` changes
+  **none** of them, so it cannot put a touch-OFF UIF flag back over a private key
+  the surviving DEK still opens. **bcdDevice → 0x098A.**
+
 - **The delete-caller row could be satisfied by a discard it could not see.**
   `scripts/deleter_gate.py` derived "reads the answer" from a `let _ =` at the
   statement's head, so three other spellings of the same discard read as `read`:
