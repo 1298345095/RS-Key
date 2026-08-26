@@ -184,6 +184,7 @@ why = "identical feature closure; the delta is a USB identity pair."
 properties = ["SEC-A-001"]
 columns = ["firmware-no-touch"]
 feature = "no-touch"
+cfg = ["firmware/src/presence.rs"]
 disposition = "out-of-scope"
 basis = "gate-compiled-out"
 why = "no-touch replaces the press with an auto-confirm."
@@ -506,6 +507,45 @@ def test_a_compiled_out_gate_no_code_reads_is_rejected(tree, capsys):
     """A feature with no `cfg` site is a switch that throws nothing."""
     tree.edit("firmware/src/presence.rs", '#[cfg(not(feature = "no-touch"))]\n', "")
     assert "no production Rust gates on it" in red(tree, capsys)
+
+
+def test_a_compiled_out_gate_that_does_not_say_which_site_is_rejected(tree, capsys):
+    """That the feature exists is not the claim. Eight store and boot rows were
+    declared out-of-scope on `firmware-fips` for `fips-profile` and passed on
+    nothing more than some Rust somewhere gating on it."""
+    tree.edit("assurance/configurations.toml", 'cfg = ["firmware/src/presence.rs"]\n', "")
+    said = red(tree, capsys)
+    assert "and no `cfg`" in said
+    assert "is the whole claim" in said
+
+
+def test_a_compiled_out_gate_naming_a_file_that_does_not_gate_on_it_is_rejected(tree, capsys):
+    tree.edit(
+        "assurance/configurations.toml",
+        'cfg = ["firmware/src/presence.rs"]',
+        'cfg = ["crates/rsk-core/src/lib.rs"]',
+    )
+    said = red(tree, capsys)
+    assert "does not gate on `no-touch`" in said
+    assert "firmware/src/presence.rs" in said
+
+
+def test_a_compiled_out_gate_in_a_crate_the_property_is_not_about_is_rejected(tree, capsys):
+    """The direction that matters: `rsk-core` really does gate on the feature and
+    is still not where SEC-A-001 lives, so that switch is another property's."""
+    tree.write(
+        "crates/rsk-core/src/lib.rs",
+        '#[cfg(feature = "no-touch")]\npub fn quiet() {}\n'
+        "/// Refines `Fixture!Kept` — SEC-A-002.\npub fn kept() {}\n",
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        'cfg = ["firmware/src/presence.rs"]',
+        'cfg = ["crates/rsk-core/src/lib.rs"]',
+    )
+    said = red(tree, capsys)
+    assert "gates on `no-touch` in `rsk-core`" in said
+    assert "another property's gate" in said
 
 
 def test_covered_on_a_configured_column_owes_the_rows_that_produced_it(tree, capsys):

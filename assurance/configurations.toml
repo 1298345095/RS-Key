@@ -407,6 +407,7 @@ columns = [
   "firmware-no-touch-fips-pqc",
 ]
 feature = "no-touch"
+cfg = ["firmware/src/presence.rs"]
 disposition = "out-of-scope"
 basis = "gate-compiled-out"
 why = """

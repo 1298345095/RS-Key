@@ -173,7 +173,7 @@ The point of the page is the thing a single-build claim hides: **the firmware is
 - properties: `SEC-SEAM-001`, `SEC-SEAM-002`, `SEC-SEAM-003`, `SEC-TRANS-001`, `SEC-TRANS-002`, `SEC-TRANS-003`
 - Identical cargo-feature closure — the gate re-derives it — so the delta is the knobs listed above, all of them flash geometry, LED wiring or the presence pin. These six statements are about in-RAM state only: the applet security status that lives for the duration of a selection, and the CTAPHID reassembly buffer. Neither reads `PK_FLASH_SIZE`/`PK_KVMAIN_LEN`, which `firmware/src/flash_storage.rs` is the only file in the tree to consume. Every other row on this column stays `gap`, because the store IS what the geometry changes: `check.sh` rebuilds `rsk-wipe` once per board because a change that stopped `BOARD` reaching the wiper once left a 16 MB board's whole KV store standing behind a "successful" wipe.
 
-**out-of-scope** — basis `gate-compiled-out` (`feature = no-touch`)
+**out-of-scope** — basis `gate-compiled-out` (`feature = no-touch`; gate: `firmware/src/presence.rs`)
 
 - columns: `firmware-no-touch`, `firmware-no-touch-pqc`, `firmware-no-touch-fips`, `firmware-no-touch-fips-pqc`
 - properties: `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-POL-004`, `SEC-ADM-002`

@@ -716,15 +716,7 @@ def check_cell(root, pid, column, entry, by_name, own):
                 " it at all, so the claim is about nothing"
             )
     if basis == GATE_COMPILED_OUT:
-        feature = entry.get("feature")
-        if feature not in column.features:
-            problems.append(
-                f"{where}: basis `{basis}` names `{feature}`, which this column does not enable"
-            )
-        elif not cfg_sites(root, feature):
-            problems.append(
-                f"{where}: basis `{basis}` names `{feature}`, and no production Rust gates on it"
-            )
+        problems.extend(check_gate(root, where, pid, column, entry, own))
     if basis == DEFAULT_BUILD and not column.default:
         problems.append(
             f"{where}: basis `{basis}` on a column that enables {sorted(column.features)}"
@@ -732,6 +724,54 @@ def check_cell(root, pid, column, entry, by_name, own):
         )
     if basis == CHECK_SH_ROWS:
         problems.extend(check_evidence(root, where, pid, column, entry, own))
+    return problems
+
+
+def check_gate(root, where, pid, column, entry, own):
+    """A compiled-out gate, held to the switch the cell says was thrown.
+
+    That the feature exists is not the claim — the claim is that THIS property's
+    gate is what went. Eight store and boot rows declared out-of-scope on
+    `firmware-fips` with `feature = "fips-profile"` passed on nothing more than
+    some production Rust somewhere gating on that feature. So the cell names the
+    `cfg` site(s), each one has to really gate on the feature, and each has to
+    sit in the property's blast radius: a crate whose Rust carries the property's
+    tag, or `firmware`, which is the glue wiring every applet and where a
+    presence switch like `no-touch` actually lives.
+    """
+    feature = entry.get("feature")
+    if feature not in column.features:
+        return [
+            f"{where}: basis `{GATE_COMPILED_OUT}` names `{feature}`,"
+            " which this column does not enable"
+        ]
+    gating = {str(path.relative_to(root)) for path in cfg_sites(root, feature)}
+    if not gating:
+        return [
+            f"{where}: basis `{GATE_COMPILED_OUT}` names `{feature}`,"
+            " and no production Rust gates on it"
+        ]
+    named = entry.get("cfg") or []
+    if not named:
+        return [
+            f"{where}: basis `{GATE_COMPILED_OUT}` and no `cfg` — the tree gates on"
+            f" `{feature}` in {sorted(gating)}, and which of those is {pid}'s gate is"
+            " the whole claim"
+        ]
+    problems, carries = [], own.get(pid, frozenset())
+    for site in named:
+        if site not in gating:
+            problems.append(
+                f"{where}: names `{site}`, which does not gate on `{feature}` —"
+                f" the tree's sites are {sorted(gating)}"
+            )
+            continue
+        crate = site.split("/")[1] if site.startswith("crates/") else "firmware"
+        if crate not in carries | {"firmware"}:
+            problems.append(
+                f"{where}: `{site}` gates on `{feature}` in `{crate}`, and {pid} is"
+                f" carried by {sorted(carries)} — that switch is another property's gate"
+            )
     return problems
 
 
@@ -843,12 +883,23 @@ def check_knobs(where, column, other, entry):
 
 @functools.cache
 def cfg_sites(root, feature):
-    """The production files that gate on `feature` — the switch's existence."""
+    """The production files that gate on `feature` — the switch's existence.
+
+    Production, on the same rule `owners` uses: a `cfg` in a `*_tests.rs` or a
+    Kani harness is not a gate in the image, and a cell that named one would be
+    pointing at code the firmware never runs.
+    """
     if not feature:
         return []
     pattern = re.compile(rf'feature\s*=\s*"{re.escape(feature)}"')
     files = [*(root / "crates").glob("*/src/**/*.rs"), *(root / "firmware/src").glob("**/*.rs")]
-    return [f for f in sorted(files) if pattern.search(f.read_text(errors="ignore"))]
+    return [
+        path
+        for path in sorted(files)
+        if "kani" not in path.name
+        and "tests" not in path.name
+        and pattern.search(path.read_text(errors="ignore"))
+    ]
 
 
 # --- the artifact -----------------------------------------------------------
@@ -950,7 +1001,8 @@ def render(root):
             knobs = ", ".join(f"`{k}`" for k in entry.get("knob_delta", [])) or "none"
             extra = f" (`same_as = {entry['same_as']}`; knob delta: {knobs})"
         elif entry.get("feature"):
-            extra = f" (`feature = {entry['feature']}`)"
+            sites = ", ".join(f"`{s}`" for s in entry.get("cfg", [])) or "none"
+            extra = f" (`feature = {entry['feature']}`; gate: {sites})"
         out += [
             f"**{entry['disposition']}** — basis `{entry['basis']}`{extra}",
             "",
