@@ -15,6 +15,14 @@ and `check.sh` is asserted to run the row. The last cases are about the
 DERIVATION rather than the ledger — seven of the seven guards this repo shipped
 before this one had a hole of that family, and an axis that quietly derives to
 nothing satisfies every rule above it.
+
+The cases added after an independent review all share one shape, and it is the
+shape the six the author closed shared too: **the rule is walked past by writing
+a stronger word.** `equivalent` was refused on a prose basis because it asserts
+sameness, and `covered` — which asserts that the evidence was produced here —
+took the same prose. So the arms below break each basis on what it now points
+at: a row that builds another image, a row that only compiles this one, a `cfg`
+site in a crate the property is not about, a chain that never reaches evidence.
 """
 
 import pathlib
@@ -726,6 +734,19 @@ def test_a_sixth_disposition_is_rejected(tree, capsys):
     assert "disposition `probably-fine` is not one of" in red(tree, capsys)
 
 
+def test_a_field_the_basis_does_not_read_is_rejected(tree, capsys):
+    """`render` prints `same_as` whatever the disposition is, so a `covered` cell
+    carrying one would show the reader a sameness the gate never derived."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'basis = "check-sh-rows"\nevidence = ["test (screen)"]',
+        'basis = "check-sh-rows"\nevidence = ["test (screen)"]\nsame_as = "firmware"',
+    )
+    said = red(tree, capsys)
+    assert "carries ['same_as'], which basis `check-sh-rows` does not read" in said
+    assert "the page prints it beside the ones that are checked" in said
+
+
 def test_an_invented_basis_is_rejected(tree, capsys):
     tree.edit("assurance/configurations.toml", 'basis = "crate-absent"', 'basis = "looks-the-same"')
     assert "basis `looks-the-same` is not one of" in red(tree, capsys)
@@ -938,7 +959,7 @@ def test_a_cargoflags_spelling_nixfmt_does_not_write_is_still_read(tree, spellin
     assert tree.run() == 0
 
 
-def test_a_cargoflags_list_the_gate_cannot_read_is_refused(tree, capsys):
+def test_a_cargoflags_the_gate_cannot_read_is_refused(tree, capsys):
     """A flag list that is not literal strings is a column derived wrong, and the
     conservative answer is to say so rather than to derive no flags."""
     tree.edit(
@@ -946,7 +967,18 @@ def test_a_cargoflags_list_the_gate_cannot_read_is_refused(tree, capsys):
         '      cargoFlags = [\n        "--features"\n        "screen"\n      ];',
         "      cargoFlags = extraFlags;",
     )
-    assert "cannot read as a list of literal flags" in red(tree, capsys)
+    assert "carries 'extraFlags', which is not a literal flag" in red(tree, capsys)
+
+
+def test_a_cargoflags_list_with_flags_appended_to_it_is_refused(tree, capsys):
+    """The same rule at the other end: reading only as far as the first `]`
+    would take `[ … ] ++ extra` for the list and never see the rest."""
+    tree.edit(
+        "nix/firmware.nix",
+        '        "screen"\n      ];',
+        '        "screen"\n      ] ++ extraFlags;',
+    )
+    assert "which is not a literal flag" in red(tree, capsys)
 
 
 def test_two_packages_under_one_name_that_derive_differently_are_rejected(tree, capsys):

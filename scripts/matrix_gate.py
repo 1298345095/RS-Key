@@ -120,6 +120,18 @@ ALLOWED = {
     "equivalent": (SAME_FEATURES,),
     "out-of-scope": (CRATE_ABSENT, GATE_COMPILED_OUT),
 }
+#: What every cell says, and the extra fields each basis reads on top. A cell
+#: carrying one its basis does not read is a field nothing checks — and `render`
+#: prints `same_as` whatever the disposition is, so the page would show a
+#: sameness the gate never derived.
+CELL_FIELDS = ("properties", "columns", "disposition", "basis", "why")
+BASIS_FIELDS = {
+    SAME_FEATURES: ("same_as", "knob_delta"),
+    GATE_COMPILED_OUT: ("feature", "cfg"),
+    CHECK_SH_ROWS: ("evidence",),
+    CRATE_ABSENT: (),
+    DEFAULT_BUILD: (),
+}
 
 #: The tranches §5 of the roadmap defines. `p0-launch` + `p0b` is the P0 family,
 #: and the P0 family is the matrix's rows; the other two are carried so the
@@ -156,14 +168,13 @@ OWNER_TAG = re.compile(
 #: word scan over the latter read `--features=a,b` as no features at all — and an
 #: empty feature set is what makes a column look like the default build.
 FEATURE_FLAG = re.compile(r"(?<![\w-])--features[=\s]+([\w,.-]+)")
-#: `cargoFlags = [ … ]` in the spellings NIX takes, not the one nixfmt happens to
-#: write: no `nixfmt --check` row exists in this tree, so `cargoFlags= [`,
-#: `cargoFlags  = [` and `cargoFlags =[` are as real as the canonical form — and
-#: each read as NO flags, which prints a published flavor as the default build.
-CARGO_FLAGS = re.compile(r"(?<![\w-])cargoFlags\s*=\s*\[(.*?)\]", re.S)
-#: The key on its own, to tell "this package sets no cargoFlags" from "it sets
-#: them to something this gate cannot read".
-CARGO_FLAGS_KEY = re.compile(r"(?<![\w-])cargoFlags\s*=")
+#: A `cargoFlags` binding, WHOLE — up to the `;`, not up to the first `]`. In the
+#: spellings Nix takes rather than the one nixfmt happens to write: no
+#: `nixfmt --check` row exists in this tree, so `cargoFlags= [`, `cargoFlags  = [`
+#: and `cargoFlags =[` are as real as the canonical form, and each read as NO
+#: flags — which prints a published flavor as the default build. Whole, because
+#: `[ "a" ] ++ extra` is a list plus flags a `\[(.*?)\]` never sees.
+CARGO_FLAGS = re.compile(r"(?<![\w-])cargoFlags\s*=\s*([^;]*);")
 #: A literal string in a Nix list.
 NIX_STRING = re.compile(r'"([^"]*)"')
 #: `attr = mkFirmware { … }`, in the spellings nixfmt leaves and the ones it does
@@ -231,19 +242,16 @@ def cargo_flags(name, body):
     """
     found = CARGO_FLAGS.search(body)
     if not found:
-        if CARGO_FLAGS_KEY.search(body):
-            raise ValueError(
-                f"{FLAKE}: `{name}` sets cargoFlags to something this gate cannot read as"
-                " a list of literal flags — a flag it cannot read is a column derived wrong"
-            )
         return (), ""
-    unread = NIX_STRING.sub(" ", found.group(1)).strip()
+    value = found.group(1).strip()
+    listed = value[1:-1] if value.startswith("[") and value.endswith("]") else value
+    unread = NIX_STRING.sub(" ", listed).strip()
     if unread:
         raise ValueError(
             f"{FLAKE}: `{name}`'s cargoFlags carries {unread!r}, which is not a literal"
             " flag — a flag this gate cannot read is a column derived wrong"
         )
-    joined = " ".join(NIX_STRING.findall(found.group(1)))
+    joined = " ".join(NIX_STRING.findall(listed))
     features = tuple(f for group in FEATURE_FLAG.findall(joined) for f in group.split(","))
     return features, " ".join(FEATURE_FLAG.sub(" ", joined).split())
 
@@ -744,6 +752,12 @@ def check_cell(root, pid, column, entry, by_name, own):
             " judgement nobody made takes the strongest word in the vocabulary"
         )
         return problems
+    stray = sorted(set(entry) - set(CELL_FIELDS) - set(BASIS_FIELDS[basis]))
+    if stray:
+        problems.append(
+            f"{where}: carries {stray}, which basis `{basis}` does not read — a field"
+            " nothing checks, and the page prints it beside the ones that are checked"
+        )
     if basis == SAME_FEATURES:
         other = by_name.get(entry.get("same_as"))
         if other is None:
