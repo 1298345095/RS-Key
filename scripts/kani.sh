@@ -47,9 +47,10 @@ FAST="rsk-sdk rsk-fs rsk-crypto rsk-openpgp rsk-otp rsk-piv rsk-oath rsk-usb rsk
 # `serialize_parse_roundtrip` (18m35s measured 2026-08-26; 27m42s in 2026-08-13's
 # reading and ~80 min on a hosted runner once), `rsk-rsa` the functional division
 # spec and the sieve — and the sieve is the expensive half by an order of
-# magnitude, 1058 s against the spec's 87 s — `rsk-mldsa` the rounding
-# round-trips, `rsk-fido` the three sequence proofs (519 s together, and one of
-# them peaks at 9.3 GiB).
+# magnitude, `sieve_step_keeps_residues` alone at 1058 s against
+# `mod_small_matches_value`'s 87 s — `rsk-mldsa` the rounding round-trips,
+# `rsk-fido` the three sequence proofs (519 s together in the `state` tier, and
+# one of them peaks at 9.3 GiB).
 # The `rsk-phy` figures are no longer inherited: they were first taken while that
 # harness lived in `rsk-rescue` and `189f24c` moved the file byte-identical, but
 # both this one and HEAVY's below are re-measured under the current crate name.
@@ -61,7 +62,9 @@ SLOW="rsk-phy rsk-rsa rsk-mldsa rsk-fido"
 # under it ("received a shutdown signal" at 50-58 min, twice, against a 6 h job
 # cap and with the run's other jobs still going, so neither a timeout nor a
 # cancel); re-measured 2026-08-26 the tier peaks at 19.9 GiB, so the number the
-# split was drawn by was 1.8× low, in the direction that argues for the split.
+# split was drawn by was low — and not like for like, since 11.1 was the harness
+# and 19.9 GiB is the tier's peak RSS — in the direction that argues for the
+# split.
 # `rsk-fido`'s 9.3 GiB fits, which the `state` row demonstrates on every run. The
 # ceiling therefore sits between the two, and the split is drawn by that number
 # rather than by how long a crate takes. The LIGHT shards below are the rest of
@@ -76,9 +79,10 @@ HEAVY="rsk-phy"
 #
 # Balanced by cost, not by crate count: the expensive crates left after HEAVY go
 # one per shard and the fast ones fill in around them. Two of the three carry
-# their shard — `rsk-fido`'s sequence proofs 519 s, `rsk-rsa`'s sieve 1058 s — and
-# the third does not: `rsk-mldsa`'s rounding round-trips discharge in 1.9 s, so
-# LIGHT3 is 162 s against LIGHT2's 1289 s (measured 2026-08-26). Re-balancing
+# their shard — `rsk-fido`'s sequence proofs 469 s of LIGHT1's 528, `rsk-rsa`'s
+# sieve 1058 s of LIGHT2's 1289 — and the third does not: all four of
+# `rsk-mldsa`'s rounding round-trips discharge in 3.7 s, so LIGHT3 is 162 s
+# against LIGHT2's 1289 s (measured 2026-08-26). Re-balancing
 # moves harnesses between shards and every FLOOR_light* with them, so it is a
 # deliberate change and not one to make while reading the clock.
 LIGHT1="rsk-fido rsk-ui rsk-piv rsk-oath"

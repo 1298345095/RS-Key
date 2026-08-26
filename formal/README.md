@@ -1143,7 +1143,9 @@ then `./run-tlc.sh liveness`, which is what `all` does, on an 18-core Apple M5
 Pro at the default `WORKERS=2` and whatever heap `floors.txt` gives each
 configuration. 186 safety rows in **2003 s** and four liveness rows in
 **1334 s**; 19 GREEN, 171 RED, and not one row missed what `floors.txt` requires
-of it — which is what makes the command exit 0 rather than merely finish. The
+of it — which is what makes the command exit 0 rather than merely finish. Every
+column but Depth, that is: that one stays the `WORKERS=1` reading the paragraph
+below explains, so `Store.cfg` says 6 where a two-worker run says 7. The
 one row not from that run is labelled: the 4 GB `Liveness.cfg` OOM is kept as the
 older observation it is. The `Shipped.cfg` state counts are **bit-identical to
 the pre-change baseline** — every Guard/Policy pair, structural invariant, clause
@@ -1214,7 +1216,7 @@ the wrong reason.
 `kani::cover!` answers on the Kani side: a transition that never fires makes
 every clause guarding it free. It is `COVERAGE=1 ./run-tlc.sh <cfg>` now, and
 it refuses on a zero — see "the dead-action check" above; the seam module fires
-**20 of 20**. The FIDO module is swept too, at the size it has now rather than
+**21 of 21**. The FIDO module is swept too, at the size it has now rather than
 at the 41 actions an earlier revision measured: **`Init` and all 50 actions fire**
 (2026-08-26, below). The reason it matters is not hypothetical — `-coverage` is
 what pinned `CardReset` firing from 330 of 666 states against 666 for each of its
@@ -2651,15 +2653,17 @@ run-tlc: DEAD ACTION in Seams.cfg -- never fired: NeverEnabled
 ```
 
 Mutation-tested both ways on the seam module: an action written to be
-unreachable is named and the run exits 1; the module as it stands fires **20 of
-20** and exits 0. It is opt-in because coverage costs wall clock — and that is
+unreachable is named and the run exits 1; the module as it stands fires **21 of
+21** and exits 0 (re-measured 2026-08-26; it was 20 before `0f71fdb`). It is opt-in because coverage costs wall clock — and that is
 now a measured price rather than a reason not to pay it. `COVERAGE=1
 ./run-tlc.sh Shipped.cfg` swept the FIDO module's 48.7 M states on 2026-08-26 in
-**1880 s against the plain run's 1285 s**, GREEN over the same 699 350 223
-generated and 48 679 968 distinct, and reported **`Init` and every one of the 50
-actions firing**. The quietest is `ResetFinish` at 2 078 generated; nothing in
-the module is free. The sweep is not a CI row: at 46% on top of the tier's
-longest configuration it belongs where `liveness` does.
+**1878 s against the plain run's 1285 s**, GREEN over the same 699 350 223
+generated and 48 679 968 distinct, and its final coverage report is **`Init` and
+every one of the 50 actions firing**. The quietest is `ResetFinish` at 3 456
+generated for 2 distinct; nothing in the module is free. Read the FINAL report
+and not an intermediate one — TLC prints six here, and the early ones are
+partial counts that look like a quieter action. The sweep is not a CI row: at
+46% on top of the tier's longest configuration it belongs where `liveness` does.
 
 ### A bit-identical count is only the signature when *generated* rises
 

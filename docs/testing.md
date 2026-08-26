@@ -344,13 +344,14 @@ against `all`'s own listing, for 3763 s of solving against `all`'s 3735 s. So
 partition adds up to.
 
 Two figures this page carried are refuted by that run rather than confirmed.
-`rsk-phy` peaks at **19.9 GiB**, not the 11.1 GB inherited from when the harness
-lived in `rsk-rescue` — 1.8× higher, in the direction that makes `heavy`'s own
-job more necessary, not less. And `light3`'s slowest harness is not
-`rsk-mldsa`'s rounding round-trips: those discharge in 1.9 s, and what the shard
-actually costs is `rsk-usb`, `rsk-led` and `rsk-oath`. So the three shards are
-balanced 528 : 1289 : 162 s, and the crate placed in `light3` to weigh it down
-weighs nothing. Left as it is on purpose — re-balancing moves harnesses between
+`rsk-phy`'s tier peaks at **19.9 GiB** against the 11.1 GB recorded for the
+harness alone while it still lived in `rsk-rescue` — not a like-for-like pair,
+and not a close one either, wrong in the direction that makes `heavy`'s own job
+more necessary rather than less. And `light3`'s slowest harness is not
+`rsk-mldsa`'s rounding round-trips: all four of those together take 3.7 s, and
+the shard's cost is `rsk-usb` at 54 s and `rsk-led` at 36 s. So the three shards
+are balanced 528 : 1289 : 162 s, and the crate placed in `light3` to weigh it
+down weighs nothing. Left as it is on purpose — re-balancing moves harnesses between
 shards and every shard floor with them, which is a change to make deliberately
 and not as a side effect of measuring.
 
@@ -359,17 +360,24 @@ and not as a side effect of measuring.
 20 m 33 s, `light2` 54 m 52 s, `light3` 4 m 59 s and `heavy` 1 h 33 m 41 s on
 hosted `ubuntu-latest` runners, all four inside the 6 h job cap — and only one of
 the four is a reading of the roster above. That run was `main` at `06813cc1`,
-where `FLOOR_all` was 66 against today's 89 and `light1` and `light2` carried 17
-and 21 harnesses; their times are about smaller shards than the ones that exist
-now. `heavy` is the exception — 5 harnesses and 1 cover then and now, over a
-proof file `189f24c` moved byte-identical — which makes it the figure that
-mattered anyway: it is the job that died twice while this split was being drawn,
-and 1 h 33 m 41 s is what it costs instead. The other three owe a reading, and
-the next Sunday cron is the first that can give them one.
+where `FLOOR_all` was 66 against today's 89, `light1` carried 17 harnesses and
+`light2` 21. A run that proved 17 is not evidence for a floor of 27.
 
-`all` is the maintainer's half and stays off CI by arithmetic: one job would cost
-the sum of the four, and the 3770 s above is that sum on a machine three times
-the runner's memory. It runs where the table says.
+By *cost* it reads better than by count, and the two answers should not be
+conflated. Every harness the three shards have gained since is in one crate each
+— `rsk-fido` 3 → 13 in `light1`, `rsk-fs` 5 → 13 in `light2`, `rsk-usb` 3 → 8 in
+`light3` — and the single harness that dominates any of them,
+`rsk-rsa::sieve_step_keeps_residues` at 82% of `light2`, was in that run already.
+So the times are better evidence than the floors are. `heavy` needs no such
+correction at all: 5 harnesses and 1 cover then and now, over a proof file
+`189f24c` moved byte-identical. It is also the job that died twice while this
+split was being drawn, which makes its 1 h 33 m 41 s the figure that mattered.
+The three `light*` floors still owe a reading, and the next Sunday cron is the
+first that can give them one.
+
+`all` is the maintainer's half and stays off CI by arithmetic: one job costs what
+the four cost between them, which on this machine is 3770 s of wall clock against
+their 3802 s. It runs where the table says.
 
 None of the fourteen figures in the Harnesses and Covers columns is kept by hand, and
 neither are `kani.sh`'s `FLOOR_*`/`COVERS_*`. `scripts/kani_gate.py` counts the
@@ -380,7 +388,7 @@ by the instruction "raise it in the commit that adds one", and `FLOOR_all` drift
 to 64 against a tree of 65: one harness could have gone missing under a floor that
 still passed.
 
-`pr` passes `--harness-timeout 5m`, five times its slowest harness. That cap is
+`pr` passes `--harness-timeout 5m`, seven times its slowest harness. That cap is
 the tripwire on the tier assignment: a fast-tier harness that grows past it
 fails the pull request instead of quietly making every one of them wait, and the
 answer is to move its crate to the slow list, never to raise the cap.
