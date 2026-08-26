@@ -40,6 +40,53 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The first P0-launch assurance slice, written down before its proof code
+  exists.** [`docs/authorization-slice.md`](docs/authorization-slice.md) fixes
+  the scope and the measurement plan for `SEC-FIDO-001` /
+  `NoAuthorizationBypass`: the A/B/C maps, the callers, eight named assumptions
+  with the class each belongs to, thirteen bounds each with what it stops
+  proving, a mutant table per level, nine exit **predicates** and one named
+  guard-rail each with what would make it fail, and the ten-group raw-bundle
+  contract the implementation must emit unabridged.
+  It closes nothing and moves no status — the row stays `BOUNDED` — because the
+  point is to make the cost of closing it *observable*: `SEC-FIDO-001` leads the
+  57 on the three axes this slice is about (44 configurations, 11 model mutants,
+  11 co-refuted), so any figure taken on it is a **floor and not a price**, and
+  the weak-end counterpart `SEC-FIDO-007`/`-008` is designed beside it for that
+  reason.
+  **An adversarial review refuted the page's own strongest negative claim**, and
+  the repair is in it: the bounds table said no `cfg(kani)` constant shrink was
+  reachable from this slice. **Three are.** `rsk-usb`'s `CTAP_MAX_MESSAGE` drops
+  from 129 frames to 3 and `crates/rsk-device/src/ctap.rs` defines `RESP_CAP` as
+  exactly that constant, so all seven `presence_kani.rs` harnesses prove over a
+  two-continuation transport; `rsk-sdk`'s `CHAIN_BUF_SIZE`/`RESP_CHAIN_CAP` drop
+  2038/2048 -> **16**, and `rsk-device`'s FIDO CCID applet is an
+  `rsk_sdk::Applet`. The census is 14 sites across four crates. The same review
+  refuted the assumption split — `PowerOnClearsScratch2` is registered in
+  `RSKeyBootHardening` and the overlap between the 13 configurations that assign
+  it and the 44 that check `NoAuthorizationBypass` is **zero**, so this slice has
+  **0 of 8** assumptions registered, not 1 — and five of nine exit criteria that
+  could not go red, including one satisfiable by pasting a doc comment into five
+  files, because `assurance_gate.py`'s `rust` column greps whole file text.
+  **Four further things it measured, none of them fixed here.**
+  `NoAuthorizationBypass`'s own comment names eleven actions and calls that "the
+  whole list"; **21 of the model's 53 actions** record it, and the nine it names
+  nowhere are three for the on-panel ceremony, two for the token-less
+  registration arm, three continuations of flows whose *Start* it does list —
+  and `SetPinStart`, a whole flow it omits. Nothing compares the
+  sentence to the set — `R1oOutcomeCoverage` is the only completeness equality
+  in the models and it guards a different set of 23 names.
+  **No `slice` in `formal/comutants.toml` runs `cargo kani`**: all 67 patched
+  co-mutants are `cargo test -p …`, so no Kani harness in this tree is reddened
+  by a recorded mutant and the property's single proof is falsified by nothing.
+  The recorded session reaches **22 of 53** model actions and **10 of this
+  invariant's 21** — the whole `credentialManagement` family, which is what that
+  one harness is about, is unreached — while `@TraceSecurityActionsMin` ratchets
+  the count and never asks which actions. And five of the seven files
+  co-refutation already patches for this property carry no
+  `Refines … — SEC-FIDO-001` tag, which is the whole reason the derived owner
+  column reads 2.
+
 - **The model refused a registration the firmware serves.** CTAP 2.1 §6.1.2
   steps 7/10 — `makeCredUvNotRqd` — create a NON-discoverable credential on the
   touch alone even where a PIN is set

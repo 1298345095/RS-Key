@@ -52,6 +52,7 @@
 - [Constant-time audit](ct-audit.md)
 - [Formal model](formal.md)
   - [Assurance matrix](assurance-matrix.md)
+  - [Authorization slice design](authorization-slice.md)
   - [Token refinement pilot](token-refinement.md)
   - [Cross-reset refinement pilot](reset-refinement.md)
   - [Store refinement pilot](store-refinement.md)

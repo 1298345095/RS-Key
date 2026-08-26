@@ -90,6 +90,11 @@ existing `rsk-fs` oracle drives the full reset through byte-granular power cuts.
 The real-board script is a destructive witness, not a proof, and its presence in
 the evidence graph does not assert that a current hardware run passed.
 
+Neither pilot covers `NoAuthorizationBypass`, which is the property those two
+were rehearsals for. The [authorization slice design](authorization-slice.md)
+writes down its A/B/C maps, callers, assumptions, bounds, mutants and exit before
+any of that proof code exists — a plan and a measurement contract, not evidence.
+
 ## Trace validation
 
 The models' fidelity to the code is kept by hand — citations, mutants,
