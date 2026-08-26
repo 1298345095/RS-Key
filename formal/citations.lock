@@ -488,3 +488,9 @@ formal/comutants.toml	crates/rsk-sdk/src/applet.rs	227-227	pub fn reset_card<C>(
 formal/gen-configs.sh	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 formal/gen-configs.sh	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
 fuzz/fuzz_targets/fido_session.rs	crates/rsk-fido/src/state.rs	488-502	/// `resetPinUvAuthToken`: new random token, cleared permissions / flags. The	}
+scripts/comutate.py	firmware/src/main.rs	625-626	if mkek.is_some() && !fs.has_data(rsk_fido::consts::EF_HARDENED) && fs.compact().is_ok() {	let _ = fs.put(rsk_fido::consts::EF_HARDENED, &[1u8]);
+scripts/security_trace.py	crates/rsk-fido/src/clientpin.rs	136-136	match req.subcommand {	match req.subcommand {
+scripts/security_trace.py	crates/rsk-fido/src/config.rs	248-248	ctx.state.mark_token_used(ctx.now_ms);	ctx.state.mark_token_used(ctx.now_ms);
+scripts/security_trace.py	crates/rsk-fido/src/consts.rs	400-400	pub const RESET_WINDOW_MS: u64 = 10_000;	pub const RESET_WINDOW_MS: u64 = 10_000;
+scripts/security_trace.py	crates/rsk-fido/src/reset.rs	211-211	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+scripts/trace_map.py	crates/rsk-sdk/src/applet.rs	387-387	let reselect = self.current == Some(i);	let reselect = self.current == Some(i);

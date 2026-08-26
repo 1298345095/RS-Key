@@ -22,7 +22,7 @@ Three families remain DELIBERATELY out, because an exclusion stated here is a
 plan and one implied by a glob is a hole:
 
 * `BootMut_*` — two of its three defended sites live in `firmware/` (the
-  marker-after-lap order in main.rs:621-622, the scratch-word carry in
+  marker-after-lap order in main.rs:625-626, the scratch-word carry in
   pin_lock.rs), which has no host tests by construction: `cargo test` cannot
   exercise them, and modelling exactly that gap is M7's stated point. The one
   host-testable site family — the lazy re-keys' `request_rescrub` re-arm —

@@ -93,8 +93,19 @@ def _page(name):
     return hits[0]
 
 
+#: A `scripts/` page: host tooling making the same model→code claim a proof
+#: header does. `security_trace.py` names the two predicates its recorder stands
+#: in for, and both of them were wrong the day this half was added.
+SCRIPT = """# SPDX-License-Identifier: AGPL-3.0-only
+# The gate this recorder stands in for (`clientpin.rs:4-6`).
+"""
+
 #: The derived page every code-half case drives.
 PROOF_PAGE = "crates/rsk-fido/src/probe_kani.rs"
+
+#: The derived page every scripts-half case drives, and one the exemption covers.
+SCRIPT_PAGE = "scripts/probe_trace.py"
+EXEMPT_PAGE = "scripts/citation_gate.py"
 
 MODEL_PAGE = _page("RSKeySecurityState.tla")
 PROSE_PAGE = _page("README.md")
@@ -109,6 +120,8 @@ class Tree:
         self.write("crates/rsk-fido/src/state.rs", UNTAGGED_CODE)
         self.write("crates/rsk-fido/src/lib.rs", UNTAGGED_CODE)
         self.write(PROOF_PAGE, PROOF)
+        self.write(SCRIPT_PAGE, SCRIPT)
+        self.write(EXEMPT_PAGE, SCRIPT)
         self.write("crates/rsk-device/src/ctap.rs", UNTAGGED_CODE)
         self.write("crates/rsk-usb/src/ctaphid.rs", UNTAGGED_CODE)
         self.write("crates/rsk-fs/src/lib.rs", UNTAGGED_CODE)
@@ -533,6 +546,10 @@ def code_pages_of(tree):
     return [str(page) for page in citation_gate.code_pages(tree.root, tracked)]
 
 
+def script_pages_of(tree):
+    return [str(page) for page in citation_gate.script_pages(tree.root)]
+
+
 def test_the_derivation_finds_a_proof_header_and_only_a_citing_file(tree):
     """A `.rs` file that cites nothing cannot fail this row — which is what keeps
     it off the back of every contributor who never writes a citation."""
@@ -561,6 +578,33 @@ def test_a_moved_citation_in_a_proof_header_is_found(tree):
     )
     drifted = only(tree.problems(), "has drifted")
     assert any(PROOF_PAGE in problem for problem in drifted), drifted
+
+
+def test_the_derivation_reads_a_citing_script_and_only_a_citing_one(tree):
+    """`scripts/` was the last substantive citing surface no gate read, and the
+    round that added it found three more rotted citations across three files."""
+    tree.write("scripts/quiet.py", "# nothing is cited here\n")
+    found = script_pages_of(tree)
+    assert SCRIPT_PAGE in found, found
+    assert "scripts/quiet.py" not in found, found
+    assert tree.problems() == []
+
+
+def test_a_rotted_citation_in_a_script_is_found(tree):
+    """The measured hole: `security_trace.py` named `reset.rs:187` for a predicate
+    on `:211`, twice, while this row printed `ok`."""
+    tree.edit(SCRIPT_PAGE, "clientpin.rs:4-6", "clientpin.rs:3-6")
+    assert only(tree.problems(), "cited line is blank")
+
+
+def test_the_guards_own_fixtures_stay_exempt(tree):
+    """`SCRIPT_EXEMPT` is what keeps this row off the files whose citations are
+    deliberately broken — this guard's own prose and its mutation table. Without
+    it the row cannot be green on any checkout that contains itself."""
+    assert EXEMPT_PAGE in citation_gate.SCRIPT_EXEMPT
+    assert EXEMPT_PAGE not in script_pages_of(tree)
+    tree.edit(EXEMPT_PAGE, "clientpin.rs:4-6", "clientpin.rs:3-6")
+    assert tree.problems() == []
 
 
 def test_a_bare_name_on_a_code_page_resolves_to_its_sibling(tree):
@@ -654,6 +698,16 @@ def test_a_derivation_that_finds_nothing_trips_the_floor_and_the_lock(tree, monk
     problems = tree.problems()
     # The derived-set message, not the per-page one — both say "under the floor
     # of", and a case that cannot tell them apart is one fixture edit from noise.
+    assert only(problems, "the derivation stopped finding them"), problems
+    assert only(problems, "which no longer cites it"), problems
+
+
+def test_a_scripts_derivation_that_finds_nothing_trips_its_own_floor(tree, monkeypatch):
+    """The scripts half gets its own floor for the reason the case above states:
+    one number over the union cannot say WHICH finder stopped finding."""
+    tree.lock()
+    monkeypatch.setattr(citation_gate, "SCRIPT_ROOT", "no-such-root/")
+    problems = tree.problems()
     assert only(problems, "the derivation stopped finding them"), problems
     assert only(problems, "which no longer cites it"), problems
 

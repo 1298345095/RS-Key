@@ -78,9 +78,11 @@ outright.
 ## The floor
 
 This is the NAMED half only. A derived page is in the set *because* it cites, so
-a per-page floor there asserts nothing; [`CODE_PAGES_FLOOR`] holds the size of
-the derived set instead, and what actually ratchets that half is [`LOCK`] — a
-page that stops being read turns every entry it had into an orphan, by name.
+a per-page floor there asserts nothing; [`CODE_PAGES_FLOOR`] and
+[`SCRIPT_PAGES_FLOOR`] hold the size of each derived set instead — two numbers,
+because one over the union cannot say which finder stopped finding — and what
+actually ratchets that half is [`LOCK`]: a page that stops being read turns every
+entry it had into an orphan, by name.
 
 Each page must carry at least its [`FLOOR`] citations — [`FLOOR_BY_PAGE`] where a
 page legitimately cites fewer, the default otherwise. A regex that has stopped
@@ -96,8 +98,13 @@ page is ever padded with citations it does not mean just to clear one number.
 citations another agent's in-flight commits rotted while this guard was being
 written. Each names the commit that broke it and fails once it stops rotting.
 
-It resolves `.rs` citations only, and only on `.rs` pages plus the named
-`formal/` ones. Thirteen other files cite and are not read; the largest are this
+It resolves `.rs` citations only, and only on `.rs` pages, `.py` pages under
+`scripts/`, and the named `formal/` ones. The `scripts/` half was the last
+substantive citing surface no gate read, and the round that swept the reset class
+found **2 of 2** of `security_trace.py`'s reset citations pointing at the wrong
+line — the same rot rate every surface has had the day it was first read
+(`RSKeyAppletPolicies.tla` 1 of 4, `comutants.toml` 15 of 16, the code half 19 of
+42). Nine other files cite and are not read; the largest are this
 guard and its own table, which quote the rotted examples they are about, and
 `CHANGELOG.md`, whose entries cite the tree as it stood and must be allowed to
 rot. Four prose files (`assurance/*.toml`, `docs/guides/fips.md`,
@@ -186,17 +193,67 @@ CODE_ROOTS = ("crates/", "firmware/", "fuzz/", "tools/", "rsk-wipe/")
 #: with no lock file at all, where every lock rule is skipped.
 CODE_PAGES_FLOOR = 1
 
+#: The other half of the derivation. The host tooling makes model→code claims in
+#: exactly the same shape a proof header does — `security_trace.py` names the two
+#: predicates its recorder stands in for — and it was the last substantive citing
+#: surface nothing read: the reset sweep found BOTH of its reset citations naming
+#: `reset.rs:187` for a predicate that is on `:211`, which `formal/README.md` had
+#: right all along.
+SCRIPT_ROOT = "scripts/"
+
+#: The `scripts/` files whose citations are FIXTURES rather than claims, each a
+#: decision rather than a name pattern — a `test_*.py` rule would hand the next
+#: script a free pass by what it is called, which is the argument [`CODE_ROOTS`]
+#: makes against reading `foo_tests.rs` off a name. A file added here owes its
+#: reason on the line.
+SCRIPT_EXEMPT = frozenset(
+    {
+        # Quotes the rotted citations it exists to describe.
+        "scripts/citation_gate.py",
+        # This guard's own mutation table: every citation in it is deliberately
+        # broken in one direction or another.
+        "scripts/test_citation_gate.py",
+        # Synthetic trees — `src/lib.rs:8`, `crates/rsk-x/src/torn.rs:9`. Their
+        # citations name files that exist only inside a `tmp_path`.
+        "scripts/test_impact.py",
+        "scripts/test_kani_sh.py",
+    }
+)
+
+
+#: The scripts half's own floor, kept apart from [`CODE_PAGES_FLOOR`] rather than
+#: shared: one number over the union cannot tell "the `.rs` finder stopped
+#: finding" from "the `.py` finder did", and a signal that cannot say which is a
+#: signal someone argues away.
+SCRIPT_PAGES_FLOOR = 1
+
+
+def _cites(root, rel):
+    """Whether `rel` carries a citation.
+
+    `errors="replace"`: `tree_files` lists untracked files too, and one that is
+    not valid UTF-8 would end this row in a traceback -- which reads as a broken
+    guard, which is how a guard gets switched off.
+    """
+    return next(citations((root / rel).read_text(errors="replace")), None) is not None
+
 
 def code_pages(root, tracked):
     """Tracked `.rs` files under [`CODE_ROOTS`] that cite code by line."""
     return tuple(
-        pathlib.Path(rel)
-        for rel in sorted(tracked)
-        if rel.startswith(CODE_ROOTS)
-        # `errors="replace"`: `tree_files` lists untracked files too, and a `.rs`
-        # that is not valid UTF-8 would end this row in a traceback -- which reads
-        # as a broken guard, which is how a guard gets switched off.
-        and next(citations((root / rel).read_text(errors="replace")), None) is not None
+        pathlib.Path(rel) for rel in sorted(tracked) if rel.startswith(CODE_ROOTS) and _cites(root, rel)
+    )
+
+
+def script_pages(root):
+    """`.py` under [`SCRIPT_ROOT`] that cite code by line, less [`SCRIPT_EXEMPT`]."""
+    return tuple(
+        rel
+        for rel in sorted(gate_lines.tree_files(root))
+        if rel.suffix == ".py"
+        and str(rel).startswith(SCRIPT_ROOT)
+        and str(rel) not in SCRIPT_EXEMPT
+        and _cites(root, rel)
     )
 
 
@@ -401,12 +458,17 @@ def audit(root, relock=False):
 
     for missing in (d for d in SEARCH if not (root / d).is_dir()):
         problems.append(f"{missing} is in SEARCH but is not a directory any more")
-    derived = code_pages(root, tracked)
-    if len(derived) < CODE_PAGES_FLOOR:
-        problems.append(
-            f"{len(derived)} code page(s) under {'/, '.join(CODE_ROOTS)} cite by line,"
-            f" under the floor of {CODE_PAGES_FLOOR}: the derivation stopped finding them"
-        )
+    derived, scripted = code_pages(root, tracked), script_pages(root)
+    for found, floor, where in (
+        (derived, CODE_PAGES_FLOOR, "/, ".join(CODE_ROOTS)),
+        (scripted, SCRIPT_PAGES_FLOOR, SCRIPT_ROOT),
+    ):
+        if len(found) < floor:
+            problems.append(
+                f"{len(found)} code page(s) under {where} cite by line,"
+                f" under the floor of {floor}: the derivation stopped finding them"
+            )
+    derived += scripted
     for page in PAGES + derived:
         if not (root / page).is_file():
             problems.append(f"{page} is gone; the model's citations are unchecked")
@@ -522,8 +584,8 @@ def audit(root, relock=False):
     assurance_gate.check_property_tags(root, problems)
     debt = f", {len(carried)} carried" if carried else ""
     return problems, (
-        f"citation-gate: ok — {total} citations across {len(PAGES)} model pages "
-        f"and {len(derived)} code pages resolve; "
+        f"citation-gate: ok — {total} citations across {len(PAGES)} model pages, "
+        f"{len(derived) - len(scripted)} code pages and {len(scripted)} script pages resolve; "
         f"phase-1 property tags close both ways{debt}"
     )
 
