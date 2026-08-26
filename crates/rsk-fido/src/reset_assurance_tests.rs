@@ -78,3 +78,31 @@ fn reset_projection_finishes_only_after_every_ordered_phase() {
     assert!(reset.finish());
     assert!(reset.well_formed(&volatile));
 }
+
+/// The seed loop is a fixed two-fid `for` with nothing to enumerate, so the wipe
+/// enters the SECRET sweep whatever the medium answered — and that sweep's own
+/// predicate covers the seed fids, which is what stops it before the gates
+/// (0x098B). The projection has to be able to hold that state: while it could not,
+/// every obligation about the gate phase over a live seed was discharged
+/// vacuously, and merging the two sweeps left all four Kani harnesses green.
+#[test]
+fn the_secret_sweep_is_where_a_seed_the_medium_kept_stops_the_wipe() {
+    let mut volatile = ResetVolatileView::default();
+    let mut reset = ResetRefinement::new(protected());
+    assert!(reset.begin(&mut volatile));
+    // The seed loop could not remove it; the code falls through regardless.
+    assert!(reset.advance());
+    assert_eq!(reset.progress, ResetProgress::Secrets);
+    assert!(reset.persistent.owner_seed);
+    assert!(
+        reset.well_formed(&volatile),
+        "a live seed inside the secret sweep is a state the wipe really reaches"
+    );
+    // However empty the rest of the range gets, the gate phase must not open.
+    assert!(reset.delete(EF_CRED));
+    assert!(!reset.advance(), "the gate phase opened over a live seed");
+    // The seed is re-yielded HERE, and removing it there is what unblocks.
+    assert!(reset.delete(EF_KEY_DEV.get()));
+    assert!(reset.advance());
+    assert_eq!(reset.progress, ResetProgress::Gates);
+}

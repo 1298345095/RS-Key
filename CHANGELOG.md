@@ -192,6 +192,24 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The reset refinement could not express the mechanism its own safety argument
+  rests on, so four Kani obligations were green over it vacuously.** 0x098B made
+  the secret sweep the thing that stops a wipe whose seed the medium kept — its
+  predicate is `is_fido_fid && !is_fido_gate_fid`, which covers the seed fids —
+  but the projection in `reset_assurance.rs` guarded the *earlier* boundary
+  instead: `advance()` refused to leave the seed phase with a live seed,
+  `well_formed`'s `Secrets` arm required `!owner_seed`, and `delete` refused a
+  seed fid there at all. "In the secret sweep with a live seed" was therefore
+  unreachable, and every obligation about the gate phase over a live seed was
+  discharged over an empty set. Measured: **merging the two sweeps into one — the
+  audit run-36 defect the phase split exists to prevent — left all four harnesses
+  SUCCESSFUL.** The 2→3 boundary is unguarded now and the seed holds 3→4 shut,
+  which is what the code does. Both mutants are red on the widened domain and
+  green on the old one: the merged sweep fails all four (each clause naming
+  itself), and the real defect it models — dropping the seed fids from the secret
+  sweep's predicate — fails the induction obligation. Verification-only source,
+  cfg-excluded from every firmware flavour, so no `bcdDevice` bump.
+
 - **A TERMINATE DF that failed with the private key still on the card wrote
   factory defaults over the owner's KDF, signature counter and cardholder data.**
   The re-seed became unconditional at 0x098A on the argument that "the gate

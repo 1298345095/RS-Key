@@ -62,12 +62,22 @@ hand-written gate list. Its phases match the implementation:
 4. sweep gates until enumeration completes;
 5. provision the next identity epoch.
 
+Step 2 is a fixed two-fid `for` with nothing to enumerate, so it cannot stop the
+wipe; step 3's predicate is `is_fido_fid && !is_fido_gate_fid`, which covers the
+seed fids, so a seed the medium refused to remove is re-yielded **there** and
+stops the wipe before step 4 (0x098B). The projection follows that: the 2→3
+boundary is unguarded and the seed holds the 3→4 boundary shut. Closing 2→3
+instead — which is how the projection read until this was measured — makes "in
+the secret sweep with a live seed" unreachable, and every obligation about step 4
+over a live seed is then discharged vacuously: merging steps 3 and 4 into one
+sweep, the audit run-36 defect itself, left all four harnesses green.
+
 `well_formed` is the induction domain. It requires retired volatile state once a
-reset is active, completed earlier phases before advancing, and all three
-relational clauses. Kani proves that construction starts inside this domain and
-that every modeled concrete step preserves it. Each harness has a satisfiable
-`kani::cover!`; the ordinary unit tests also inject one early-gate mutant per
-clause and require its exact property to fail.
+reset is active, the phase order above, and all three relational clauses. Kani
+proves that construction starts inside this domain and that every modeled
+concrete step preserves it. Each harness has a satisfiable `kani::cover!`; the
+ordinary unit tests also inject one early-gate mutant per clause and require its
+exact property to fail.
 
 This is a finite Boolean projection and a one-step induction proof, not an
 unbounded proof of the `sweep` loop. Loop termination and truncated enumeration

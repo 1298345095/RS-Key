@@ -3009,7 +3009,12 @@ predicates; the proof has no second gate list to drift.
 Four Kani harnesses establish initialization and one-step induction across
 begin, each relevant delete, guarded phase advances, abort, finish, real reboot
 and an unrelated FID. Each clause has its own satisfiable cover and a unit-test
-mutant that makes only that clause red. The persistent atomicity assumption is
+mutant that makes only that clause red. The secret sweep is entered whatever the
+seed loop answered, and its predicate covers the seed fids, so a seed the medium
+kept holds the GATE boundary shut rather than the secret one; the projection used
+to close the earlier boundary instead, which made the gate phase over a live seed
+unreachable and every obligation about it vacuous — measured, merging the two
+sweeps left all four harnesses green, and does not now. The persistent atomicity assumption is
 the existing `rsk-fs::powercut::delete_landed` rule and its Kani proof. The
 `power_cut` fuzzer supplies the missing byte-level composition by running the
 complete real reset over `SeqStorage`, dropping power inside writes/erases,
