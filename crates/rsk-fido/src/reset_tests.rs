@@ -7,7 +7,7 @@ use crate::consts::{EF_BACKUP_SEALED, EF_CRED, EF_LARGEBLOB, EF_PIN, EF_RP, RESE
 use crate::seed::{bump_sign_counter, get_sign_counter, load_keydev};
 use rsk_crypto::Device;
 use rsk_fs::Fs;
-use rsk_fs::storage::faults::{MetaStuck, RemoveStuck, Undead};
+use rsk_fs::storage::faults::{MetaStuck, RemoveStuck, TruncatedWalk, Undead};
 use rsk_fs::storage::ram::RamStorage;
 
 struct SeqRng(u64);
@@ -558,6 +558,38 @@ fn a_faulted_metadata_drop_is_carried_to_the_end_of_the_sweep_and_still_answered
         (Ok(true), false),
         "a faulted EF_META still owes the WHOLE range, and the sweep still owes its \
          caller the record it could not prove dropped"
+    );
+}
+
+/// An un-yielded fid is not an absent fid: a walk the medium truncated must fail the
+/// sweep rather than read the empty batch as "the range is clear" — which is a wipe
+/// answering success over key material it never looked at.
+///
+/// Forcing the `complete` arm true left 615 / 118 / 197 passing: PIV owned this guard
+/// and the other three did not, because the only fixture that truncates a walk was
+/// PIV's own local one. It is `rsk_fs::storage::faults::TruncatedWalk` now.
+#[test]
+fn a_truncated_enumeration_fails_the_sweep_instead_of_reading_it_as_clear() {
+    let mut fs = Fs::new(TruncatedWalk::new());
+    fs.scan();
+    fs.put(EF_CRED, &[0xC0; 8]).unwrap();
+    let mut rng = SeqRng(5);
+    let mut state = FidoState::new();
+    let mut presence = crate::AlwaysConfirm;
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev: dev(),
+        fs: &mut fs,
+        rng: &mut rng,
+        state: &mut state,
+        now_ms: 0,
+    };
+    assert_eq!(sweep(&mut ctx, is_fido_fid), Err(CtapError::Other));
+    let mut buf = [0u8; 8];
+    assert_eq!(
+        fs.read(EF_CRED, &mut buf),
+        Some(8),
+        "the credential was never swept"
     );
 }
 

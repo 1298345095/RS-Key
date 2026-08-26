@@ -222,8 +222,17 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   the way the new tests are, by calling `sweep` directly over a medium whose
   EF_META is unreadable and asserting both arms (`Ok(false)` clean, `Ok(true)`
   faulted, and an empty range either way).
-  `bcdDevice -> 0x098E`, for the same reason as the entry below: nothing here can
-  reach the image, and the row counts `crates/rsk-fs/src/storage.rs` wholesale.
+  *The truncated walk.* `if complete` is what stops an empty batch from reading as
+  "the range is clear" when the medium truncated the enumeration, and forcing it
+  true left 615 / 118 / 197 passing — PIV alone owned it, because the only fixture
+  in the tree that truncates a walk was PIV's own local `TruncatedWalk`. Promoted
+  to `rsk_fs::storage::faults::TruncatedWalk` (PIV's copy deleted, its test
+  re-pointed) with one test per applet. Driven: the forced arm turns exactly one
+  test red in each of the four, reading `left: Ok(false) right: Err(Other)` —
+  success over key material the sweep never looked at.
+  `bcdDevice -> 0x098E`, then `0x098F` for the shared fixture, for the same reason
+  as the entry below: nothing here can reach the image, and the row counts
+  `crates/rsk-fs/src/storage.rs` wholesale.
 
 - **The reset runaway valve was falsifiable in none of its four applets, and the
   reason was the batch, not the cardinality.** `deleted > RESET_MAX_DELETES` is

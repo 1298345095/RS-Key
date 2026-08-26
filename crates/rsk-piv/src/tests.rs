@@ -5489,30 +5489,11 @@ fn reset_converges_over_multi_version_stuffing() {
     assert_eq!(sw, Sw::OK);
 }
 
-/// `Storage` whose enumeration is truncated by a flash read fault: it yields
-/// nothing and reports the walk incomplete, while the files are still there.
-struct TruncatedWalk(RamStorage);
-
-impl Storage for TruncatedWalk {
-    fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
-        self.0.read(fid, buf)
-    }
-    fn write(&mut self, fid: u16, data: &[u8]) -> rsk_sdk::error::Result<()> {
-        self.0.write(fid, data)
-    }
-    fn remove(&mut self, fid: u16) -> rsk_sdk::error::Result<()> {
-        self.0.remove(fid)
-    }
-    fn size(&mut self, fid: u16) -> Option<usize> {
-        self.0.size(fid)
-    }
-    fn for_each_key(&mut self, _f: &mut dyn FnMut(u16)) -> bool {
-        false
-    }
-}
-
 /// An un-yielded fid is not an absent fid: a truncated walk must fail the reset
-/// rather than report a factory state it only failed to look at.
+/// rather than report a factory state it only failed to look at. The medium is
+/// `rsk_fs::storage::faults::TruncatedWalk` — this test's own local copy for a
+/// release, and the reason PIV was the only applet whose guard anything could
+/// falsify.
 #[test]
 fn reset_fails_when_the_enumeration_is_truncated() {
     let dev = Device {
@@ -5520,7 +5501,7 @@ fn reset_fails_when_the_enumeration_is_truncated() {
         serial_id: &SERIAL,
         otp_key: None,
     };
-    let mut fs = Fs::new(TruncatedWalk(RamStorage::new()));
+    let mut fs = Fs::new(rsk_fs::storage::faults::TruncatedWalk::new());
     fs.scan();
     let obj = data_object_fid(0x01).unwrap();
     fs.put(obj, &[0x41]).unwrap();

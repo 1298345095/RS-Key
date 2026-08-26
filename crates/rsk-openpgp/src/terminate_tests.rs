@@ -449,6 +449,27 @@ fn a_wipe_that_never_converges_stops_inside_its_delete_budget() {
     );
 }
 
+/// An un-yielded fid is not an absent fid: a walk the medium truncated must fail the
+/// wipe rather than read the empty batch as "the range is clear" — which is a wipe
+/// answering success over key material it never looked at.
+///
+/// Forcing the `complete` arm true left 615 / 118 / 197 passing: PIV owned this guard
+/// and the other three did not, because the only fixture that truncates a walk was
+/// PIV's own local one. It is `rsk_fs::storage::faults::TruncatedWalk` now.
+#[test]
+fn a_truncated_enumeration_fails_the_wipe_instead_of_reading_it_as_clear() {
+    let mut fs = Fs::new(rsk_fs::storage::faults::TruncatedWalk::new());
+    fs.scan();
+    fs.put(EF_PK_SIG.get(), &[0xAB; 40]).unwrap();
+    assert_eq!(wipe_openpgp(&mut fs), Err(Sw::MEMORY_FAILURE));
+    let mut buf = [0u8; 40];
+    assert_eq!(
+        fs.read(EF_PK_SIG.get(), &mut buf),
+        Some(40),
+        "the private key was never swept"
+    );
+}
+
 /// The `?` under the valve — a refused backend removal must STOP the wipe, because
 /// `for_each_key` re-yields the fid the medium kept. Nothing in any of the four
 /// applets could see it: swallow the `?` and the loop spins on that fid straight

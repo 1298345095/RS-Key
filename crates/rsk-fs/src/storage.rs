@@ -281,6 +281,42 @@ pub mod faults {
         }
     }
 
+    /// A RAM medium whose `for_each_key` faults before it yields anything, so the
+    /// walk answers `false` over records that are still live. An un-yielded fid is
+    /// not an absent one: the four applet sweeps must fail rather than read the
+    /// empty batch as "the range is clear", which is a wipe reporting success over
+    /// key material it never looked at.
+    ///
+    /// It was PIV's local `TruncatedWalk` for a release, and PIV was the only applet
+    /// whose truncation guard anything could falsify — forcing the `complete` arm
+    /// true left FIDO, OATH and OpenPGP at 615 / 118 / 197 passing.
+    #[derive(Default)]
+    pub struct TruncatedWalk(RamStorage);
+
+    impl TruncatedWalk {
+        pub fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    impl Storage for TruncatedWalk {
+        fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+            self.0.read(fid, buf)
+        }
+        fn write(&mut self, fid: u16, data: &[u8]) -> Result<()> {
+            self.0.write(fid, data)
+        }
+        fn remove(&mut self, fid: u16) -> Result<()> {
+            self.0.remove(fid)
+        }
+        fn size(&mut self, fid: u16) -> Option<usize> {
+            self.0.size(fid)
+        }
+        fn for_each_key(&mut self, _f: &mut dyn FnMut(u16)) -> bool {
+            false
+        }
+    }
+
     /// A RAM medium whose `remove` ANSWERS `Ok` and leaves the record standing, so
     /// `for_each_key` keeps yielding what the sweep just deleted. This is the fault
     /// the four applet wipes' delete budget exists for, and the one a REFUSED

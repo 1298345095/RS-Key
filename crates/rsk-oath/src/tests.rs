@@ -2,7 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
-use rsk_fs::storage::faults::{RemoveStuck, Undead};
+use rsk_fs::storage::faults::{RemoveStuck, TruncatedWalk, Undead};
 use rsk_fs::storage::ram::RamStorage;
 
 /// PUT's body grammar — a rule per field, a measured card cell per rule. Hung
@@ -2022,6 +2022,27 @@ fn a_refused_removal_stops_the_sweep_instead_of_spinning_into_the_valve() {
         "the sweep asked for {} removals over {LIVE} credentials: it carried on past \
          the refusal and the delete budget, not the `?`, is what stopped it",
         medium.attempts()
+    );
+}
+
+/// An un-yielded fid is not an absent fid: a walk the medium truncated must fail the
+/// sweep rather than read the empty batch as "the range is clear" — which is a wipe
+/// answering success over key material it never looked at.
+///
+/// Forcing the `complete` arm true left 615 / 118 / 197 passing: PIV owned this guard
+/// and the other three did not, because the only fixture that truncates a walk was
+/// PIV's own local one. It is `rsk_fs::storage::faults::TruncatedWalk` now.
+#[test]
+fn a_truncated_enumeration_fails_the_sweep_instead_of_reading_it_as_clear() {
+    let mut fs = Fs::new(TruncatedWalk::new());
+    fs.scan();
+    fs.put(EF_OATH_CRED, &[0x11; 24]).unwrap();
+    assert_eq!(sweep(&mut fs, is_oath_cred_fid), Err(Sw::MEMORY_FAILURE));
+    let mut buf = [0u8; 24];
+    assert_eq!(
+        fs.read(EF_OATH_CRED, &mut buf),
+        Some(24),
+        "the credential was never swept"
     );
 }
 
