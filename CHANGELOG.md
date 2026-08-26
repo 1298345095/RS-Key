@@ -192,6 +192,23 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The PIN entry row's overflow test hand-copied the constant that selects the
+  branch it tests.** `render_pin_dots` must clear the "+" overflow marker when
+  `entered` drops, and the test mirrored `ENTRY_X0` / `ENTRY_MAX_SHOWN` /
+  `ENTRY_STEP` out of `render/pin.rs` "so the edge test does not force a wider
+  re-export". Measured: `ENTRY_MAX_SHOWN: 10 → 12` and both setup assertions and
+  both teardown assertions still pass with the overflow branch never taken —
+  including with the clear strip narrowed so it no longer covers the "+" slot,
+  the exact regression the test is named for. The row's geometry is read out of
+  `render/pin.rs` now (`pub(super)`), and the probe positions and entry counts
+  derive from it. The widening itself is a build failure rather than a test
+  failure: "it fits left of the eye" was prose in `ENTRY_MAX_SHOWN`'s doc and is
+  a `const _: () = assert!` beside it now, because a row drawn under
+  `PIN_EYE_RECT` makes the test red for the wrong reason. Driven: 11 and 12 stop
+  compiling (`evaluation panicked: assertion failed: ENTRY_X0 + …`), and at 8 and
+  9 — the direction still legal — the narrowed strip fails "stale '+' marker left
+  after delete" where before it passed.
+
 - **Three sweep tests spanned a batch that was a bare literal none of them could
   see.** `rsk_fido`'s reset sweep, `Fs::factory_wipe` and `rsk_piv`'s
   `wipe_piv` each collect fids in a fixed-size batch, and each has a test whose
