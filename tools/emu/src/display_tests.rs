@@ -55,10 +55,14 @@ const CTAP2_OK: u8 = 0x00;
 const CID: u32 = 0x0102_0304;
 
 /// How long the panel may take to answer a job. The display flow holds the single
-/// executor while a modal is open, so a queued command waits for it — bounded
-/// past `MENU_INACTIVITY_MS` (60 s) so a screen that never yields fails on the
-/// bound below with its real figure rather than on a receive timeout.
-const REPLY_TIMEOUT: Duration = Duration::from_secs(90);
+/// executor while a modal is open, so a queued command waits for it — bounded past
+/// `MENU_INACTIVITY_MS` so a screen that never yields fails on the bound below with
+/// its real figure rather than on a receive timeout.
+const REPLY_TIMEOUT_MS: u64 = 90_000;
+const REPLY_TIMEOUT: Duration = Duration::from_millis(REPLY_TIMEOUT_MS);
+// Checked, not argued: `MENU_INACTIVITY_MS` invites being generous, and past this
+// the diagnostic for a yield defect becomes "the device answered within the bound".
+const _: () = assert!(rsk_display::MENU_INACTIVITY_MS < REPLY_TIMEOUT_MS);
 
 /// What a queued command may wait for an open menu. A board hands the executor
 /// over on the first `TOUCH_POLL_MS` (16 ms) poll past `UI_YIELD_FLOOR_MS`; a

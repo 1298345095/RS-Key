@@ -192,6 +192,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **Three of the eight closures above were themselves defective; the review that
+  found the fourth sweep found these too.**
+  *PIV counted the wrong population.* `wipe_piv` sweeps its two predicates
+  separately, and the re-aimed guard compared the **total** fid count (264) with
+  the batch while only the secrets phase (260) wraps — so `SWEEP_BATCH: 32 →
+  260…263` left the test green with the wrap never crossed. Counted over the
+  secrets phase now; driven at 260 it fails "the fill no longer spans more than
+  one sweep batch: 260 secret fids".
+  *The `credentialManagement` assertion was one step too strict, and its message
+  was false where it fired.* `PER_RP * N < N * N` demands `N ≥ 9`, but the
+  measured pre-index cost is `N² + N`, so `N = 8` still kills the regression at 72
+  vs 64 — the entry below records that measurement and the assertion contradicted
+  it. Held to `N * N + N` now: `N = 7` (56 = 56, the value measured as blinding)
+  is a build failure and `N = 8` compiles.
+  *The emulator's third relation was left as prose.* `REPLY_TIMEOUT` must stay
+  above `MENU_INACTIVITY_MS` or a never-yielding screen fails on a receive timeout
+  instead of on the yield bound — a red for the wrong reason in the one moment you
+  are diagnosing a yield defect. `MENU_INACTIVITY_MS: 60_000 → 120_000`, which the
+  constant's own doc invites, now stops the build.
+
 - **The sweep class has five members and the entry below closed three.** An
   adversarial review of that commit ran `grep -B3 for_each_key` over `crates/` and
   found six batched collectors, not three: `rsk-rescue`'s already derives its test

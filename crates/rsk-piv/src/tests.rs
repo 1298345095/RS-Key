@@ -5078,9 +5078,17 @@ fn reset_sweeps_more_files_than_one_batch() {
     // sweep stopped having (progress is counted in DELETED FILES now, against
     // `RESET_MAX_DELETES`), so it held a number nothing could move and left the
     // wrap it is here for free to slide out from under the fill.
+    //
+    // Counted over the SECRETS phase, which is the one that wraps: `wipe_piv`
+    // sweeps the two predicates separately, and the four gate fids ride in the
+    // total without ever being in the same batch as these.
+    let secrets = piv_fids(&mut fs)
+        .into_iter()
+        .filter(|fid| !files::is_piv_gate_fid(*fid))
+        .count();
     assert!(
-        piv_fids(&mut fs).len() > files::SWEEP_BATCH,
-        "the fill no longer spans more than one sweep batch"
+        secrets > files::SWEEP_BATCH,
+        "the fill no longer spans more than one sweep batch: {secrets} secret fids"
     );
 
     // Block both references, then RESET.
