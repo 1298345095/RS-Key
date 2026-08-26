@@ -126,6 +126,16 @@ OWNER_TAG = re.compile(
 #: word scan over the latter read `--features=a,b` as no features at all — and an
 #: empty feature set is what makes a column look like the default build.
 FEATURE_FLAG = re.compile(r"(?<![\w-])--features[=\s]+([\w,.-]+)")
+#: `cargoFlags = [ … ]` in the spellings NIX takes, not the one nixfmt happens to
+#: write: no `nixfmt --check` row exists in this tree, so `cargoFlags= [`,
+#: `cargoFlags  = [` and `cargoFlags =[` are as real as the canonical form — and
+#: each read as NO flags, which prints a published flavor as the default build.
+CARGO_FLAGS = re.compile(r"(?<![\w-])cargoFlags\s*=\s*\[(.*?)\]", re.S)
+#: The key on its own, to tell "this package sets no cargoFlags" from "it sets
+#: them to something this gate cannot read".
+CARGO_FLAGS_KEY = re.compile(r"(?<![\w-])cargoFlags\s*=")
+#: A literal string in a Nix list.
+NIX_STRING = re.compile(r'"([^"]*)"')
 #: `attr = mkFirmware { … }`, in the spellings nixfmt leaves and the ones it does
 #: not: the `=` and the call may be on separate lines (this file already breaks
 #: two other bindings that way), the indent is not fixed, and `mkFirmware{` is
@@ -141,7 +151,8 @@ INVOCATION = re.compile(r"(?<![\w-])mkFirmware\s*\{")
 #: into the default build in the matrix.
 KNOB = re.compile(r"(?<![\w-])([a-zA-Z][A-Za-z0-9]*)\s*=\s*([^;]+);")
 #: Nothing in a package body is a knob under these names: the image's name, and
-#: the cargo flags, which are the feature axis rather than the knob axis.
+#: the raw `cargoFlags` list, whose feature half is the feature axis and whose
+#: residual half [`cargo_flags`] re-adds as one knob.
 NOT_A_KNOB = ("name", "cargoFlags")
 #: The release workflow's flavor loop.
 PKG_LOOP = re.compile(r"for pkg in ([^;]+); do")
@@ -175,6 +186,33 @@ def _nix_blocks(text):
                     break
 
 
+def cargo_flags(name, body):
+    """(cargo features, the rest of the list) for one package's `cargoFlags`.
+
+    The rest is a knob and not a footnote: `--no-default-features` and
+    `--profile release-fast` build a different image, and a column whose derived
+    features AND knobs are both empty IS the default build — which is a basis the
+    gate accepts and an equivalence whose whole delta reads as nothing.
+    """
+    found = CARGO_FLAGS.search(body)
+    if not found:
+        if CARGO_FLAGS_KEY.search(body):
+            raise ValueError(
+                f"{FLAKE}: `{name}` sets cargoFlags to something this gate cannot read as"
+                " a list of literal flags — a flag it cannot read is a column derived wrong"
+            )
+        return (), ""
+    unread = NIX_STRING.sub(" ", found.group(1)).strip()
+    if unread:
+        raise ValueError(
+            f"{FLAKE}: `{name}`'s cargoFlags carries {unread!r}, which is not a literal"
+            " flag — a flag this gate cannot read is a column derived wrong"
+        )
+    joined = " ".join(NIX_STRING.findall(found.group(1)))
+    features = tuple(f for group in FEATURE_FLAG.findall(joined) for f in group.split(","))
+    return features, " ".join(FEATURE_FLAG.sub(" ", joined).split())
+
+
 def packages(root):
     """The flake's firmware images: name -> (features, knobs).
 
@@ -188,18 +226,23 @@ def packages(root):
     )
     out = {}
     for _attr, body in _nix_blocks(text):
-        name = re.search(r'name = "([^"]+)"', body).group(1)
-        flags = re.search(r"cargoFlags = \[(.*?)\]", body, re.S)
-        features = ()
-        if flags:
-            joined = " ".join(re.findall(r'"([^"]*)"', flags.group(1)))
-            features = tuple(f for group in FEATURE_FLAG.findall(joined) for f in group.split(","))
+        name = re.search(r'name\s*=\s*"([^"]+)"', body).group(1)
+        features, residual = cargo_flags(name, body)
         knobs = {
             key: value.strip().strip('"')
             for key, value in KNOB.findall(body)
             if key not in NOT_A_KNOB
         }
-        out[name] = (frozenset(features), knobs)
+        if residual:
+            knobs["cargoFlags"] = residual
+        derived = (frozenset(features), knobs)
+        if out.setdefault(name, derived) != derived:
+            raise ValueError(
+                f"{FLAKE} builds `{name}` from two mkFirmware blocks that derive"
+                f" differently — {sorted(out[name][0])} {out[name][1]} and"
+                f" {sorted(features)} {knobs}. One image name is one column, so the"
+                " second block replaced the first with no message at all"
+            )
     seen, called = len(list(_nix_blocks(text))), len(INVOCATION.findall(code))
     if seen != called:
         raise ValueError(

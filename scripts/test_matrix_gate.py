@@ -625,6 +625,76 @@ def test_a_package_with_the_call_on_the_next_line_is_still_a_column(tree, capsys
     assert tree.run() == 0
 
 
+def test_a_cargo_flag_that_is_not_a_feature_is_a_knob(tree, capsys):
+    """`--features` is not the only thing in a `cargoFlags` list, and the rest
+    changes the image: a residual read as nothing left `--no-default-features`
+    invisible to both halves of the equivalence rule AND to `default-build`."""
+    tree.edit(
+        "nix/firmware.nix",
+        '      vidpid = "Pico";',
+        '      vidpid = "Pico";\n      cargoFlags = [\n        "--no-default-features"\n      ];',
+    )
+    said = red(tree, capsys)
+    assert "declares the knob delta ['vidpid=Pico']" in said
+    assert "cargoFlags=--no-default-features" in said
+
+
+def test_a_non_feature_cargo_flag_takes_the_default_build_basis_away(tree, capsys):
+    """The other half of the same defect: a package built `--profile release-fast`
+    reads as the image every measurement was taken on."""
+    for attr in ("default", "firmware"):
+        tree.edit(
+            "nix/firmware.nix",
+            f'    {attr} = mkFirmware {{ name = "firmware"; }};',
+            f'    {attr} = mkFirmware {{ name = "firmware"; cargoFlags = ['
+            ' "--profile" "release-fast" ]; };',
+        )
+    said = red(tree, capsys)
+    assert "basis `default-build` on a column that enables" in said
+    assert "cargoFlags" in said
+
+
+@pytest.mark.parametrize("spelling", ["cargoFlags= [", "cargoFlags  = [", "cargoFlags =["])
+def test_a_cargoflags_spelling_nixfmt_does_not_write_is_still_read(tree, spelling):
+    """Nothing in this tree runs `nixfmt --check`, so the canonical shape cannot
+    be assumed — and each of these read as NO features, which is a published
+    flavor printing as the default build."""
+    tree.edit(
+        "nix/firmware.nix",
+        '      name = "firmware-no-touch";\n      cargoFlags = [',
+        f'      name = "firmware-no-touch";\n      {spelling}',
+    )
+    derived = matrix_gate.packages(tree.root)["firmware-no-touch"]
+    assert derived == (frozenset({"no-touch"}), {}), derived
+    assert tree.run() == 0
+
+
+def test_a_cargoflags_list_the_gate_cannot_read_is_refused(tree, capsys):
+    """A flag list that is not literal strings is a column derived wrong, and the
+    conservative answer is to say so rather than to derive no flags."""
+    tree.edit(
+        "nix/firmware.nix",
+        '      cargoFlags = [\n        "--features"\n        "screen"\n      ];',
+        "      cargoFlags = extraFlags;",
+    )
+    assert "cannot read as a list of literal flags" in red(tree, capsys)
+
+
+def test_two_packages_under_one_name_that_derive_differently_are_rejected(tree, capsys):
+    """`default` and `firmware` are one image under two attributes — but only
+    while they derive the same. One of them gaining a knob replaced the other's
+    column with NO message, and the saw-everything count cannot see it: both
+    blocks are seen."""
+    tree.edit(
+        "nix/firmware.nix",
+        '    default = mkFirmware { name = "firmware"; };',
+        '    default = mkFirmware { name = "firmware"; flashSize = "16M"; };',
+    )
+    said = red(tree, capsys)
+    assert "builds `firmware` from two mkFirmware blocks" in said
+    assert "replaced the first with no message" in said
+
+
 def test_a_features_flag_written_with_an_equals_sign_is_read(tree, capsys):
     """`--features=a` is a spelling cargo takes and a hand-rolled word scan does
     not — and a package whose features read as empty looks like the default
