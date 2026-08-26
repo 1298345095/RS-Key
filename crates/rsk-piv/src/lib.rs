@@ -927,9 +927,13 @@ impl PivApplet<'_> {
                 Sw::OK
             }
             s if is_key(s) => {
-                // meta_find below gates existence (delete clears the meta record
-                // unconditionally), so the old separate has_key probe here was a
-                // redundant per-slot flash fetch on every GET METADATA — dropped.
+                // meta_find gates existence, and SEC-STORE-006 says that is not the
+                // same as the key being there: a faulted EF_META drop leaves an
+                // ORPHAN head, which both producers report rather than prevent.
+                //
+                // Over one this answers 9000 with the head and the cached point
+                // (EC) or 6400 (RSA), never 6A88 — measured. Kept, because the
+                // has_key probe it replaced is a flash fetch per slot per call.
                 // Sized to hold a cached EC public point trailing the 4-byte
                 // [algo, pin_pol, touch_pol, origin] head (see slot_pubkey_tlv).
                 let mut meta = [0u8; 4 + MAX_EC_POINT];

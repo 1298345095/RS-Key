@@ -8094,3 +8094,105 @@ fn a_reset_answers_for_the_heads_it_could_not_drop() {
          record RESET reported erased"
     );
 }
+
+/// GET METADATA's `is_key` arm gates existence on `meta_find` alone. That was
+/// justified by "delete clears the meta record unconditionally", which
+/// SEC-STORE-006 withdraws: a faulted EF_META drop leaves the head standing over
+/// a key that is gone, both producers REPORT that state rather than prevent it,
+/// and it persists on the card. So what the arm answers over an orphan is a
+/// measured fact, not an impossible one.
+///
+/// `keep_cache` restores the slot's cached public point, which the same fault can
+/// leave behind (its own `remove` is a separate write); without it the arm falls
+/// through to deriving the point from a key that is not there. The RSA size is a
+/// FIXTURE here — the case is about the orphan, not the modulus — so it takes
+/// `ALGO_RSA_FIXTURE` rather than asserting an error `fips-profile` cannot make.
+fn metadata_over_an_orphan_head(keep_cache: bool) -> Sw {
+    metadata_over_an_orphan_head_algo(keep_cache, ALGO_ECCP256)
+}
+fn metadata_over_an_orphan_head_algo(keep_cache: bool, algo: u8) -> Sw {
+    let rng = RefCell::new(TestRng(7));
+    let pres = RefCell::new(AlwaysConfirm);
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    let faults = std::rc::Rc::new(std::cell::Cell::new(0usize));
+    let mut fs = Fs::new(MetaFaults {
+        inner: RamStorage::new(),
+        budget: faults.clone(),
+        unremovable: std::rc::Rc::new(std::cell::Cell::new(0u16)),
+        err: false,
+    });
+    fs.scan();
+    select(&mut app, &mut fs);
+    auth_mgm(&mut app, &mut fs);
+    verify_pin(&mut app, &mut fs);
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            INS_ASYM_KEYGEN,
+            0,
+            SLOT_AUTHENTICATION,
+            &gen_template(algo)
+        )
+        .0,
+        Sw::OK
+    );
+    let mut point = [0u8; 256];
+    let cached = fs
+        .read(files::pubkey_fid(SLOT_AUTHENTICATION), &mut point)
+        .unwrap_or(0);
+
+    faults.set(usize::MAX);
+    let (sw, _) = run(
+        &mut app,
+        &mut fs,
+        INS_MOVE_KEY,
+        0xFF,
+        SLOT_AUTHENTICATION,
+        &[],
+    );
+    faults.set(0);
+    assert_eq!(sw, Sw::MEMORY_FAILURE);
+    let mut head = [0u8; 8];
+    assert!(
+        fs.meta_find(key_fid(SLOT_AUTHENTICATION).get(), &mut head)
+            .is_some()
+            && !fs.has_key(key_fid(SLOT_AUTHENTICATION)),
+        "the fixture must leave a head over a key that is gone"
+    );
+    if keep_cache {
+        fs.put(files::pubkey_fid(SLOT_AUTHENTICATION), &point[..cached])
+            .unwrap();
+    }
+    run(
+        &mut app,
+        &mut fs,
+        INS_GET_METADATA,
+        0,
+        SLOT_AUTHENTICATION,
+        &[],
+    )
+    .0
+}
+
+/// The arm's comment used to justify dropping its `has_key` probe with "delete
+/// clears the meta record unconditionally". It does not, and this is what the
+/// slot answers instead — so the justification is held to a measurement rather
+/// than to a guarantee the store withdrew.
+#[test]
+fn metadata_answers_over_an_orphaned_head() {
+    assert_eq!(
+        (
+            metadata_over_an_orphan_head(true),
+            metadata_over_an_orphan_head(false),
+        ),
+        (Sw::OK, Sw::OK),
+        "an EC head carries the point itself, so the slot reads as populated \
+         whether or not its cache file survived — it just cannot sign"
+    );
+    assert_eq!(
+        metadata_over_an_orphan_head_algo(false, ALGO_RSA_FIXTURE),
+        Sw::EXEC_ERROR,
+        "RSA loads the modulus from the key, so the same orphan fails there"
+    );
+}

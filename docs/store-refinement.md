@@ -239,6 +239,14 @@ medium refused and the value may be live. Held by
 `a_faulted_metadata_drop_is_reported_by_force_delete_too` at the `Fs` layer and
 `a_reset_answers_for_the_heads_it_could_not_drop` at the APDU layer.
 
+**What the card then shows over an orphan is measured, not assumed.** PIV's GET
+METADATA gates existence on the head alone — its `has_key` probe was dropped as a
+per-slot flash fetch on every call — so a slot whose head outlived its key answers
+`9000` with the head and the cached public point on an EC slot (the point rides in
+the head), `6400` on an RSA one (the modulus is loaded from the key), and never
+`6A88`. The probe stays out: the state is rare, both producers report it at the
+moment they create it, and the cost is paid on every `ykman piv info`.
+
 **And the first shape of that repair was itself the wrong one, measured.** Naming
 three outcomes in the prose while returning a type that carries two left every
 caller to collapse them, and the four sweeps collapsed them with `?`: a faulted
