@@ -39,6 +39,9 @@ crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/state.rs	357-361	/// Trans
 crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	150-152	fn known_absent(&self, fid: u16) -> bool {	}
 crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	413-433	pub fn put(&mut self, fid: u16, data: &[u8]) -> Result<()> {	}
 crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	473-482	pub fn delete(&mut self, fid: u16) -> Result<()> {	}
+crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	217-217	if fid == EF_META || fid == EF_SCRUB_FILLER {	if fid == EF_META || fid == EF_SCRUB_FILLER {
+crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	631-633	if r.is_none() && self.storage.last_error() {	}
+crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	663-663	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
 crates/rsk-fs/src/store_steps_tests.rs	crates/rsk-fs/src/fs.rs	474-474	let meta = self.meta_delete(fid);	let meta = self.meta_delete(fid);
 crates/rsk-piv/src/tests.rs	crates/rsk-fido/src/clientpin.rs	761-761	if !matched && ctx.dev.otp_key.is_some() {	if !matched && ctx.dev.otp_key.is_some() {
 crates/rsk-usb/src/secure_pin_kani.rs	crates/rsk-usb/src/secure_pin.rs	96-96	// Force the canonical VERIFY class byte; never honour the host template's CLA.	// Force the canonical VERIFY class byte; never honour the host template's CLA.

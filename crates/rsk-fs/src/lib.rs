@@ -46,7 +46,17 @@ pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
     let _ = fs.delete(EF_HARDENED);
 }
 
+/// The metadata side-store EF: one blob, shared by every applet.
+#[cfg(not(kani))]
 pub const EF_META: u16 = 0xE010;
+/// `0x0017` under `cfg(kani)`, because the metadata paths address EF_META in the
+/// present map and [`fs::Fs`]'s map is 24 bits wide there — `0xE010` is index
+/// 7170 of it, so every one of them panicked before this alias existed. Index 23
+/// puts EF_META INSIDE the symbolic FID domain rather than outside it, which is a
+/// different store topology and not the same one faster; `store_meta_kani.rs`
+/// carries what that stops proving.
+#[cfg(kani)]
+pub const EF_META: u16 = 0x0017;
 
 /// The scrub filler a [`Storage::compact`] lap writes to push superseded payloads
 /// off the medium. It is a backend-internal key, not a file — but `compact` writes

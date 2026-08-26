@@ -217,9 +217,11 @@ crypto-critical helpers, where a proof genuinely beats a sample:
   findings each needed two commands to express. It pins that the applet is
   never handed a body from a command it did not itself terminate, that a
   dropped chain leaves no bytes behind, that a secure-messaging class reaches
-  no applet, and that a SELECT for a registered AID always arrives. It is also
-  the tree's only `cfg(kani)` change to production source; the shrink and its
-  reasoning are in `applet_kani.rs`.
+  no applet, and that a SELECT for a registered AID always arrives. Its bound is
+  a `cfg(kani)` shrink of production source — one of four in the tree, with
+  `rsk-usb`'s `CTAP_MAX_MESSAGE` and `rsk-fs`'s `FID_PRESENT_BYTES` and
+  `EF_META`; each states what it stops proving where it is written, this one in
+  `applet_kani.rs`.
 - `rsk-fs`: the `EF_META` record-walk (`rebuild_meta`) over arbitrary (corrupt)
   blobs — nothing written past the length it reports, and the old record for the
   rebuilt fid is **gone** from the output, which is what `meta_delete` and
@@ -323,11 +325,11 @@ run):
 
 | Tier | Crates | Harnesses | Covers | Solve | Slowest harness |
 |---|---|---|---|---|---|
-| `pr` | 13 | 61 | 31 | 276 s | `rsk-piv::set_protected_total_and_invariant`, 47 s |
-| `state` | 2 | 24 | 26 | ~10 min | `rsk-fido::…_at_call_site`, ~7 min (9.3 GiB peak) |
-| `all` | 17 | 87 | 51 | ~1 h 46 | `rsk-phy::serialize_parse_roundtrip`, 27 m 42 s |
+| `pr` | 13 | 63 | 35 | 276 s | `rsk-piv::set_protected_total_and_invariant`, 47 s |
+| `state` | 2 | 26 | 30 | ~10 min | `rsk-fido::…_at_call_site`, ~7 min (9.3 GiB peak) |
+| `all` | 17 | 89 | 55 | ~1 h 46 | `rsk-phy::serialize_parse_roundtrip`, 27 m 42 s |
 | `light1` | 4 | 27 | 23 | not yet run | `rsk-fido::…_at_call_site`, ~7 min (9.3 GiB peak) |
-| `light2` | 5 | 27 | 8 | not yet run | `rsk-rsa`'s division spec and sieve |
+| `light2` | 5 | 29 | 12 | not yet run | `rsk-rsa`'s division spec and sieve |
 | `light3` | 7 | 28 | 19 | not yet run | `rsk-mldsa`'s rounding round-trips |
 | `heavy` | 1 | 5 | 1 | ~55 min | `rsk-phy::serialize_parse_roundtrip`, 55 min (11.1 GB peak) |
 

@@ -134,6 +134,13 @@ pub const VIEW_FIDS: [u16; 3] = [0x0301, 0x0302, 0x0455];
 /// shipped tree and on every mutant. The one thing that is: none may BE a record
 /// the store keeps for itself, or a `Put` would be writing the metadata blob and
 /// no recorder would notice.
+///
+/// That measurement was taken at `EF_META = 0xE010` and still stands, because this
+/// triple is read under `cfg(test)` only — where the assertion below also still
+/// means what it says. Under `cfg(kani)` EF_META is `0x0017`, so its half of the
+/// assertion certifies nothing about the shipped blob (only the `EF_SCRUB_FILLER`
+/// half is unaliased there) over a triple that config never reads.
+/// `store_meta_kani.rs` names its own domain rather than borrowing this one.
 const _: () = assert!(
     VIEW_FIDS[0] != crate::EF_META
         && VIEW_FIDS[1] != crate::EF_META

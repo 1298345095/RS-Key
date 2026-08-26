@@ -40,6 +40,46 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The two EF_META fault sites are Kani harnesses now, and the two registry rows
+  they belong to did not move.** `docs/store-refinement.md` had measured a win and
+  recorded it as not taken: a probe that does nothing but `meta_add` fails under
+  `cfg(kani)` on `index out of bounds ... decided_bit`, and the blocker is
+  `EF_META`'s VALUE (`0xE010`, index 7170 of a map `FID_PRESENT_BYTES` shrinks to
+  three bytes) rather than the map's width. Re-measured on this tree: the same
+  probe with `#[cfg(kani)] EF_META = 0x0017` is `SUCCESSFUL` in **0.223 s**.
+  `crates/rsk-fs/src/store_meta_kani.rs` takes the two obligations that sit there
+  — `meta_add` refusing a FAILED EF_META read instead of rebuilding from an empty
+  blob (0.317 s), `meta_delete` never caching that read as a decided absence
+  (0.156 s) — over the `FaultBackend` the cache clauses already use, both
+  directions of each as separate clauses, because Kani 0.67 reports every
+  `assert!` message in this crate as "a placeholder message" and the failing LINE
+  is then the only thing that tells a kill from its inverse. Driven, not assumed:
+  `BugMetaAddDropsOnFault` and `BugMetaDeleteDropsOnFault` each fail their
+  harness on the FAULTED arm, which is the defect and not its mirror.
+  **`SEC-STORE-003` and `SEC-STORE-004` stay `MODELLED-ONLY`**, deliberately, and
+  the harnesses are named so that they stay: `assurance_gate` forces `BOUNDED`
+  off a harness function name carrying the property's, without looking at domain,
+  bound or `cfg`. A `FaultBackend` holds no blob, so what verifies is the guard at
+  the fault site and not "no record was lost" — both clauses over a MEDIUM still
+  time out, re-measured at **420 s** (`CBMC timed out`, 419.9 s and 420.7 s of
+  solving) with a single-blob backend and `META_MAX` shrunk 1024 -> 32. The redefinition costs a
+  boundary, and it is written down where the shrink is: at `0x0017` the blob sits
+  INSIDE the symbolic FID domain instead of outside it, so three things stop being
+  proved — that EF_META indexes within the shipped map (the compile-time assert in
+  `fs.rs` owns that), that EF_META is disjoint from every FID an applet writes (an
+  over-approximation the shrink invents, assumed away by name), and that `scan`
+  registers every file it is handed, since its `fid == EF_META` skip now refuses
+  FID 23, inert only because no harness reaches `scan`. `VIEW_FIDS` is untouched:
+  it never lands in the 24-bit map, it is read under `cfg(test)` only, and the
+  seven-alternative measurement that chose it stands. `scripts/kani.sh`'s floors
+  and the `docs/testing.md` tier table move with the two harnesses (`pr` 61 -> 63
+  and 31 -> 35 covers, `state` 24 -> 26 and 26 -> 30, `all` 87 -> 89 and
+  51 -> 55, `light2` 27 -> 29 and 8 -> 12).
+  **bcdDevice -> 0x0994** — the image cannot reach a `#[cfg(kani)]` constant, but
+  `bcd_gate` reads cfg-gated FILES rather than cfg-gated REGIONS and the new
+  `pub const` line carries no cfg of its own, so the counter moves rather than the
+  guard.
+
 - **The TLA verdict registry is held at merge time now, not only by the weekly
   matrix.** `formal/floors.txt` records what each of the 192 TLC configurations
   must produce — GREEN or RED, a state floor, and for some RED rows the invariant

@@ -37,6 +37,10 @@ of `fs.rs` so the private methods are reachable without widening them.
 | `Init` / `Reboot` | `Fs::new` | nothing cached, nothing decided |
 | — | `known_absent` | a clear present bit is trusted only once decided confirms it |
 
+Two more, in `store_meta_kani.rs`, are the EF_META **fault sites** rather than the
+cache clauses. They are described in the first bullet of "What this is not",
+because they are what that bullet used to say could not exist.
+
 Every harness carries a **second** symbolic FID. That is the content: the model's
 clauses are `[present EXCEPT ![f] = …]` — one element moves, every other stands —
 while the code reaches its bit through `fid >> 3` and `1 << (fid & 7)`. A shift
@@ -72,6 +76,30 @@ const _: () = assert!(((u16::MAX >> 3) as usize) < FID_PRESENT_BYTES);
 which is the stronger form: it is about the shipped width, and a proof would only
 ever have covered the FIDs a harness enumerated.
 
+`EF_META` is aliased for the same reason and costs something different. At
+`0x0017` it is **bit** 23 of the 24 the shrunk map has — the last bit of the last
+byte — so the metadata blob sits *inside* the symbolic FID domain rather than
+outside it, which is a different store topology and not the same one faster.
+Three things stop being proved:
+
+- that EF_META indexes within the shipped map. Shipped, `fid >> 3` puts `0xE010`
+  at **byte** 7170 of 8192, and the compile-time assert above owns that;
+- that EF_META is disjoint from every FID an applet writes. At `0xE010` it is
+  outside every applet range; at `0x0017` it is inside the file space. That is an
+  over-approximation the shrink INVENTS rather than one it hides — a `meta_add`
+  whose subject is EF_META itself is a state the shipped store cannot reach — so
+  `store_meta_kani.rs` assumes the collision away and says so;
+- that `scan` registers every file it is handed. Its `fid == EF_META` skip
+  (`fs.rs:217`) is compiled under `cfg(kani)` too, so under the alias it refuses
+  FID 23 — a FID the harnesses' own domain draws from. Inert today, because no
+  harness in the tree reaches `scan`; it is what the `Scan` bullet below would
+  have to deal with.
+
+`VIEW_FIDS` is untouched by all of it: at `0x0301` and up it does not land in the
+24-bit map, it is read under `cfg(test)` only, and the seven-alternative
+measurement that chose it — including the triple "around `EF_META`" — was taken at
+`0xE010` and still stands.
+
 ## What this is not
 
 - **Not a Kani result for the persistent half — and the first version of this
@@ -80,14 +108,14 @@ ever have covered the FIDs a harness enumerated.
   `store_steps_tests.rs`, below — but it is a host sweep, so the four stay
   `MODELLED-ONLY`: `assurance_gate` reads `BOUNDED` off a Kani harness name.
 
-  A harness that does nothing but `meta_add` does fail, and the message is the
-  present map:
+  A harness that does nothing but `meta_add` failed, before the alias below, and
+  the message was the present map:
 
   ```console
   ** 1 of 164 failed (34 unreachable)
   Failed Checks: index out of bounds: the length is less than or equal to the given index
-   File: "crates/rsk-fs/src/fs.rs", line 118, in fs::Fs::<…>::decided_bit
-  Verification Time: 0.109 s
+   File: "crates/rsk-fs/src/fs.rs", line 140, in fs::Fs::<…>::decided_bit
+  Verification Time: 0.110 s
   ```
 
   From which this page concluded "no metadata path can run under `cfg(kani)` at
@@ -95,19 +123,37 @@ ever have covered the FIDs a harness enumerated.
   The blocker is `EF_META`'s VALUE (`0xE010`, index 7170), not the map's WIDTH,
   and the value takes the same one-line alias `FID_PRESENT_BYTES` already has:
   with `#[cfg(kani)] EF_META = 0x0017` and nothing else changed, the same harness
-  is `0 of 164 failed`, `SUCCESSFUL`, **0.244 s** — and two real obligations at
-  the fault sites the model states verify over the existing `FaultBackend` in
-  **0.107 s each**. Widening the map, which is what the old bullet argued about,
-  was answering a question nobody asked.
+  is `0 of 164 failed`, `SUCCESSFUL`, **0.223 s**. Widening the map, which is what
+  the old bullet argued about, was answering a question nobody asked.
 
-  What genuinely is out of reach is the clauses over a MEDIUM. With the alias, a
-  single-blob backend and `META_MAX` shrunk 1024 → 32, both blob obligations
-  **time out at 420 s**. That is the blob rebuild, not the bitmap.
+  **The alias and the two fault-site obligations are taken now**, in
+  `store_meta_kani.rs`, over the `FaultBackend` this page's cache harnesses
+  already use: `meta_add` refusing a FAILED EF_META read rather than rebuilding
+  from an empty blob (0.317 s), and `meta_delete` never caching that same read as
+  a decided absence (0.156 s), both measured by the `pr` tier that runs them. Each asserts BOTH directions as separate clauses,
+  because a refusal alone is satisfied by a `meta_add` that refuses everything —
+  and because Kani 0.67 reports every `assert!` message in this crate as "a
+  placeholder message", so the failing LINE is the only thing that tells a kill
+  from its inverse. Driven: `BugMetaAddDropsOnFault` fails the first on the
+  faulted arm, `BugMetaDeleteDropsOnFault` fails the second on the faulted arm.
 
-  So the honest position: the two fault-site obligations are a cheap win this
-  page has not taken, and taking them means a `cfg(kani)` redefinition of a
-  PUBLIC constant plus a status change for two registry rows — its own change,
-  with its own mutation table, not a footnote to this one. The medium-backed
+  **What did not move is the two statuses.** `SEC-STORE-003` and `SEC-STORE-004`
+  stay `MODELLED-ONLY`, and the two harnesses are named so that they stay there:
+  `assurance_gate` FORCES `BOUNDED` from a harness function name containing the
+  property's, without looking at domain, bound or `cfg`, so a name is all it
+  would have taken. A `FaultBackend` holds no blob, so
+  `meta[f]` is not represented and what verifies is the GUARD at the fault site,
+  not "no record was lost"; and the domain is the shrunk one. `BOUNDED` there
+  would be a scalar going up while the domain went quietly down. The thing that
+  would earn it is a theorem carrying the `present`/`decided` arithmetic to the
+  whole shipped `u16` domain, and that has no owner.
+
+  What genuinely is out of reach is still the clauses over a MEDIUM. With the
+  alias, a single-blob backend and `META_MAX` shrunk 1024 → 32, both blob
+  obligations **time out at 420 s** — re-measured, `CBMC timed out`, at 419.9 s
+  of solving for the record a `meta_add` may not drop and 420.7 s for the blob
+  that may not read absent while one stands. That is the blob rebuild, not the
+  bitmap, and it is the boundary of what the alias buys. The medium-backed
   clauses stay the host sweep's.
 
 - **Not `Scan`.** The model's truncated-walk clause needs a backend that can

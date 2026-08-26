@@ -732,6 +732,10 @@ mod proofs;
 #[path = "store_refinement_kani.rs"]
 mod store_refinement_proofs;
 
+#[cfg(kani)]
+#[path = "store_meta_kani.rs"]
+mod store_meta_proofs;
+
 #[cfg(test)]
 #[path = "fs_tests.rs"]
 mod tests;
