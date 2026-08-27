@@ -14,12 +14,14 @@ platform, a tool or an abstraction, and there is no arm to run.
 
 **Why a second file and not a `class` field on the first.** A discriminator
 inside `assumptions.toml` would pick which rules apply, and the rules it would
-switch off are the only mechanical ones that file has. Measured both ways:
-deleting `PowerOnClearsScratch2` from that registry reddens it at once
-(`assigned by Boot.cfg but not in the registry`), because rule 1 runs in both
-directions — but a `class = "platform"` on that same entry leaves it in
-`entries`, so the orphan rule is satisfied and the both-arms rule is skipped, and
-an axiom passes. Two files make that escape a red row instead of a spelling.
+have to switch off are ALL THREE of the mechanical ones that file has — which
+leaves "an entry exists". Measured, on the real gate: an entry for `M7-Q2` there
+answers `in the registry but no configuration assigns it`, so the amendment must
+disable the orphan rule as well as the both-arms and reachability rules; and the
+counterfactual — that gate with the two constant rules skipped for `platform` —
+passes `PowerOnClearsScratch2` pinned nine ways with nothing to falsify it.
+Deleting a constant from that registry instead reddens it at once, so a second
+file makes the misclass a red row rather than a spelling.
 
 The classes differ in how they are DISCHARGED, which is the other half: a model
 constant is discharged by a TLC run, an entry here by a board measurement, a
@@ -38,8 +40,11 @@ Six rules, and the first is the one that earns the file:
   because a model assumption's own discharge is always a fact about the world;
   `board-only:` the suites `tests/emu.py` refuses by name that
   `scripts/usbip-guest.sh` does not run either — no runner in this tree can pass
-  them, so each is a pending board obligation; `unsafe:` every first-party `.rs`
-  carrying the token, which is stage 10's "firmware unsafe invariant" half.
+  them, so each is a pending board obligation; `unsafe:` every `.rs` whose CODE
+  carries the token, which is stage 10's "firmware unsafe invariant" half.
+  Each reads a STRUCTURE and not a text: the shim's dict through `ast`, the
+  guest's rows through `gate_lines`, Rust with its comments and strings removed.
+  The review drove nine legal spellings past the first, text-reading versions.
 * **both ways.** A `covers` token no derivation produces is an entry outliving
   its candidate — the shape that leaves a registry looking complete over a
   shorter list.
@@ -47,9 +52,11 @@ Six rules, and the first is the one that earns the file:
   owner from a closed vocabulary, because "someone should measure this" names
   nobody.
 * **a claim of discharge owes evidence.** Anything but `pending` needs artifacts
-  that are in the tree; a hardware-class discharge additionally needs the silicon
-  revision it was taken on — the same rule `evidence_gate.py` puts on a bundle,
-  at the other end of the same claim.
+  that are in the tree; a silicon-class discharge needs the stepping it was taken
+  on, a stepping written anywhere here must be a real one whatever the class, and
+  a discharge carrying one owes a raw artifact under `assurance/board/` — because
+  a rule satisfied by any file that merely exists is satisfied by `README.md`,
+  which is what the review reached the hardware axis with.
 * **links resolve.** `supports` names registry properties, `depends_on` and
   `refines` name entries here, `discharges` names constants of the first
   registry — and an entry covering `model:X` must discharge `X`, so the two
@@ -65,6 +72,7 @@ whose only exercise is its own mutation is the thing this programme keeps findin
 switched off. It goes in when a real pair arrives.
 """
 
+import ast
 import pathlib
 import re
 import sys
@@ -82,12 +90,17 @@ ARTIFACT = pathlib.Path("docs/platform-assumptions.md")
 EMU_SHIM = pathlib.Path("tests/emu.py")
 USBIP_GUEST = pathlib.Path("scripts/usbip-guest.sh")
 UNSAFE_PAGE = pathlib.Path("docs/unsafe.md")
+#: Where a raw board result lands. Empty, and that is the state it is meant to
+#: report: a discharge naming a stepping must cite something from here, or any
+#: file in the tree that happens to exist stands in for a measurement.
+BOARD_EVIDENCE = "assurance/board/"
 
-#: Stage 10's inventory categories, plus the four the closed slice's own
-#: assumption table produced that no hardware table has a row for. The split
-#: matters downstream: only [`HARDWARE_CLASSES`] can ever move `evidence_gate`'s
-#: hardware axis, and a `tool-tcb` entry discharged by reading a lockfile must
-#: not be able to.
+#: Stage 10's inventory's eleven categories, plus the six the closed slice's own
+#: assumption table produced that no hardware table has a row for. The class is
+#: what a reader sorts by; it is deliberately NOT what decides whether a row is a
+#: board result — the review measured that keying the hardware axis on
+#: [`HARDWARE_CLASSES`] printed 0 over a discharged `tool-fidelity` row whose own
+#: route reads "a board recording of the same session".
 CLASSES = {
     "reset",
     "memory",
@@ -108,8 +121,10 @@ CLASSES = {
     "build-configuration",
 }
 
-#: The classes whose discharge is a measurement on silicon. `toolchain` is not
-#: one: the Rust memory model and the linker script are read, not measured.
+#: The classes whose discharge is a measurement on silicon, and so must record
+#: the stepping. `toolchain` is not one: the Rust memory model and the linker
+#: script are read, not measured. This obliges a stepping; it does not decide who
+#: HAS one — a row of any class that records a real stepping is a board result.
 HARDWARE_CLASSES = frozenset(
     {"reset", "memory", "flash", "boot-rom", "otp", "trng", "timers", "multicore-xip"}
 )
@@ -151,19 +166,27 @@ BOARD_REVISION = re.compile(r"\bRP2350[\s-]+A[0-9]\b")
 #: `SEC-FIDO-001`, `TM-HOST-GATES` and `RP2350-A2` as assumption ids.
 SLICE_ID = re.compile(r"\bAS-[A-Z]+-\d+\b")
 
-#: Where those prose ids may live. Anything else naming one is a page this
-#: derivation has not been taught, which is a finding rather than a silent miss.
-DESIGN_PAGES = ("docs/authorization-slice.md", "docs/assurance-matrix.md")
+#: Every page under `docs/`, globbed. A two-name list was the first version and
+#: the review drove it: a `docs/store-slice.md` carrying `AS-STORE-1` produced no
+#: candidate and owed no entry, silently. A design page is written before its
+#: bundle exists, which is the whole reason this half is here.
+DESIGN_ROOT = pathlib.Path("docs")
 
-#: The token, and there is exactly one spelling of it in this tree: 37
-#: occurrences, all the bare word (no `unsafe_code` / `unsafe_op_in_unsafe_fn`
-#: attribute anywhere). Checked rather than assumed, because a rule closed in one
-#: spelling of the thing it is about is this programme's most common defect.
+#: The token, on source with comments and string literals REMOVED — which is the
+#: rule, not the regex. The review measured the regex alone over raw text: 4 of
+#: the 12 files it produced carry the word only in a line saying there is no
+#: `unsafe` in them, and a fifth is a code generator emitting the word inside a
+#: string. Stripping first means no form has to be enumerated: `unsafe {`,
+#: `unsafe fn`, `unsafe impl`, `unsafe extern` and the 2024 `#[unsafe(…)]`
+#: attribute all survive it, and prose does not.
 UNSAFE = re.compile(r"\bunsafe\b")
 
-#: First-party Rust. `third_party/` is out for the reason `citation_gate.py`
-#: gives: a vendored fork's `unsafe` is its author's invariant, not this tree's.
-UNSAFE_ROOTS = ("crates/", "firmware/", "fuzz/", "tools/", "rsk-wipe/")
+#: First-party Rust is every `.rs` EXCEPT these, which is what the rule always
+#: meant. A whitelist of roots was the first version and the review drove it: a
+#: new top-level crate — `rsk-wipe/`'s own shape — was invisible. `third_party/`
+#: is out for the reason `citation_gate.py` gives: a vendored fork's `unsafe` is
+#: its author's invariant, not this tree's.
+UNSAFE_EXCLUDED = ("third_party/",)
 
 GENERATED_BY = "Generated by scripts/platform_gate.py --write"
 
@@ -182,18 +205,15 @@ def slice_candidates(root):
     which no `AS-` pattern matches.
     """
     found = {}
-    for path in sorted((root / BUNDLES).glob("*.toml")):
+    for path in sorted((root / BUNDLES).rglob("*.toml")):
         doc = _toml(path)
         for entry in doc.get("assumption", []):
             name = str(entry.get("id", "")).strip()
             if name:
                 found.setdefault(name, str(path.relative_to(root)))
-    for rel in DESIGN_PAGES:
-        page = root / rel
-        if not page.is_file():
-            continue
-        for name in SLICE_ID.findall(page.read_text(encoding="utf-8")):
-            found.setdefault(name, rel)
+    for page in sorted((root / DESIGN_ROOT).rglob("*.md")):
+        for name in SLICE_ID.findall(page.read_text(errors="replace")):
+            found.setdefault(name, str(page.relative_to(root)))
     return found
 
 
@@ -214,15 +234,36 @@ def model_candidates(root):
 
 
 def emu_refusals(root):
-    """The suites `tests/emu.py` refuses by name, with the reason it gives."""
-    text = (root / EMU_SHIM).read_text(encoding="utf-8")
-    block = re.search(r"^UNSUPPORTED = \{(.*?)^\}", text, re.S | re.M)
-    if not block:
-        return {}
-    return {
-        name: reason
-        for name, reason in re.findall(r'"([^"]+)":\s*"([^"]+)"', block.group(1))
-    }
+    """The suites `tests/emu.py` refuses by name, with the reason it gives.
+
+    Read through `ast`, not a regex over the source. The regex was the first
+    version and the review drove four legal spellings past it — single quotes,
+    an implicit concatenation across lines, an f-string, and an empty reason —
+    each of which parses, and none of which this tree has a formatter to rule
+    out. A literal is what the shim actually has, so a literal is what is read.
+    """
+    tree = ast.parse((root / EMU_SHIM).read_text(encoding="utf-8"))
+    for node in tree.body:
+        targets = getattr(node, "targets", [])
+        if not any(isinstance(t, ast.Name) and t.id == "UNSUPPORTED" for t in targets):
+            continue
+        if not isinstance(node.value, ast.Dict):
+            break
+        out = {}
+        for key, value in zip(node.value.keys, node.value.values):
+            try:
+                name = ast.literal_eval(key)
+            except ValueError:
+                continue
+            try:
+                reason = ast.literal_eval(value)
+            except ValueError:
+                # An f-string has no literal value; the KEY is what is derived
+                # from, and a suite with an unreadable reason still owes an entry.
+                reason = "no literal reason"
+            out[str(name)] = str(reason)
+        return out
+    return {}
 
 
 def board_only_candidates(root):
@@ -233,8 +274,18 @@ def board_only_candidates(root):
     prefix, which is the head of both. A suite the guest reaches through a
     variable would be over-reported here, and that direction is the safe one: an
     obligation registered that a runner already covers, never the reverse.
+
+    The guest's CODE, not its text. Reading it whole was the first version and
+    the review drove it both ways: a comment naming a board-only suite made its
+    obligation disappear, and a comment naming a registered one turned a live
+    obligation red with "no derivation produces it" — where the fix reads as
+    deleting the row. `gate_lines` is imported here for exactly this and was not
+    being used.
     """
-    guest = (root / USBIP_GUEST).read_text(encoding="utf-8")
+    guest = "\n".join(
+        gate_lines.split_at_comment(line)[0]
+        for line in (root / USBIP_GUEST).read_text(encoding="utf-8").splitlines()
+    )
     return {
         name: f"{EMU_SHIM} UNSUPPORTED ({reason})"
         for name, reason in emu_refusals(root).items()
@@ -242,14 +293,60 @@ def board_only_candidates(root):
     }
 
 
+def rust_code(text):
+    """`text` with comments and string literals blanked out, spans preserved.
+
+    A lexer, not a token list, because the alternative is enumerating every form
+    `unsafe` takes and the review showed that list is the thing that goes wrong:
+    the word appears in `//! no unsafe`, in `/// the unsafe direction`, and
+    inside a `"\\n    unsafe fn "` a code generator emits. Handles `//` to end of
+    line, nested `/* … */`, `"…"` with backslash escapes, and `r#"…"#`.
+    """
+    out, i, n = [], 0, len(text)
+    while i < n:
+        char = text[i]
+        if char == "/" and text.startswith("//", i):
+            end = text.find("\n", i)
+            end = n if end < 0 else end
+            out.append(" " * (end - i))
+            i = end
+        elif char == "/" and text.startswith("/*", i):
+            depth, start = 1, i
+            i += 2
+            while i < n and depth:
+                if text.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif text.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+            out.append(" " * (i - start))
+        elif char == "r" and (m := re.match(r'r(#*)"', text[i:])):
+            close = '"' + m.group(1)
+            end = text.find(close, i + m.end())
+            end = n if end < 0 else end + len(close)
+            out.append(" " * (end - i))
+            i = end
+        elif char == '"':
+            start, i = i, i + 1
+            while i < n and text[i] != '"':
+                i += 2 if text[i] == "\\" else 1
+            i = min(i + 1, n)
+            out.append(" " * (i - start))
+        else:
+            out.append(char)
+            i += 1
+    return "".join(out)
+
+
 def unsafe_candidates(root):
-    """First-party `.rs` carrying the token, which `docs/unsafe.md` enumerates."""
+    """Every `.rs` whose CODE carries the token, which `docs/unsafe.md` enumerates."""
     return {
         str(rel): f"the token in {rel}, enumerated by {UNSAFE_PAGE}"
         for rel in sorted(gate_lines.tree_files(root))
         if rel.suffix == ".rs"
-        and str(rel).startswith(UNSAFE_ROOTS)
-        and UNSAFE.search((root / rel).read_text(errors="replace"))
+        and not str(rel).startswith(UNSAFE_EXCLUDED)
+        and UNSAFE.search(rust_code((root / rel).read_text(errors="replace")))
     }
 
 
@@ -333,6 +430,13 @@ def check_evidence(root, name, entry, findings):
     evidence = entry.get("evidence", [])
     evidence = evidence if isinstance(evidence, list) else [evidence]
     board = str(entry.get("board_revision", "")).strip()
+    # Whatever the class. Gating this on HARDWARE_CLASSES was the first version,
+    # and the review put "a red Pico 2 I had lying around" in an `input` row.
+    if board and not BOARD_REVISION.search(board):
+        findings.append(
+            f"{name}: board_revision {board!r} names no RP2350 stepping —"
+            " a part with a revision, not a description of a desk"
+        )
     if status in ("discharged", "refuted"):
         if not evidence:
             findings.append(
@@ -350,11 +454,19 @@ def check_evidence(root, name, entry, findings):
                 " assumption with no trigger stays settled through the change"
                 " that unsettles it"
             )
-        if entry.get("class") in HARDWARE_CLASSES and not BOARD_REVISION.search(board):
+        if entry.get("class") in HARDWARE_CLASSES and not board:
             findings.append(
-                f"{name}: a {entry.get('class')} discharge names no RP2350"
-                " stepping in `board_revision` — a platform result names the"
-                " platform it was taken on"
+                f"{name}: a {entry.get('class')} discharge records no"
+                " `board_revision` — a platform result names the platform it"
+                " was taken on"
+            )
+        if board and not any(
+            str(rel).startswith(BOARD_EVIDENCE) for rel in evidence
+        ):
+            findings.append(
+                f"{name}: a discharge on {board!r} cites no artifact under"
+                f" {BOARD_EVIDENCE} — a rule met by any file that merely exists"
+                " is met by README.md, which is not a board result"
             )
     elif evidence or board or entry.get("revalidated_by"):
         findings.append(
@@ -502,7 +614,7 @@ def render(root, registered=None):
     rows = sorted(registered.items())
     pending = [n for n, e in rows if e.get("status") == "pending"]
     discharged = [n for n, e in rows if e.get("status") == "discharged"]
-    hardware = [n for n, e in rows if e.get("class") in HARDWARE_CLASSES]
+    board = [n for n, e in rows if e.get("discharge_owner") == "maintainer"]
     out = [
         "<!-- SPDX-License-Identifier: AGPL-3.0-only -->",
         "<!-- Copyright (C) 2026 RS-Key contributors -->",
@@ -523,12 +635,13 @@ def render(root, registered=None):
         "",
         "## What discharges what",
         "",
-        f"Nothing in this repository can discharge {len(hardware)} of these rows:"
-        " they are measurements on silicon, and AGENTS.md puts flashing and every"
-        " board operation with the maintainer. A row moves off `pending` only with"
-        " artifacts in the tree, and a hardware row additionally with the RP2350"
-        " stepping it was taken on — the same rule `docs/assurance-vector.md`"
-        " puts on a bundle, at the other end of the same claim.",
+        f"Nothing in this repository can discharge {len(board)} of these rows:"
+        " their route ends at a board, and AGENTS.md puts flashing and every"
+        " board operation with the maintainer. A row moves off `pending` only"
+        " with artifacts in the tree; a silicon-class row additionally with the"
+        " stepping it was taken on, any row naming a stepping must name a real"
+        f" one, and a row naming one owes a capture under `{BOARD_EVIDENCE}` —"
+        " because a rule met by any file that merely exists is met by a README.",
         "",
         f"The candidates are DERIVED — {len(found)} of them, from the slice"
         " bundles and design pages, the model registry, the suites no runner in"
@@ -576,7 +689,10 @@ def render(root, registered=None):
         "## What this page may not be read as",
         "",
         f"- that any of these {len(rows)} statements is known to be true —"
-        f" {len(pending)} are `pending`, which means measured by nobody.",
+        f" {len(pending)} are `pending`, which means no artifact in this tree"
+        " records a result for them. One of those rows names a run that HAPPENED"
+        " and whose capture was never committed, which is a different state and"
+        " says so in its own discharge route.",
         "- that the list is complete. Four derivations produce it, and stage 10's"
         " inventory names eleven categories — a category with no candidate source"
         " is a category this page cannot see.",

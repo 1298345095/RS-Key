@@ -22,7 +22,9 @@
 # Read the `status` column first. **One of eighteen is discharged**, and the one
 # that is was discharged by reading a manifest. Nothing here is evidence about
 # anything yet; every row is an obligation with an owner and a named route, and
-# ten of the routes end at a board this repository must not touch.
+# eight of the routes end at a board this repository must not touch — the eight
+# whose `discharge_owner` is `maintainer`, which is the count the generated page
+# derives rather than a number written here twice.
 
 # ---- Reset and the boot ROM --------------------------------------------------
 
@@ -39,7 +41,9 @@ status = "pending"
 failure_direction = "usability: a soft lock that outlives the power cycle it was meant to end"
 covers = ["slice:AS-AUTH-4", "model:PowerOnClearsScratch2"]
 discharges = ["PowerOnClearsScratch2"]
-supports = ["SEC-BOOT-001", "SEC-BOOT-002"]
+# `TheWholeLockRides` and not `MarkerNeverLies`: the marker is `EF_HARDENED`, a
+# flash record, and nothing about it rides the watchdog word.
+supports = ["SEC-BOOT-002"]
 
 [[assumption]]
 id = "PLAT-ROM-001"
@@ -52,13 +56,13 @@ failure_direction = "security: a host that can reach the vendor AID could clear 
 # The measurement cannot be taken until the drop itself is known to work, which
 # is the other row's whole content.
 depends_on = ["PLAT-ROM-002"]
-supports = ["SEC-BOOT-001", "SEC-BOOT-002"]
+supports = ["SEC-BOOT-002"]
 
 [[assumption]]
 id = "PLAT-ROM-002"
 class = "boot-rom"
 statement = "The vendor applet's reboot really reaches the bootloader: `tests/51_secure_reboot.py` has no runner in this tree, because the emulator has no bootloader to fall into."
-discharge = "A run of tests/51_secure_reboot.py against a no-touch board, with the resulting log kept beside this registry."
+discharge = "A run of `tests/51_secure_reboot.py --bootsel` against a no-touch board — the plain run drives P1=0x00, the warm reset, and only `--bootsel` takes the P1=0x01 path this row is about; afterwards the board needs a UF2 re-dragged. The capture belongs under assurance/board/."
 discharge_owner = "maintainer"
 status = "pending"
 failure_direction = "availability: a reboot that lands nowhere leaves a key that cannot be updated in the field"
@@ -69,7 +73,7 @@ supports = ["SEC-ADM-001"]
 id = "PLAT-MEM-001"
 class = "memory"
 statement = "SRAM does not survive the drop to BOOTSEL, so a seed unwrapped in RAM is not readable through the bootloader."
-discharge = "A run of tests/54_sram_residue.py against a board — the write-back probe is what tells `cleared` from `unreadable` — with its log kept."
+discharge = "The measurement exists and its artifact does not. tests/54_sram_residue.py:48 records `control` + `residue --expect present` run on 2026-08-05, Waveshare RP2350 Zero, silicon A4, secure boot off — 520 KiB of SRAM zero and the written pattern read straight back, which is this statement in the same direction. What is missing is the raw capture under assurance/board/, and until it is there this row is pending on an artifact, not on a board."
 discharge_owner = "maintainer"
 status = "pending"
 failure_direction = "security: a plaintext seed readable over the bootloader's mass-storage interface"
@@ -105,7 +109,7 @@ supports = [
 id = "PLAT-OTP-001"
 class = "otp"
 statement = "OTP read permissions, lock state and the chaffing layout behave as the datasheet describes across a partial MKEK provisioning, so a half-written fuse row is refused rather than read as a key."
-discharge = "A run of tests/90_otp_mkek_migration.py on a board whose fuses are expendable. Irreversible by construction — AGENTS.md puts fuse writes with the maintainer and nowhere else."
+discharge = "A fuse-burning procedure this tree does not have. tests/90_otp_mkek_migration.py deliberately validates the migration WITHOUT touching a fuse, on a FAKE_MKEK/FAKE_DEVK build, so it exercises the kbase path and not the read-permission, lock-state or chaffing behaviour this row is about. Irreversible by construction — AGENTS.md puts fuse writes with the maintainer and nowhere else."
 discharge_owner = "maintainer"
 status = "pending"
 failure_direction = "security: a derivation that silently succeeds on the wrong key material, which a FAKE_MKEK board already mimics"
@@ -115,7 +119,7 @@ covers = ["board-only:90_otp_mkek_migration"]
 id = "PLAT-INPUT-001"
 class = "input"
 statement = "A PC/SC reader's `FEATURE_VERIFY_PIN_DIRECT` layer carries the PIN to the card without the host seeing it, so the pinpad path spends the same retry budget the CCID path does."
-discharge = "A run of tests/53_ccid_pinpad.py against a board through a real PC/SC stack; the emulator's socket has no reader layer to exercise."
+discharge = "A run of tests/53_ccid_pinpad.py against a DISPLAY board through a real PC/SC stack — the standard build leaves `bPINSupport = 0x00` and refuses `PC_to_RDR_Secure`, so the row cannot be answered on the default image at all. Interactive, and the emulator's socket has no reader layer to exercise."
 discharge_owner = "maintainer"
 status = "pending"
 failure_direction = "security: a verify that does not reach the retry ladder is an unmetered guessing channel"
@@ -196,19 +200,17 @@ discharge = "A source audit per site, which docs/unsafe.md carries: justificatio
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: the one class of memory-corruption defect safe Rust does not rule out"
+# Seven, not the twelve the first version of the derivation produced: four of
+# those carried the word only in a line saying the file has no `unsafe`, and one
+# was a code generator emitting it inside a string.
 covers = [
-  "unsafe:crates/rsk-mldsa/src/lib.rs",
   "unsafe:crates/rsk-rsa/build.rs",
   "unsafe:crates/rsk-rsa/src/lib.rs",
-  "unsafe:crates/rsk-sha512/src/lib.rs",
   "unsafe:firmware/build.rs",
   "unsafe:firmware/src/core1.rs",
   "unsafe:firmware/src/main.rs",
   "unsafe:firmware/src/presence.rs",
-  "unsafe:fuzz/tests/miri.rs",
-  "unsafe:rsk-wipe/build.rs",
   "unsafe:rsk-wipe/src/main.rs",
-  "unsafe:tools/emu/src/display_tests.rs",
 ]
 
 [[assumption]]
@@ -227,7 +229,7 @@ supports = ["SEC-FIDO-001"]
 [[assumption]]
 id = "PLAT-BUILD-001"
 class = "build-configuration"
-statement = "The shipped image is built without `--features always-uv`, so `gate.alwaysUv` is a free state variable a platform toggles rather than the compiled default every reset restores."
+statement = "The DEFAULT image is built without `--features always-uv`, so `gate.alwaysUv` is a free state variable a platform toggles rather than the compiled default every reset restores. `firmware-always-uv` is a published package and is the other arm, not a counterexample."
 discharge = "The build itself: firmware/Cargo.toml's default feature set does not name it, and docs/assurance-matrix.md carries the firmware-always-uv column separately. Both arms run — every configuration the shipped image is about pins the constant FALSE, and AlwaysUv.cfg runs the whole invariant set with it TRUE."
 discharge_owner = "contributor"
 status = "discharged"

@@ -7,22 +7,26 @@ claims to be — the message is asserted, never the count, because a red run who
 reason nobody read proves as little as one that cannot go red. Then the real
 checkout closes the other direction.
 
-**30 mutations of `platform_gate.py` driven, 30 killed, 0 survivors** — one per
-rule AND one per derivation clause, which is the criterion the review of the
-sibling row corrected: a table written against the rules the author had in mind
-left half of a derivation deletable with the whole suite green. Six of the
-thirty ALSO redden the real checkout, which is the set that would have published
-a wrong page. Six more did not apply on the first pass and reported so rather
-than passing — an unapplied patch over a green suite reads exactly like a
-survivor, and the tell is that the harness says which.
+**35 mutations of `platform_gate.py` driven, 35 killed, 0 survivors.** The first
+table was 30/30 and an adversarial review broke four of its rules with the suite
+green — the model floor zeroed (the other three derivations had a floor case and
+that one did not), the design-page list narrowed, `BOARD_REVISION` loosened to
+the bare part number, and two vocabularies widened by a member. Each has its case
+here now, and the pattern is the one this programme keeps meeting: the table was
+written against the rules the author had in mind, and a value can be moved
+without a rule being deleted.
 
-The candidate derivations each have BOTH spellings driven: a slice assumption
-declared in a bundle and one written only in a design page; a board-only suite
-the USB/IP guest names as a glob (`tests/02_*.py`) and one it names in full
-(`tests/73_otp_keyboard.py`); a board revision written `RP2350 A2` and the bare
-`A2` a Kani claim is named. And the four derivations are floored apart rather
-than in total, because a floor over the union cannot tell "the `unsafe` finder
-stopped finding" from "the bundle reader did".
+Every spelling below is one that got past a first version, measured rather than
+imagined: a slice assumption in a bundle, in a bundle SUBDIRECTORY, and on a
+design page the list never named; a board-only suite the USB/IP guest names as a
+glob (`tests/02_*.py`), in full (`tests/73_otp_keyboard.py`), and in a COMMENT
+that runs nothing; four legal spellings of an `UNSUPPORTED` entry the shim's own
+regex could not read; the word `unsafe` in a line comment, a doc comment, a
+nested block comment and a string literal; a new crate at the top of the tree;
+and a board revision written `RP2350 A2`, `A2` alone, and `RP2350` alone. The
+four derivations are floored apart rather than in total, because a floor over the
+union cannot tell "the `unsafe` finder stopped finding" from "the bundle reader
+did" — and the floors are asserted by VALUE, because a key set does not see a 0.
 """
 
 import pathlib
@@ -91,6 +95,16 @@ UNSAFE_RS = """\
 pub fn steal() {
     unsafe { core::ptr::null::<u8>().read() };
 }
+"""
+
+#: The three shapes the review drove past the first version of the derivation:
+#: a line comment, a doc comment and a string literal, each carrying the word.
+PROSE_RS = """\
+//! `no_std`, no alloc, no `unsafe`.
+/* the unsafe direction, and /* a nested */ span */
+pub const EMITTED: &str = "\\n    unsafe fn ";
+/// which for the erase length is the unsafe direction
+pub const N: u8 = 1;
 """
 
 REGISTRY = """\
@@ -168,6 +182,9 @@ class Tree:
         # Tracked-but-safe Rust, so the `unsafe:` derivation is selecting rather
         # than returning everything it walks.
         self.write("crates/rsk-a/src/safe.rs", "pub const N: u8 = 1;\n")
+        # Three spellings of the word OUTSIDE code, in one file. Four of the
+        # twelve files the first derivation produced were exactly this.
+        self.write("crates/rsk-a/src/prose.rs", PROSE_RS)
         self.git("init", "-q")
         self.git("add", "-A")
         self.regenerate()
@@ -401,7 +418,7 @@ def test_a_hardware_discharge_with_no_board_revision_is_a_finding(tree):
         'evidence = ["assurance/properties.toml"]\nrevalidated_by = "a new stepping"\n'
         'failure_direction = "security: a torn',
     )
-    assert only(tree.problems(), "names no RP2350 stepping in `board_revision`")
+    assert only(tree.problems(), "discharge records no `board_revision`")
 
 
 def test_a_bare_stepping_is_not_a_board_revision(tree):
@@ -413,7 +430,7 @@ def test_a_bare_stepping_is_not_a_board_revision(tree):
         'evidence = ["assurance/properties.toml"]\nboard_revision = "A2"\n'
         'revalidated_by = "a new stepping"\nfailure_direction = "security: a torn',
     )
-    assert only(tree.problems(), "names no RP2350 stepping in `board_revision`")
+    assert only(tree.problems(), "board_revision 'A2' names no RP2350 stepping")
 
 
 def test_a_pending_entry_carrying_evidence_is_a_finding(tree):
@@ -532,9 +549,17 @@ def test_the_unsafe_derivation_is_floored(tree):
     assert only(tree.problems(), "the `unsafe:` derivation found 0 candidate(s)")
 
 
+def test_the_model_derivation_is_floored(tree):
+    """The fourth floor. The review drove `model: 0` past a table that had the
+    other three and asserted only the KEY set, so zeroing one was free."""
+    tree.write("assurance/assumptions.toml", "# no constants\n")
+    assert only(tree.problems(), "the `model:` derivation found 0 candidate(s)")
+
+
 def test_the_floors_are_apart_not_in_total(tree):
-    """One number over the union cannot say WHICH reader stopped."""
-    assert set(platform_gate.FLOORS) == {"slice", "model", "board-only", "unsafe"}
+    """One number over the union cannot say WHICH reader stopped — and a floor of
+    0 is a floor nothing can fall below, which the key set alone does not see."""
+    assert platform_gate.FLOORS == {"slice": 1, "model": 1, "board-only": 1, "unsafe": 1}
 
 
 # --- the row that runs it ------------------------------------------------------
@@ -553,3 +578,136 @@ def test_the_entry_point_exits_nonzero_on_a_finding(tmp_path):
     tree.edit("assurance/platform.toml", '"slice:AS-T-1"', '"slice:AS-T-404"')
     assert platform_gate.run(tree.root) == 1
     assert platform_gate.run(Tree(tmp_path / "clean").root) == 0
+
+
+# --- the spellings the review drove past the first version ---------------------
+
+
+def test_the_word_in_a_comment_or_a_string_is_not_an_unsafe_site(tree):
+    """Four of the twelve files the first derivation produced carried the word
+    only in a line saying the file has no `unsafe`; a fifth emitted it inside a
+    string. Stripping first is what makes the form list unnecessary."""
+    found = platform_gate.candidates(tree.root)
+    assert "unsafe:crates/rsk-a/src/prose.rs" not in found, sorted(found)
+    assert "unsafe:crates/rsk-a/src/lib.rs" in found
+
+
+def test_every_syntactic_form_of_unsafe_still_counts(tree):
+    """And the other direction: stripping must not take the code with it."""
+    for body in (
+        "pub fn f() { unsafe { g() } }",
+        "pub unsafe fn f() {}",
+        "unsafe impl Send for T {}",
+        'unsafe extern "C" { fn g(); }',
+        '#[unsafe(link_section = ".data")]\npub static X: u8 = 0;',
+    ):
+        tree.write("crates/rsk-c/src/lib.rs", body + "\n")
+        tree.git("add", "-A")
+        assert "unsafe:crates/rsk-c/src/lib.rs" in platform_gate.candidates(tree.root), body
+
+
+def test_a_comment_in_the_usbip_guest_neither_covers_nor_uncovers(tree):
+    """Both directions, and both were red on the first version: a comment naming
+    a board-only suite made its obligation vanish, and a comment naming a
+    registered one turned a live row into "no derivation produces it"."""
+    tree.append("scripts/usbip-guest.sh", "\n# tests/29_reset_power_cut.py is board-only\n")
+    assert tree.problems() == []
+    tree.edit(
+        "tests/emu.py",
+        '"73_otp_keyboard"',
+        '"91_glitch_detector": "needs a real glitch detector",\n    "73_otp_keyboard"',
+    )
+    tree.append("scripts/usbip-guest.sh", "\n# tests/91_glitch_detector.py is board-only too\n")
+    assert only(tree.problems(), "board-only:91_glitch_detector: derived from")
+
+
+def test_four_legal_spellings_of_an_unsupported_entry(tree):
+    """Single quotes, an implicit concatenation, an f-string and an empty reason.
+    Each parses, this tree has no Python formatter to rule any of them out, and
+    each was invisible to the regex the first version read the shim with."""
+    for spelling in (
+        "'91_glitch_detector': 'needs a real glitch detector',",
+        '"91_glitch_detector": (\n        "needs a real glitch"\n        " detector"\n    ),',
+        '"91_glitch_detector": f"needs a real glitch detector",',
+        '"91_glitch_detector": "",',
+    ):
+        tree.write("tests/emu.py", EMU_SHIM.replace(
+            '    "73_otp_keyboard"', f"    {spelling}\n    \"73_otp_keyboard\""))
+        assert only(tree.problems(), "board-only:91_glitch_detector: derived from"), spelling
+
+
+def test_a_new_top_level_crate_is_not_invisible(tree):
+    """`rsk-wipe/`'s own shape. A whitelist of roots missed it silently."""
+    tree.write("rsk-probe/src/main.rs", UNSAFE_RS)
+    tree.git("add", "-A")
+    assert only(tree.problems(), "unsafe:rsk-probe/src/main.rs: derived from")
+
+
+def test_a_vendored_fork_is_still_out(tree):
+    """The one exclusion, and it is a decision rather than a name pattern."""
+    tree.write("third_party/x/src/lib.rs", UNSAFE_RS)
+    tree.git("add", "-A")
+    assert tree.problems() == []
+
+
+def test_a_design_page_the_list_never_named(tree):
+    """A two-page hardcode; the review put `AS-STORE-1` on a third page."""
+    tree.write("docs/store-slice.md", "| `AS-STORE-1` | A torn write is detectable |\n")
+    assert only(tree.problems(), "slice:AS-STORE-1: derived from")
+
+
+def test_a_bundle_in_a_subdirectory(tree):
+    """`glob` and not `rglob` was the first version."""
+    tree.write(
+        "assurance/bundle/store/SEC-T-002.toml",
+        '[property]\nid = "SEC-T-002"\n\n[[assumption]]\nid = "AS-T-7"\n'
+        'statement = "s"\nregistered = "no"\n',
+    )
+    assert only(tree.problems(), "slice:AS-T-7: derived from")
+
+
+# --- the board-result rules the hardware axis rests on -------------------------
+
+
+def test_a_board_revision_that_names_no_stepping_is_a_finding(tree):
+    """On ANY class. Gating this on the silicon classes was the first version,
+    and the review put "a red Pico 2 I had lying around" in a `tool-fidelity`
+    row, where nothing looked at it."""
+    tree.edit(
+        "assurance/platform.toml",
+        'evidence = ["assurance/properties.toml"]',
+        'evidence = ["assurance/properties.toml"]\nboard_revision = "a red Pico 2"',
+    )
+    assert only(tree.problems(), "names no RP2350 stepping")
+
+
+def test_a_part_without_a_stepping_is_not_a_board_revision(tree):
+    """The other half of the token, and the half the first table left open:
+    `A2` alone was driven and `RP2350` alone was not, so loosening the pattern to
+    the part number survived. `evidence_gate.py` reads this same object."""
+    tree.edit(
+        "assurance/platform.toml",
+        'evidence = ["assurance/properties.toml"]',
+        'evidence = ["assurance/properties.toml"]\nboard_revision = "RP2350"',
+    )
+    assert only(tree.problems(), "board_revision 'RP2350' names no RP2350 stepping")
+
+
+def test_a_board_result_owes_a_capture_not_just_a_file_that_exists(tree):
+    """`README.md` satisfied "the evidence is in the tree" and flipped the public
+    page's headline sentence. A capture lives under `assurance/board/`."""
+    tree.edit(
+        "assurance/platform.toml",
+        'evidence = ["assurance/properties.toml"]',
+        'evidence = ["assurance/properties.toml"]\nboard_revision = "RP2350 A2"',
+    )
+    problems = tree.problems()
+    assert only(problems, "cites no artifact under assurance/board/")
+    tree.write("assurance/board/run.log", "a capture\n")
+    tree.edit(
+        "assurance/platform.toml",
+        'evidence = ["assurance/properties.toml"]',
+        'evidence = ["assurance/board/run.log"]',
+    )
+    tree.regenerate()
+    assert tree.problems() == []
