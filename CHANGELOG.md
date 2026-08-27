@@ -937,10 +937,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   exact case the field was created to make sayable. So an `inverse` row owes a
   `disposition`: `superseded`, which must name **another** row of the group as
   the corrected mutant (its own name would satisfy a plain membership test), or
-  `kept-as-a-finding`, which must carry the `reading` that argues it. The
-  success line counts them apart — `9 mutation verdict(s) and 1 disposed as
-  inverse` — so a disposed row cannot be read as a kill. All 10 current rows are
-  `modelled`; nothing in the bundle moved.
+  `kept-as-a-finding`. **Every** inverse row owes the `reading` that argues it,
+  whichever disposition it takes — the code has always demanded that and this
+  line said `kept-as-a-finding` alone. The success line counts them apart —
+  `9 mutation verdict(s) and 1 disposed as inverse` — so a disposed row cannot
+  be read as a kill. All 10 current rows are `modelled`; nothing in the bundle
+  moved.
+  *And the hatch had no cycle rule and no ratchet.* Self-reference was excluded
+  and cycles were not: A `superseded_by` B with B `superseded_by` A printed
+  **"8 verdict(s) and 2 disposed as inverse"** at **EXIT=0**, a three-row cycle
+  the same, and **all ten rows inverse in a ten-cycle** printed *"0 mutation
+  verdict(s) and 10 disposed as inverse"* — a table that killed nothing,
+  published as one that killed ten. Also green: all ten `kept-as-a-finding` with
+  `reading = "x"`, every inverse row carrying the **same** reading, and a
+  `disposition`/`superseded_by` sitting on a **`modelled`** row, accepted and
+  unvalidated. A `superseded` chain must now reach a corrected mutant — a row
+  that is not itself inverse — the group has a verdict floor of 8 against the 10
+  it carries, one `reading` may not be copied across rows, and the register's
+  two keys belong to the row they are about. Refusing `reading` there as well
+  was the obvious third and was **refuted** by the bundle: all ten `modelled`
+  rows carry one, because it argues whichever direction the row records.
 - **One rule about "which silicon", enforced in one of the two places it is
   asked.** `platform_gate.py` holds its own registry's `board_revision` to a
   concrete RP2350 stepping, and `evidence_gate.py` shares the *token* — it reads

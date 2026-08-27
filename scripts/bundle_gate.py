@@ -254,6 +254,19 @@ DIRECTIONS = ("modelled", "inverse")
 #: SAYABLE, so unsaying it is the verdict column this register replaces.
 DISPOSITIONS = ("superseded", "kept-as-a-finding")
 
+#: The two keys that register belongs to. On a `modelled` row both were accepted
+#: and neither was validated — the register filled in for a row it is not about,
+#: which is a claim wearing a field's name. `reading` is NOT one of them: it
+#: argues whichever direction the row records, and all ten `modelled` rows of
+#: this bundle carry one. Measured, on a first version that refused them.
+INVERSE_FIELDS = ("disposition", "superseded_by")
+
+#: Mutation rows that are a RESULT about the property rather than a finding about
+#: the mutant. Ten rows all `inverse` in a ten-cycle printed "0 mutation
+#: verdict(s) and 10 disposed as inverse" at exit 0: a table that killed nothing,
+#: read as one that killed ten. Under the measured 10, like every ratchet here.
+VERDICT_FLOOR = 8
+
 #: The two rosters above must name the same ten groups. One in `GROUPS` and not
 #: in `FLOORS` is a `KeyError`; one in `FLOORS` and not in `GROUPS` is silently
 #: dead, which is the direction nothing would have shown.
@@ -545,6 +558,98 @@ def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> Non
             )
 
 
+def corrected_by(rows: dict, start: str) -> str | None:
+    """The row at the end of `start`'s `superseded_by` chain, or None on a cycle.
+
+    A membership test alone was the whole rule and a CYCLE satisfies it: A
+    superseded by B and B by A printed "8 mutation verdict(s) and 2 disposed as
+    inverse" at exit 0, and so did a ten-row cycle over the entire group —
+    neither mutant corrected, and every row of the register saying otherwise.
+    """
+    seen, name = set(), start
+    while name in rows and rows[name].get("direction") == "inverse":
+        if name in seen:
+            return None
+        seen.add(name)
+        name = str(rows[name].get("superseded_by", ""))
+    return name if name in rows else None
+
+
+def mutation_dispositions(doc: dict, findings: list[str]) -> int:
+    """Hold the `inverse` register, and return how many rows it disposed of."""
+    rows = [row for row in doc.get("mutation", []) if isinstance(row, dict)]
+    by_name = {str(row.get("mutant", "")): row for row in rows}
+    named = [str(row.get("mutant", "")) for row in rows]
+    readings, inverse = [], 0
+    for index, row in enumerate(doc.get("mutation", []), 1):
+        if not isinstance(row, dict):
+            continue
+        where = f"{BUNDLE} mutation #{index} ({row.get('mutant', '?')})"
+        direction = row.get("direction")
+        readings.append(core(str(row.get("reading", ""))))
+        if direction != "inverse":
+            # The register is filled in for the row it is ABOUT. On a `modelled`
+            # row all three were accepted and none was read: `disposition =
+            # "banana"` beside a `superseded_by` naming nothing was exit 0.
+            stray = [key for key in INVERSE_FIELDS if key in row]
+            if stray:
+                findings.append(
+                    f"{where}: a {direction!r} row carrying {stray} — the disposition"
+                    " register belongs to an inverse kill, and on any other row it is"
+                    " a field nothing validates"
+                )
+        if direction not in DIRECTIONS:
+            findings.append(
+                f"{where}: direction {direction!r} is not one of {DIRECTIONS}"
+                " — a red run is not evidence until the direction is read"
+            )
+        elif direction == "inverse":
+            inverse += 1
+            disposition = row.get("disposition")
+            if disposition not in DISPOSITIONS:
+                findings.append(
+                    f"{where}: an INVERSE kill is a finding about the mutant, not a"
+                    f" result about the property — `disposition` {disposition!r} is"
+                    f" not one of {DISPOSITIONS}"
+                )
+            elif disposition == "superseded":
+                # Its own name would satisfy a plain membership test, and a row
+                # superseded by itself is the claim with nothing behind it again.
+                others = set(named) - {str(row.get("mutant", ""))}
+                if str(row.get("superseded_by", "")) not in others:
+                    findings.append(
+                        f"{where}: `superseded_by` {row.get('superseded_by')!r} names"
+                        " no OTHER row of this group — the corrected mutant is what"
+                        " makes this one a step rather than a result"
+                    )
+                elif corrected_by(by_name, str(row.get("superseded_by", ""))) is None:
+                    findings.append(
+                        f"{where}: `superseded_by` reaches no corrected mutant — a"
+                        " chain of inverse rows corrects nothing, and the step this"
+                        " row claims to be has no result at the end of it"
+                    )
+            if not str(row.get("reading", "")).strip():
+                findings.append(
+                    f"{where}: an inverse kill with no `reading` — the direction is"
+                    " the whole content, and nothing else in the row states it"
+                )
+    for text in sorted({r for r in readings if r and readings.count(r) > 1}):
+        findings.append(
+            f"{BUNDLE}: {readings.count(text)} mutation rows share one `reading`"
+            " — it argues THIS row's direction, and one sentence copied across"
+            " rows argues none of them. All 10 in this bundle are distinct"
+        )
+    verdicts = len(named) - inverse
+    if verdicts < VERDICT_FLOOR:
+        findings.append(
+            f"{BUNDLE}: {verdicts} mutation verdict(s), under the floor of"
+            f" {VERDICT_FLOOR} — all ten rows `inverse` printed '0 mutation"
+            " verdict(s) and 10 disposed as inverse' at exit 0, and a group that"
+            " disposed of every row killed nothing"
+        )
+    return inverse
+
+
 def audit(root: pathlib.Path) -> tuple[list[str], str]:
     root = pathlib.Path(root)
     findings: list[str] = []
@@ -646,44 +751,7 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
                     " an estimate, and an estimate in any of the three voids the measurement"
                 )
 
-    named = [
-        str(row.get("mutant", ""))
-        for row in doc.get("mutation", []) if isinstance(row, dict)
-    ]
-    inverse = 0
-    for index, row in enumerate(doc.get("mutation", []), 1):
-        if not isinstance(row, dict):
-            continue
-        where = f"{BUNDLE} mutation #{index} ({row.get('mutant', '?')})"
-        if row.get("direction") not in DIRECTIONS:
-            findings.append(
-                f"{where}: direction {row.get('direction')!r} is not one of {DIRECTIONS}"
-                " — a red run is not evidence until the direction is read"
-            )
-        elif row.get("direction") == "inverse":
-            inverse += 1
-            disposition = row.get("disposition")
-            if disposition not in DISPOSITIONS:
-                findings.append(
-                    f"{where}: an INVERSE kill is a finding about the mutant, not a"
-                    f" result about the property — `disposition` {disposition!r} is"
-                    f" not one of {DISPOSITIONS}"
-                )
-            elif disposition == "superseded":
-                # Its own name would satisfy a plain membership test, and a row
-                # superseded by itself is the claim with nothing behind it again.
-                others = set(named) - {str(row.get("mutant", ""))}
-                if str(row.get("superseded_by", "")) not in others:
-                    findings.append(
-                        f"{where}: `superseded_by` {row.get('superseded_by')!r} names"
-                        " no OTHER row of this group — the corrected mutant is what"
-                        " makes this one a step rather than a result"
-                    )
-            if not str(row.get("reading", "")).strip():
-                findings.append(
-                    f"{where}: an inverse kill with no `reading` — the direction is"
-                    " the whole content, and nothing else in the row states it"
-                )
+    inverse = mutation_dispositions(doc, findings)
 
     summary = (
         f"bundle-gate: ok — {BUNDLE.name} carries {len(GROUPS)} groups and {total}"

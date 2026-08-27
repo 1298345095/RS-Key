@@ -780,6 +780,69 @@ def test_a_disposed_inverse_kill_is_admitted_and_counted_apart(tmp_path, disposi
     assert "9 mutation verdict(s) and 1 disposed as inverse" in summary, summary
 
 
+def cycle(doc, length, reading=None):
+    """The first `length` rows inverse, each superseded by the next, the last by
+    the first — every row a step and none of them a result."""
+    rows = doc["mutation"]
+    for order in range(length):
+        rows[order].update(
+            direction="inverse", disposition="superseded",
+            superseded_by=rows[(order + 1) % length]["mutant"],
+            reading=reading or f"row {order} is a step towards row {order + 1}",
+        )
+
+
+@pytest.mark.parametrize("length", [2, 3])
+def test_a_superseded_by_cycle_corrects_nothing(tmp_path, length):
+    """Self-reference was excluded and cycles were not: A superseded by B and B
+    by A printed `8 mutation verdict(s) and 2 disposed as inverse` at EXIT=0,
+    with neither mutant corrected."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: cycle(doc, length))
+    assert any("reaches no corrected mutant" in p for p in findings(root)), findings(root)
+
+
+def test_a_group_that_disposed_of_every_row(tmp_path):
+    """All ten rows inverse in a ten-cycle printed `0 mutation verdict(s) and 10
+    disposed as inverse` at EXIT=0 — a table that killed nothing, published as
+    one that killed ten."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: cycle(doc, 10))
+    problems = findings(root)
+    assert any("under the floor of 8" in p for p in problems), problems
+
+
+def test_every_inverse_row_carrying_the_same_reading(tmp_path):
+    """The reading argues THIS row's direction. Ten `kept-as-a-finding` rows all
+    reading `x` was EXIT=0, and so was one sentence copied across all ten."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: cycle(doc, 3, reading="the same sentence, three times"))
+    assert any("share one `reading`" in p for p in findings(root)), findings(root)
+
+
+def test_the_disposition_register_on_a_row_it_is_not_about(tmp_path):
+    """`disposition = "banana"` beside a `superseded_by` naming no row at all,
+    on a `modelled` row, was silently accepted and never validated."""
+    root = tree(tmp_path)
+
+    def stray(doc):
+        doc["mutation"][0].update(disposition="banana",
+                                  superseded_by="a row that does not exist")
+
+    rewrite(root, stray)
+    assert any("the disposition register belongs to" in p for p in findings(root)), findings(root)
+
+
+def test_a_reading_is_owed_by_every_direction_not_only_by_the_inverse_one(tmp_path):
+    """The first version of the rule above refused `reading` on a `modelled` row
+    and reddened all ten of the real bundle's — it argues whichever direction the
+    row records, so it belongs on any of them."""
+    root = tree(tmp_path)
+    doc = tomllib.loads((root / bundle_gate.BUNDLE).read_text())
+    assert all(str(row.get("reading", "")).strip() for row in doc["mutation"]), doc["mutation"]
+    assert findings(root) == []
+
+
 def test_a_mutation_that_does_not_say_which_assertion_fell(tmp_path):
     root = tree(tmp_path)
     import re
