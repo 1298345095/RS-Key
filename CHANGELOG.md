@@ -68,6 +68,16 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **`formal/README.md`'s two "the tree as it stands" baseline rows are held to
+  the gates that print them.** Each opens a mutation table by quoting a
+  `check.sh` row's live summary verbatim — `config_gen_gate.py`'s and
+  `verdict_gate.py`'s — and nothing had ever compared the quote to the output.
+  Both rotted: once at `eaf29a5`, once at `8cb0a74`, whose own subject line
+  says the count "went stale again, in fifteen lines". No run-count rule
+  reaches them either: a markdown table row names no runner, so the shape scan
+  never arms, and 200 is far under the value rule's floor. The numbers are
+  **live**, so they are held exactly rather than scoped — the test asks each
+  gate for its summary and requires the page to carry it.
 - **Both registries added above shipped with the defect they were added to
   close, and both are fixed here.** The carve-out list — the second exemption
   registry on this row — had reasons nothing read and no ratchet on its size,

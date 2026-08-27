@@ -825,3 +825,13 @@ def test_the_pre_fix_reading_is_quoted_with_one_number_in_both_places():
     said = {rel: set(QUOTE.findall((ROOT / rel).read_text())) for rel in QUOTED_IN}
     assert all(len(v) == 1 for v in said.values()), said
     assert len(set().union(*said.values())) == 1, said
+
+
+def test_the_baseline_row_quotes_this_gate_live_summary():
+    """The sibling of the case in `test_config_gen_gate.py`, for the other
+    mutation table on the same page: `formal/README.md` opens it with a `the
+    tree as it stands` row quoting this row's live summary, and only the gate
+    moves it when the tree does. Both rotted; neither was compared to anything.
+    """
+    body = verdict_gate.audit()[1].split("ok — ", 1)[1]
+    assert body in (ROOT / "formal/README.md").read_text(), body

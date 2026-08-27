@@ -307,3 +307,17 @@ def test_a_cfg_that_is_not_a_regular_file_is_a_finding_not_a_traceback(tree):
     (tree / "formal/Directory.cfg").mkdir()
     found = problems(tree)
     assert any("not a regular file" in problem for problem in found), found
+
+
+def test_the_baseline_row_quotes_this_gate_live_summary():
+    """`formal/README.md`'s mutation table opens with a `the tree as it stands`
+    row quoting this row's own summary line, and nothing compared the two.
+
+    It has rotted twice — `eaf29a5` and `8cb0a74`, the second retyping fifteen
+    lines at once and naming the staleness in its own subject. The number is
+    live, so it can be held exactly rather than scoped: the run-count scan
+    cannot see it (a markdown table row names no runner, and 200 is far under
+    the value rule's floor), and the string is the whole claim.
+    """
+    body = config_gen_gate.audit(ROOT)[1].split("ok — ", 1)[1]
+    assert body in (ROOT / "formal/README.md").read_text(), body
