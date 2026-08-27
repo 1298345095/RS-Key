@@ -222,6 +222,22 @@ def test_check_sh_runs_the_row():
     assert gate_lines.runs(check, "scripts/config_gen_gate.py")
 
 
+def test_the_prose_still_counts_the_tree():
+    """A count in a guard's own comment is held by NOTHING.
+
+    `docs_constants.py` reads `docs/**`, `tests/*.py` and `metadata/*.json`, and
+    `run_count_gate.py` reads the published trees; neither reads `scripts/`.
+    Measured on this pair: rotting both back to `191 of the 192` leaves every row
+    of `check.sh` at exit 0. Asserted rather than generated because two sentences
+    do not earn a generator — but a sentence that can be wrong silently is the
+    one defect this row is named for, one directory over.
+    """
+    present = len(list((ROOT / "formal").glob("*.cfg")))
+    said = f"{present - len(config_gen_gate.HAND_WRITTEN)} of the {present} configurations"
+    for rel in ("scripts/config_gen_gate.py", "scripts/check.sh"):
+        assert said in (ROOT / rel).read_text(), (rel, said)
+
+
 def test_the_generator_still_takes_an_output_directory():
     """The whole row rests on it. Hardcode the destination again and every case
     above would compare `formal/` with itself and pass."""
