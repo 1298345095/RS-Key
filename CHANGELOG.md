@@ -86,6 +86,27 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **PIV `MOVE KEY` destroyed the certificate at BOTH slots on a faulted probe, and
+  answered `9000`.** It reads the source certificate and, finding none, deletes the
+  destination's; the source's goes at the end of the move. `Fs::read` answers the
+  same `None` for "no certificate" and "I could not read it". Measured: `MOVE 9A ->
+  82` with `0xD205` stuck → `sw = 0x9000`, source certificate `None`, destination
+  certificate `None` (it was 40 bytes of a known fill). Three more probes in the
+  same command took the fallible twin: the metadata head (a faulted `meta_find`
+  stranded the moved key with no head, which `GET METADATA` and the PIN/touch gate
+  both read), the tail read-back (`has_key`'s collapsed `false` let a failed
+  `remove` answer OK over a key that is still live — the shape `Fs::delete` closed
+  one layer up), and the source blob itself (`FILE_NOT_FOUND` over a slot the medium
+  merely could not read tells the host the slot is EMPTY, and a host that believes
+  it fills the slot). `Fs::try_read_key` is the `read_key` twin, keeping the
+  `KeyFid` chokepoint.
+
+  The fault medium grew the two capabilities these needed: `ProbeMedium::stick_after`
+  lets N reads of a fid through before faulting — a guard standing BEHIND another
+  probe of the same record is otherwise unfalsifiable, which is how 18 of the
+  previous batch's guards ended up held by nothing — and `refuse_remove` drives a
+  failed delete and a faulted read-back on one medium.
+
 - **One faulted flash probe erased the tamper-evident audit trail and left it
   looking freshly initialised.** `journal::load_meta` read `EF_AUDIT_META` with the
   collapsing `Fs::read`, and its absent arm is *genesis* — the state of a journal

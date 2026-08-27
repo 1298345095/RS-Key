@@ -19,7 +19,7 @@
 (*    re-arm it (`request_rescrub`) or its superseded copy stays readable    *)
 (*    forever: audit run-35 found FOUR OF FIVE lazy re-keys skipping that,   *)
 (*    and the sweep landed at crates/rsk-fido/src/clientpin.rs:814-816 and   *)
-(*    :1117-1119, crates/rsk-piv/src/lib.rs:1285-1288,                       *)
+(*    :1117-1119, crates/rsk-piv/src/lib.rs:1313-1316,                       *)
 (*    crates/rsk-oath/src/lib.rs:1180, crates/rsk-openpgp/src/pin.rs:340.    *)
 (*                                                                           *)
 (* 2. THE SCRATCH-WORD LOCK CARRY. The clientPIN soft lock rides a warm      *)

@@ -600,9 +600,14 @@ impl<S: Storage> Fs<S> {
     }
 
     /// Copy a sealed key blob into `buf`; returns its full length, or `None` if
-    /// the slot is absent.
+    /// the slot is absent (or unreadable — see [`try_read`](Self::try_read)).
     pub fn read_key(&mut self, fid: KeyFid, buf: &mut [u8]) -> Option<usize> {
         self.read(fid.get(), buf)
+    }
+
+    /// [`read_key`](Self::read_key), fallible — see [`try_read`](Self::try_read).
+    pub fn try_read_key(&mut self, fid: KeyFid, buf: &mut [u8]) -> Result<Option<usize>> {
+        self.try_read(fid.get(), buf)
     }
 
     /// Whether the key slot holds non-empty data.

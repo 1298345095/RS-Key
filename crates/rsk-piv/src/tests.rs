@@ -8310,3 +8310,177 @@ fn a_faulted_meta_probe_does_not_retire_the_management_touch_gate() {
         "a faulted EF_META probe retired the management key's touch gate"
     );
 }
+
+/// A provisioned card on a fault medium, management key and PIN open, with an
+/// EC P-256 key in 9A — the state `MOVE KEY` starts from.
+fn moved_card() -> (
+    PivApplet<'static>,
+    Fs<ProbeStuck>,
+    rsk_fs::storage::faults::ProbeMedium,
+    &'static RefCell<TestRng>,
+    &'static RefCell<AlwaysConfirm>,
+) {
+    let rng: &'static _ = Box::leak(Box::new(RefCell::new(TestRng(7))));
+    let pres: &'static _ = Box::leak(Box::new(RefCell::new(AlwaysConfirm)));
+    let (backend, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut app = PivApplet::new(SERIAL, HASH, None, rng, pres);
+    select(&mut app, &mut fs);
+    auth_mgm(&mut app, &mut fs);
+    verify_pin(&mut app, &mut fs);
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            INS_ASYM_KEYGEN,
+            0,
+            SLOT_AUTHENTICATION,
+            &gen_template(ALGO_ECCP256),
+        )
+        .0,
+        Sw::OK
+    );
+    (app, fs, medium, rng, pres)
+}
+
+/// Write a certificate object at `tag` (`5FC1xx`) with a recognisable body.
+fn put_cert<S: Storage>(app: &mut PivApplet, fs: &mut Fs<S>, tag: u8, fill: u8) {
+    let body = std::vec![fill; 40];
+    let mut obj = std::vec![0x5C, 0x03, 0x5F, 0xC1, tag, 0x53, body.len() as u8];
+    obj.extend_from_slice(&body);
+    assert_eq!(run(app, fs, INS_PUT_DATA, 0x3F, 0xFF, &obj).0, Sw::OK);
+}
+
+/// `MOVE KEY` reads the source certificate and, finding none, DELETES the
+/// destination's — then deletes the source's at the end of the move. `Fs::read`
+/// answers the same `None` for "no certificate" and "I could not read it", so one
+/// faulted probe destroyed both certificates and still answered 9000.
+#[test]
+fn a_faulted_certificate_probe_does_not_destroy_both_certificates() {
+    let (mut app, mut fs, medium, _rng, _pres) = moved_card();
+    put_cert(&mut app, &mut fs, 0x05, 0xA1); // 9A's certificate  -> 0xD205
+    put_cert(&mut app, &mut fs, 0x0D, 0xB2); // retired 82's      -> 0xD20D
+    let from = cert_fid_for_slot(SLOT_AUTHENTICATION).unwrap();
+    let to = cert_fid_for_slot(0x82).unwrap();
+    let (src, dst) = (medium.value(from), medium.value(to));
+    assert!(
+        src.is_some() && dst.is_some(),
+        "control: both are on the medium"
+    );
+
+    medium.stick(Some(from));
+    let sw = run(
+        &mut app,
+        &mut fs,
+        INS_MOVE_KEY,
+        0x82,
+        SLOT_AUTHENTICATION,
+        &[],
+    )
+    .0;
+    // The destruction first, then the status word: the loss is the finding, and the
+    // refusal is only how it is now avoided.
+    assert_eq!(
+        medium.value(to),
+        dst,
+        "the destination's certificate is gone"
+    );
+    assert_eq!(medium.value(from), src, "and so is the source's");
+    assert_eq!(
+        sw,
+        Sw::MEMORY_FAILURE,
+        "a move that could not read the certificate it carries must refuse"
+    );
+}
+
+/// The moved key's metadata head is what `GET METADATA` and the PIN/touch gate read.
+/// `meta_find` answers the same `None` for a key with no head and for an EF_META read
+/// the flash refused, so a faulted probe stranded the key at the destination with no
+/// head at all. Reached with `stick_after`: `drop_slot_meta` reads EF_META first, so a
+/// plain `stick_once` never gets past it.
+#[test]
+fn a_faulted_meta_head_does_not_strand_the_moved_key() {
+    let (mut app, mut fs, medium, _rng, _pres) = moved_card();
+    medium.stick_after(rsk_fs::EF_META, 1);
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            INS_MOVE_KEY,
+            0x82,
+            SLOT_AUTHENTICATION,
+            &[]
+        )
+        .0,
+        Sw::MEMORY_FAILURE,
+        "a move that could not read the head it carries forward must refuse"
+    );
+    medium.stick(None);
+    let (sw, md) = run(
+        &mut app,
+        &mut fs,
+        INS_GET_METADATA,
+        0,
+        SLOT_AUTHENTICATION,
+        &[],
+    );
+    assert_eq!(
+        sw,
+        Sw::OK,
+        "the source slot still holds the key and its head"
+    );
+    assert_eq!(find_tag(&md, 0x01).unwrap(), &[ALGO_ECCP256]);
+}
+
+/// The tail read-back exists because a `remove` that FAILED leaves the source holding
+/// a live key. It asked `has_key`, which answers `false` for a probe the medium could
+/// not serve — so the move fell through to `meta_delete` and reported OK over the key
+/// it had just copied to a second slot.
+#[test]
+fn a_faulted_readback_does_not_report_a_move_that_left_the_key() {
+    let (mut app, mut fs, medium, _rng, _pres) = moved_card();
+    let src = key_fid(SLOT_AUTHENTICATION).get();
+    medium.refuse_remove(Some(src));
+    // Read 1 is the blob the move carries; read 2 is the tail read-back.
+    medium.stick_after(src, 1);
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            INS_MOVE_KEY,
+            0x82,
+            SLOT_AUTHENTICATION,
+            &[]
+        )
+        .0,
+        Sw::MEMORY_FAILURE,
+        "a move whose source delete failed must not answer OK over the live key"
+    );
+    medium.refuse_remove(None);
+    assert!(
+        medium.value(src).is_some(),
+        "the source key really is still there"
+    );
+}
+
+/// `FILE_NOT_FOUND` over a slot the medium merely could not read tells the host the
+/// slot is EMPTY, and a host that believes it fills the slot — over a live key.
+#[test]
+fn a_faulted_source_probe_does_not_report_the_slot_empty() {
+    let (mut app, mut fs, medium, _rng, _pres) = moved_card();
+    medium.stick(Some(key_fid(SLOT_AUTHENTICATION).get()));
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            INS_MOVE_KEY,
+            0x82,
+            SLOT_AUTHENTICATION,
+            &[]
+        )
+        .0,
+        Sw::MEMORY_FAILURE,
+        "a source slot the medium could not read was reported as an empty one"
+    );
+}

@@ -1107,8 +1107,12 @@ impl PivApplet<'_> {
         // verbatim. Sized to the largest sealed record (RSA-4096 `P ‖ Q`); a
         // smaller buffer would truncate/overrun-slice a 3072/4096 key's blob.
         let mut blob = [0u8; seal::MAX_BLOB];
-        let Some(blob_n) = fs.read_key(key_fid(from), &mut blob) else {
-            return Sw::FILE_NOT_FOUND;
+        // `try_read_key`: FILE_NOT_FOUND over a slot the medium merely could not
+        // read tells the host the slot is EMPTY, and its next move is to fill it.
+        let blob_n = match fs.try_read_key(key_fid(from), &mut blob) {
+            Ok(Some(n)) => n,
+            Ok(None) => return Sw::FILE_NOT_FOUND,
+            Err(_) => return Sw::MEMORY_FAILURE,
         };
         let (cert_from, cert_to) = (cert_fid_for_slot(from), cert_fid_for_slot(to));
         if to != 0xFF {
@@ -1127,7 +1131,17 @@ impl PivApplet<'_> {
                 return Sw::MEMORY_FAILURE;
             }
             let mut obj = [0u8; MAX_OBJECT];
-            let cert = cert_from.and_then(|f| fs.read(f, &mut obj));
+            // `try_read`: the absent arm below DELETES the destination's certificate
+            // and the source's goes at the end of the move, so a probe read as "no
+            // certificate" destroyed both and still answered 9000.
+            let cert = match cert_from.map(|f| fs.try_read(f, &mut obj)) {
+                Some(Ok(n)) => n,
+                None => None,
+                Some(Err(_)) => {
+                    blob.zeroize();
+                    return Sw::MEMORY_FAILURE;
+                }
+            };
             // Clamp the full stored length to the buffer (flash-corruption guard,
             // as in get_data); host-written certs are already <= MAX_OBJECT.
             if let (Some(n), Some(tofid)) = (cert, cert_to) {
@@ -1141,8 +1155,18 @@ impl PivApplet<'_> {
             // Sized to read the full source record (head + any cached point).
             // The point is carried to the destination best-effort — kept when
             // EF_META has room, else dropped to the head alone (see meta_add_slot).
+            // `try_meta_find`: a head the medium could not read is not "this key has
+            // no metadata" — the moved key would land at the destination with none,
+            // and GET METADATA and the PIN/touch gate both answer off that head.
             let mut meta = [0u8; 4 + MAX_EC_POINT];
-            if let Some(n) = fs.meta_find(key_fid(from).get(), &mut meta) {
+            let head = match fs.try_meta_find(key_fid(from).get(), &mut meta) {
+                Ok(n) => n,
+                Err(_) => {
+                    blob.zeroize();
+                    return Sw::MEMORY_FAILURE;
+                }
+            };
+            if let Some(n) = head {
                 let n = n.min(meta.len());
                 if let Err(e) = keygen::meta_add_slot(fs, key_fid(to).get(), &meta[..n]) {
                     blob.zeroize();
@@ -1171,8 +1195,12 @@ impl PivApplet<'_> {
         // read can fault where the next lands, so the head earns a retry; the key
         // is read back too, because a `remove` that failed leaves the source
         // holding a live key and that is not an OK move either.
+        // The read-back resolves to STILL THERE on a probe the medium could not
+        // serve: the collapsed `false` let a failed `remove` answer OK over a key
+        // that is still live, which is the shape `Fs::delete` closed one layer up.
         if dropped.is_err()
-            && (fs.has_key(key_fid(from)) || fs.meta_delete(key_fid(from).get()).is_err())
+            && (fs.try_has_key(key_fid(from)).unwrap_or(true)
+                || fs.meta_delete(key_fid(from).get()).is_err())
         {
             return Sw::MEMORY_FAILURE;
         }

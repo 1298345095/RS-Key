@@ -214,6 +214,12 @@ pub mod faults {
         inner: Rc<RefCell<RamStorage>>,
         stuck: Rc<Cell<Option<u16>>>,
         once: Rc<Cell<bool>>,
+        /// Reads of the stuck fid to let through before the fault lands. A guard
+        /// shadowed by an EARLIER probe of the same record is otherwise
+        /// unfalsifiable: the first one catches every fault and the later one
+        /// never runs.
+        skip: Rc<Cell<u32>>,
+        refused: Rc<Cell<Option<u16>>>,
         err: bool,
     }
 
@@ -224,6 +230,8 @@ pub mod faults {
         inner: Rc<RefCell<RamStorage>>,
         stuck: Rc<Cell<Option<u16>>>,
         once: Rc<Cell<bool>>,
+        skip: Rc<Cell<u32>>,
+        refused: Rc<Cell<Option<u16>>>,
     }
 
     impl ProbeStuck {
@@ -231,14 +239,24 @@ pub mod faults {
             let inner = Rc::new(RefCell::new(RamStorage::new()));
             let stuck = Rc::new(Cell::new(None));
             let once = Rc::new(Cell::new(false));
+            let skip = Rc::new(Cell::new(0));
+            let refused = Rc::new(Cell::new(None));
             (
                 Self {
                     inner: inner.clone(),
                     stuck: stuck.clone(),
                     once: once.clone(),
+                    skip: skip.clone(),
+                    refused: refused.clone(),
                     err: false,
                 },
-                ProbeMedium { inner, stuck, once },
+                ProbeMedium {
+                    inner,
+                    stuck,
+                    once,
+                    skip,
+                    refused,
+                },
             )
         }
     }
@@ -248,13 +266,28 @@ pub mod faults {
         pub fn stick(&self, fid: Option<u16>) {
             self.stuck.set(fid);
             self.once.set(false);
+            self.skip.set(0);
         }
         /// Fail the NEXT read of `fid` and then recover. A persistent fault is
         /// caught by whichever guard reads the record first, so it cannot falsify
         /// the ones further down the same command — the transient one can.
         pub fn stick_once(&self, fid: u16) {
+            self.stick_after(fid, 0);
+        }
+        /// Let `skip` reads of `fid` through, fail the one after, then recover.
+        /// [`stick_once`](Self::stick_once) is `skip = 0`. This is what reaches a
+        /// guard standing BEHIND another probe of the same record — the shadowed
+        /// ones a whole-suite run leaves unfalsifiable.
+        pub fn stick_after(&self, fid: u16, skip: u32) {
             self.stuck.set(Some(fid));
             self.once.set(true);
+            self.skip.set(skip);
+        }
+        /// Refuse `remove` for `fid` (`None` clears it), so a test can drive a
+        /// failed delete and a faulted read-back probe on ONE medium — which is
+        /// what the guards that check their own delete are made of.
+        pub fn refuse_remove(&self, fid: Option<u16>) {
+            self.refused.set(fid);
         }
         /// The bytes stored for `fid` ON THE MEDIUM, fault or no fault.
         pub fn value(&self, fid: u16) -> Option<Vec<u8>> {
@@ -264,13 +297,28 @@ pub mod faults {
         }
     }
 
+    impl ProbeStuck {
+        /// Whether this probe of `fid` is the one that faults, consuming a skip
+        /// credit or the one-shot arming as it decides.
+        fn faults(&self, fid: u16) -> bool {
+            if self.stuck.get() != Some(fid) {
+                return false;
+            }
+            if self.skip.get() > 0 {
+                self.skip.set(self.skip.get() - 1);
+                return false;
+            }
+            if self.once.get() {
+                self.stuck.set(None);
+            }
+            true
+        }
+    }
+
     impl Storage for ProbeStuck {
         fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
-            if self.stuck.get() == Some(fid) {
+            if self.faults(fid) {
                 self.err = true;
-                if self.once.get() {
-                    self.stuck.set(None);
-                }
                 return None;
             }
             self.err = false;
@@ -280,14 +328,14 @@ pub mod faults {
             self.inner.borrow_mut().write(fid, data)
         }
         fn remove(&mut self, fid: u16) -> Result<()> {
+            if self.refused.get() == Some(fid) {
+                return Err(Error::MemoryFatal);
+            }
             self.inner.borrow_mut().remove(fid)
         }
         fn size(&mut self, fid: u16) -> Option<usize> {
-            if self.stuck.get() == Some(fid) {
+            if self.faults(fid) {
                 self.err = true;
-                if self.once.get() {
-                    self.stuck.set(None);
-                }
                 return None;
             }
             self.err = false;
