@@ -978,6 +978,32 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   against what the file DECLARES; the suffix match the `…` elision needs is
   scoped to the elision, because everywhere it would make `::owner` resolve
   against `no_authorization_bypass_walk_owner`.
+  *And it was closed for two of the eight rows.* Instrumented: rows 1, 2, 3, 4,
+  7 and 8 carry no `::` at all, so for six of eight the rule degenerated to "a
+  file of that name exists" — the walk row re-pointed at `CHANGELOG.md`, at
+  `README.md` and at the bundle itself were each **EXIT=0**, and so were
+  `state_kani.rs::STEPS` (a const), `::StepRng` (a struct) and `::OP_STOP`,
+  because `DECLARED` matches a const, a struct and anything inside a
+  `#[cfg(test)]` block. A row's `method` word is now held to §4.1's vocabulary
+  and read: a `model-check` row must resolve a `.cfg` and a `bounded proof` must
+  name a `#[kani::proof]` — `kani_gate.HARNESS`'s own token, so deleting the
+  attribute and keeping the name reddens THIS row rather than only a global
+  count floor one row over (92 → 91, blind to which harness went).
+  *The elision resolved on any suffix, and a bare `…` on nothing.*
+  `…_creds_begin_at_call_site` shortened to `…site`, `…e`, `…n` and to `…`
+  alone were all **EXIT=0**; `…site` ends the antecedent's OWN harness, so the
+  second reference was discharged by the first — the self-reference
+  `superseded_by` refuses one function away. An elision must end exactly one
+  declaration the row has not already named, and an empty one is a finding.
+  *And a reference the resolver did not recognise said nothing at all.*
+  `formal/RSKeySecurityState.tla` typed `.tlaa` in row 8 was **EXIT=0**: the
+  extension is in no list, so the token was read as prose, and the row's other
+  token resolved. A file-shaped token with an unknown extension is a finding
+  now — "unresolvable, so fine" is the same hole with more code.
+  *And one branch of the new pattern could never match.* `gate_lines.rust_code`
+  blanks string literals BEFORE the regex runs, so `extern[ \t]+"[^"]*"` had
+  nothing to match and `pub extern "C" fn X` was reported as **undeclared** — a
+  branch nothing can take, wrong in the direction that refuses real code.
 - **A green exhaustive TLC run was reported `VACUOUS`, and the reason was a hole
   in its own log.** `formal/run-tlc.sh` pulled `states`/`distinct`/`depth` out
   with plain `grep -oE`, and one NUL byte anywhere makes grep call the whole file

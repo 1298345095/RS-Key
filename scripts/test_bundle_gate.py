@@ -289,6 +289,84 @@ def test_a_harness_is_matched_whole_and_not_by_suffix(tmp_path):
     assert any("declares no `owner`" in p for p in findings(root)), findings(root)
 
 
+@pytest.mark.parametrize("symbol", ["STEPS", "StepRng", "OP_STOP"])
+def test_a_bounded_proof_discharged_by_a_const_or_a_struct(tmp_path, symbol):
+    """`DECLARED` matches a const, a struct and anything under `#[cfg(test)]`, so
+    the whole rule was "the file declares SOMETHING by that name": all three were
+    measured green on the walk row."""
+    root = tree(tmp_path)
+    edit(root, "state_kani.rs::no_authorization_bypass_walk_owner", f"state_kani.rs::{symbol}")
+    assert any("naming no `#[kani::proof]`" in p for p in findings(root)), findings(root)
+
+
+def test_a_harness_that_lost_its_proof_attribute(tmp_path):
+    """The name survives the deletion of the thing that makes it a proof. Before
+    this, only `kani_gate.py`'s global count floor moved — 92 to 91, a different
+    row, and blind to WHICH harness went."""
+    root = tree(tmp_path)
+    harness = root / "crates/rsk-fido/src/state_kani.rs"
+    harness.write_text(harness.read_text().replace("#[kani::proof]\nfn no_authorization_bypass_walk_owner",
+                                                   "fn no_authorization_bypass_walk_owner"))
+    assert any("naming no `#[kani::proof]`" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize(
+    "target", ["CHANGELOG.md", "README.md", "assurance/bundle/SEC-FIDO-001.toml"],
+)
+def test_a_bounded_proof_discharged_by_any_file_in_the_tree(tmp_path, target):
+    """Six of the eight rows carry no `::` at all, so for them the rule was "a
+    file of that name exists". All three of these were EXIT=0 on the walk row."""
+    root = tree(tmp_path)
+    (root / target).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / target, root / target)
+    edit(root, 'artifact = "crates/rsk-fido/src/state_kani.rs'
+               '::no_authorization_bypass_walk_owner"', f'artifact = "{target}"')
+    assert any("and no .rs" in p for p in findings(root)), findings(root)
+
+
+def test_a_model_check_row_discharged_by_something_that_is_not_a_configuration(tmp_path):
+    """The other half of the same rule, on the four rows that name a bare
+    `Name.cfg`: the file resolving is not the file being a configuration."""
+    root = tree(tmp_path)
+    shutil.copy(ROOT / "CHANGELOG.md", root / "CHANGELOG.md")
+    edit(root, 'artifact = "Shipped.cfg"', 'artifact = "CHANGELOG.md"')
+    assert any("and no .cfg" in p for p in findings(root)), findings(root)
+
+
+def test_what_a_rust_file_declares_and_which_of_them_are_proofs(tmp_path):
+    """`gate_lines.rust_code` blanks string literals BEFORE this runs, so the
+    `extern "…"` alternative the pattern first carried could never match and
+    `pub extern "C" fn target` was reported as undeclared — a branch nothing can
+    take, wrong in the direction that refuses real code. And a `#[test]` fn is a
+    declaration and not a harness, which is the half `::STEPS` walked through."""
+    source = tmp_path / "x.rs"
+    source.write_text(
+        'pub extern "C" fn exported() {}\n'
+        "\n"
+        "/// A doc comment, blank by the time this runs.\n"
+        "#[kani::proof]\n"
+        "fn a_harness() {}\n"
+        "\n"
+        "#[cfg(test)]\n"
+        "mod tests {\n"
+        "    #[test]\n"
+        "    fn a_test() {}\n"
+        "}\n"
+    )
+    declared, proofs = bundle_gate.declarations(source)
+    assert {"exported", "a_harness", "a_test", "tests"} <= set(declared), declared
+    assert proofs == {"a_harness"}, proofs
+
+
+@pytest.mark.parametrize("word", ["bounded proofs", "model check", "reviewed", ""])
+def test_a_method_word_outside_the_vocabulary(tmp_path, word):
+    """The kind rule reads this field, so a typo silently drops it: `bounded
+    proofs` is not `bounded proof`, and the harness arm stops applying."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["method"][4].update({"method": word}))
+    assert any("is in no row of §4.1's vocabulary" in p for p in findings(root)), findings(root)
+
+
 def test_a_bound_written_as_prose_answers_something(tmp_path):
     """Half the bounds are numbers and `bound_totals` is a sentence, so requiring
     the KEY is satisfied by one bound reading `n/a` — measured green."""
@@ -317,7 +395,43 @@ def test_an_elided_harness_is_resolved_against_the_file_before_it(tmp_path):
     before it named, so it is the spelling a `::`-only reader walks past."""
     root = tree(tmp_path)
     edit(root, "…_creds_begin_at_call_site", "…_creds_begin_at_the_wrong_site")
-    assert any("declares no `" in p for p in findings(root)), findings(root)
+    assert any("ends 0 declaration(s)" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize("elision", ["…site", "…e", "…n", "...site"])
+def test_an_elision_that_resolves_on_any_suffix(tmp_path, elision):
+    """`…site` ends the antecedent's OWN harness — the second reference
+    discharged by the first, which is the self-reference `superseded_by` refuses
+    one function away. All four were EXIT=0."""
+    root = tree(tmp_path)
+    edit(root, "…_creds_begin_at_call_site", elision)
+    assert any("declaration(s) of" in p for p in findings(root)), findings(root)
+
+
+def test_an_elision_that_names_the_token_before_it(tmp_path):
+    """The ambiguity count alone does not reach this one: `…rps_begin_at_call_site`
+    ends exactly ONE declaration, and it is the harness the `::` token already
+    named — one row, one proof, counted twice. Measured: dropping the
+    already-named clause and keeping the count left all 169 cases green."""
+    root = tree(tmp_path)
+    edit(root, "…_creds_begin_at_call_site", "…rps_begin_at_call_site")
+    assert any("ends 0 declaration(s)" in p for p in findings(root)), findings(root)
+
+
+def test_a_bare_ellipsis_elides_nothing(tmp_path):
+    """The symbol is falsy, so the resolver never went looking: EXIT=0."""
+    root = tree(tmp_path)
+    edit(root, "…_creds_begin_at_call_site", "…")
+    assert any("elides nothing" in p for p in findings(root)), findings(root)
+
+
+def test_an_extension_the_resolver_does_not_read_is_not_silence(tmp_path):
+    """The `gives up, says nothing` arm: `.tlaa` in row 8 was skipped as prose
+    because the row's OTHER token resolved, so `resolved > 0` and the typo was
+    never looked at — EXIT=0, while `formal/DoesNotExist.tla` reddened."""
+    root = tree(tmp_path)
+    edit(root, "formal/RSKeySecurityState.tla", "formal/RSKeySecurityState.tlaa")
+    assert any("extension this resolver does not read" in p for p in findings(root)), findings(root)
 
 
 def test_a_bare_configuration_that_is_not_in_formal(tmp_path):

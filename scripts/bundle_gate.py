@@ -54,6 +54,9 @@ import sys
 import tomllib
 
 import gate_lines
+#: For `HARNESS` alone — the token that says a Rust `fn` is a Kani proof. A
+#: second copy here is the defect one directory over.
+import kani_gate
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BUNDLE = pathlib.Path("assurance/bundle/SEC-FIDO-001.toml")
@@ -137,6 +140,12 @@ REFERENCE_SUFFIXES = (
     ".cfg", ".tla", ".rs", ".py", ".sh", ".md", ".toml", ".txt", ".jsonl", ".log", ".gz",
 )
 
+#: A token SHAPED like a file reference. Without it the resolver had a "gives up,
+#: says nothing" arm: `formal/RSKeySecurityState.tlaa` was read as prose because
+#: `.tlaa` is in no list, the row's OTHER token resolved, and the typo went past
+#: at exit 0. Alphabetic first character, so `§6.8.2` and `2.3` stay prose.
+FILE_SHAPED = re.compile(r"\.[A-Za-z][A-Za-z0-9]{0,5}$")
+
 #: `…_creds_begin_at_call_site`: a second harness inside the file the token
 #: before it named. The bundle already writes it this way.
 ELISION = ("…", "...")
@@ -150,11 +159,45 @@ TRIM = "()[]{},;:'\"`"
 #: `no_authorization_bypass_walk_owner` in a doc comment, so pointing the walk
 #: row at the wrong file resolved at exit 0. What a file MENTIONS is not what it
 #: defines, which is the same measurement `platform_gate.py`'s inventory paid for.
+#:
+#: `extern` carries no ABI here for the same reason: the string is already blank
+#: by the time this runs, so the `extern "…"` alternative the first version wrote
+#: could never match, and `pub extern "C" fn X` was reported as undeclared — a
+#: branch nothing can take, wrong in the direction that refuses real code.
+#: Line-anchored, so a one-line `mod m { fn target() {} }` declares only `m`;
+#: nothing in this tree is written that way and brace tracking is a lexer.
 DECLARED = re.compile(
     r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?"
-    r"(?:(?:const|async|unsafe|extern[ \t]+\"[^\"]*\")[ \t]+)*"
+    r"(?:(?:const|async|unsafe|extern)[ \t]+)*"
     r"(?:fn|const|static|struct|enum|trait|type|mod)[ \t]+([A-Za-z_][A-Za-z0-9_]*)"
 )
+
+#: What an item's attributes are written on: the lines a declaration is preceded
+#: by until the previous item ends. Doc comments are already blank by then, so
+#: walking back over blanks and `#[…]` reaches the `#[kani::proof]` and stops at
+#: the closing brace above it.
+ATTRIBUTE = re.compile(r"^[ \t]*#!?\[")
+
+#: §4.1's method vocabulary, in `docs/authorization-slice.md` п.3's order. A word
+#: outside it is a finding and not a shrug: [`METHOD_KIND`] reads this field, so
+#: `method = "bounded proofs"` would quietly drop the rule that field carries.
+METHODS = (
+    "review", "model-check", "bounded proof", "deductive proof",
+    "exhaustive sweep", "mutation", "trace", "measurement", "accepted risk",
+)
+
+#: The two methods whose own word NAMES the kind of artifact discharging them.
+#: Without it a row is satisfied by any file in the tree: re-pointing the walk
+#: row's artifact at `CHANGELOG.md`, at `README.md` and at this bundle were all
+#: exit 0, as were `state_kani.rs::STEPS` (a const) and `::StepRng` (a struct).
+#: The other seven §4.1 methods name no kind — this bundle discharges an
+#: `exhaustive sweep` with a `.py` over a `.tla` and with two `.cfg` — and
+#: inventing one for them would be requiring the wrong one, which is why
+#: `bound_*` is a prefix one field over.
+METHOD_KIND = {
+    "model-check": (".cfg",),
+    "bounded proof": (".rs",),
+}
 
 #: The method row's two PROSE fields — what the obligation is, and how the bound
 #: relates to the shipped domain. A required field is satisfied by any string, so
@@ -239,22 +282,30 @@ def resolve(root: pathlib.Path, name: str) -> pathlib.Path | None:
     return None
 
 
-def defines(target: pathlib.Path, symbol: str, elided: bool = False) -> bool:
-    """Whether `target` DECLARES `symbol`, exactly — or ends in it, if elided.
+def declarations(target: pathlib.Path) -> tuple[list[str], set[str]]:
+    """(every Rust item `target` declares, and those carrying `#[kani::proof]`).
 
-    The suffix arm is the elision's alone. Allowing it everywhere would make
-    `state_kani.rs::owner` resolve against `no_authorization_bypass_walk_owner`,
-    which is the rule loosened by the shape it was written to support.
+    Rust is read as code — anything else has no item grammar this could parse and
+    the claim there is only that the name occurs, which [`method_references`]
+    handles in place.
 
-    Rust is read as code; anything else falls back to the text, because a `.cfg`
-    or a `.tla` has no item grammar this could parse and the claim there is only
-    that the name occurs.
+    The harness half is `kani_gate.HARNESS`'s token and not a second copy of it.
+    A bounded proof is discharged by a HARNESS, and `DECLARED` matches a const, a
+    struct and anything inside a `#[cfg(test)]` block just as happily: `::STEPS`
+    and `::StepRng` each discharged the walk row at exit 0.
     """
-    text = target.read_text(encoding="utf-8", errors="replace")
-    if target.suffix != ".rs":
-        return symbol in text
-    names = DECLARED.findall(gate_lines.rust_code(text))
-    return any(name.endswith(symbol) if elided else name == symbol for name in names)
+    code = gate_lines.rust_code(target.read_text(encoding="utf-8", errors="replace"))
+    lines = code.splitlines()
+    names, proofs = [], set()
+    for match in DECLARED.finditer(code):
+        name = match.group(1)
+        names.append(name)
+        above = code.count("\n", 0, match.start()) - 1
+        while above >= 0 and (not lines[above].strip() or ATTRIBUTE.match(lines[above])):
+            if kani_gate.HARNESS.search(lines[above]):
+                proofs.add(name)
+            above -= 1
+    return names, proofs
 
 
 def answers(value) -> bool:
@@ -298,28 +349,65 @@ def method_answers(doc: dict, findings: list[str]) -> None:
 
 
 def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> None:
-    """Every `[[method]]`'s `artifact` names something this tree still has.
+    """Every `[[method]]`'s `artifact` names something this tree still has, OF THE
+    KIND its own `method` word calls for.
 
-    A `.rs` file must carry its `::symbol`. Naming the file alone is how this
-    rule would be walked past — a bounded proof is identified by its harness, and
-    the file outlives any one of them.
+    A `.rs` file must carry its `::symbol`, and for a bounded proof that symbol
+    must be a harness. Naming the file alone is how this rule would be walked
+    past — a bounded proof is identified by its harness, and the file outlives
+    any one of them — and naming any DECLARATION is how it was: six of the eight
+    rows carry no `::` at all, so the rule degenerated to "a file of that name
+    exists" for all six.
     """
     for index, row in enumerate(doc.get("method", []), 1):
         if not isinstance(row, dict) or "artifact" not in row:
             continue  # a dropped field is the REQUIRED rule's, reported once
         where = f"{BUNDLE} method #{index}"
-        resolved, last = 0, None
+        method = str(row.get("method", ""))
+        if "method" in row and method not in METHODS:
+            findings.append(
+                f"{where}: method {method!r} is in no row of §4.1's vocabulary"
+                f" {METHODS} — the kind rule reads this field, so a word outside"
+                " it drops the rule the field carries"
+            )
+        resolved, last, named, proofs, kinds = 0, None, [], 0, set()
         for word in re.split(r"[\s+]+", str(row["artifact"])):
             token = word.strip(TRIM)
-            elided = token.startswith(ELISION)
-            if elided:
+            if token.startswith(ELISION):
                 symbol, target = token.lstrip("…. "), last
                 if target is None:
                     findings.append(f"{where}: `{token}` elides a file no earlier token named")
                     continue
+                if not symbol:
+                    findings.append(
+                        f"{where}: `{token}` elides nothing — the symbol is empty,"
+                        " so the resolver never went looking for one"
+                    )
+                    continue
+                declared, harnesses = declarations(target)
+                fresh = [
+                    name for name in declared
+                    if name.endswith(symbol) and name not in named
+                ]
+                if len(fresh) != 1:
+                    findings.append(
+                        f"{where}: `{token}` ends {len(fresh)} declaration(s) of"
+                        f" {target.name} this row has not already named — `…site`"
+                        " resolved against the token BEFORE it, which is the second"
+                        " reference discharged by the first"
+                    )
+                    continue
+                symbol = fresh[0]
             else:
                 name, _, symbol = token.partition("::")
+                if not FILE_SHAPED.search(name):
+                    continue  # prose beside a reference; two rows trail off into it
                 if pathlib.PurePosixPath(name).suffix not in REFERENCE_SUFFIXES:
+                    findings.append(
+                        f"{where}: `{name}` carries an extension this resolver does"
+                        " not read, so nothing looked at it — an unresolvable"
+                        " reference that says nothing is the hole with more code"
+                    )
                     continue
                 target = resolve(root, name)
                 if target is None:
@@ -330,21 +418,46 @@ def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> Non
                     )
                     continue
                 resolved, last = resolved + 1, target
-                if target.suffix == ".rs" and not symbol:
+                kinds.add(target.suffix)
+                if target.suffix != ".rs":
+                    text = target.read_text(encoding="utf-8", errors="replace")
+                    if symbol and symbol not in text:
+                        findings.append(f"{where}: {name} does not name `{symbol}`")
+                    continue
+                if not symbol:
                     findings.append(
                         f"{where}: `{name}` names a Rust file and no `::harness` —"
                         " the file is not the proof, and it outlives any one of them"
                     )
-            if symbol and not defines(target, symbol, elided):
-                findings.append(
-                    f"{where}: {target.relative_to(root)} declares no `{symbol}` —"
-                    " the harness this row rests on is gone or renamed, and a file"
-                    " that MENTIONS the name is not the file that has it"
-                )
+                    continue
+                declared, harnesses = declarations(target)
+                if symbol not in declared:
+                    findings.append(
+                        f"{where}: {target.relative_to(root)} declares no `{symbol}` —"
+                        " the harness this row rests on is gone or renamed, and a file"
+                        " that MENTIONS the name is not the file that has it"
+                    )
+                    continue
+            named.append(symbol)
+            proofs += symbol in harnesses
         if not resolved:
             findings.append(
                 f"{where}: `artifact` resolves nothing in the tree — a method with"
                 " no artifact is the obligation restated, not discharged"
+            )
+            continue
+        wanted = METHOD_KIND.get(method, ())
+        if wanted and not kinds.intersection(wanted):
+            findings.append(
+                f"{where}: a {method!r} row resolving {sorted(kinds)} and no"
+                f" {'/'.join(wanted)} — a file in the tree is not the artifact this"
+                " method's own word says discharged the obligation"
+            )
+        if method == "bounded proof" and not proofs:
+            findings.append(
+                f"{where}: a bounded proof naming no `#[kani::proof]` — `::STEPS`"
+                " is a const and `::StepRng` a struct, and each discharged this"
+                " obligation at exit 0"
             )
 
 
