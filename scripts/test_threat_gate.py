@@ -18,6 +18,7 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import gate_lines
+import platform_gate
 import threat_gate
 
 DOC = "\n".join(
@@ -100,6 +101,7 @@ where = "## Zeroization"
 [[untraced]]
 id = "SEC-STORE-001"
 verdict = "missing-clause"
+owner = "contributor"
 why = "not TM-HOST-POWER-CUT, which scopes itself to the interrupted write"
 rests_on = ["**Scope: the interrupted write.** A faulted read is another condition."]
 """
@@ -423,6 +425,61 @@ def test_an_untraced_shrug_is_refused(tree):
     )
     found = problems(tree)
     assert any("under" in p and "words" in p and "SEC-STORE-001" in p for p in found), found
+
+
+def test_an_untraced_finding_nobody_owns_is_refused(tree):
+    """Stage 0's exit bullet, on the second register that carries open items.
+    `verdict` already types what would end the finding — `missing-clause` means
+    write the clause — and who owes it was the missing half."""
+    edit(tree, threat_gate.CLAUSES, 'owner = "contributor"\n', "")
+    found = problems(tree)
+    assert any("owed by None" in p and "SEC-STORE-001" in p for p in found), found
+    assert any("an obligation nobody owns is a wish" in p for p in found), found
+
+
+def test_an_untraced_owner_outside_the_four_roles_is_refused(tree):
+    """One vocabulary across the registers: `platform_gate` chose it and this
+    borrows it, so `someone` is as refused here as it is there."""
+    edit(tree, threat_gate.CLAUSES, 'owner = "contributor"', 'owner = "someone"')
+    found = problems(tree)
+    assert any("owed by 'someone'" in p for p in found), found
+
+
+def test_the_owner_vocabulary_is_the_one_platform_gate_already_chose():
+    """Borrowed, not copied — the identity is the assertion, for the reason the
+    `FLOOR_WORDS` above it is borrowed rather than re-picked."""
+    assert threat_gate.OWNERS is platform_gate.OWNERS
+
+
+def test_a_field_an_untraced_entry_does_not_read_is_refused(tree):
+    """Neither record in this file had a field list, so a key added to one was
+    held by no rule and shown by no reader — the hole `matrix_gate`'s
+    `[[question]]` had, asked of its sibling register."""
+    edit(tree, threat_gate.CLAUSES, 'verdict = "missing-clause"', 'verdict = "missing-clause"\nreview_by = "2027-01-01"')
+    found = problems(tree)
+    assert any("carrying ['review_by']" in p for p in found), found
+
+
+def test_a_field_a_clause_does_not_read_is_refused(tree):
+    """And of the other record in the same file: closing one of two is how a
+    class survives its own fix."""
+    edit(tree, threat_gate.CLAUSES, 'where = "## Zeroization"', 'where = "## Zeroization"\nnote = "later"')
+    found = problems(tree)
+    assert any("carries ['note']" in p and "TM-ZEROIZATION" in p for p in found), found
+
+
+def test_a_table_the_clause_file_does_not_read_is_refused(tree):
+    """And of the file itself, which is where the same question ran out."""
+    edit(tree, threat_gate.CLAUSES, "[[untraced]]", '[[review]]\nwhen = "2027-01-01"\n\n[[untraced]]')
+    found = problems(tree)
+    assert any("carries a `review` table" in p for p in found), found
+
+
+def test_the_report_shows_who_owes_each_untraced_finding(tree):
+    """A field the reader never sees is the same hole one step out: the gate
+    would hold it and the register would still read as unowned."""
+    lines = threat_gate.audit(tree)[1]
+    assert any("untraced [missing-clause, contributor]" in line for line in lines), lines
 
 
 def test_an_untraced_entry_for_a_row_outside_the_p0_family_is_refused(tree):

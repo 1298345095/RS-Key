@@ -103,6 +103,22 @@ CEILING_UNTRACED = 5
 #: A `why` shorter than this is a shrug with a verdict column. Same floor and
 #: same reason as `matrix_gate.FLOOR_WORDS`, borrowed rather than re-picked.
 FLOOR_WORDS = matrix_gate.FLOOR_WORDS
+#: Who owes each untraced finding its clause. Borrowed the same way, from the
+#: register that chose the four roles — an obligation nobody owns is a wish, and
+#: this list is a register of obligations. Every entry today is `contributor`,
+#: because a `missing-clause` finding is a page that is behind code already
+#: defending the threat; a `defends-nothing` verdict, which no entry has yet,
+#: says a P0-family property is against nothing and is the maintainer's.
+OWNERS = platform_gate.OWNERS
+
+#: What each record of `assurance/threat_clauses.toml` may say, and which tables
+#: the file may have. `matrix_gate`'s `[[cell]]` has refused a stray field since
+#: it shipped and its `[[question]]` did not, which is how the hole was found;
+#: asked of this file, NEITHER record had a list and neither did the file, so a
+#: key or a whole section added here was read by nothing and printed by nothing.
+CLAUSE_FIELDS = ("id", "kind", "where", "why", "rests_on")
+UNTRACED_FIELDS = ("id", "verdict", "why", "rests_on", "owner")
+CLAUSE_TABLES = ("clause", "untraced")
 
 
 #: A fence, in both of CommonMark's spellings and at any indent. Three of them
@@ -279,7 +295,13 @@ def check_clauses(
             " seeing it. Shrink the floor here in the same diff"
         )
 
-    entries = load(root, CLAUSES).get("clause", [])
+    document = load(root, CLAUSES)
+    for table in sorted(set(document) - set(CLAUSE_TABLES)):
+        problems.append(
+            f"{CLAUSES}: carries a `{table}` table, which is not one of"
+            f" {list(CLAUSE_TABLES)} — a section of this file no reader reads"
+        )
+    entries = document.get("clause", [])
     clauses: dict[str, dict] = {}
     for index, entry in enumerate(entries, 1):
         cid, where = entry.get("id"), entry.get("where")
@@ -315,6 +337,11 @@ def check_clauses(
             problems.append(
                 f"{cid}: `where` is not a clause of {DOC} any more — it was"
                 f" reworded, deleted or re-indented: {where.strip()[:60]!r}"
+            )
+        if stray := sorted(set(entry) - set(CLAUSE_FIELDS)):
+            problems.append(
+                f"{cid}: carries {stray}, which nothing reads — the same key-nobody"
+                " -holds hole its sibling record had, asked of this one"
             )
         clauses[cid] = entry
 
@@ -413,6 +440,17 @@ def check_untraced(
             problems.append(
                 f"{pid}: untraced with a `why` under {FLOOR_WORDS} words — the"
                 " finding IS the why, and `TODO` is not one"
+            )
+        if entry.get("owner") not in OWNERS:
+            problems.append(
+                f"{pid}: untraced and owed by {entry.get('owner')!r}, which is not"
+                f" one of {sorted(OWNERS)} — this is a register of obligations, and"
+                " an obligation nobody owns is a wish with a verdict column"
+            )
+        if stray := sorted(set(entry) - set(UNTRACED_FIELDS)):
+            problems.append(
+                f"{pid}: untraced and carrying {stray}, which nothing reads — a key"
+                " no rule holds is one the page never shows either"
             )
         if pid in cited:
             problems.append(
@@ -591,7 +629,12 @@ def audit(root) -> tuple[list[str], list[str], str]:
         rest = ", ".join(owners) if owners else "— no registered property"
         report.append(f"  {cid:<30} {len(owners):>2}  {rest}{outside}")
     for pid, entry in untraced.items():
-        report.append(f"  {pid:<30}  -  untraced [{entry.get('verdict')}]")
+        # The owner is printed, not just held: a field no reader ever sees is
+        # the same field-nothing-reads hole as one no rule holds, one step out.
+        report.append(
+            f"  {pid:<30}  -  untraced [{entry.get('verdict')},"
+            f" {entry.get('owner')}]"
+        )
     defences = [c for c in clauses.values() if c.get("kind") == "defence"]
     summary = (
         f"threat-gate: ok — {len(clauses)} clause(s) ({len(defences)} defence,"

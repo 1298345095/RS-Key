@@ -66,6 +66,23 @@
 # the only cut point, and `crates/rsk-store/src/lib.rs:236` says a NOR power cut
 # never produces a read fault. The other three are against a FAILED READ, which is
 # a threat this page still states nowhere.
+#
+# Every [[untraced]] row also names an `owner`, from scripts/platform_gate.py's
+# four roles — borrowed rather than re-picked, like the word floor above it, and
+# for its reason: this is a register of obligations and an obligation nobody owns
+# is a wish with a verdict column. What would END the finding is already typed by
+# `verdict` and needs no second field: `missing-clause` says write the clause,
+# and `defends-nothing` is a decision rather than a deferral. All five are
+# `contributor` today, because a `missing-clause` finding is a page standing
+# behind code that already defends the threat; a `defends-nothing` verdict, which
+# no row has yet, claims a P0-family property is against nothing and is the
+# maintainer's to make.
+#
+# Both records here take a fixed set of keys now, and so does the file. Neither
+# had one: a key added to a [[clause]] or an [[untraced]] was held by no rule and
+# shown to no reader, which is the hole matrix_gate's [[question]] had, asked of
+# this file — and the same question one level out found the file's own tables
+# unguarded too.
 
 [[clause]]
 id = "TM-TITLE"
@@ -342,6 +359,7 @@ serve"""
 
 [[untraced]]
 id = "SEC-STORE-003"
+owner = "contributor"
 verdict = "missing-clause"
 why = """
 not TM-HOST-POWER-CUT, though this property's name says "torn": the writer \
@@ -355,6 +373,7 @@ different condition, and a NOR power cut does not produce one."""]
 
 [[untraced]]
 id = "SEC-STORE-004"
+owner = "contributor"
 verdict = "missing-clause"
 why = """
 the same absent clause as SEC-STORE-003, and not TM-HOST-POWER-CUT for the \
@@ -367,6 +386,7 @@ different condition, and a NOR power cut does not produce one."""]
 
 [[untraced]]
 id = "SEC-STORE-005"
+owner = "contributor"
 verdict = "missing-clause"
 why = """
 the induction conjunct behind SEC-STORE-004 and the same missing clause, \
@@ -379,6 +399,7 @@ different condition, and a NOR power cut does not produce one."""]
 
 [[untraced]]
 id = "SEC-POL-003"
+owner = "contributor"
 verdict = "missing-clause"
 why = """
 no clause covers key material surviving a slot's re-parameterisation; an \
@@ -387,6 +408,7 @@ secret behind a label that no longer describes it"""
 
 [[untraced]]
 id = "SEC-POL-006"
+owner = "contributor"
 verdict = "missing-clause"
 why = """
 a repeated counter lets a captured OTP validate twice, and the page states \

@@ -40,6 +40,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The second register of open items gained the same owner, and both of its
+  record types gained the field list neither had.** `assurance/threat_clauses.toml`
+  keeps the P0-family properties that trace to no threat-model clause; its five
+  `[[untraced]]` findings now name an `owner` from the same four roles, borrowed
+  from `scripts/platform_gate.py` with the identity asserted. No second deferral
+  field: `verdict` already types what would end the finding — `missing-clause`
+  means write the clause, and `defends-nothing` is a decision rather than a
+  deferral — so adding one would be two answers to one question. All five are
+  `contributor`, because a `missing-clause` finding is a page standing behind code
+  that already defends the threat. Asking the field-allowlist question of this
+  file found **neither** `[[clause]]` nor `[[untraced]]` had one, and neither did
+  the file's own tables; all three are refused now, and the owner is printed in the
+  report rather than only held. Six mutations in `scripts/test_threat_gate.py`.
+
 - **Every open question in the build-configuration ledger names who owes the
   answer and what would end the deferral, and neither is a date.** Stage 0's last
   exit bullet asked for an owner and a decision, or a deferral with a review date;
