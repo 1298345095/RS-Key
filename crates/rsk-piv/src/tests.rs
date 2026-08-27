@@ -8296,7 +8296,6 @@ fn a_faulted_meta_probe_does_not_retire_the_management_touch_gate() {
     // ONE faulted EF_META read, not a stuck one: `meta_add` further down refuses a
     // persistently unreadable blob on its own, which would mask this guard entirely.
     medium.stick_once(rsk_fs::EF_META);
-    medium.stick_once(rsk_fs::EF_META);
     assert_eq!(
         protect_mgm_key(&dev, &mut fs, &mut TestRng(3)),
         Sw::MEMORY_FAILURE,
