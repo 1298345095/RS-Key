@@ -764,7 +764,7 @@ fn no_enforce_authenticate_cannot_flush_the_audit_journal() {
     }
     assert_eq!(process_u2f(&mut ctx, &touched, &mut out).0, Sw::OK);
 
-    let (_, m) = crate::journal::chain_head(&dev(), &mut fs);
+    let (_, m) = crate::journal::chain_head(&dev(), &mut fs).unwrap();
     assert_eq!(m.start, 0, "nothing evicted from the window");
     // BOOT, PIN_LOCKOUT, the coalesced silent run, the touched authenticate.
     assert_eq!(m.seq_next, 4);

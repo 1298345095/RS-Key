@@ -617,7 +617,7 @@ fn silent_assertions_cannot_flush_the_audit_journal() {
         get_assertion(&mut ctx, &gestured, &mut out).unwrap();
     }
 
-    let (_, m) = crate::journal::chain_head(&dev(), &mut fs);
+    let (_, m) = crate::journal::chain_head(&dev(), &mut fs).unwrap();
     assert_eq!(m.start, 0, "nothing evicted from the window");
     // BOOT, BACKUP_EXPORT, the coalesced silent run, the gestured assertion.
     assert_eq!(m.seq_next, 4);

@@ -86,6 +86,27 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted flash probe erased the tamper-evident audit trail and left it
+  looking freshly initialised.** `journal::load_meta` read `EF_AUDIT_META` with the
+  collapsing `Fs::read`, and its absent arm is *genesis* — the state of a journal
+  that has never been written. `raw_append` then wrote at slot 0 and `put_meta`
+  **persisted** it. Measured: `seq_next` 10 → 1, `start` 0, the head no longer over
+  the window, ten entries out of the live window, all of it on flash. The chain's
+  whole job is to make that undetectable-loss case impossible.
+
+  The eviction fold was the second half: `raw_append` folded the entry it is about
+  to overwrite into the epoch only `if read_slot(..).is_some()`, so a faulted slot
+  read at eviction dropped an entry from the chain *without* folding it — and the
+  head still verified over the shortened history. Three more readers spelled the
+  same thing: `chain_head` (whose result gets SIGNED by `AUDIT_CHECKPOINT`),
+  `vendor_read` (the export the host folds against that signature) and
+  `fold_and_scrub` (which deletes the slots after committing the fold). All four
+  refuse now; the two coalesce paths decline instead, which sends the caller to
+  `append`, which refuses. `for_each_event` deliberately keeps the collapse — it
+  writes nothing, signs nothing and opens no gate, and its one caller is a display
+  screen with no error state to paint; a faulted `EF_AUDIT_META` still renders
+  there as an empty log.
+
 - **One faulted flash probe waived the vendor PIN gate and handed out the device
   master seed.** `vendor::pin_gate` is the *only* PIN half of the gate on
   `BACKUP_EXPORT`, `BACKUP_LOAD`, `BACKUP_FINALIZE`, `ATT_IMPORT`, `ATT_CLEAR`,

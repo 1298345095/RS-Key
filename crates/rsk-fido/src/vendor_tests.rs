@@ -1784,7 +1784,7 @@ fn audit_config_rejects_unknown_target() {
 /// export: `(start, seq_next, head)`. An eviction moves `start`; a coalesced repeat
 /// moves only the head, since it rewrites the newest entry in place.
 fn journal_state(fs: &mut Fs<RamStorage>) -> (u32, u32, [u8; 32]) {
-    let (head, m) = crate::journal::chain_head(&dev(), fs);
+    let (head, m) = crate::journal::chain_head(&dev(), fs).unwrap();
     (m.start, m.seq_next, head)
 }
 
