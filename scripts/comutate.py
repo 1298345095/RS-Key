@@ -18,7 +18,7 @@ the answer to a measured skew: 31 of the first 43 patches landed in `rsk-fido`,
 modules are written about held ZERO. "TLC is green over the applets" was
 therefore fidelity nobody had measured, not fidelity measured and found good.
 
-Three families remain DELIBERATELY out, because an exclusion stated here is a
+Four families remain DELIBERATELY out, because an exclusion stated here is a
 plan and one implied by a glob is a hole:
 
 * `BootMut_*` — two of its three defended sites live in `firmware/` (the
@@ -37,11 +37,28 @@ plan and one implied by a glob is a hole:
   the glob, because the glob was how they were out before: `roster()` simply did
   not match them, which is the shape of hole this file exists to refuse.
 
+* `TokenGateMut_*` — tier A's mutant edits `AllowedEventRel` itself, and no
+  production function's body IS that relation. A code twin would have to be
+  invented rather than found, and an invented twin is a second model wearing a
+  patch. What tier A's edge asserts about the code is already carried by the
+  eleven `Mut_*` twins of this property, one of which now reddens its Kani
+  harness as well as the unit suite.
+
 `formal/comutants.toml` holds one entry per mutant: a `patch` (exact-snippet
 find/replace — the defect, re-made in today's code), `unreachable` (the defect
 became unreachable by construction after a shipped fix; the model measured it
 and the evidence field says where), or `pending` (batch not yet derived,
 floored so the count only goes down).
+
+A `patch` may additionally carry a `proof` — a second command, run in the same
+worktree after the slice killed, plus the `proof_names` string one of its failed
+checks must carry. It exists because 0 of the 67 slices ran `cargo kani`, so no
+Kani harness in this tree was reddened by any recorded mutant: a proof falsified
+by nothing is the same shape as a guard whose wiring nothing exercises. The
+`--target <host>` this file appends goes on a `cargo test` and nowhere else —
+`cargo kani` has no such flag — and two TOOL LIMITS (a CBMC timeout, an
+unsupported construct) end in the same `VERIFICATION:- FAILED` a real refutation
+does, so both are refused by name rather than counted as kills.
 
 Three modes:
 
@@ -369,6 +386,19 @@ def lint(root: pathlib.Path, check_generated_readme: bool = True) -> list[str]:
             problems.append(f"{where}: patch without a slice")
         if entry.get("expect") not in ("killed", "gap"):
             problems.append(f"{where}: expect must be 'killed' or 'gap'")
+        if ("proof" in entry) != bool(entry.get("proof_names", "").strip()):
+            problems.append(
+                f"{where}: a proof and the check it must fell go together — a proof "
+                "whose reason nothing compares is a RED nobody read"
+            )
+        if "proof" in entry:
+            if entry.get("expect") != "killed":
+                problems.append(f"{where}: a proof half only means anything under expect = 'killed'")
+            if "--harness" not in entry["proof"]:
+                problems.append(
+                    f"{where}: the proof must name --harness — an unrelated harness "
+                    "failing in the same run would be credited to this patch"
+                )
         shape = anchor_shape_problems(bug, entry)
         problems.extend(shape)
         if shape:
@@ -398,6 +428,68 @@ def lint(root: pathlib.Path, check_generated_readme: bool = True) -> list[str]:
     if check_generated_readme:
         check_readme(root, entries, problems)
     return problems
+
+
+#: What a Kani run prints when a check fell. Two TOOL LIMITS print the same last
+#: line -- a CBMC timeout and an unsupported Rust construct -- so a harness that
+#: did not converge would score a kill wearing the right colour. Refused by name,
+#: which is the same rule `floors.txt`'s invariant column applies one tier up.
+PROOF_FAILED = "VERIFICATION:- FAILED"
+PROOF_NOT_A_KILL = (
+    "CBMC timed out",
+    "not currently supported",
+    "unwinding assertion",
+)
+
+
+def with_target(cmd: list[str], host: str) -> list[str]:
+    """`--target <host>` on a `cargo test` and on nothing else."""
+    return cmd + ["--target", host] if cmd[:2] == ["cargo", "test"] else list(cmd)
+
+
+def run_slice(cmd: list[str], wt: pathlib.Path, root: pathlib.Path, host: str):
+    """One command in the worktree, sharing the main build cache.
+
+    `--target` goes on a `cargo test` and nowhere else: `cargo kani` has no such
+    flag, answers `error: unexpected argument '--target' found`, and this file's
+    own classifier would read that clap error as `build-broke` -- a mutant that
+    never ran, recorded as a patch that does not compile.
+    """
+    cmd = with_target(cmd, host)
+    return subprocess.run(
+        cmd,
+        cwd=wt,
+        capture_output=True,
+        text=True,
+        env={
+            **__import__("os").environ,
+            # Sequential runs share the main build cache: only the patched
+            # crate recompiles, instead of a cold dependency tree per mutant.
+            "CARGO_TARGET_DIR": str(root / "target"),
+            # `scripts/kani.sh`'s reason, and it applies to any kani slice run
+            # from here: on x86_64 a harness that hashes reaches `cpufeatures`'
+            # inline-asm CPU probe, which Kani calls unsupported -- a tool limit
+            # wearing the shape of a property violation, invisible on aarch64.
+            "RUSTFLAGS": (
+                __import__("os").environ.get("RUSTFLAGS", "")
+                + ' --cfg sha2_backend="soft" --cfg poly1305_force_soft'
+                " --cfg sha1_force_soft"
+            ).strip(),
+        },
+    )
+
+
+def proof_verdict(out: str, code: int, names: str) -> tuple[str, str] | None:
+    """(verdict, detail) when the proof half did NOT redden for its own reason."""
+    for limit in PROOF_NOT_A_KILL:
+        if limit in out:
+            return "proof-broke", f"the harness did not converge: {limit}"
+    if code == 0 or PROOF_FAILED not in out:
+        return "proof-survived", "the harness stayed green under the patch"
+    hit = [line.strip() for line in out.splitlines() if names in line]
+    if not hit:
+        return "proof-wrong-reason", f"a check fell and none of them named {names}"
+    return None
 
 
 def host_triple() -> str:
@@ -447,34 +539,33 @@ def run_one(root: pathlib.Path, bug: str, entry: dict, host: str) -> tuple[str, 
             edits[target] = text.replace(find, replace)
         for target, text in edits.items():
             target.write_text(text)
-        cmd = list(entry["slice"]) + ["--target", host]
-        r = subprocess.run(
-            cmd,
-            cwd=wt,
-            capture_output=True,
-            text=True,
-            env={
-                **__import__("os").environ,
-                # Sequential runs share the main build cache: only the patched
-                # crate recompiles, instead of a cold dependency tree per mutant.
-                "CARGO_TARGET_DIR": str(root / "target"),
-            },
-        )
-        if r.returncode != 0:
-            out = r.stdout + r.stderr
-            # A compile error is not a kill: the tests never ran, so a broken
-            # patch would masquerade as "the tests caught the defect". A real
-            # test failure prints "test result:" / "FAILED"; a build break
-            # prints "error[E" / "error:" and no test line. Tell them apart, or
-            # a patch that does not compile scores a false killed — which is how
-            # BugPpuatIsAGate first read (EF_PAUTHTOKEN is a KeyFid, not a u16).
-            ran = [l for l in out.splitlines() if "FAILED" in l or "test result" in l]
-            if ran:
-                return "killed", ran[-1]
+        r = run_slice(list(entry["slice"]), wt, root, host)
+        if r.returncode == 0:
+            return "gap", "every slice command stayed green"
+        out = r.stdout + r.stderr
+        # A compile error is not a kill: the tests never ran, so a broken patch
+        # would masquerade as "the tests caught the defect". A real test failure
+        # prints "test result:" / "FAILED"; a build break prints "error[E" /
+        # "error:" and no test line. Tell them apart, or a patch that does not
+        # compile scores a false killed — which is how BugPpuatIsAGate first read
+        # (EF_PAUTHTOKEN is a KeyFid, not a u16).
+        ran = [l for l in out.splitlines() if "FAILED" in l or "test result" in l]
+        if not ran:
             if re.search(r"^error(\[E\d+\])?:", out, re.M):
                 return "build-broke", "patch does not compile — not a kill"
-            return "killed", "slice exited nonzero (no test output)"
-        return "gap", "every slice command stayed green"
+            ran = ["slice exited nonzero (no test output)"]
+        if "proof" not in entry:
+            return "killed", ran[-1]
+        # THE PROOF HALF. 0 of the 67 slices reddened a Kani harness, so the
+        # property's proof was falsified by nothing — the same shape as a guard
+        # whose wiring nothing exercises, one layer in.
+        proof = run_slice(list(entry["proof"]), wt, root, host)
+        text = proof.stdout + proof.stderr
+        refused = proof_verdict(text, proof.returncode, entry["proof_names"])
+        if refused:
+            return refused
+        named = [l.strip() for l in text.splitlines() if entry["proof_names"] in l]
+        return "killed", f"{ran[-1]}; proof: {named[0]}"
     finally:
         subprocess.run(
             ["git", "worktree", "remove", "--force", str(wt)], cwd=root, check=False

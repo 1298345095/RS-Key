@@ -275,6 +275,17 @@ file = "crates/rsk-fido/src/state.rs"
 find = "self.channel == channel && self.rp_counter <= self.rp_total"
 replace = "self.rp_counter <= self.rp_total"
 slice = ["cargo", "test", "-p", "rsk-fido"]
+# THE FIRST PROOF HALF IN THIS FILE. Every other slice here is a `cargo test`, so
+# no Kani harness in the tree was reddened by any recorded mutant and the one
+# proof `SEC-FIDO-001` has was falsified by nothing. This patch drops the channel
+# conjunct out of `may_walk_rps`, so B1's EQUALITY must fail on the non-owning
+# probe specifically — a different check falling means a different defect, which
+# is what `proof_names` compares.
+proof = [
+  "cargo", "kani", "-p", "rsk-fido", "--features", "kani-soft",
+  "--harness", "no_authorization_bypass_walk_owner",
+]
+proof_names = "NoAuthorizationBypass/B1"
 expect = "killed"
 note = "the RP walk ignores which channel opened it — any channel continues it."
 

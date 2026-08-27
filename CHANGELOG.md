@@ -40,6 +40,23 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **A recorded mutant reddens a Kani harness, for the first time.** All 67
+  co-refutation slices ran `cargo test -p …`, so no proof in this tree was
+  falsified by any recorded defect — the property's single harness was the same
+  shape as a guard whose wiring nothing exercises, one layer in. A `patch` entry
+  in `formal/comutants.toml` may now carry a `proof` (a second command, run in
+  the same worktree after the slice killed) and `proof_names` (the check one of
+  its failures must carry). `BugCmWalkIgnoresChannel` carries the first: it drops
+  the channel conjunct out of `may_walk_rps`, so `no_authorization_bypass_walk_owner`'s
+  `NoAuthorizationBypass/B1` equality must fail on the non-owning probe
+  specifically, and a different check falling is a different defect. Three traps
+  are refused by name rather than counted as kills: `--target <host>` now goes on
+  a `cargo test` and nowhere else (`cargo kani` answers a clap error, which this
+  file's own classifier read as "the patch does not compile"), and a CBMC timeout
+  or an unsupported Rust construct ends in the same `VERIFICATION:- FAILED` a real
+  refutation does. The weekly `comutants` job gains the out-of-band Kani install
+  the `kani` job already had.
+
 - **Three quarters of `NoAuthorizationBypass` had no ownership ledger, and now
   do.** The invariant is four clauses — the token and its permission, the retry
   budget's soft lock, the reset window, the walk's owning channel — and

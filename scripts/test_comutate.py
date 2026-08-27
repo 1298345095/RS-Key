@@ -404,3 +404,131 @@ def test_one_entry_patches_several_files(tmp_path):
     one = {"site": [both["site"][0]], "slice": slice_}
     verdict, _ = comutate.run_one(root, "BugAlpha", one, "any-host")
     assert verdict == "killed", "the slice cannot tell one patched file from two"
+
+
+# ---- the proof half ----------------------------------------------------------
+
+
+def test_the_host_target_goes_on_a_cargo_test_and_nowhere_else():
+    # `cargo kani` has no `--target`: it answers `error: unexpected argument
+    # '--target' found`, which this file's own classifier reads as build-broke —
+    # a mutant that never ran, recorded as a patch that does not compile.
+    assert comutate.with_target(["cargo", "test", "-p", "x"], "h")[-2:] == ["--target", "h"]
+    kani = ["cargo", "kani", "-p", "x", "--harness", "y"]
+    assert comutate.with_target(kani, "h") == kani
+
+
+@pytest.mark.parametrize(
+    "out,code,verdict",
+    [
+        ("Checking harness y…\nVERIFICATION:- SUCCESSFUL\n", 0, "proof-survived"),
+        ("Failed Checks: something else\nVERIFICATION:- FAILED\n", 1, "proof-wrong-reason"),
+        ("CBMC timed out\nVERIFICATION:- FAILED\n", 1, "proof-broke"),
+        (
+            "A Rust construct that is not currently supported by Kani\n"
+            "VERIFICATION:- FAILED\n",
+            1,
+            "proof-broke",
+        ),
+    ],
+)
+def test_a_proof_that_did_not_redden_for_its_own_reason(out, code, verdict):
+    # The two tool limits end in the SAME line a real refutation does, so a
+    # harness that did not converge would score a kill wearing the right colour —
+    # the direction failure AGENTS.md records two of twenty-four patches taking.
+    assert comutate.proof_verdict(out, code, "NoAuthorizationBypass/B1")[0] == verdict
+
+
+def test_a_proof_that_fell_on_its_named_check_is_not_refused():
+    out = "Failed Checks: NoAuthorizationBypass/B1: wrong set\nVERIFICATION:- FAILED\n"
+    assert comutate.proof_verdict(out, 1, "NoAuthorizationBypass/B1") is None
+
+
+def test_a_killed_slice_with_a_surviving_proof_is_not_a_kill(tmp_path):
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": ["sh", "-c", 'echo "test result: FAILED"; exit 1'],
+        "proof": ["sh", "-c", 'echo "VERIFICATION:- SUCCESSFUL"', "--harness"],
+        "proof_names": "NoAuthorizationBypass/B1",
+    }
+    verdict, _ = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "proof-survived", verdict
+
+
+def test_a_killed_slice_with_a_reddened_proof_names_the_check(tmp_path):
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": ["sh", "-c", 'echo "test result: FAILED"; exit 1'],
+        "proof": [
+            "sh",
+            "-c",
+            'echo "Failed Checks: NoAuthorizationBypass/B1: wrong set";'
+            ' echo "VERIFICATION:- FAILED"; exit 1',
+            "--harness",
+        ],
+        "proof_names": "NoAuthorizationBypass/B1",
+    }
+    verdict, detail = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "killed", (verdict, detail)
+    assert "proof: Failed Checks: NoAuthorizationBypass/B1" in detail, detail
+
+
+def test_a_green_slice_never_reaches_the_proof(tmp_path):
+    # A slice that stayed green is a gap, and running the proof over it would
+    # credit the mutant with a refutation the unit suite never made.
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": ["true"],
+        "proof": ["sh", "-c", "exit 1", "--harness"],
+        "proof_names": "x",
+    }
+    assert comutate.run_one(root, "BugAlpha", entry, "any-host")[0] == "gap"
+
+
+@pytest.mark.parametrize(
+    "edit_to,text",
+    [
+        ('proof = ["cargo", "kani", "--harness", "h"]', "the check it must fell go together"),
+        (
+            'proof = ["cargo", "kani"]\nproof_names = "X"',
+            "the proof must name --harness",
+        ),
+        ('proof_names = "X"', "the check it must fell go together"),
+    ],
+)
+def test_a_proof_half_that_cannot_be_read_reddens_the_lint(tmp_path, edit_to, text):
+    tree = build(tmp_path)
+    edit(tree / "formal" / "comutants.toml", 'expect = "gap"', f'expect = "gap"\n{edit_to}')
+    red(tree, text)
+
+
+def test_a_proof_only_means_anything_under_a_kill(tmp_path):
+    tree = build(tmp_path)
+    edit(
+        tree / "formal" / "comutants.toml",
+        'expect = "gap"',
+        'expect = "gap"\nproof = ["cargo", "kani", "--harness", "h"]\nproof_names = "X"',
+    )
+    red(tree, "only means anything under expect = 'killed'")
+
+
+def test_the_shipped_proof_half_names_a_harness_that_exists():
+    # The one entry that carries a proof today, and the trap it is against: a
+    # `--harness` naming nothing runs every harness in the crate, and any of them
+    # failing would be credited to this patch.
+    entries = comutate.load(comutate.ROOT)[2]
+    carried = {b: e for b, e in entries.items() if "proof" in e}
+    assert carried, "no comutant reddens a proof — the finding this half closed is back"
+    names = "\n".join(
+        p.read_text() for p in (comutate.ROOT / "crates").glob("*/src/*kani*.rs")
+    )
+    for bug, entry in carried.items():
+        harness = entry["proof"][entry["proof"].index("--harness") + 1]
+        assert f"fn {harness}(" in names, (bug, harness)
+        assert entry["proof_names"] in names, (bug, entry["proof_names"])

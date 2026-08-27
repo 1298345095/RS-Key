@@ -47,9 +47,9 @@
 #   comutants — the semantic model mutants re-injected into production Rust
 #          (`scripts/comutate.py run`). Gating: every recorded code-level kill
 #          must still go red, and a new GAP is an abstraction-fidelity finding.
-#   formal — TLC over formal/: the 186 configurations `run-tlc.sh safety` lists,
-#          their floors and the vacuity check — 18 that must come back GREEN and
-#          168 that must go RED, on the invariant `floors.txt` names wherever it
+#   formal — TLC over formal/: the 194 configurations `run-tlc.sh safety` lists,
+#          their floors and the vacuity check — 20 that must come back GREEN and
+#          174 that must go RED, on the invariant `floors.txt` names wherever it
 #          names one. Gating. It also runs on
 #          any push touching formal/, so an edit to the model is checked at once
 #          rather than up to a week later. The `liveness` tier is deliberately
@@ -435,6 +435,13 @@ jobs:
     if: github.event.schedule != '17 5 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # One comutant now carries a PROOF half — `cargo kani` over the harness its
+    # defect must redden — so this job needs the same out-of-band install the
+    # `kani` job has. Without it the proof command answers `error: no such
+    # command`, which `comutate.py` classifies as `build-broke` and the row goes
+    # red for the tool rather than for the patch.
+    env:
+      KANI_VERSION: "0.67.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -454,6 +461,16 @@ jobs:
           key: comutants-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'formal/comutants.toml') }}
           restore-keys: comutants-${{ runner.os }}-
 
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin
+          key: kani-${{ runner.os }}-${{ env.KANI_VERSION }}
+
+      - name: install kani (rustup-based — not packaged in nixpkgs)
+        run: |
+          command -v cargo-kani >/dev/null || cargo install --locked kani-verifier --version "$KANI_VERSION"
+          cargo kani setup
+
       - name: co-refutation — inject every semantic defect into production Rust
         run: |
           set -o pipefail
@@ -470,7 +487,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # The TLA+ model checker. It ran in no workflow at all until now: `floors.txt`,
-  # the vacuity check and the mutant matrix -- 156 of the 186 configurations
+  # the vacuity check and the mutant matrix -- 156 of the 194 configurations
   # `run-tlc.sh --tiers` lists under `safety` -- were ratchets whose only puller was
   # whoever remembered `./formal/run-tlc.sh`, on the one machine that had a jar at
   # a hardcoded store path. The tool is pinned in the dev shell now, which is what
