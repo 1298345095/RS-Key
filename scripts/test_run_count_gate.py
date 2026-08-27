@@ -354,6 +354,7 @@ def fixture_registries(monkeypatch):
     """
     monkeypatch.setattr(run_count_gate, "SCOPED", {})
     monkeypatch.setattr(run_count_gate, "SCAN_FLOOR", 0)
+    monkeypatch.setattr(run_count_gate, "RULE_FLOOR", 0)
     monkeypatch.setattr(run_count_gate, "TABLE_GROUPS", GROUPS)
 
 
@@ -373,6 +374,35 @@ def test_the_summary_counts_what_it_says(tree):
 def test_the_real_checkout_is_green():
     """The other direction, on the tree this actually guards."""
     assert run_count_gate.audit(ROOT)[0] == []
+
+
+@pytest.mark.parametrize("rule", ("TALLY", "COUNT", "CLOCK", "LOOSE_TALLY", "NAMES_A_RUN"))
+def test_a_scan_rule_that_has_stopped_matching_this_tree(monkeypatch, rule):
+    """Each rule against the REAL checkout at the REAL floor, which is the half
+    the fixture case below cannot reach: it monkeypatches `SCAN_FLOOR` down to 4
+    and kills two rules at once, so the shipped 8 was never exercised against the
+    shipped tree. Measured that way, the aggregate floor is blind — `COUNT` dead
+    leaves 19 literals and `CLOCK` dead leaves 16, both over 8, and `TALLY` dead
+    leaves all 28 because every tally is also a loose one.
+    """
+    monkeypatch.setattr(run_count_gate, rule, run_count_gate.re.compile("(?!x)x"))
+    problems = run_count_gate.audit(ROOT)[0]
+    assert only(problems, f"under the floor of {run_count_gate.RULE_FLOOR}"), problems
+
+
+def test_a_published_sentence_that_stopped_being_generated(monkeypatch):
+    """The region set had no floor at all: dropping one entry from
+    `region_bodies`, deleting its two markers and retyping the sentence by hand
+    left the row green over the exact state count this gate is named after. The
+    table-DELETED family one layer out — the case below tests a region the
+    generator does not own, and nothing tested a sentence it no longer does."""
+    bodies = run_count_gate.region_bodies
+    monkeypatch.setattr(
+        run_count_gate, "region_bodies",
+        lambda f, findings=None: dict(list(bodies(f, findings).items())[1:]),
+    )
+    assert only(run_count_gate.audit(ROOT)[0], "under the floor of"
+                f" {run_count_gate.REGION_FLOOR}")
 
 
 # --- the record: is it a run of THIS tier ----------------------------------

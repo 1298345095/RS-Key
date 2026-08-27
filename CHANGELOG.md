@@ -68,6 +68,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **Both halves of the scan gained the ratchet the other half already had.**
+  The set of generated regions was floored by nothing at all, so dropping one
+  entry from the generator, deleting its two markers and retyping its sentence
+  by hand left the row green over the exact state count this work is named
+  after — the table-DELETED family one layer out, where the tested case was a
+  region the generator does not own and nothing tested a sentence it no longer
+  does. And one floor over four scan rules and a trigger cannot see the rule
+  carrying most of them go: measured by killing each in turn against this tree,
+  `COUNT` dead leaves **19** literals and `CLOCK` dead leaves **16**, both over
+  the floor of 8, and `TALLY` dead leaves all **28**, because every tally is
+  also a loose one. Only the trigger's death was visible. Every rule now has to
+  match at least one literal of its own, and the region set has a floor —
+  falsified against the real checkout at the real floors, one rule at a time,
+  which is the half the fixture case could not reach.
 - **A historical quotation in `formal/README.md` was corrected back to the
   number it was taken at, and the two copies of it are compared now.** The
   pre-fix reading that motivates `verdict_gate.py`'s switch-parsing cases —
