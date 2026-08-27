@@ -33,7 +33,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 - **28 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
 - **10 of 59** are checked by a configuration that ACCEPTS a recorded session, and **10** by one that must REFUSE a negative one.
 - **11 of 59** carry at least one Kani harness named after them. That is all `BOUNDED` keys on — a harness NAME, not the `#[kani::proof]` attribute, not a bound, not a `cfg` — so it points at the bundle's method table and is never the proof itself.
-- Rows carrying a dated raw evidence bundle: **1 of 59**; of those, still ahead of every input they are about: **1**.
+- Rows carrying a dated raw evidence bundle: **1 of 59**; of those, still ahead of every input they are about: **0**.
 - No property is claimed on more than **10** built image(s) of the configuration ledger; every other column is a gap or out of scope.
 
 ## What a release may not say
@@ -58,7 +58,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-REF-004` | `R4bEventConsensus` | 2 of 9 | 0 | 2 of 9 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-005` | `NoAuthorizationBypassA` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-006` | `RequiredGateAgreesWithRelation` | 0 of 1 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-001` | `NoAuthorizationBypass` | 2 of 45 | 11 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` fresh | BOUNDED |
+| `SEC-FIDO-001` | `NoAuthorizationBypass` | 2 of 45 | 11 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (6 input(s) newer) | BOUNDED |
 | `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 2 of 39 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | — | BOUNDED |
 | `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 2 of 41 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | — | BOUNDED |
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 2 of 36 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
