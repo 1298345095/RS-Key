@@ -23,6 +23,8 @@ entry matching nothing, an entry matching twice, and a literal that merely
 resembles a registered one and must still be refused.
 """
 
+import datetime
+import os
 import pathlib
 import subprocess
 import sys
@@ -86,6 +88,55 @@ MATRIX_SAFETY = (
     "Mut_BugFooOpens.cfg RED: FooStaysClosed states=90    distinct=40  depth=4  7s"
 )
 MATRIX_LIVENESS = "Liveness.cfg     GREEN                 states=900   distinct=44  depth=9  300s"
+
+#: What TLC said about the same three rows, in TLC's words — the second account
+#: `check_tlc` holds the matrix to. Each clock is a little under the runner's,
+#: because the runner's brackets the JVM.
+TLC_SAFETY = (
+    "Shipped.cfg 4000 states generated, 200 distinct states found, 0 states left on"
+    " queue. The depth of the complete state graph search is 6. Finished in 09min 58s\n"
+    "Mut_BugFooOpens.cfg 90 states generated, 40 distinct states found, 0 states left"
+    " on queue. The depth of the complete state graph search is 4. Finished in 06s"
+)
+TLC_LIVENESS = (
+    "Liveness.cfg 900 states generated, 44 distinct states found, 0 states left on"
+    " queue. The depth of the complete state graph search is 9. Finished in 04min 59s"
+)
+
+def a_minute_from_now():
+    """The fixture's runs happen just AFTER its own commit, because `--record`
+    refuses a run of a tree younger than itself. A hard-coded stamp made every
+    `--record` case fail that check instead of the one it was written for."""
+    later = datetime.datetime.now() + datetime.timedelta(minutes=1)
+    return later.strftime("%Y-%m-%d %H:%M:%S")
+
+
+#: One per configuration, the way `formal/out/` holds them. The banner and the
+#: start line are what `provenance` reads, so they carry this machine's own arch:
+#: a fixture that hard-coded one would pass on that machine and nowhere else.
+def tlc_log(states, distinct, depth, finished, workers=2, cores=1, when=None):
+    when = when or a_minute_from_now()
+    return (
+        "TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)\n"
+        f"Running breadth-first search Model-Checking with fp 21 and seed 1 with {workers}"
+        f" workers on {cores} cores with 3641MB heap and 64MB offheap memory (Some OS"
+        f" {os.uname().machine}, Azul Systems, Inc. 1.8.0_492, MSBDiskFPSet, DiskStateQueue).\n"
+        f"Starting... ({when})\n"
+        "Model checking completed. No error has been found.\n"
+        f"{states} states generated, {distinct} distinct states found, 0 states left on queue.\n"
+        f"The depth of the complete state graph search is {depth}.\n"
+        f"Finished in {finished} at ({when})\n"
+    )
+
+
+def logs(**kw):
+    """The three logs of one fixture run, built per call so their start time is
+    always after the fixture's own commit."""
+    return {
+        "Shipped": tlc_log(4000, 200, 6, "09min 58s", **kw),
+        "Mut_BugFooOpens": tlc_log(90, 40, 4, "06s", **kw),
+        "Liveness": tlc_log(900, 44, 9, "04min 59s", **kw),
+    }
 
 TESTING_MD = """\
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
@@ -186,6 +237,8 @@ class Tree:
         self.write("formal/comutants.toml", COMUTANTS)
         for cfg in ("Shipped.cfg", "Mut_BugFooOpens.cfg", "Liveness.cfg"):
             self.write(f"formal/{cfg}", SHIPPED_CFG)
+        for name, text in logs().items():
+            self.write(f"formal/out/{name}.log", text)
         self.write("formal/README.md", README_MD)
         self.write("docs/testing.md", TESTING_MD)
         self.write("docs/formal.md", FORMAL_MD)
@@ -230,9 +283,12 @@ class Tree:
         )
         return done.stdout.strip()
 
-    def record(self, safety=None, liveness=None, commit=None, drop=""):
+    def record(self, safety=None, liveness=None, commit=None, drop="", tlc=None):
         out = run_count_gate.HEADER
-        for tier, matrix in (("safety", safety or MATRIX_SAFETY), ("liveness", liveness or MATRIX_LIVENESS)):
+        for tier, matrix, summary in (
+            ("safety", safety or MATRIX_SAFETY, TLC_SAFETY),
+            ("liveness", liveness or MATRIX_LIVENESS, TLC_LIVENESS),
+        ):
             out += "\n[[run]]\n"
             for key, value in (
                 ("tier", tier),
@@ -245,6 +301,8 @@ class Tree:
                 if key != drop:
                     out += f"{key} = {run_count_gate.quoted(value)}\n"
             out += f'matrix = """\n{matrix}\n"""\n'
+            if drop != "tlc":
+                out += f'tlc = """\n{summary if tlc is None else tlc}\n"""\n'
         return out
 
     def regenerate(self):
@@ -369,6 +427,86 @@ def test_a_commit_that_is_not_an_object_name(tree):
 def test_a_commit_from_another_repository(tree):
     tree.write("formal/runs.toml", tree.record(commit="0" * 40))
     assert only(tree.problems(), "is in no history here")
+
+
+# --- the matrix against TLC's own account of the same run -------------------
+#
+# The record was the hole under the whole row: `states`, `depth` and the wall
+# clock were held against nothing at all and `distinct` only from below, so
+# editing two fields and running `--write` restored six published sentences to
+# the exact defect this gate is named after, green. One case per field, in the
+# direction rot takes — a number made SMALLER, which is what a stale copy is.
+
+
+def test_a_distinct_count_the_log_contradicts(tree):
+    tree.edit("formal/runs.toml", "distinct=200", "distinct=48")
+    assert only(tree.problems(), "recorded distinct=48 and TLC's own summary says 200")
+
+
+def test_a_states_count_the_log_contradicts(tree):
+    tree.edit("formal/runs.toml", "states=4000", "states=400")
+    assert only(tree.problems(), "recorded states=400 and TLC's own summary says 4000")
+
+
+def test_a_depth_the_log_contradicts(tree):
+    tree.edit("formal/runs.toml", "depth=6 ", "depth=2 ")
+    assert only(tree.problems(), "recorded depth=2 and TLC's own summary says 6")
+
+
+def test_a_wall_clock_under_the_one_tlc_timed_itself_at(tree):
+    """The measured attack: `1869s` retyped `539s` republished half an hour of
+    exhaustive checking as nine minutes. The runner's clock brackets the JVM, so
+    it can only ever be the larger of the two."""
+    tree.edit("formal/runs.toml", "depth=6  600s", "depth=6  120s")
+    assert only(tree.problems(), "and this one is -478s")
+
+
+def test_a_wall_clock_further_over_it_than_a_jvm_starts_in(tree):
+    tree.edit("formal/runs.toml", "depth=6  600s", "depth=6  9000s")
+    assert only(tree.problems(), f"belongs in 0..{run_count_gate.CLOCK_SLACK}s")
+
+
+def test_a_row_with_no_tlc_summary_at_all(tree):
+    tree.edit("formal/runs.toml", "Shipped.cfg 4000 states generated", "Other.cfg 4000 states generated")
+    problems = tree.problems()
+    assert only(problems, "Shipped.cfg is in the matrix and TLC's own summary of it is not")
+    assert only(problems, "TLC's summary of Other.cfg is kept and the matrix has no such row")
+
+
+def test_the_tlc_block_emptied_rather_than_deleted(tree):
+    """The table-EMPTIED half. A block dropped whole is a missing key and reads
+    as one; a block left in place with nothing in it is the same hole wearing the
+    field's own name, and it is the form this tree has actually shipped."""
+    tree.write("formal/runs.toml", tree.record(tlc=""))
+    assert len(only(tree.problems(), "TLC's own summary of it is not")) == 3
+
+
+def test_the_tlc_block_dropped_whole(tree):
+    tree.write("formal/runs.toml", tree.record(drop="tlc"))
+    assert only(tree.problems(), "no tlc — a result with no provenance")
+
+
+def test_a_kept_line_that_is_not_a_tlc_summary(tree):
+    tree.edit("formal/runs.toml", "Shipped.cfg 4000 states generated", "Shipped.cfg went well")
+    assert only(tree.problems(), "is not a TLC summary line")
+
+
+def test_a_question_mark_must_mean_tlc_printed_nothing(tree):
+    """`?` is the runner's spelling of "no such field", and TLC leaves both halves
+    out on a run that died on an initial state — two rows of the recorded safety
+    tier are exactly that. So the two accounts have to agree about ABSENCE, or the
+    field with no number is the one field nothing checks."""
+    tree.edit("formal/runs.toml", "states=4000", "states=?")
+    assert only(tree.problems(), "recorded states=? and TLC's own summary says 4000")
+
+
+def test_write_will_not_publish_from_a_record_that_does_not_check_out(tree):
+    """The laundering step, and the row's own message sends people to it: the
+    gate says "run --write and commit the result", and `--write` used to rewrite
+    every published sentence from whatever the record now said."""
+    tree.edit("formal/runs.toml", "distinct=200", "distinct=48")
+    assert run_count_gate.run(tree.root, ["--write"]) == 1
+    assert "48 distinct states" not in tree.read("docs/testing.md")
 
 
 def test_two_runs_for_one_tier(tree):
@@ -697,6 +835,79 @@ def test_a_verdict_carrying_a_tla_operator_survives_the_record(tree, tmp_path):
     )
     run_count_gate.record(tree.root, log)
     assert "/\\ b" in run_count_gate.load(tree.root)["safety"]["rows"][1]["verdict"]
+
+
+def test_recording_a_row_whose_log_has_gone(tree, tmp_path):
+    """`formal/out/` is gitignored and the next run overwrites it, so the logs
+    exist only at `--record` time. A row recorded without one has nothing behind
+    it, and the record would carry a number with a single source again."""
+    (tree.root / "formal/out/Shipped.log").unlink()
+    log = tmp_path / "all.log"
+    log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
+    with pytest.raises(RuntimeError, match="is missing — record a run, do not type one"):
+        run_count_gate.record(tree.root, log)
+
+
+def test_recording_reads_the_workers_off_the_log_not_the_environment(tree, tmp_path, monkeypatch):
+    """`WORKERS=9 … --record` over a log whose banner says two published *"at the
+    default `WORKERS=9`"* on three pages. The field is about the run."""
+    monkeypatch.setenv("WORKERS", "9")
+    tree.write("formal/runs.toml", "# nothing here\n")
+    log = tmp_path / "all.log"
+    log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
+    run_count_gate.record(tree.root, log)
+    assert all(r["workers"] == 2 for r in run_count_gate.load(tree.root).values())
+
+
+def test_recording_the_same_matrix_twice_moves_nothing(tree, tmp_path):
+    """It used to stamp `date.today()` and HEAD on every call, so re-recording one
+    capture republished it as a later run — of a tree it had never seen. The
+    measured form: `commit` re-pointed at whatever had been committed since."""
+    log = tmp_path / "all.log"
+    log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
+    run_count_gate.record(tree.root, log)
+    first = tree.read("formal/runs.toml")
+    tree.write("docs/formal.md", tree.read("docs/formal.md") + "\nsomething else\n")
+    tree.commit("a commit after the run")
+    run_count_gate.record(tree.root, log)
+    assert tree.read("formal/runs.toml") == first
+
+
+def test_recording_a_new_matrix_against_a_head_younger_than_the_run(tree, tmp_path):
+    """A run of a tree that no longer exists is the defect one level up, and it is
+    the one provenance field TLC cannot corroborate — so the check is on the only
+    thing that is checkable, the order of the two clocks."""
+    for name, text in logs(when="2019-01-01 00:00:00").items():
+        tree.write(f"formal/out/{name}.log", text)
+    tree.write("formal/runs.toml", "# nothing here\n")
+    log = tmp_path / "all.log"
+    log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
+    with pytest.raises(RuntimeError, match="record before committing, or re-run the tier"):
+        run_count_gate.record(tree.root, log)
+
+
+def test_recording_logs_that_disagree_with_each_other(tree, tmp_path):
+    """Within one tier, because that is where a run is one run. `liveness` is a
+    single row here and a single row cannot disagree with itself — the first
+    version of this case put the odd log there and never raised."""
+    tree.write("formal/out/Mut_BugFooOpens.log", tlc_log(90, 40, 4, "06s", workers=8))
+    log = tmp_path / "all.log"
+    log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
+    with pytest.raises(RuntimeError, match="the logs disagree about date/workers/cores"):
+        run_count_gate.record(tree.root, log)
+
+
+def test_recording_a_log_from_another_machine(tree, tmp_path):
+    """`host` is the log's core count wearing this machine's brand string, so the
+    two have to be one box. Folded, not substring-matched: the JVM writes
+    `aarch64` where `uname` writes `arm64`, and the plain comparison refused
+    every honest record on this machine."""
+    for name, text in logs().items():
+        tree.write(f"formal/out/{name}.log", text.replace(os.uname().machine, "s390x"))
+    log = tmp_path / "all.log"
+    log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
+    with pytest.raises(RuntimeError, match="record where the run happened"):
+        run_count_gate.record(tree.root, log)
 
 
 def test_recording_a_whole_tier_leaves_a_green_tree(tree, tmp_path):

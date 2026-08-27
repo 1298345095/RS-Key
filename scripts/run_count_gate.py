@@ -29,13 +29,25 @@ Two halves, because either alone leaves the class open.
   outside a region is a finding unless [`SCOPED`] registers it with the scope it
   is history to.
 
-What the record does **not** prove is that a real TLC ran: `--record` ingests a
-log, and a log can be typed. What it proves is what rot cannot fake — that the
+What the record does **not** prove is that a real TLC ran: `--record` ingests
+logs, and a log can be typed. What it proves is what rot cannot fake — that the
 matrix covers every configuration of the tier as the tree lists it *today*, that
 every verdict is the one `floors.txt` requires, that no row came back under its
 floor or carrying the runner's `!!`, and that the row count, the wall clock and
 the tally are counted here rather than stored. The class this row exists for is a
 number going stale, not a person forging 199 mutually consistent rows.
+
+Which left the record itself typeable, and that was the hole under all of it:
+`states`, `depth` and the wall clock were held against nothing and `distinct`
+only from below, so editing `distinct=77563872` to `48679968` and `1869s` to
+`539s` and running `--write` put six published sentences back to the exact defect
+this file is named after, with every sibling row green. So each `[[run]]` now
+also keeps [`TLC_ROW`] — TLC's own closing sentences, per configuration, out of
+the per-configuration logs at `--record` time — and the gate re-derives the row
+from them. Two programs' accounts of one run, in one file. It is not a signature
+and does not pretend to be: someone writing both halves can still write them to
+agree. It is the difference between rot, which is one careless number, and a
+forgery, which is a decision.
 
 And what it deliberately does not reach: `scripts/` and `assurance/`. Both were
 counted when this was written. `scripts/` held eight, six of them the measured
@@ -50,7 +62,6 @@ heading, which is the scope label a historical figure needs — an entry saying
 what a run cost at 0.4.10 does not go stale, it stays 0.4.10's.
 """
 
-import datetime
 import fnmatch
 import os
 import pathlib
@@ -72,6 +83,11 @@ RECORD = pathlib.Path("formal/runs.toml")
 RUNNER = pathlib.Path("formal/run-tlc.sh")
 FLOORS = pathlib.Path("formal/floors.txt")
 COMUTANTS = pathlib.Path("formal/comutants.toml")
+
+#: Where the runner leaves TLC's own output, one log per configuration. Gitignored
+#: and rewritten by the next run, so `--record` reads them while they exist and
+#: keeps what they said; nothing at gate time can go looking.
+LOG_DIR = pathlib.Path("formal/out")
 
 #: Configurations of a tier that no recorded run covers. Zero, because a tier
 #: whose roster has moved since the last run is one the documentation may not
@@ -319,9 +335,72 @@ ROW = re.compile(
 )
 
 
+#: What TLC says about its own run, in TLC's words. The runner greps the first
+#: three out of `formal/out/<cfg>.log` to build the matrix row above; `--record`
+#: keeps them, and the gate re-derives the row from them. So the two halves of
+#: every published number are a `printf` in a shell script and a sentence a JVM
+#: wrote, and moving one by hand contradicts the other.
+TLC_SUMMARY = re.compile(
+    r"^(\d+) states generated, (\d+) distinct states found, (\d+) states left on queue\.$", re.M
+)
+TLC_DEPTH = re.compile(r"^The depth of the complete state graph search is (\d+)\.$", re.M)
+TLC_FINISHED = re.compile(r"^Finished in (?:(\d+)h )?(?:(\d+)min )?(\d+)s\b", re.M)
+TLC_STARTED = re.compile(r"^Starting\.\.\. \((\d{4}-\d\d-\d\d)[ T]([\d:]+)\)$", re.M)
+TLC_BANNER = re.compile(r"^Running .*? with (\d+) workers? on (\d+) cores? .*?\(([^,]+),", re.M)
+
+#: One kept line: the configuration, then TLC's own sentences joined in the order
+#: it prints them. Both optional halves are genuinely absent on a run that died
+#: on an initial state — `TokenGateDisagreement.cfg` generated nothing, so the
+#: runner recorded `?` there and TLC printed only its clock.
+TLC_ROW = re.compile(
+    r"^(?P<cfg>\S+\.cfg)"
+    r"(?:\s+(?P<states>\d+) states generated, (?P<distinct>\d+) distinct states found,"
+    r" (?P<queue>\d+) states left on queue\.)?"
+    r"(?:\s+The depth of the complete state graph search is (?P<depth>\d+)\.)?"
+    r"\s+Finished in (?:(?P<hours>\d+)h )?(?:(?P<minutes>\d+)min )?(?P<seconds>\d+)s$"
+)
+
+#: Seconds the runner's wall clock may exceed TLC's own `Finished in`. It brackets
+#: the JVM, so it is always the larger of the two; the gap is start-up and
+#: teardown. Measured 0-2 s over all 199 rows of the recorded run, and set here
+#: well above that so a cold page cache does not redden the row — while a clock
+#: rewritten to tell a different story about cost (539 s over a run TLC timed at
+#: 31min 08s) cannot pass either bound.
+CLOCK_SLACK = 30
+
+
 def matrix_rows(text):
     """The rows of one recorded matrix, in the order the runner printed them."""
     return [found.groupdict() for line in text.splitlines() if (found := ROW.match(line.strip()))]
+
+
+def elapsed(found, prefix=""):
+    """`Finished in 31min 08s` as seconds."""
+    return (
+        int(found[prefix + "hours"] or 0) * 3600
+        + int(found[prefix + "minutes"] or 0) * 60
+        + int(found[prefix + "seconds"])
+    )
+
+
+def tlc_line(root, cfg):
+    """What `formal/out/<cfg>.log` says about itself, as one kept line — or the
+    reason there is nothing to keep. Read at `--record` time and only there: the
+    logs are gitignored, which is exactly why what they said has to be stored."""
+    log = root / LOG_DIR / (cfg[:-4] + ".log")
+    if not log.is_file():
+        raise RuntimeError(f"{log.relative_to(root)} is missing — record a run, do not type one")
+    text = log.read_text(errors="replace")
+    finished = TLC_FINISHED.search(text)
+    if not finished:
+        raise RuntimeError(f"{log.relative_to(root)}: TLC never said it finished")
+    parts = [cfg]
+    if summary := TLC_SUMMARY.findall(text):
+        parts.append("{} states generated, {} distinct states found, {} states left on queue.".format(*summary[-1]))
+    if depth := TLC_DEPTH.findall(text):
+        parts.append(f"The depth of the complete state graph search is {depth[-1]}.")
+    parts.append(finished.group(0).strip())
+    return " ".join(parts), text
 
 
 def tiers(root):
@@ -379,11 +458,61 @@ def load(root):
     return runs
 
 
+def check_tlc(where, run, findings):
+    """Every published number of a row, re-derived from what TLC said about the
+    same run and compared to what the runner printed.
+
+    The one field with no second source was the whole of the record's exposure:
+    `check_record` held the roster, the verdicts and the floors, so a `distinct`
+    or a wall clock could be retyped and `--write` would carry it into six
+    published sentences. Neither half is proof a run happened — both are bytes in
+    a committed file — but they are two different programs' accounts of it, and
+    an edit to one is now a contradiction rather than an opinion.
+    """
+    kept = {}
+    for line in run.get("tlc", "").splitlines():
+        if found := TLC_ROW.match(line.strip()):
+            if found["cfg"] in kept:
+                findings.append(f"{where}: {found['cfg']} has two TLC summaries")
+            kept[found["cfg"]] = found
+        elif line.strip():
+            findings.append(f"{where}: {line.strip()[:60]!r} is not a TLC summary line")
+    for row in run["rows"]:
+        found = kept.pop(row["cfg"], None)
+        if found is None:
+            findings.append(
+                f"{where}: {row['cfg']} is in the matrix and TLC's own summary of it is"
+                " not — re-record the run, the row has nothing to check it against"
+            )
+            continue
+        for field in ("states", "distinct", "depth"):
+            # `?` is the runner's spelling of "TLC printed none", and TLC leaves
+            # both halves out on a run that died on an initial state. So the two
+            # must agree about ABSENCE as well as about a number.
+            mine, theirs = row[field], found[field]
+            if mine != (theirs if theirs is not None else "?"):
+                findings.append(
+                    f"{where}: {row['cfg']} recorded {field}={mine} and TLC's own summary"
+                    f" says {theirs if theirs is not None else 'nothing'} — one of the two"
+                    " was edited by hand"
+                )
+        gap = int(row["seconds"]) - elapsed(found)
+        if not 0 <= gap <= CLOCK_SLACK:
+            findings.append(
+                f"{where}: {row['cfg']} recorded {row['seconds']}s and TLC timed itself at"
+                f" {elapsed(found)}s — the runner's clock brackets the JVM, so the gap"
+                f" belongs in 0..{CLOCK_SLACK}s and this one is {gap}s"
+            )
+    for cfg in sorted(kept):
+        findings.append(f"{where}: TLC's summary of {cfg} is kept and the matrix has no such row")
+
+
 def check_record(root, runs, listed, floor_rows, findings):
     """Whether each recorded run is a run of the tier as this tree lists it now."""
     for tier, run in sorted(runs.items()):
         where = f"{RECORD} [{tier}]"
-        for field in ("command", "date", "commit", "host", "workers"):
+        check_tlc(where, run, findings)
+        for field in ("command", "date", "commit", "host", "workers", "tlc"):
             if not str(run.get(field, "")).strip():
                 findings.append(f"{where}: no {field} — a result with no provenance")
         commit = str(run.get("commit", ""))
@@ -895,14 +1024,63 @@ def audit(root):
 # --- the recorder ----------------------------------------------------------
 
 
-def host():
+def host(cores):
     """The machine, asked rather than typed — a hand-written host is the same
-    defect as a hand-written count, about a fact nobody can check later."""
+    defect as a hand-written count, about a fact nobody can check later.
+
+    `cores` comes from TLC's banner rather than from `os.cpu_count()`, because
+    the recorder need not be the machine that ran. The brand string is the one
+    fact of the three the JVM does not print, so it stays local and the arch is
+    held against the banner to say the two are the same box.
+    """
     brand = subprocess.run(
         ["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True
     )
     name = brand.stdout.strip() if brand.returncode == 0 else ""
-    return f"{name or os.uname().machine} ({os.cpu_count()} cores)"
+    return f"{name or os.uname().machine} ({cores} cores)"
+
+
+#: The one ISA under two names each. Folded rather than substring-matched: the
+#: banner's `aarch64` does not contain `uname`'s `arm64`, so the plain comparison
+#: refused every honest record on this machine.
+ARCH = {"arm64": "arm64", "aarch64": "arm64", "x86_64": "x86_64", "amd64": "x86_64"}
+
+
+def arch(text):
+    """Whichever ISA name [`ARCH`] knows appears in `text`, folded."""
+    return next((v for k, v in ARCH.items() if k in text), text)
+
+
+def provenance(logs):
+    """(date, workers, cores, earliest start) as TLC reported them, over one
+    tier's logs.
+
+    Read out of the run and not off the recorder: `WORKERS=9 … --record` over a
+    log whose banner says two published *"at the default `WORKERS=9`"* on three
+    pages, and `date.today()` is the day somebody got round to recording. One
+    disagreement among the logs is a record assembled from two runs.
+    """
+    seen, first = {}, None
+    for cfg, text in sorted(logs.items()):
+        banner, started = TLC_BANNER.search(text), TLC_STARTED.search(text)
+        if not banner or not started:
+            raise RuntimeError(f"{cfg}: its log carries no TLC banner or start time")
+        # `uname` and the JVM spell one ISA two ways — `arm64` here, `aarch64` in
+        # the banner — so the names are folded before they are compared. Compared
+        # at all because `host` is the log's core count wearing the local machine's
+        # brand string, and those are one box or the field is a fiction.
+        if arch(banner.group(3)) != arch(os.uname().machine):
+            raise RuntimeError(
+                f"{cfg}: TLC ran on {banner.group(3)!r} and this is"
+                f" {os.uname().machine} — record where the run happened"
+            )
+        stamp = f"{started.group(1)} {started.group(2)}"
+        first = stamp if first is None else min(first, stamp)
+        seen.setdefault((started.group(1), int(banner.group(1)), int(banner.group(2))), []).append(cfg)
+    if len(seen) != 1:
+        spread = "; ".join(f"{k} ({len(v)} row(s), e.g. {v[0]})" for k, v in sorted(seen.items()))
+        raise RuntimeError(f"the logs disagree about date/workers/cores — {spread}")
+    return (*next(iter(seen)), first)
 
 
 def quoted(value):
@@ -942,32 +1120,67 @@ def record(root, log):
     )
     for tier in covered:
         members = set(listed[tier])
+        mine = [r for r in rows if r["cfg"] in members]
         matrix = "\n".join(
             f"{r['cfg']:<44} {r['verdict']:<40} states={r['states']:<10}"
             f" distinct={r['distinct']:<9} depth={r['depth']:<3} {r['seconds']}s{r['mark']}"
-            for r in rows
-            if r["cfg"] in members
+            for r in mine
         )
+        summaries, logs = [], {}
+        for r in mine:
+            line, text = tlc_line(root, r["cfg"])
+            summaries.append(line)
+            logs[r["cfg"]] = text
+        date, workers, cores, started = provenance(logs)
+        # RE-RECORDING THE SAME RUN MOVES NOTHING. `--record` used to stamp
+        # `date.today()` and HEAD on every call, so running it twice over one
+        # capture republished the run as a different, later one — of a tree it had
+        # never seen. An unchanged matrix is the same run; only what its logs said
+        # gets attached, and the provenance already recorded stands.
+        same = kept.get(tier, {}) if kept.get(tier, {}).get("matrix", "").strip() == matrix else {}
+        if same and (same.get("date"), same.get("workers")) != (date, workers):
+            raise RuntimeError(
+                f"{tier} is recorded as {same.get('date')} at WORKERS={same.get('workers')}"
+                f" and these logs are {date} at {workers} — the matrix is the same run's"
+                " and the logs beside it are not"
+            )
+        if not same:
+            # The commit is the one field with no second copy anywhere — TLC does
+            # not know it. So the only claim worth refusing is the one that is
+            # checkable: a HEAD younger than the run is a record of a tree the run
+            # never saw, which is what a `--record` after an unrelated commit writes.
+            when = subprocess.run(
+                ["git", "-C", str(root), "log", "-1", "--format=%cd",
+                 "--date=format:%Y-%m-%d %H:%M:%S", head.stdout.strip()],
+                capture_output=True, text=True,
+            ).stdout.strip()
+            if when > started:
+                raise RuntimeError(
+                    f"HEAD was committed {when} and {tier} started {started} — record"
+                    " before committing, or re-run the tier: a run of a tree that no"
+                    " longer exists is the same defect one level up"
+                )
         kept[tier] = {
             "tier": tier,
             "command": f"./formal/run-tlc.sh {tier}",
-            "date": datetime.date.today().isoformat(),
-            "commit": head.stdout.strip(),
-            "host": host(),
-            "workers": int(os.environ.get("WORKERS", "2")),
+            "date": same.get("date", date),
+            "commit": same.get("commit", head.stdout.strip()),
+            "host": same.get("host", host(cores)),
+            "workers": same.get("workers", workers),
             "matrix": matrix,
+            "tlc": "\n".join(summaries),
         }
     body = HEADER
     for _, entry in sorted(kept.items()):
         body += "\n[[run]]\n"
         for key, value in entry.items():
-            if key == "matrix":
+            if key in ("matrix", "tlc"):
                 # A LITERAL multi-line string: TLC's generic error line reaches
                 # this file verbatim and TLA+ operators are `/\` and `\/`, which
                 # a basic string reads as escapes and refuses to parse.
                 if "'''" in value:
-                    raise RuntimeError(f"a matrix row carries ''', which no TOML string holds")
-                body += f"matrix = '''\n{value}\n'''\n"
+                    raise RuntimeError(f"a {key} row carries ''', which no TOML string holds")
+                body += f"{key} = '''\n{value}\n'''\n"
             else:
                 body += f"{key} = {quoted(value)}\n"
     (root / RECORD).write_text(body)
@@ -986,11 +1199,22 @@ HEADER = """\
 # emit every run-count the documentation publishes.
 #
 # `matrix` is the runner's own output, unedited, one line per configuration, and
-# it is the only thing stored: the row count, the wall clock and the GREEN/RED
+# no total is stored beside it: the row count, the wall clock and the GREEN/RED
 # tally are COUNTED out of it on every gate run, so no total here can disagree
 # with the rows it is a total of. That disagreement is what this file exists for
 # -- seven published run-counts were stale on the day it was written, one of them
 # in the paragraph the docs introduce as the one to quote.
+#
+# `tlc` is the SAME run in TLC's own words: the closing sentences of each
+# `formal/out/<cfg>.log`, kept at `--record` time because those logs are
+# gitignored and the next run overwrites them. The gate re-derives every row's
+# states, distinct states and depth from it and holds the runner's wall clock to
+# TLC's. This does NOT make a run unforgeable -- both halves are bytes in a
+# committed file -- and it is not meant to. It makes a number here unrottable BY
+# HAND: `distinct` and the clock had no second source at all, so editing one and
+# running `--write` restored six published sentences to the exact defect this
+# file was added to close, with the gate green. Now the edit contradicts a
+# sentence a JVM wrote, in this file, on the next line but one.
 #
 # A run is a run of the tier as `run-tlc.sh --tiers` lists it TODAY: the gate
 # holds every listed configuration against this matrix, every verdict against
@@ -1005,6 +1229,18 @@ def run(root, argv):
         return record(root, argv[1])
     if argv[:1] == ["--write"]:
         runs, listed = load(root), tiers(root)
+        # The generator is the laundry, and the row's own message sends people to
+        # it: edit a number in the record, run this, and six published sentences
+        # agree with the edit. So it refuses the same record the row refuses,
+        # over the same checks — the ones about whether the record is a run.
+        refused = []
+        check_record(root, runs, listed, floors(root), refused)
+        if refused:
+            print(f"run-count-gate: {len(refused)} finding(s) in {RECORD} — refusing to"
+                  " publish from it", file=sys.stderr)
+            for finding in refused:
+                print(f"  {finding}", file=sys.stderr)
+            return 1
         for rel, text in sorted(rendered(root, region_bodies(facts(root, runs, listed))).items()):
             (root / rel).write_text(text)
             print(f"run-count-gate: wrote {rel}")

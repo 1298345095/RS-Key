@@ -6,11 +6,22 @@
 # emit every run-count the documentation publishes.
 #
 # `matrix` is the runner's own output, unedited, one line per configuration, and
-# it is the only thing stored: the row count, the wall clock and the GREEN/RED
+# no total is stored beside it: the row count, the wall clock and the GREEN/RED
 # tally are COUNTED out of it on every gate run, so no total here can disagree
 # with the rows it is a total of. That disagreement is what this file exists for
 # -- seven published run-counts were stale on the day it was written, one of them
 # in the paragraph the docs introduce as the one to quote.
+#
+# `tlc` is the SAME run in TLC's own words: the closing sentences of each
+# `formal/out/<cfg>.log`, kept at `--record` time because those logs are
+# gitignored and the next run overwrites them. The gate re-derives every row's
+# states, distinct states and depth from it and holds the runner's wall clock to
+# TLC's. This does NOT make a run unforgeable -- both halves are bytes in a
+# committed file -- and it is not meant to. It makes a number here unrottable BY
+# HAND: `distinct` and the clock had no second source at all, so editing one and
+# running `--write` restored six published sentences to the exact defect this
+# file was added to close, with the gate green. Now the edit contradicts a
+# sentence a JVM wrote, in this file, on the next line but one.
 #
 # A run is a run of the tier as `run-tlc.sh --tiers` lists it TODAY: the gate
 # holds every listed configuration against this matrix, every verdict against
@@ -30,6 +41,12 @@ Liveness.cfg                                 GREEN                              
 LiveMut_BugAssertWedgesOnTimeout.cfg         RED: Error: Temporal properties were violated. states=555265     distinct=85099     depth=?   4s
 LiveMut_BugWaitScopeNotCleared.cfg           RED: Error: Temporal properties were violated. states=513071     distinct=75430     depth=?   4s
 LiveMut_BugWalkNeverExpires.cfg              RED: Error: Temporal properties were violated. states=625807     distinct=94131     depth=?   4s
+'''
+tlc = '''
+Liveness.cfg 105147241 states generated, 10720348 distinct states found, 0 states left on queue. The depth of the complete state graph search is 46. Finished in 35min 05s
+LiveMut_BugAssertWedgesOnTimeout.cfg 555265 states generated, 85099 distinct states found, 39136 states left on queue. Finished in 03s
+LiveMut_BugWaitScopeNotCleared.cfg 513071 states generated, 75430 distinct states found, 34298 states left on queue. Finished in 03s
+LiveMut_BugWalkNeverExpires.cfg 625807 states generated, 94131 distinct states found, 42251 states left on queue. Finished in 03s
 '''
 
 [[run]]
@@ -235,5 +252,201 @@ TokenRefinement.cfg                          GREEN                              
 TokenRefinementBadMap.cfg                    RED: Error: Action property line 130, col 17 to line 130, col 30 of module RSKeyTokenAbstract is violated. states=1483       distinct=497       depth=6   1s
 TokenRefinementOutcome.cfg                   GREEN                                    states=34038747   distinct=3472034   depth=44  206s
 TokenRefinementDeadToken.cfg                 RED: Error: Action property R1oTokenOutcomes is violated. states=2          distinct=2         depth=2   1s
-
+'''
+tlc = '''
+Shipped.cfg 986836197 states generated, 77563872 distinct states found, 0 states left on queue. The depth of the complete state graph search is 58. Finished in 31min 08s
+AlwaysUv.cfg 273124081 states generated, 23521512 distinct states found, 0 states left on queue. The depth of the complete state graph search is 51. Finished in 08min 32s
+Historical_E76.cfg 1875114 states generated, 219667 distinct states found, 96777 states left on queue. The depth of the complete state graph search is 13. Finished in 04s
+Historical_E77.cfg 1784803 states generated, 207245 distinct states found, 89347 states left on queue. The depth of the complete state graph search is 13. Finished in 04s
+Mut_BugBackupSealedNotAGate.cfg 23404 states generated, 5354 distinct states found, 3221 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Mut_BugChangePinKeepsPpuat.cfg 20124 states generated, 4555 distinct states found, 2755 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Mut_BugCmWalkIgnoresChannel.cfg 16679 states generated, 3945 distinct states found, 2296 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Mut_BugConsumeKeepsMcGa.cfg 62463 states generated, 11505 distinct states found, 7005 states left on queue. The depth of the complete state graph search is 9. Finished in 00s
+Mut_BugCredBeforeRp.cfg 7031 states generated, 1893 distinct states found, 1147 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Mut_BugDeleteRpBeforeCred.cfg 3378394 states generated, 377779 distinct states found, 156365 states left on queue. The depth of the complete state graph search is 14. Finished in 07s
+Mut_BugHostPreemptsLocalWait.cfg 89 states generated, 40 distinct states found, 32 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+Mut_BugLocalPinIgnoresBudget.cfg 2362014 states generated, 264160 distinct states found, 108742 states left on queue. The depth of the complete state graph search is 14. Finished in 05s
+Mut_BugLocalPinKeepsToken.cfg 5834 states generated, 1616 distinct states found, 929 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Mut_BugNoConsumeAfterUp.cfg 54056 states generated, 10188 distinct states found, 6139 states left on queue. The depth of the complete state graph search is 9. Finished in 00s
+Mut_BugNoDropStaleCancelAtEntry.cfg 386 states generated, 169 distinct states found, 137 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Mut_BugNoTouchRequired.cfg 797 states generated, 269 distinct states found, 194 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Mut_BugPanelCancelable.cfg 677 states generated, 234 distinct states found, 177 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Mut_BugPinWriteBeforeRevoke.cfg 21228 states generated, 4749 distinct states found, 2913 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Mut_BugPpuatIsAGate.cfg 1798272 states generated, 208803 distinct states found, 89969 states left on queue. The depth of the complete state graph search is 13. Finished in 04s
+Mut_BugResetGatesFirst.cfg 24690 states generated, 5625 distinct states found, 3304 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Mut_BugSeedDoesNotLead.cfg 1875183 states generated, 219676 distinct states found, 96772 states left on queue. The depth of the complete state graph search is 13. Finished in 04s
+Mut_BugSetPinKeepsPpuat.cfg 1755413 states generated, 209491 distinct states found, 94243 states left on queue. The depth of the complete state graph search is 13. Finished in 04s
+Mut_BugSetPinOverExisting.cfg 2418 states generated, 716 distinct states found, 463 states left on queue. The depth of the complete state graph search is 6. Finished in 00s
+Mut_BugSoftLockLostOnWarmReset.cfg 58213 states generated, 10919 distinct states found, 6600 states left on queue. The depth of the complete state graph search is 9. Finished in 00s
+Mut_BugStateResetAfterWipe.cfg 476262 states generated, 67670 distinct states found, 35908 states left on queue. The depth of the complete state graph search is 11. Finished in 01s
+Mut_BugStopUsingKeepsPerms.cfg 5989 states generated, 1643 distinct states found, 947 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Mut_BugTokenSurvivesPinChange.cfg 145436 states generated, 22629 distinct states found, 13161 states left on queue. The depth of the complete state graph search is 10. Finished in 01s
+Mut_BugTokenlessIgnoresAlwaysUv.cfg 52484 states generated, 9488 distinct states found, 5644 states left on queue. The depth of the complete state graph search is 9. Finished in 00s
+Mut_BugTouchNotSpent.cfg 5035 states generated, 1401 distinct states found, 805 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Mut_BugUnscopedCancel.cfg 551 states generated, 191 distinct states found, 150 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Mut_BugUnscopedOtpCancel.cfg 672 states generated, 237 distinct states found, 182 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Mut_BugUvNotRqdIgnoresRk.cfg 2761 states generated, 719 distinct states found, 465 states left on queue. The depth of the complete state graph search is 6. Finished in 00s
+Mut_BugWarmResetReopensWindow.cfg 483 states generated, 177 distinct states found, 141 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Mut_BugWrongPinKeepsToken.cfg 5804 states generated, 1592 distinct states found, 912 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Solo_BugBackupSealedNotAGate.cfg 23308 states generated, 5338 distinct states found, 3226 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Solo_BugChangePinKeepsPpuat.cfg 19238 states generated, 4403 distinct states found, 2644 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Solo_BugCmWalkIgnoresChannel.cfg 17366 states generated, 4068 distinct states found, 2389 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Solo_BugConsumeKeepsMcGa.cfg 53847 states generated, 10154 distinct states found, 6117 states left on queue. The depth of the complete state graph search is 9. Finished in 00s
+Solo_BugCredBeforeRp.cfg 7031 states generated, 1893 distinct states found, 1147 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Solo_BugDeleteRpBeforeCred.cfg 3363187 states generated, 374958 distinct states found, 154583 states left on queue. The depth of the complete state graph search is 14. Finished in 07s
+Solo_BugHostPreemptsLocalWait.cfg 89 states generated, 39 distinct states found, 31 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+Solo_BugLocalPinIgnoresBudget.cfg 2398165 states generated, 266032 distinct states found, 108471 states left on queue. The depth of the complete state graph search is 14. Finished in 05s
+Solo_BugLocalPinKeepsToken.cfg 5775 states generated, 1592 distinct states found, 911 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Solo_BugNoConsumeAfterUp.cfg 48908 states generated, 9442 distinct states found, 5643 states left on queue. The depth of the complete state graph search is 9. Finished in 00s
+Solo_BugNoDropStaleCancelAtEntry.cfg 386 states generated, 169 distinct states found, 137 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Solo_BugNoTouchRequired.cfg 790 states generated, 268 distinct states found, 194 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Solo_BugPanelCancelable.cfg 693 states generated, 238 distinct states found, 179 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Solo_BugPinWriteBeforeRevoke.cfg 21182 states generated, 4757 distinct states found, 2918 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Solo_BugPpuatIsAGate.cfg 1798369 states generated, 208832 distinct states found, 89995 states left on queue. The depth of the complete state graph search is 13. Finished in 04s
+Solo_BugResetGatesFirst.cfg 23444 states generated, 5350 distinct states found, 3208 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+Solo_BugSeedDoesNotLead.cfg 1653609 states generated, 186886 distinct states found, 79915 states left on queue. The depth of the complete state graph search is 13. Finished in 04s
+Solo_BugSetPinKeepsPpuat.cfg 5360582 states generated, 584128 distinct states found, 232576 states left on queue. The depth of the complete state graph search is 15. Finished in 11s
+Solo_BugSetPinOverExisting.cfg 2423 states generated, 717 distinct states found, 463 states left on queue. The depth of the complete state graph search is 6. Finished in 00s
+Solo_BugSoftLockLostOnWarmReset.cfg 54156 states generated, 10058 distinct states found, 5987 states left on queue. The depth of the complete state graph search is 9. Finished in 00s
+Solo_BugStateResetAfterWipe.cfg 481640 states generated, 68898 distinct states found, 36366 states left on queue. The depth of the complete state graph search is 11. Finished in 01s
+Solo_BugStopUsingKeepsPerms.cfg 5926 states generated, 1624 distinct states found, 930 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Solo_BugTokenSurvivesPinChange.cfg 148815 states generated, 23127 distinct states found, 13439 states left on queue. The depth of the complete state graph search is 10. Finished in 01s
+Solo_BugTokenlessIgnoresAlwaysUv.cfg 54096 states generated, 9786 distinct states found, 5854 states left on queue. The depth of the complete state graph search is 9. Finished in 00s
+Solo_BugTouchNotSpent.cfg 5022 states generated, 1400 distinct states found, 806 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Solo_BugUnscopedCancel.cfg 549 states generated, 189 distinct states found, 148 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Solo_BugUnscopedOtpCancel.cfg 679 states generated, 240 distinct states found, 184 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Solo_BugUvNotRqdIgnoresRk.cfg 2761 states generated, 719 distinct states found, 465 states left on queue. The depth of the complete state graph search is 6. Finished in 00s
+Solo_BugWarmResetReopensWindow.cfg 518 states generated, 171 distinct states found, 134 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+Solo_BugWrongPinKeepsToken.cfg 5943 states generated, 1635 distinct states found, 941 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+Solo_NoAccessibleSecretWithoutGate.cfg 401729 states generated, 56369 distinct states found, 30229 states left on queue. The depth of the complete state graph search is 11. Finished in 01s
+Solo_NoLiveTokenWithoutPinRecord.cfg 806598 states generated, 102239 distinct states found, 49591 states left on queue. The depth of the complete state graph search is 12. Finished in 02s
+Solo_RamNeverOutlivesFlashSeed.cfg 9756 states generated, 2592 distinct states found, 1466 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+SoloClause_ResetKeepsTheAlwaysUvGate.cfg 20230310 states generated, 2038232 distinct states found, 650864 states left on queue. The depth of the complete state graph search is 18. Finished in 39s
+SoloClause_ResetKeepsTheBackupSeal.cfg 24937 states generated, 5668 distinct states found, 3295 states left on queue. The depth of the complete state graph search is 8. Finished in 00s
+SoloClause_ResetKeepsThePinGate.cfg 8827323 states generated, 928427 distinct states found, 337148 states left on queue. The depth of the complete state graph search is 16. Finished in 17s
+Fairness.cfg 105147241 states generated, 10720348 distinct states found, 0 states left on queue. The depth of the complete state graph search is 46. Finished in 02min 40s
+FairMut_BugFairnessFoldsLocalCeremony.cfg 72 states generated, 39 distinct states found, 31 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+Seams.cfg 6045 states generated, 410 distinct states found, 0 states left on queue. The depth of the complete state graph search is 11. Finished in 00s
+SeamMut_BugAdminOpensKeyOps.cfg 336 states generated, 65 distinct states found, 39 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+SeamMut_BugCardResetKeepsStatus.cfg 93 states generated, 29 distinct states found, 19 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamMut_BugFailedChangeKeepsStatus.cfg 348 states generated, 68 distinct states found, 41 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+SeamMut_BugPinFreshNotSpent.cfg 143 states generated, 42 distinct states found, 30 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamMut_BugPinFreshOutlivesPin.cfg 120 states generated, 37 distinct states found, 26 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamMut_BugPivChangeResetsStatus.cfg 142 states generated, 42 distinct states found, 30 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamMut_BugPwStatusIgnoresAdmin.cfg 175 states generated, 47 distinct states found, 32 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamMut_BugRefusedValidateDropsUnlock.cfg 80 states generated, 27 distinct states found, 19 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamMut_BugRefusedValidateGrants.cfg 382 states generated, 70 distinct states found, 40 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+SeamMut_BugRemoveCodeUnvalidated.cfg 396 states generated, 73 distinct states found, 42 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+SeamMut_BugReselectResetsStatus.cfg 119 states generated, 37 distinct states found, 26 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamMut_BugSelectKeepsOtherApplet.cfg 77 states generated, 27 distinct states found, 17 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamMut_BugSigPinNotSpent.cfg 1825 states generated, 211 distinct states found, 83 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+SeamMut_BugUserStatusOpensAdmin.cfg 144 states generated, 43 distinct states found, 31 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugAdminOpensKeyOps.cfg 320 states generated, 62 distinct states found, 37 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+SeamSolo_BugCardResetKeepsStatus.cfg 93 states generated, 29 distinct states found, 19 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugFailedChangeKeepsStatus.cfg 348 states generated, 68 distinct states found, 41 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+SeamSolo_BugPinFreshNotSpent.cfg 177 states generated, 45 distinct states found, 31 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugPinFreshOutlivesPin.cfg 120 states generated, 37 distinct states found, 26 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugPivChangeResetsStatus.cfg 142 states generated, 42 distinct states found, 30 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugPwStatusIgnoresAdmin.cfg 175 states generated, 47 distinct states found, 32 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugRefusedValidateDropsUnlock.cfg 109 states generated, 32 distinct states found, 22 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugRefusedValidateGrants.cfg 394 states generated, 72 distinct states found, 41 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+SeamSolo_BugRemoveCodeUnvalidated.cfg 420 states generated, 73 distinct states found, 41 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+SeamSolo_BugReselectResetsStatus.cfg 119 states generated, 37 distinct states found, 26 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugSelectKeepsOtherApplet.cfg 77 states generated, 27 distinct states found, 17 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+SeamSolo_BugSigPinNotSpent.cfg 1752 states generated, 206 distinct states found, 82 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+SeamSolo_BugUserStatusOpensAdmin.cfg 158 states generated, 46 distinct states found, 32 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+Store.cfg 4185 states generated, 364 distinct states found, 0 states left on queue. The depth of the complete state graph search is 7. Finished in 00s
+StoreMut_BugCacheFaultAsAbsent.cfg 55 states generated, 24 distinct states found, 19 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+StoreMut_BugDeleteHidesFaultedDrop.cfg 175 states generated, 61 distinct states found, 50 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreMut_BugDeleteMetaOnlyUnderPresent.cfg 174 states generated, 58 distinct states found, 47 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreMut_BugDeleteValueBeforeMeta.cfg 171 states generated, 61 distinct states found, 50 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreMut_BugMetaAddDropsOnFault.cfg 183 states generated, 58 distinct states found, 47 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreMut_BugMetaDeleteDropsOnFault.cfg 183 states generated, 57 distinct states found, 46 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreMut_BugTruncatedScanDecidesAll.cfg 59 states generated, 25 distinct states found, 20 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+StoreSolo_BugCacheFaultAsAbsent.cfg 55 states generated, 24 distinct states found, 19 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+StoreSolo_BugDeleteHidesFaultedDrop.cfg 175 states generated, 61 distinct states found, 50 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreSolo_BugDeleteMetaOnlyUnderPresent.cfg 195 states generated, 66 distinct states found, 54 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreSolo_BugDeleteValueBeforeMeta.cfg 171 states generated, 61 distinct states found, 50 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreSolo_BugMetaAddDropsOnFault.cfg 183 states generated, 58 distinct states found, 47 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreSolo_BugMetaDeleteDropsOnFault.cfg 183 states generated, 58 distinct states found, 47 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+StoreSolo_BugTruncatedScanDecidesAll.cfg 59 states generated, 25 distinct states found, 20 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+StoreInduction.cfg 12460 states generated, 1000 distinct states found, 0 states left on queue. The depth of the complete state graph search is 1. Finished in 00s
+StoreInductionMut_BugMetaAddDropsOnFault.cfg 1499 states generated, 1002 distinct states found, 961 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+Lattice.cfg 2431 states generated, 243 distinct states found, 0 states left on queue. The depth of the complete state graph search is 11. Finished in 00s
+LatMut_BugRecoveryWithoutSecret.cfg 17 states generated, 9 distinct states found, 5 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+LatMut_BugUseWhenBlocked.cfg 73 states generated, 30 distinct states found, 21 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+LatMut_BugWrongDoesNotSpend.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+LatSolo_BugRecoveryWithoutSecret.cfg 17 states generated, 9 distinct states found, 5 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+LatSolo_BugUseWhenBlocked.cfg 83 states generated, 31 distinct states found, 21 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+LatSolo_BugWrongDoesNotSpend.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+Policies.cfg 45253 states generated, 2268 distinct states found, 0 states left on queue. The depth of the complete state graph search is 14. Finished in 00s
+PolicyMut_BugOathCodeIgnored.cfg 269 states generated, 63 distinct states found, 49 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicyMut_BugOathTouchIgnored.cfg 291 states generated, 65 distinct states found, 50 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicyMut_BugOtpCodeIgnored.cfg 363 states generated, 71 distinct states found, 52 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicyMut_BugOtpCounterRepeats.cfg 311 states generated, 69 distinct states found, 52 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicyMut_BugPgpAttributeKeepsKey.cfg 165 states generated, 49 distinct states found, 38 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicyMut_BugPivAlwaysDoesNotSpend.cfg 636 states generated, 116 distinct states found, 84 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+PolicyMut_BugPivPolicyIgnored.cfg 33 states generated, 14 distinct states found, 9 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+PolicySolo_BugOathCodeIgnored.cfg 251 states generated, 61 distinct states found, 48 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicySolo_BugOathTouchIgnored.cfg 291 states generated, 65 distinct states found, 50 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicySolo_BugOtpCodeIgnored.cfg 363 states generated, 71 distinct states found, 52 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicySolo_BugOtpCounterRepeats.cfg 311 states generated, 69 distinct states found, 52 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicySolo_BugPgpAttributeKeepsKey.cfg 165 states generated, 49 distinct states found, 38 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicySolo_BugPivAlwaysDoesNotSpend.cfg 592 states generated, 110 distinct states found, 80 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+PolicySolo_BugPivPolicyIgnored.cfg 33 states generated, 14 distinct states found, 9 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+Admin.cfg 101 states generated, 8 distinct states found, 0 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+AdminMut_BugAdminGateable.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+AdminMut_BugLockWriteResetsCaps.cfg 86 states generated, 9 distinct states found, 1 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+AdminMut_BugMaskIsCosmetic.cfg 40 states generated, 10 distinct states found, 5 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+AdminMut_BugPrivilegedOpUngated.cfg 21 states generated, 10 distinct states found, 6 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+AdminSolo_BugAdminGateable.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+AdminSolo_BugLockWriteResetsCaps.cfg 99 states generated, 9 distinct states found, 0 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+AdminSolo_BugMaskIsCosmetic.cfg 40 states generated, 10 distinct states found, 5 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+AdminSolo_BugPrivilegedOpUngated.cfg 21 states generated, 10 distinct states found, 6 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+Display.cfg 15 states generated, 5 distinct states found, 0 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+DispMut_BugAnyTapApproves.cfg 15 states generated, 6 distinct states found, 0 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+DispMut_BugPadSubstitutesForCard.cfg 12 states generated, 6 distinct states found, 0 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+DispMut_BugPreScreenTouchApproves.cfg 15 states generated, 6 distinct states found, 0 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+DispSolo_BugAnyTapApproves.cfg 15 states generated, 6 distinct states found, 0 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+DispSolo_BugPadSubstitutesForCard.cfg 12 states generated, 6 distinct states found, 0 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+DispSolo_BugPreScreenTouchApproves.cfg 15 states generated, 6 distinct states found, 0 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+Boot.cfg 77 states generated, 24 distinct states found, 0 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+BootCarry.cfg 67 states generated, 18 distinct states found, 0 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+BootMut_BugMarkerBeforeScrub.cfg 55 states generated, 26 distinct states found, 12 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+BootMut_BugPartialLockCarry.cfg 63 states generated, 26 distinct states found, 8 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+BootMut_BugRekeyKeepsTheMarker.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+BootSolo_BugMarkerBeforeScrub.cfg 55 states generated, 26 distinct states found, 12 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+BootSolo_BugPartialLockCarry.cfg 61 states generated, 26 distinct states found, 9 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+BootSolo_BugRekeyKeepsTheMarker.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+BootCarryMut_BugMarkerBeforeScrub.cfg 55 states generated, 20 distinct states found, 6 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+BootCarryMut_BugPartialLockCarry.cfg 59 states generated, 20 distinct states found, 4 states left on queue. The depth of the complete state graph search is 5. Finished in 00s
+BootCarryMut_BugRekeyKeepsTheMarker.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+BootInduction.cfg 180 states generated, 48 distinct states found, 0 states left on queue. The depth of the complete state graph search is 1. Finished in 00s
+BootInductionMut_BugRekeyKeepsTheMarker.cfg 101 states generated, 50 distinct states found, 37 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+Transport.cfg 127 states generated, 13 distinct states found, 0 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+TransMut_BugContIgnoresChannel.cfg 42 states generated, 11 distinct states found, 4 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+TransMut_BugContIgnoresSeq.cfg 45 states generated, 10 distinct states found, 3 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+TransMut_BugInitLenUnchecked.cfg 28 states generated, 8 distinct states found, 4 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+TransSolo_BugContIgnoresChannel.cfg 42 states generated, 11 distinct states found, 4 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+TransSolo_BugContIgnoresSeq.cfg 46 states generated, 10 distinct states found, 3 states left on queue. The depth of the complete state graph search is 4. Finished in 00s
+TransSolo_BugInitLenUnchecked.cfg 28 states generated, 8 distinct states found, 4 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+TraceSeams.cfg 15 states generated, 14 distinct states found, 0 states left on queue. The depth of the complete state graph search is 14. Finished in 00s
+TraceSeamsBad.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
+TraceSecurity.cfg 77 states generated, 75 distinct states found, 0 states left on queue. The depth of the complete state graph search is 75. Finished in 00s
+TraceSecurityBadBeta.cfg 21 states generated, 20 distinct states found, 0 states left on queue. The depth of the complete state graph search is 20. Finished in 00s
+TraceSecurityBadAlpha.cfg 22 states generated, 21 distinct states found, 0 states left on queue. The depth of the complete state graph search is 21. Finished in 00s
+TraceSecurityBadAlphaNoR4b.cfg 77 states generated, 75 distinct states found, 0 states left on queue. The depth of the complete state graph search is 75. Finished in 00s
+TraceSecurityBadOutcome.cfg 11 states generated, 10 distinct states found, 0 states left on queue. The depth of the complete state graph search is 10. Finished in 00s
+TraceSecurityBadUvNotRqd.cfg 45 states generated, 44 distinct states found, 0 states left on queue. The depth of the complete state graph search is 44. Finished in 00s
+TraceSecurityBadResetWindow.cfg 76 states generated, 75 distinct states found, 0 states left on queue. The depth of the complete state graph search is 75. Finished in 00s
+TraceSecurityBadAlwaysUvArm.cfg 52 states generated, 51 distinct states found, 0 states left on queue. The depth of the complete state graph search is 51. Finished in 00s
+TraceSecurityBadPinSet.cfg 13 states generated, 12 distinct states found, 0 states left on queue. The depth of the complete state graph search is 12. Finished in 00s
+TokenGate.cfg 875 states generated, 44 distinct states found, 0 states left on queue. The depth of the complete state graph search is 3. Finished in 00s
+TokenGateOracle.cfg 506 states generated, 22 distinct states found, 0 states left on queue. The depth of the complete state graph search is 1. Finished in 00s
+TokenGateDisagreement.cfg Finished in 00s
+TokenGateMut_BugUnauthorizedEdge.cfg Finished in 00s
+TokenRefinement.cfg 34038747 states generated, 3472034 distinct states found, 0 states left on queue. The depth of the complete state graph search is 44. Finished in 03min 13s
+TokenRefinementBadMap.cfg 1483 states generated, 497 distinct states found, 296 states left on queue. The depth of the complete state graph search is 6. Finished in 00s
+TokenRefinementOutcome.cfg 34038747 states generated, 3472034 distinct states found, 0 states left on queue. The depth of the complete state graph search is 44. Finished in 03min 25s
+TokenRefinementDeadToken.cfg 2 states generated, 2 distinct states found, 0 states left on queue. The depth of the complete state graph search is 2. Finished in 00s
 '''

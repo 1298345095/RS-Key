@@ -58,16 +58,41 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   moment somebody typed it.
 - **`formal/runs.toml` is the record they are written from.** Produced by
   `python scripts/run_count_gate.py --record <log>` over a capture of
-  `formal/run-tlc.sh`, it holds the runner's own matrix per tier and nothing
-  else: the row count, the wall clock and the GREEN/RED tally are counted out
-  of it on every gate run, so no total in it can disagree with the rows it
-  totals. A run is a run of the tier as `--tiers` lists it TODAY — every listed
-  configuration must be in the matrix, every verdict must be the one
-  `floors.txt` requires, no row may sit under its floor, and a row the runner
-  marked `!!` is refused. The first record is `./run-tlc.sh safety` and then
-  `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
+  `formal/run-tlc.sh`, it holds the runner's own matrix per tier and stores no
+  total beside it: the row count, the wall clock and the GREEN/RED tally are
+  counted out of it on every gate run, so no total in it can disagree with the
+  rows it totals. A run is a run of the tier as `--tiers` lists it TODAY —
+  every listed configuration must be in the matrix, every verdict must be the
+  one `floors.txt` requires, no row may sit under its floor, and a row the
+  runner marked `!!` is refused. The first record is `./run-tlc.sh safety` and
+  then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **Each `[[run]]` also keeps the same run in TLC's own words, and the gate
+  re-derives the matrix from it.** The record was the hole under everything
+  above: `states`, `depth` and the wall clock were held against nothing at all
+  and `distinct` only from below, so editing `distinct=77563872` to `48679968`
+  and `1869s` to `539s` and running `--write` put six published sentences
+  across four files back to the exact defect this work is named after, with
+  every sibling row green — driven, exit 0. So `--record` now reads the closing
+  sentences of each `formal/out/<cfg>.log` while those logs still exist, keeps
+  them, and the gate holds every row's states, distinct states and depth to
+  them and the runner's wall clock to TLC's own (which it brackets, so the gap
+  belongs in 0..30 s — measured 0-2 s over all 199 rows). `--write` refuses to
+  publish from a record that does not check out, which is the step the gate's
+  own message used to send people to. Two programs' accounts of one run, in one
+  file: **not** a signature, and it does not make a run unforgeable — someone
+  writing both halves can write them to agree. It makes a number unrottable by
+  hand, which is the class this is about.
+- **The recorder reads provenance out of the run instead of off itself.** It
+  stamped `date.today()`, the local core count and `$WORKERS` — so
+  `WORKERS=9 … --record` over a log whose banner says two published *"at the
+  default `WORKERS=9`"* on three pages, and re-recording one capture
+  republished it as a later run of a tree it had never seen. The date, the
+  worker count and the core count now come from TLC's banner and start line,
+  one tier's logs must agree about all three, the run's architecture must be
+  this machine's, and re-recording an unchanged matrix moves nothing. A record
+  of a tree younger than the run is refused outright.
 - **A run-count typed anywhere else reddens the row.** A generated region
   cannot stop the next sentence being typed somewhere else, which is the half
   every guard in this tree has failed on, so `docs/`, `formal/README.md`,
