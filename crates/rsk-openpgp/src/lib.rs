@@ -45,13 +45,21 @@ pub use pin::Session;
 /// If the UIF DO `fid` (`0xD6/D7/D8`) is present with a non-zero first byte,
 /// require a touch; a non-confirmation maps to `SECURE_MESSAGE_EXEC_ERROR`
 /// (0x6600). With UIF off (or no button) this is a no-op.
+///
+/// A probe the medium could not serve reads as ON. `Fs::read` answers the same
+/// `None` for "no UIF configured" and "I could not look", and the absent arm here
+/// runs the private-key operation with no touch at all — so the collapse waived
+/// exactly the gate the owner set.
 pub(crate) fn check_uif<S: Storage>(
     fs: &mut Fs<S>,
     fid: u16,
     presence: &mut dyn UserPresence,
 ) -> Result<(), Sw> {
     let mut buf = [0u8; 2];
-    let on = matches!(fs.read(fid, &mut buf), Some(n) if n >= 1 && buf[0] > 0);
+    let on = match fs.try_read(fid, &mut buf) {
+        Ok(stored) => matches!(stored, Some(n) if n >= 1 && buf[0] > 0),
+        Err(_) => true,
+    };
     if on {
         // The trusted screen names which key operation the UIF is gating (the
         // OpenPGP UIF DOs: 0xD6 signature, 0xD7 decryption, 0xD8 authentication).

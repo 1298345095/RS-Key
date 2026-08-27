@@ -186,7 +186,7 @@ formal/README.md	crates/rsk-oath/src/lib.rs	1197-1197	self.validated = false;	se
 formal/README.md	crates/rsk-oath/src/lib.rs	1549-1549	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
 formal/README.md	crates/rsk-openpgp/src/internalaut.rs	45-48	// §7.2.13 names PW1 no. 82 and nothing else; PW3 used to stand in, and a	return Err(Sw::SECURITY_STATUS_NOT_SATISFIED);
 formal/README.md	crates/rsk-openpgp/src/keys.rs	405-409	/// Bump the 3-byte big-endian PSO:CDS counter. If the PW-status "PW1 valid for	if fs.read(EF_PW_PRIV, &mut pw).is_some() && pw[0] == 0 {
-formal/README.md	crates/rsk-openpgp/src/lib.rs	335-338	/// valid AID and an ICC power cycle clear them (the dispatcher's `deselect`).	self.reset_session();
+formal/README.md	crates/rsk-openpgp/src/lib.rs	343-346	/// valid AID and an ICC power cycle clear them (the dispatcher's `deselect`).	self.reset_session();
 formal/README.md	crates/rsk-openpgp/src/pin.rs	67-80	pub fn reset(&mut self) {	}
 formal/README.md	crates/rsk-openpgp/src/pin.rs	125-125	pw[idx] -= 1;	pw[idx] -= 1;
 formal/README.md	crates/rsk-openpgp/src/pin.rs	176-188	/// Refines `RSKeyAppletSeams!NoStatusAfterARefusedAuth` — SEC-SEAM-002.	}
@@ -198,7 +198,7 @@ formal/README.md	crates/rsk-openpgp/src/pin.rs	790-790	Some(n) if n >= 1 => rc_r
 formal/README.md	crates/rsk-openpgp/src/pin.rs	793-793	if data.len() <= rc_len {	if data.len() <= rc_len {
 formal/README.md	crates/rsk-openpgp/src/pso.rs	80-92	(0x9E, 0x9A) => {	if !sess.has_pw2 {
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	59-65	pub fn write_authorized(sess: &Session, fid: u16) -> bool {	}
-formal/README.md	crates/rsk-openpgp/src/putdata.rs	192-194	if matches!(fid, EF_UIF_SIG | EF_UIF_DEC | EF_UIF_AUT) {	if let Some(n) = fs.read(target, &mut cur)
+formal/README.md	crates/rsk-openpgp/src/putdata.rs	244-247	pub fn put_pw_status<S: Storage>(fs: &mut Fs<S>, sess: &Session, data: &[u8]) -> Sw {	}
 formal/README.md	crates/rsk-openpgp/src/terminate.rs	156-156	let mut deleted = 0u32;	let mut deleted = 0u32;
 formal/README.md	crates/rsk-openpgp/src/terminate.rs	187-187	if deleted > WIPE_MAX_DELETES {	if deleted > WIPE_MAX_DELETES {
 formal/README.md	crates/rsk-piv/src/auth.rs	57-65	/// skips the PIN; listing known gated values made unknown bytes ungated.	}
@@ -273,7 +273,7 @@ formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1195-1199	/// `select` re
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1203-1203	/// algorithm) when an access code is set.	/// algorithm) when an access code is set.
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1225-1229	self.chain = Chain::None;	self.validated = !code_set;
 formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/keys.rs	405-409	/// Bump the 3-byte big-endian PSO:CDS counter. If the PW-status "PW1 valid for	if fs.read(EF_PW_PRIV, &mut pw).is_some() && pw[0] == 0 {
-formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/lib.rs	249-251	// moved the tag below the ACL and left this one above it.	return Sw::SECURITY_STATUS_NOT_SATISFIED;
+formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/lib.rs	257-259	// moved the tag below the ACL and left this one above it.	return Sw::SECURITY_STATUS_NOT_SATISFIED;
 formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/pin.rs	19-38	pub struct Session {	session_rc: [u8; 32],
 formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/pin.rs	67-80	pub fn reset(&mut self) {	}
 formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/pin.rs	176-188	/// Refines `RSKeyAppletSeams!NoStatusAfterARefusedAuth` — SEC-SEAM-002.	}
@@ -492,9 +492,9 @@ formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	539-541	if always_uv
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	545-547	if pin_set && req.rk {	}
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1193-1200	/// Drop the VALIDATE result on deselect / card reset, so a later session must	}
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1229-1230	self.validated = !code_set;	self.otp_pin_verified = false;
-formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	250-252	if !putdata::write_authorized(&self.sess, fid) {	}
-formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	318-320	fn deselect(&mut self, _fs: &mut Fs<S>) {	}
-formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	336-339	fn select(&mut self, reselect: bool, _fs: &mut Fs<S>, res: &mut ResBuf) -> Sw {	}
+formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	258-260	if !putdata::write_authorized(&self.sess, fid) {	}
+formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	326-328	fn deselect(&mut self, _fs: &mut Fs<S>) {	}
+formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	344-347	fn select(&mut self, reselect: bool, _fs: &mut Fs<S>, res: &mut ResBuf) -> Sw {	}
 formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	220-224	if idx < n && pw[idx] == 0 {	let mut rec = [0u8; 64];
 formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	796-796	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);
 formal/comutants.toml	crates/rsk-otp/src/lib.rs	541-545	let unmatched =	}

@@ -190,8 +190,14 @@ pub fn put_data<S: Storage>(fs: &mut Fs<S>, sess: &Session, fid: u16, data: &[u8
     // (TERMINATE DF re-seeds UIF_DEFAULT). It is the one touch setting that is meant
     // to survive an admin-PIN compromise, so the generic writer must not lower it.
     if matches!(fid, EF_UIF_SIG | EF_UIF_DEC | EF_UIF_AUT) {
+        // `try_read`: the guard fires only on the value it managed to read, so an
+        // unreadable record skipped it entirely — and `02` is clearable ONLY by a
+        // factory reset, which makes the lowering irreversible.
         let mut cur = [0u8; 2];
-        if let Some(n) = fs.read(target, &mut cur)
+        let Ok(stored) = fs.try_read(target, &mut cur) else {
+            return Sw::MEMORY_FAILURE;
+        };
+        if let Some(n) = stored
             && n >= 1
             && cur[0] == UIF_PERMANENT
             && data.first() != Some(&UIF_PERMANENT)

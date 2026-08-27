@@ -38,7 +38,7 @@ fn make_fs() -> Fs<RamStorage> {
     fs
 }
 
-fn run(app: &mut OpenpgpApplet, fs: &mut Fs<RamStorage>, raw: &[u8]) -> (Vec<u8>, Sw) {
+fn run<S: Storage>(app: &mut OpenpgpApplet, fs: &mut Fs<S>, raw: &[u8]) -> (Vec<u8>, Sw) {
     let apdu = Apdu::parse(raw).unwrap();
     let mut buf = [0u8; SCRATCH];
     let mut res = ResBuf::new(&mut buf);
@@ -491,13 +491,13 @@ const ATTR_P256: &[u8] = &[0x13, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07]
 const ATTR_P256_ECDH: &[u8] = &[0x12, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07];
 const ATTR_ED25519: &[u8] = &[0x16, 0x2b, 0x06, 0x01, 0x04, 0x01, 0xda, 0x47, 0x0f, 0x01];
 
-fn verify_pin(app: &mut OpenpgpApplet, fs: &mut Fs<RamStorage>, mode: u8, pin: &[u8]) {
+fn verify_pin<S: Storage>(app: &mut OpenpgpApplet, fs: &mut Fs<S>, mode: u8, pin: &[u8]) {
     let mut a = vec![0x00, consts::INS_VERIFY, 0x00, mode, pin.len() as u8];
     a.extend_from_slice(pin);
     assert_eq!(run(app, fs, &a).1, Sw::OK, "VERIFY mode {mode:#x}");
 }
 
-fn put(app: &mut OpenpgpApplet, fs: &mut Fs<RamStorage>, p1: u8, p2: u8, data: &[u8]) -> Sw {
+fn put<S: Storage>(app: &mut OpenpgpApplet, fs: &mut Fs<S>, p1: u8, p2: u8, data: &[u8]) -> Sw {
     let mut a = vec![0x00, consts::INS_PUT_DATA, p1, p2, data.len() as u8];
     a.extend_from_slice(data);
     run(app, fs, &a).1
@@ -673,7 +673,7 @@ impl crate::UserPresence for Fixed {
 }
 
 // Import a P-256 SIG key + verify PW1, then enable the SIG UIF (touch) DO.
-fn setup_uif_sig(app: &mut OpenpgpApplet, fs: &mut Fs<RamStorage>) {
+fn setup_uif_sig<S: Storage>(app: &mut OpenpgpApplet, fs: &mut Fs<S>) {
     verify_pin(app, fs, consts::PW3_MODE83, consts::PW3_DEFAULT);
     assert_eq!(put(app, fs, 0x00, 0xC1, ATTR_P256), Sw::OK);
     assert_eq!(run(app, fs, &ec_import(0xB6, &[0x11u8; 32])).1, Sw::OK);
@@ -681,7 +681,7 @@ fn setup_uif_sig(app: &mut OpenpgpApplet, fs: &mut Fs<RamStorage>) {
     fs.put(consts::EF_UIF_SIG, &[0x01, 0x20]).unwrap(); // UIF on
 }
 
-fn pso_cds(app: &mut OpenpgpApplet, fs: &mut Fs<RamStorage>) -> (Vec<u8>, Sw) {
+fn pso_cds<S: Storage>(app: &mut OpenpgpApplet, fs: &mut Fs<S>) -> (Vec<u8>, Sw) {
     let mut a = vec![0x00, consts::INS_PSO, 0x9E, 0x9A, 0x20];
     a.extend_from_slice(&[0x42u8; 32]);
     run(app, fs, &a)
@@ -2839,4 +2839,72 @@ fn put_data_c4_refuses_a_user_status() {
     );
     verify_pin(&mut app, &mut fs, consts::PW3_MODE83, consts::PW3_DEFAULT);
     assert_eq!(put(&mut app, &mut fs, 0x00, 0xC4, &[0x00]), Sw::OK);
+}
+
+/// `check_uif` is the touch gate itself, and it decides on a `Fs::read` that
+/// answers the same `None` for "no UIF configured" and "I could not read it". A
+/// faulted probe therefore ran the private-key operation with no touch at all —
+/// the gate the owner set, waived by one flash fault.
+#[test]
+fn a_faulted_uif_probe_does_not_waive_the_touch_gate() {
+    let rng = RefCell::new(CountRng(7));
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    // Every touch declined: with the gate up the signature must be refused.
+    let presence = RefCell::new(Fixed(crate::Presence::Timeout));
+    let mut app = OpenpgpApplet::new(SERIAL_ID, SERIAL_HASH, None, &rng, &presence);
+    setup_uif_sig(&mut app, &mut fs);
+    assert_eq!(
+        pso_cds(&mut app, &mut fs).1,
+        Sw::SECURE_MESSAGE_EXEC_ERROR,
+        "control: the touch gate refuses a declined signature"
+    );
+
+    verify_pin(&mut app, &mut fs, consts::PW1_MODE81, consts::PW1_DEFAULT);
+    medium.stick(Some(consts::EF_UIF_SIG));
+    assert_eq!(
+        pso_cds(&mut app, &mut fs).1,
+        Sw::SECURE_MESSAGE_EXEC_ERROR,
+        "a faulted EF_UIF_SIG probe signed with the touch gate skipped"
+    );
+}
+
+/// OpenPGP 3.4 §4.4.3.6: UIF `02` is "permanently enabled … not changeable with
+/// PUT DATA", clearable only by a factory reset. Its guard read the stored value
+/// with `Fs::read`, so an unreadable record skipped the guard and the generic
+/// writer lowered a touch requirement that is meant to survive an admin-PIN
+/// compromise — irreversibly, short of TERMINATE DF.
+#[test]
+fn a_faulted_uif_probe_does_not_lower_a_permanent_touch_requirement() {
+    let rng = RefCell::new(CountRng(7));
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    let presence = RefCell::new(Fixed(crate::Presence::Confirmed));
+    let mut app = OpenpgpApplet::new(SERIAL_ID, SERIAL_HASH, None, &rng, &presence);
+    verify_pin(&mut app, &mut fs, consts::PW3_MODE83, consts::PW3_DEFAULT);
+    assert_eq!(put(&mut app, &mut fs, 0x00, 0xD6, &[0x02, 0x20]), Sw::OK);
+    assert_eq!(
+        put(&mut app, &mut fs, 0x00, 0xD6, &[0x00, 0x20]),
+        Sw::CONDITIONS_NOT_SATISFIED,
+        "control: PW3 cannot lower a permanently enabled UIF"
+    );
+
+    medium.stick(Some(consts::EF_UIF_SIG));
+    let sw = put(&mut app, &mut fs, 0x00, 0xD6, &[0x00, 0x20]);
+    medium.stick(None);
+    let mut cur = [0u8; 2];
+    assert_eq!(
+        fs.read(consts::EF_UIF_SIG, &mut cur).map(|n| cur[..n][0]),
+        Some(consts::UIF_PERMANENT),
+        "a faulted probe lowered a permanently enabled UIF"
+    );
+    assert_eq!(
+        sw,
+        Sw::MEMORY_FAILURE,
+        "a write that could not read the value it must not lower has to refuse"
+    );
 }

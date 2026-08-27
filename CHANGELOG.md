@@ -86,6 +86,28 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **A faulted probe waived the OpenPGP touch gate, and lowered a UIF the card
+  documents as unchangeable.** `check_uif` is the touch gate itself — PSO:CDS,
+  PSO:DEC and INTERNAL AUTHENTICATE all pass through it — and it decided on a
+  `Fs::read` that answers the same `None` for "no UIF configured" and "I could not
+  read it". Measured over a declined touch: control `6600`, one faulted
+  `EF_UIF_SIG` probe `9000` — the signature made with no confirmation at all. It
+  resolves to ON now.
+
+  The second is the guard the reviewer named and did not drive; driven here.
+  OpenPGP 3.4 §4.4.3.6: UIF `02` is "permanently enabled … not changeable with PUT
+  DATA", clearable only by a factory reset, and its guard read the stored value the
+  same collapsing way. Measured with PW3 verified: control
+  `CONDITIONS_NOT_SATISFIED`, one faulted probe and the stored value goes `02` →
+  `00`, irreversibly short of TERMINATE DF.
+
+  Separately, `formal/README.md` cited `putdata.rs:192-194` twice for "PUT DATA
+  `0xC4` is an administrative write gated on PW3". The locked text says that span
+  is the **UIF** block; the PW3 gate is `put_pw_status`'s own `!sess.has_pw3` at
+  `:244-247`. The citation named code the prose was never about, and only became
+  visible because this change rewrote the line it ended on — `citation_gate.py`
+  reports a locked line that MOVED, never one edited where it stood.
+
 - **PIV `MOVE KEY` destroyed the certificate at BOTH slots on a faulted probe, and
   answered `9000`.** It reads the source certificate and, finding none, deletes the
   destination's; the source's goes at the end of the move. `Fs::read` answers the
