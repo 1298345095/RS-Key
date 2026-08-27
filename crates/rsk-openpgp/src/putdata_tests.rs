@@ -347,3 +347,40 @@ fn a_faulted_probe_does_not_skip_the_attribute_invalidation() {
     assert_eq!(put_data(&mut fs, &sess, EF_ALGO_SIG, DEFAULT_ALGO), Sw::OK);
     assert!(!fs.has_data(EF_PK_SIG.get()));
 }
+
+/// The invalidation retires the public half of the slot as well as the sealed key,
+/// and it probes that half with its own `try_has_data`. The key probe three lines
+/// above catches a persistent fault first, so a test aimed at the key slot never
+/// runs this guard — which is how it came to be held by nothing. Aimed at
+/// `EF_PB_SIG` directly: the key is retired (correctly, the attribute did change)
+/// and then the public half must survive rather than be read as already gone.
+#[test]
+fn a_faulted_public_slot_probe_does_not_skip_its_retirement() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    let mut sess = Session::new();
+    admin(&mut fs, &mut sess);
+    let p256 = [0x13, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07];
+    assert_eq!(put_data(&mut fs, &sess, EF_ALGO_SIG, &p256), Sw::OK);
+    fs.put(EF_PK_SIG.get(), &[0xAA; 16]).unwrap();
+    fs.put(EF_PB_SIG, &[0xBB; 16]).unwrap();
+
+    medium.stick(Some(EF_PB_SIG));
+    let sw = put_data(&mut fs, &sess, EF_ALGO_SIG, DEFAULT_ALGO);
+    medium.stick(None);
+    assert!(
+        fs.has_data(EF_PB_SIG),
+        "a faulted probe left the public half standing over a retired key"
+    );
+    assert_eq!(
+        sw,
+        Sw::MEMORY_FAILURE,
+        "an invalidation that could not read the half it retires must refuse"
+    );
+
+    // With every probe answering, the retirement completes.
+    assert_eq!(put_data(&mut fs, &sess, EF_ALGO_SIG, DEFAULT_ALGO), Sw::OK);
+    assert!(!fs.has_data(EF_PB_SIG));
+}

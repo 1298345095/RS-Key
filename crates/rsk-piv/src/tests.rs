@@ -8484,3 +8484,89 @@ fn a_faulted_source_probe_does_not_report_the_slot_empty() {
         "a source slot the medium could not read was reported as an empty one"
     );
 }
+
+/// Every guard in [`scan_files`] writes a FACTORY DEFAULT over the record it reads
+/// absent, and the fallible probe is what stops a flash fault from taking that arm.
+/// One row per guard, each aimed at its OWN fid: a persistent fault on the first
+/// record shadows every later guard, which is how most of these came to be held by
+/// nothing at all while the suite stayed green.
+#[test]
+fn every_scan_files_guard_refuses_its_own_faulted_probe() {
+    let rng = RefCell::new(TestRng(7));
+    let pres = RefCell::new(AlwaysConfirm);
+    let (backend, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    // A provisioned card: every record below is present, so every probe reaches the
+    // backend and the fault can land on it.
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+
+    for (fid, what) in [
+        (EF_PIN, "the PIN verifier"),
+        (EF_PUK, "the PUK verifier"),
+        (EF_RETRIES, "the retry counters"),
+        (key_fid(SLOT_CARDMGM).get(), "the management key"),
+        (key_fid(SLOT_ATTESTATION).get(), "the F9 attestation key"),
+        (rsk_fs::EF_META, "the 9B metadata head"),
+    ] {
+        let before = medium.value(fid);
+        assert!(before.is_some(), "{what} is provisioned before the fault");
+        medium.stick(Some(fid));
+        let dev = Device {
+            serial_hash: &HASH,
+            serial_id: &SERIAL,
+            otp_key: None,
+        };
+        let sw = crate::files::scan_files(&dev, &mut fs, &mut TestRng(3));
+        medium.stick(None);
+        assert_eq!(
+            medium.value(fid),
+            before,
+            "a faulted probe replaced {what} with the factory default"
+        );
+        assert_eq!(
+            sw,
+            Err(Sw::MEMORY_FAILURE),
+            "a boot that could not read {what} must refuse, not re-provision"
+        );
+    }
+}
+
+/// `protect_mgm_key` rebuilds ADMIN DATA from the host's own record so the
+/// PIN-change timestamp and unrelated flag bits survive the on-panel protect.
+/// `Fs::read` answers the same `None` for "no host record" and for one the flash
+/// could not serve, and the absent arm rebuilds from EMPTY — so a faulted probe
+/// discarded the host's PivmanData and the rebuild made that permanent.
+#[test]
+fn a_faulted_pivman_probe_does_not_discard_the_host_record() {
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let (backend, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut inner = vec![PIVMAN_FLAGS_TAG, 0x01, 0x01];
+    inner.extend_from_slice(&[PIVMAN_TS_TAG, 0x04, 0xDE, 0xAD, 0xBE, 0xEF]);
+    let mut admin = vec![PIVMAN_TAG, inner.len() as u8];
+    admin.extend_from_slice(&inner);
+    fs.put(EF_PIVMAN_DATA, &admin).unwrap();
+
+    medium.stick(Some(EF_PIVMAN_DATA));
+    let sw = protect_mgm_key(&dev, &mut fs, &mut TestRng(42));
+    medium.stick(None);
+    let mut out = [0u8; 64];
+    let n = fs.read(EF_PIVMAN_DATA, &mut out).unwrap();
+    assert_eq!(
+        find_tag(&out[2..n], PIVMAN_TS_TAG as u16),
+        Some(&[0xDE, 0xAD, 0xBE, 0xEF][..]),
+        "a faulted probe rebuilt ADMIN DATA without the host's timestamp"
+    );
+    assert_eq!(
+        sw,
+        Sw::MEMORY_FAILURE,
+        "a rebuild that could not read the record it carries forward must refuse"
+    );
+}

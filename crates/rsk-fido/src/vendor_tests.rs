@@ -2353,3 +2353,58 @@ fn a_faulted_sealed_probe_reads_as_sealed_on_the_display() {
         "and for the Backup screen's recovery-phrase reveal"
     );
 }
+
+/// `lock_engaged` resolves a probe it could not serve to ENGAGED, and `BACKUP_LOAD`
+/// is one of the gates that reads it: a restore next to a live wrapped blob leaves
+/// two competing seeds, and every credential is sealed under one of them. The two
+/// halves — `lock_state`'s probes and the `unwrap_or(true)` above them — are held
+/// here together, because either one collapsing lets the same load through.
+#[cfg(not(feature = "fips-profile"))]
+#[test]
+fn a_faulted_lock_probe_does_not_admit_a_load_over_a_wrapped_seed() {
+    let (mut fs, medium, mut rng, mut st) = setup_stuck();
+    // The soft-locked shape: the wrapped blob is what is on flash.
+    fs.put_key(
+        EF_KEY_DEV_ENC,
+        rsk_fs::Sealed::wrap(&[0x5Cu8; LOCK_BLOB_LEN]),
+    )
+    .unwrap();
+    fs.delete_key(EF_KEY_DEV).unwrap();
+    assert!(lock_engaged(&mut fs), "control: the device reads locked");
+    let wrapped = medium
+        .value(EF_KEY_DEV_ENC.get())
+        .expect("the wrapped blob is on the medium");
+
+    let host = handshake(&mut fs, &mut rng, &mut st);
+    let mut blob = [0u8; LOCK_BLOB_LEN];
+    let nonce = [0x07u8; 12];
+    let mut buf = [0x33u8; 32];
+    let tag = chacha20poly1305_encrypt(&host.key, &nonce, &host.aad, &mut buf);
+    blob[..12].copy_from_slice(&nonce);
+    blob[12..44].copy_from_slice(&buf);
+    blob[44..].copy_from_slice(&tag);
+    let mut req = [0u8; 128];
+    let n = load_req(&mut req, &blob);
+    let mut out = [0u8; 16];
+
+    medium.stick(Some(EF_KEY_DEV_ENC.get()));
+    let r = call(
+        &mut fs,
+        &mut rng,
+        &mut st,
+        &mut AlwaysConfirm,
+        &req[..n],
+        &mut out,
+    );
+    medium.stick(None);
+    assert_eq!(
+        medium.value(EF_KEY_DEV_ENC.get()).as_deref(),
+        Some(&wrapped[..]),
+        "a faulted lock probe let a LOAD land beside the wrapped seed"
+    );
+    assert!(
+        medium.value(EF_KEY_DEV.get()).is_none(),
+        "and left a second, plaintext seed competing with it"
+    );
+    assert_eq!(r, Err(CtapError::NotAllowed));
+}

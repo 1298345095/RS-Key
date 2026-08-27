@@ -40,6 +40,35 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **More than half of the fallible-probe conversion was held by no test, and the
+  count was worse than the review said.** Reverting each converted guard on its own
+  and running the owning crate's whole suite: **12 killed, 26 survived** — a diff
+  where 26 of 38 guards could be deleted with a green suite. The independent review
+  put it at 18; the extra 8 are the OpenPGP `scan_files` guards it grouped as one
+  `read_file` row, and one — PIV's `have_meta` — it listed as surviving where the
+  measurement kills it.
+
+  The mechanism is shadowing: a persistent fault on the first record a function
+  probes is caught by that first guard, so every later one never runs, and a test
+  aimed at one record therefore proves nothing about its neighbours. Three
+  mechanisms close it, and none of them is "assert harder":
+  `ProbeMedium::stick_after(fid, skip)` lets N probes of a record through before
+  faulting, which is the only way to reach a guard standing behind another probe of
+  the SAME record (`EF_PW1` twice, `EF_PW_PRIV` three times); each sweep aims at the
+  guard's own fid rather than the function's first; and the guards whose record is
+  legitimately absent are driven over a **truncated boot walk**, because a complete
+  scan decides the whole FID space and `try_*` then short-circuits an absent record
+  before the backend — no fault can reach those guards at all on a fully scanned
+  store. Re-measured after: **38 killed, 0 survived**, every mutant proven compiled
+  in.
+
+  Two smaller findings fell out. `Fs::delete` skips the backend when the present bit
+  is clear, and a truncated walk clears every present bit — so a test that plants and
+  removes a record across such a walk must use `force_delete` or the record silently
+  survives. And the first `try_*` over an absent record CACHES the absence, so a
+  second guard probing the same absent record answers from RAM with no probe to
+  fault: two guards over one record need it present to be separable.
+
 - **A paragraph naming no run could restate every number the run-count regions
   publish, and did, at exit 0.** The scan's four shape rules are armed by a word
   in the same PARAGRAPH, so the price of a hand-typed run-count was not writing

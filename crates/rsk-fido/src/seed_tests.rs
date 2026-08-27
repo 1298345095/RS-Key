@@ -589,3 +589,39 @@ fn a_faulted_probe_does_not_mint_a_second_device_seed() {
         "the credentials derived from this seed must still resolve"
     );
 }
+
+/// `ensure_seed`'s other two guards, each aimed at its own record. A persistent
+/// fault on `EF_KEY_DEV` is caught by the seed guard three lines above and these
+/// never run — which is how both came to be held by nothing while the suite stayed
+/// green. Their absent arm rolls the signature counter back to zero and overwrites
+/// the large-blob array, at boot, with no host command involved.
+#[test]
+fn a_faulted_probe_does_not_reinitialise_the_counter_or_the_large_blob() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&d, &mut fs, &mut SeqRng(1)).unwrap();
+    // Move both off the values a first boot writes, so a re-initialisation shows.
+    fs.put(EF_COUNTER, &[9, 8, 7, 6]).unwrap();
+    fs.put(EF_LARGEBLOB, &[0xAB; 8]).unwrap();
+
+    for (fid, what) in [
+        (EF_COUNTER, "the signature counter"),
+        (EF_LARGEBLOB, "the large-blob array"),
+    ] {
+        let before = medium.value(fid).expect("on the medium");
+        medium.stick(Some(fid));
+        let r = ensure_seed(&d, &mut fs, &mut SeqRng(2));
+        medium.stick(None);
+        assert_eq!(
+            medium.value(fid).as_deref(),
+            Some(&before[..]),
+            "a faulted probe re-initialised {what}"
+        );
+        assert!(
+            r.is_err(),
+            "a boot that could not read {what} must fail, not re-initialise it"
+        );
+    }
+}
