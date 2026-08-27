@@ -843,6 +843,16 @@ def test_a_transcribed_gate_line_that_the_gate_does_not_derive(tmp_path, key, ol
     assert any(f"result.{key}" in p for p in problems), problems
 
 
+@pytest.mark.parametrize("key", bundle_gate.GATE_RESULTS)
+def test_a_transcribed_gate_line_with_its_numbers_taken_out(tmp_path, key):
+    """Both rules above compare the numbers a line HAS, so a line with none
+    satisfies them — the same spelling as the roster satisfied by one key, one
+    rule over. It clears the leaf floor and the non-answer rule too."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["result"].update({key: "the gate was green"}))
+    assert any("carries no number" in p for p in findings(root)), findings(root)
+
+
 def test_a_result_line_transcribing_a_gate_this_file_cannot_derive(tmp_path):
     """The resolver's own lesson one group over: a `gate_*` key nothing knows how
     to check must say so rather than be skipped."""

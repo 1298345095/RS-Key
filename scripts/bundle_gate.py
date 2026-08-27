@@ -637,6 +637,15 @@ def gate_transcriptions(doc: dict, findings: list[str]) -> None:
             )
             continue
         claim, derived = str(result[key]), corpus[key]
+        # Both rules below compare the numbers a line HAS, so a line with none
+        # satisfies them: `gate_registry = "assurance-gate: all good"` clears the
+        # roster, the leaf floor and the non-answer rule, and transcribes nothing.
+        if not re.search(r"\d", claim):
+            findings.append(
+                f"{BUNDLE}: `result.{key}` transcribes a gate and carries no number"
+                " — the counts are what this line is, and a sentence in their place"
+                " is the claim withdrawn rather than checked"
+            )
         for name, value in CLAIMED_PAIR.findall(claim):
             if not re.search(rf"\b{re.escape(name)}={re.escape(value)}(?!\d)", derived):
                 findings.append(

@@ -1112,7 +1112,12 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   routes` where the line carries no pairs; the prose after them stays the row's
   to write. This belongs here and not in `run_count_gate.py` because that file
   says in as many words that it does not reach `assurance/`, *"which is itself a
-  record of measurements and has `bundle_gate.py`"*.
+  record of measurements and has `bundle_gate.py`"*. And both of those rules
+  compare the numbers a line **has**, so a line with none satisfies them:
+  `gate_registry = "assurance-gate: all good"` cleared the roster, the leaf floor
+  and the non-answer rule while transcribing nothing, which is the roster
+  satisfied by one key wearing a different field. A transcribed gate line owes at
+  least one number.
   *What it found on the first run.* `gate_assumption` said
   `AlwaysUvShipped … FALSE=88 cfgs`, and `formal/` has held **89**
   `AlwaysUvShipped = FALSE` configurations at every commit from `58df09d` through
