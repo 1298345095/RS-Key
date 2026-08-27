@@ -409,6 +409,9 @@ def fixture_registries(monkeypatch):
     a three-line Results grouping and could never have passed.
     """
     monkeypatch.setattr(run_count_gate, "SCOPED", {})
+    # Its ceiling with it: the ceiling EQUALS the registry now, which is what
+    # makes raising it visible, and an empty registry has a ceiling of nothing.
+    monkeypatch.setattr(run_count_gate, "SCOPE_CEILING", 0)
     monkeypatch.setattr(run_count_gate, "SCAN_FLOOR", 0)
     monkeypatch.setattr(run_count_gate, "RULE_FLOOR", 0)
     monkeypatch.setattr(run_count_gate, "TABLE_GROUPS", GROUPS)
@@ -448,6 +451,19 @@ def test_a_scan_rule_that_has_stopped_matching_this_tree(monkeypatch, rule):
     assert only(problems, f"under the floor of {run_count_gate.RULE_FLOOR}"), problems
 
 
+@pytest.mark.parametrize("ceiling", ("SCOPE_CEILING", "CARVE_OUT_CEILING", "SCOPE_SPAN_CAP"))
+def test_a_ceiling_raised_without_the_entry_that_needs_it(monkeypatch, ceiling):
+    """Three surviving mutants of one shape. `fb406e8` wrote of `SCAN_FLOOR` that
+    monkeypatching it down on a fixture left the shipped value never exercised
+    against the shipped tree -- and this file then shipped three ceilings with
+    exactly that defect. The asymmetry is measured: lowering a FLOOR is caught,
+    because the cases that drive it drive the real tree, and raising a CEILING was
+    not, because nothing said where the ceiling should BE. Each sits on what the
+    tree holds now, so a raise costs the diff line it is supposed to."""
+    monkeypatch.setattr(run_count_gate, ceiling, getattr(run_count_gate, ceiling) + 62)
+    assert run_count_gate.audit(ROOT)[0], ceiling
+
+
 def test_a_published_sentence_that_stopped_being_generated(monkeypatch):
     """The region set had no floor at all: dropping one entry from
     `region_bodies`, deleting its two markers and retyping the sentence by hand
@@ -477,6 +493,24 @@ def test_a_recorded_row_the_tier_no_longer_lists(tree):
         tree.record(safety=MATRIX_SAFETY + "\nGone.cfg  GREEN  states=1 distinct=1 depth=1 1s"),
     )
     assert only(tree.problems(), "Gone.cfg is recorded and the tier no longer lists it")
+
+
+def test_the_model_moved_under_the_recorded_run(tree):
+    """The gate reads model CONTENT for two things only -- the `Bug*` switch
+    names and `Shipped.cfg`'s `INVARIANTS` -- so an edit that changes the state
+    space without moving the roster or the floors left every published count
+    stale and the row green. The record carries the commit, and this is the
+    question that lets the row ask."""
+    tree.write("formal/Mini.tla", MINI.replace("Init == TRUE", "Init == TRUE /\\ TRUE"))
+    assert only(tree.problems(), "formal/Mini.tla has moved since")
+
+
+def test_a_page_beside_the_model_is_not_the_model(tree):
+    """The other direction: `formal/README.md` carries generated regions that
+    `--write` moves right after `--record`, so a rule over the whole directory
+    would redden every honest run."""
+    tree.write("formal/README.md", tree.read("formal/README.md") + "\nA later note.\n")
+    assert not only(tree.problems(), "has moved since")
 
 
 def test_a_row_recorded_twice(tree):
@@ -552,6 +586,26 @@ def test_a_wall_clock_under_the_one_tlc_timed_itself_at(tree):
 def test_a_wall_clock_further_over_it_than_a_jvm_starts_in(tree):
     tree.edit("formal/runs.toml", "depth=6  600s", "depth=6  9000s")
     assert only(tree.problems(), f"belongs in 0..{run_count_gate.CLOCK_SLACK}s")
+
+
+@pytest.mark.parametrize("clock, over", (("628s", False), ("629s", True)))
+def test_the_per_row_gap_is_bounded_where_it_says(tree, clock, over):
+    """Written with the boundary spelled out rather than computed from the
+    constant: `CLOCK_SLACK` at 3000 was a surviving mutant, because the case
+    above uses a gap of 8402 and passes at either value. TLC timed this row at
+    598 s, so 628 is exactly the bound and 629 is one over."""
+    tree.edit("formal/runs.toml", "depth=6  600s", f"depth=6  {clock}")
+    assert bool(only(tree.problems(), "belongs in 0..")) is over, tree.problems()
+
+
+def test_one_configuration_with_two_kept_summaries(tree):
+    """The finding existed and nothing drove it: a second line for one
+    configuration silently replaced the first, so a row could be given a summary
+    that is not its own with the real one left in the file above it."""
+    tree.write("formal/runs.toml", tree.record(
+        tlc=tlc_kept(tree.when)["safety"] + "\n"
+        + tlc_kept(tree.when)["safety"].splitlines()[0].replace("4000 states", "40 states")))
+    assert only(tree.problems(), "Shipped.cfg has two TLC summaries")
 
 
 def test_a_row_with_no_tlc_summary_at_all(tree):
@@ -672,6 +726,17 @@ def test_more_distinct_states_than_were_generated(tree):
         safety=MATRIX_SAFETY.replace("states=4000 ", "states=1    "),
         tlc=tlc_kept(tree.when)["safety"].replace("4000 states generated", "1 states generated")))
     assert only(tree.problems(), "distinct among them — no run finds more")
+
+
+def test_a_number_where_tlc_printed_nothing(tree):
+    """The other direction of the same agreement, which nothing drove: the case
+    above has the matrix say `?` where TLC printed a number, and this one has the
+    matrix say a number where TLC printed none."""
+    tree.write("formal/runs.toml", tree.record(
+        tlc=tlc_kept(tree.when)["safety"].replace(
+            "4000 states generated, 200 distinct states found, 0 states left on queue."
+            " The depth of the complete state graph search is 6. ", "")))
+    assert only(tree.problems(), "recorded states=4000 and TLC's own summary says nothing")
 
 
 def test_write_will_not_publish_from_a_record_that_does_not_check_out(tree):
@@ -962,6 +1027,31 @@ def test_the_provenance_a_region_prints_verbatim(tree, spoken):
     assert second_copy(tree, f"Recorded on {spoken} on this box.\n"), spoken
 
 
+#: Every separator [`GROUP`] holds. Each is asserted as the WHOLE literal,
+#: because a case that asserts only that something fired passes with the
+#: separator deleted: the rule then matches the truncated tail and the finding
+#: names `'563 872 rows'`, which is `test_a_literal_is_reported_whole`'s own
+#: defect wearing a lost separator. `340e515` added the three invisible
+#: characters as the fix for a measured bypass and its two cases were exactly
+#: that shape -- delete them again and the suite was green.
+#:
+#: This is also the only thing that sees a rule NARROWED. `RULE_FLOOR` counts
+#: matches, and hollowing `GROUP` or `JOIN` moves none of the five tallies at all
+#: (67/3/21/5/13 before and after), so the floor sees a rule killed and never one
+#: that has quietly stopped holding a member.
+@pytest.mark.parametrize("sep", (" ", "\u00a0", "\u2009", "\u202f", ",", "_"))
+def test_every_grouping_the_count_rule_holds(tree, sep):
+    number = sep.join(("77", "563", "872"))
+    tree.write("docs/typed.md", f"`run-tlc.sh --tiers` lists {number} rows.\n")
+    assert only(tree.problems(), repr(f"{number} rows")), tree.problems()
+
+
+@pytest.mark.parametrize("join", (" ", "-", "\u2013", "\u2014"))
+def test_every_join_the_count_rule_holds(tree, join):
+    tree.write("docs/typed.md", f"`run-tlc.sh --tiers` lists 195{join}rows.\n")
+    assert only(tree.problems(), repr(f"195{join}rows")), tree.problems()
+
+
 def test_a_literal_is_reported_whole(tree):
     """`48.7 M-state GREEN` was reported as `'7 M-state GREEN'`: `NUM` stopped at
     the decimal point, so the finding named a number that is not in the page."""
@@ -1082,7 +1172,7 @@ def test_a_registry_over_its_ceiling(tree, monkeypatch):
     monkeypatch.setattr(run_count_gate, "SCOPED", {
         ("docs/testing.md", "a"): LONG, ("docs/formal.md", "b"): LONG + " twice",
     })
-    assert only(tree.problems(), "over the ceiling of 1")
+    assert only(tree.problems(), "against a ceiling of 1")
 
 
 def test_a_fragment_that_exempts_nothing(tree, monkeypatch):
@@ -1180,7 +1270,7 @@ def test_a_carve_out_whose_reason_is_not_one(tree, monkeypatch, why):
 
 def test_a_carve_out_list_over_its_ceiling(tree, monkeypatch):
     monkeypatch.setattr(run_count_gate, "CARVE_OUT_CEILING", 1)
-    assert only(tree.problems(), "over the ceiling of 1")
+    assert only(tree.problems(), "against a ceiling of 1")
 
 
 @pytest.mark.parametrize("rel", sorted(run_count_gate.NOT_TYPED_HERE))
@@ -1287,6 +1377,28 @@ def test_the_value_rule_with_nothing_left_to_look_for(monkeypatch):
     print and the rule is inert, which is the shape audit run-34 #9 is about."""
     monkeypatch.setattr(run_count_gate, "VALUE_FLOOR", 10 ** 12)
     assert only(run_count_gate.audit(ROOT)[0], "the emitted-value rule matched 0")
+
+
+def test_a_tracked_page_the_scan_cannot_decode(tree):
+    """`scanned` swallowed a `UnicodeDecodeError` "rather than reported", so a
+    page in any other encoding dropped out of the scan with nothing said. Costs
+    nothing today -- all 21 files that do not decode in the real tree are images
+    -- which is why it had to be driven rather than assumed."""
+    tree.stray("docs/other.md", "")
+    (tree.root / "docs/other.md").write_bytes(
+        "# Cost\n\nCaf\xe9 ran `run-tlc.sh safety` in 2916 s.\n".encode("latin-1"))
+    tree.pending.add("docs/other.md")
+    assert only(tree.problems(), "does not decode as UTF-8")
+
+
+def test_a_binary_file_under_a_scanned_tree_is_not_a_page(tree):
+    """The other direction, and the reason the two are told apart by a NUL byte
+    the way git tells them apart: an image carries no prose and 21 of them are
+    tracked under `docs/`."""
+    tree.stray("docs/shot.png", "")
+    (tree.root / "docs/shot.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\xff\xfe")
+    tree.pending.add("docs/shot.png")
+    assert not only(tree.problems(), "does not decode as UTF-8")
 
 
 def test_a_page_another_gate_writes_whole(tree):

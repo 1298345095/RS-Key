@@ -132,6 +132,15 @@ SCAN_FLOOR = 8
 #: the aggregate floor cannot see it go at all. Only the trigger's death (2 left)
 #: was visible. ONE, not a fraction of what each holds today: a vocabulary either
 #: still matches the tree's spelling or it does not, and a fraction of 2 is 0.
+#:
+#: What it does NOT see, said plainly because the justification above reads as
+#: though it did: a rule NARROWED. Hollowing `GROUP` — dropping the NBSP and the
+#: two thin spaces, which is the bypass `340e515` added them for — moves none of
+#: the five tallies at all, 3/20/13/5/66 before and after, and neither does
+#: hollowing `JOIN`. Only `test_every_grouping_the_count_rule_holds` and its
+#: sibling see that, by asserting the WHOLE literal a page holds rather than that
+#: some finding fired: with a separator gone the rule matches the tail and reports
+#: `'563 872 rows'`, which is a finding about a number that is not on the page.
 RULE_FLOOR = 1
 
 #: What a scope label has to BE. It cannot be checked for truth — no program
@@ -149,12 +158,27 @@ LABEL_WORDS = 8
 #: entry, which is an exemption nobody sized. Measured maximum today is five, in
 #: the `COVERAGE=1` sweep sentence; a sixth in one sentence means splitting the
 #: registration, not widening it.
+#:
+#: Held ONE above that maximum rather than merely over it, for the reason under
+#: the two ceilings below: raising it to 99 was a surviving mutant, because a cap
+#: with headroom is a cap nothing has to move.
 SCOPE_SPAN_CAP = 6
 
-#: And the registry as a whole only grows deliberately. 27 today; a bump belongs
-#: in the diff beside the entry that needs it, the way every other ratchet here
-#: moves. An exemption list that grows without anyone noticing is the colander
-#: this row exists to not become.
+#: And the registry as a whole only grows deliberately: this EQUALS `len(SCOPED)`,
+#: so a bump belongs in the diff beside the entry that needs it, the way every
+#: other ratchet here moves. An exemption list that grows without anyone noticing
+#: is the colander this row exists to not become.
+#:
+#: Equal and not merely an upper bound, because the difference is what a mutation
+#: run measured: `fb406e8` wrote of `SCAN_FLOOR` that "it monkeypatches the floor
+#: down on a fixture, so the shipped 8 had never been exercised against the
+#: shipped tree" -- and then this file shipped three ceilings with exactly that
+#: defect. Lowering a FLOOR is caught, because the cases that drive it drive the
+#: real tree; raising a CEILING was not, because nothing said where the ceiling
+#: should be. Now `test_the_real_checkout_is_green` says. (This number also read
+#: 27 in its own comment one commit after being written, thirty lines from the
+#: constant, in the guard whose whole subject is a hand-typed number going
+#: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
 SCOPE_CEILING = 37
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
@@ -819,6 +843,30 @@ def check_tlc(where, run, findings):
         findings.append(f"{where}: TLC's summary of {cfg} is kept and the matrix has no such row")
 
 
+#: What a recorded run's numbers actually depend on: the modules, the
+#: configurations, the verdict registry and the two shell scripts that build and
+#: drive them. NOT `formal/README.md`, whose generated regions `--write` moves
+#: right after `--record`, and not the record itself.
+MODEL = (":(glob)formal/*.tla", ":(glob)formal/*.cfg", "formal/floors.txt",
+         "formal/run-tlc.sh", "formal/gen-configs.sh")
+
+
+def checked_out_since(root, commit):
+    """What of [`MODEL`] this working tree has that `commit` did not.
+
+    The gate reads model CONTENT for exactly two things -- the `Bug*` switch
+    names and `Shipped.cfg`'s `INVARIANTS` -- so an edit that changed the state
+    space without moving the roster or `floors.txt` left every published count
+    stale and the row green. The record carries the commit; this is the question
+    it lets the row ask. Empty over the 32 commits since the recorded run.
+    """
+    done = subprocess.run(
+        ["git", "-C", str(root), "diff", "--name-only", commit, "--", *MODEL],
+        capture_output=True, text=True,
+    )
+    return sorted(q for q in done.stdout.split("\n") if q) if done.returncode == 0 else []
+
+
 def check_record(root, runs, listed, floor_rows, findings):
     """Whether each recorded run is a run of the tier as this tree lists it now."""
     for tier, run in sorted(runs.items()):
@@ -837,6 +885,13 @@ def check_record(root, runs, listed, floor_rows, findings):
             )
             if known.returncode != 0:
                 findings.append(f"{where}: commit {commit} is in no history here")
+            for moved in checked_out_since(root, commit):
+                findings.append(
+                    f"{where}: {moved} has moved since {commit[:12]}, the commit this run"
+                    " is recorded against — the roster and the floors can still agree"
+                    " while every published count is of a state space that has gone."
+                    " Re-run the tier and `--record` it"
+                )
         seen = [r["cfg"] for r in run["rows"]]
         for cfg in sorted({c for c in seen if seen.count(c) > 1}):
             findings.append(f"{where}: {cfg} recorded {seen.count(cfg)} times")
@@ -1158,8 +1213,9 @@ NOT_TYPED_HERE = {
     " does not go stale, it stays 0.4.10's",
 }
 
-#: Two. A third file that is not a place a run-count gets typed is a claim worth
-#: making in a diff, for the reason the ceiling on `SCOPED` exists.
+#: Two, and EQUAL to `len(NOT_TYPED_HERE)` for [`SCOPE_CEILING`]'s reason. A
+#: third file that is not a place a run-count gets typed is a claim worth making
+#: in a diff.
 CARVE_OUT_CEILING = 2
 
 
@@ -1181,11 +1237,15 @@ def tracked(root):
     return sorted(q for q in done.stdout.split("\0") if q)
 
 
-def scanned(root):
+def scanned(root, findings=None):
     """The published trees, in a fixed order so two findings read the same way.
 
-    A file that does not decode as text is dropped rather than reported: an image
-    carries no prose, and `docs/images/` is most of what that skips.
+    A file that does not decode was dropped rather than reported, and there is a
+    difference between the two reasons it might not: an image carries no prose and
+    is nothing to this rule, while a page in some other encoding is a page the
+    scan silently stops reading. Told apart the way git tells them apart, by a NUL
+    byte. Measured over this tree: 21 files do not decode, every one an image and
+    every one with a NUL in it, so the report costs nothing today.
     """
     out = []
     for rel in tracked(root):
@@ -1194,7 +1254,15 @@ def scanned(root):
         path = root / rel
         try:
             path.read_text()
-        except (UnicodeDecodeError, OSError):
+        except UnicodeDecodeError:
+            if findings is not None and b"\0" not in path.read_bytes():
+                findings.append(
+                    f"{rel}: tracked under a scanned tree and does not decode as UTF-8,"
+                    " and it is not binary — a page the scan cannot read is a page a"
+                    " run-count can be typed into with nothing to see it"
+                )
+            continue
+        except OSError:
             continue
         out.append(path)
     return out
@@ -1432,11 +1500,12 @@ def check_scope(root, findings):
             )
         else:
             seen[label] = where
-    if len(SCOPED) > SCOPE_CEILING:
+    if len(SCOPED) != SCOPE_CEILING:
         findings.append(
-            f"{len(SCOPED)} scoped entries, over the ceiling of {SCOPE_CEILING} — raise"
+            f"{len(SCOPED)} scoped entries against a ceiling of {SCOPE_CEILING} — move"
             " it in the same diff as the entry that needs it, so the exemption surface"
-            " grows where somebody can see it"
+            " grows where somebody can see it. A ceiling with headroom is one nobody"
+            " has to move, which is how raising it to 999 survived a mutation run"
         )
 
 
@@ -1463,7 +1532,7 @@ def scan(root, owned, values, pairs, said, findings):
     #: literals each registered fragment actually exempts, so an entry can be
     #: held to buying silence for a bounded, non-zero number of them.
     exempted = {}
-    for path in scanned(root):
+    for path in scanned(root, findings):
         rel = path.relative_to(root).as_posix()
         text = path.read_text()
         for marker in MARKER.finditer(text):
@@ -1565,6 +1634,13 @@ def scan(root, owned, values, pairs, said, findings):
                 f" {SCOPE_SPAN_CAP} — split the registration; a span this wide is an"
                 " exemption nobody sized"
             )
+    widest = max(exempted.values(), default=0)
+    if exempted and SCOPE_SPAN_CAP != widest + 1:
+        findings.append(
+            f"the widest registered fragment exempts {widest} literal(s) and the cap is"
+            f" {SCOPE_SPAN_CAP} — it sits one above the widest, or it is headroom nobody"
+            " has to move and raising it costs a diff line nobody reads"
+        )
     for name, count in sorted(per.items()):
         if count < RULE_FLOOR:
             findings.append(
@@ -1633,9 +1709,9 @@ def audit(root):
                 f" under {LABEL_WORDS} — the same rule its sibling registry has, because"
                 " it is the same kind of exemption"
             )
-    if len(NOT_TYPED_HERE) > CARVE_OUT_CEILING:
+    if len(NOT_TYPED_HERE) != CARVE_OUT_CEILING:
         findings.append(
-            f"{len(NOT_TYPED_HERE)} file(s) carved out of the scan, over the ceiling of"
+            f"{len(NOT_TYPED_HERE)} file(s) carved out of the scan against a ceiling of"
             f" {CARVE_OUT_CEILING} — a page that is not a place a run-count gets typed is"
             " a claim, and it belongs in a diff beside the reason for it"
         )
