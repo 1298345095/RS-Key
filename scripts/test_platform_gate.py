@@ -681,6 +681,19 @@ def test_a_board_revision_that_names_no_stepping_is_a_finding(tree):
     assert only(tree.problems(), "names no RP2350 stepping")
 
 
+def test_a_desk_with_the_part_named_inside_it_is_not_a_board_revision(tree):
+    """`search` over an otherwise free field: the desk description the arm above
+    refuses keeps the finding by being ABOUT a part, and loses it the moment it
+    names one. Driven at the sibling axis, where it published `1 of 3`."""
+    tree.edit(
+        "assurance/platform.toml",
+        'evidence = ["assurance/properties.toml"]',
+        'evidence = ["assurance/properties.toml"]\n'
+        'board_revision = "a red Pico 2 (an RP2350 A2) I had lying around"',
+    )
+    assert only(tree.problems(), "names no RP2350 stepping")
+
+
 def test_a_part_without_a_stepping_is_not_a_board_revision(tree):
     """The other half of the token, and the half the first table left open:
     `A2` alone was driven and `RP2350` alone was not, so loosening the pattern to

@@ -635,7 +635,12 @@ def test_the_bundle_may_say_a_stepping_change_expires_it(tree):
 @pytest.mark.parametrize(
     "value",
     ["a red Pico 2 I had lying around", "the blue one on the desk", "rp2350 a2",
-     "RP2350", "A2", "Pico 2 W", "B1"],
+     "RP2350", "A2", "Pico 2 W", "B1",
+     # And the desk with the part named INSIDE it, which is what a `search` over
+     # an otherwise free field takes: all three published `1 of 3` at exit 0.
+     "a red Pico 2 (an RP2350 A2) I had lying around",
+     "not an RP2350 A2 at all",
+     "RP2350 A2 and also RP2040"],
 )
 def test_a_board_revision_that_names_no_stepping(tree, value):
     """The measured hole: `platform_gate.py` held its own registry to this
@@ -648,11 +653,17 @@ def test_a_board_revision_that_names_no_stepping(tree, value):
     assert tree.vector("SEC-T-001")["hardware"] == 0, value
 
 
-def test_the_two_registries_share_one_board_vocabulary(tree):
-    """Not a second `re.compile`: two definitions of "which silicon" are two
-    answers, and the axis and its sibling row would drift apart on the value
-    neither of them was written against."""
-    assert evidence_gate.BOARD_REVISION is platform_gate.BOARD_REVISION
+def test_the_two_registries_share_one_board_rule(tree):
+    """The RULE, not the token — and this arm's own first version could not fail.
+
+    It asserted `evidence_gate.BOARD_REVISION is platform_gate.BOARD_REVISION`,
+    and `re` CACHES compiled patterns: `re.compile(t) is re.compile(t)` is True,
+    so the copy-paste it was written against passed it. Driven — writing the
+    forbidden `BOARD_REVISION = re.compile(r"\\bRP2350[\\s-]+A[0-9]\\b")` into
+    `evidence_gate.py` left this case, both suites and the gate at EXIT=0.
+    A function is not cached, so the same test over one holds.
+    """
+    assert evidence_gate.names_a_stepping is platform_gate.names_a_stepping
 
 
 def test_a_board_revision_with_no_result_on_it(tree):

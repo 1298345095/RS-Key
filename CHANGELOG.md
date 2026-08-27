@@ -896,10 +896,22 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   subject published **"1 of 59 carry a result measured on a board, each naming
   the revision it was taken on"** at **EXIT=0**. The declaration is held to the
   same vocabulary now, and the axis counts a stepping rather than a string, so
-  the sentence and the finding cannot disagree. Seven table cases over the value
+  the sentence and the finding cannot disagree. Ten table cases over the value
   spellings — a description of a desk, a lowercase `rp2350 a2`, the part with no
   stepping, the bare `A2`, and `B1`, which is a Kani claim's name and not
   silicon.
+  *Which the first fix did in one of the two senses.* It shared the token and
+  matched with `search`, so a desk that NAMES a part kept publishing:
+  `board_revision = "a red Pico 2 (an RP2350 A2) I had lying around"` read the
+  hardware axis 1 at **EXIT=0**, and so did `"not an RP2350 A2 at all"`. The
+  whole value must be the part now, through `platform_gate.names_a_stepping` —
+  a shared RULE and not a shared pattern, because the anti-drift arm the first
+  fix added *could not fail*: it asserted the two compiled tokens were the same
+  object, and `re` CACHES compiled patterns, so `re.compile(t) is re.compile(t)`
+  is `True`. Driven — writing the forbidden second `re.compile` into
+  `evidence_gate.py` left that case, both suites and the gate at **EXIT=0**. The
+  arm holds a function now, which has no such cache. Which steppings *exist* is
+  Raspberry Pi's roster and still not this tree's: `RP2350 A9` passes.
 - **The bundle demanded a scope *sentence* and not the structured bounds it is
   about.** Roadmap §7.2 stores a proof's bound as data — sequence length,
   symbolic bytes, cardinality, unwind, `cfg`/features, the shipped-domain

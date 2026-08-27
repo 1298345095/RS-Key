@@ -133,11 +133,14 @@ DOCUMENT_KEYS = frozenset({"property"})
 HARDWARE_SUBJECT = "hardware"
 MEASUREMENT_METHOD = "measurement"
 BOARD_FIELD = "board_revision"
-#: A shipped part with a stepping, not the bare `A2`: the bundle's Kani claims are
-#: named `B1`/`B2` and a looser token would read those as silicon. Borrowed from
-#: the sibling row rather than copied — two definitions of "which silicon" are two
-#: answers, and the review measured that the copy here was unfalsifiable while the
-#: original was not.
+#: Is this value a shipped part with a stepping, not the bare `A2` — the bundle's
+#: Kani claims are named `B1`/`B2` and a looser token reads those as silicon. The
+#: sibling registry's own RULE and not a second copy of its token: `re.compile`
+#: hands back the CACHED object for the same pattern text, so an identity test
+#: over two `BOARD_REVISION`s is green over the copy-paste it exists to refuse.
+names_a_stepping = platform_gate.names_a_stepping
+#: And the token, for [`board_mentions`] alone: a stepping the evidence depends
+#: on turns up in prose, where MENTIONING one anywhere is the whole claim.
 BOARD_REVISION = platform_gate.BOARD_REVISION
 
 #: A `scripts/<name>.py` reference inside a TLA+ module: the module naming the
@@ -354,7 +357,7 @@ def board_backed(root, findings):
     for name, entry in sorted(entries.items()):
         if entry.get("status") != "discharged":
             continue
-        if not platform_gate.BOARD_REVISION.search(str(entry.get(BOARD_FIELD, ""))):
+        if not names_a_stepping(entry.get(BOARD_FIELD, "")):
             continue
         for pid in entry.get("supports", []):
             out.setdefault(pid, []).append(name)
@@ -551,11 +554,10 @@ def vectors(root, findings):
                     " history does not have — an evidence date nothing can check"
                 )
             board = str(doc.get("build", {}).get(BOARD_FIELD, "")).strip()
-            # The same vocabulary the sibling registry is held to. Sharing the
-            # TOKEN and not the RULE was the gap: `board_mentions` searched every
-            # other leaf with it while the declaration itself took any non-empty
-            # string, and "a red Pico 2 I had lying around" published 1 of 59.
-            stepping = bool(BOARD_REVISION.search(board))
+            # The sibling registry's own rule, not its token: a `search` here
+            # published "a red Pico 2 (an RP2350 A2) I had lying around" as a
+            # board result, which is the desk the finding's words refuse.
+            stepping = names_a_stepping(board)
             reasons = hardware_claims(doc)
             mentions = [where for where in board_mentions(doc) if where != f"build.{BOARD_FIELD}"]
             if board and not stepping:
