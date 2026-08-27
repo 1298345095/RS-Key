@@ -679,9 +679,9 @@ MintPpuat ==
 \* It spends the SAME persistent retry counter the wire path spends -- a correct
 \* PIN refills it, a wrong one costs a try -- because
 \* `spend_and_verify_local_pin` is `spend_and_verify_pin_at(EF_PIN, ..)`
-\* (crates/rsk-fido/src/clientpin.rs:1080-1086). What it deliberately does NOT
+\* (crates/rsk-fido/src/clientpin.rs:1095-1101). What it deliberately does NOT
 \* touch is the CTAP session: no ECDH regeneration, no RAM 3-strikes lock, no
-\* journal (crates/rsk-fido/src/clientpin.rs:1074-1078). So this is not a
+\* journal (crates/rsk-fido/src/clientpin.rs:1089-1093). So this is not a
 \* PinAttempt: the pad neither consults `lock.soft` nor arms it, and the
 \* persistent 8-try counter is the whole gate. A host-soft-locked device still
 \* takes PIN entry at the pad, which is the documented recovery.
@@ -689,7 +689,7 @@ MintPpuat ==
 \* gate" while nothing could see it move: deleting it left the reachable space
 \* BIT-IDENTICAL at 79 985 500 states. `spend_and_verify_pin_at` refuses at zero
 \* before any compare and a correct PIN at zero must not refill
-\* (crates/rsk-fido/src/clientpin.rs:1114-1116), which is the same shape
+\* (crates/rsk-fido/src/clientpin.rs:1129-1131), which is the same shape
 \* PinAttemptEnabled / PinAttemptPolicy carry for the wire path.
 LocalPinGuard  == IF BugLocalPinIgnoresBudget THEN pin.set
                                               ELSE pin.set /\ pin.retries > 0
@@ -726,7 +726,7 @@ LocalPinWrong ==
     /\ UNCHANGED << gate, store, lock, pres, sys, op, snap, upSpent, ram >>
 
 \* A correct PIN at the pad refills the persistent budget
-\* (crates/rsk-fido/src/clientpin.rs:1080-1086) and grants NOTHING host-visible:
+\* (crates/rsk-fido/src/clientpin.rs:1095-1101) and grants NOTHING host-visible:
 \* no token, no `pcmr`, no CCID security status. It also leaves the RAM soft lock
 \* armed, which fails closed -- the host stays blocked until a replug.
 LocalPinOk ==
@@ -1039,12 +1039,12 @@ ConfigOp ==
                     ram >>
 
 (***************************************************************************)
-(* Vendor BACKUP_FINALIZE -- vendor.rs:900-907, and its on-device twin      *)
-(* mark_backup_sealed (vendor.rs:968-974).                                  *)
+(* Vendor BACKUP_FINALIZE -- vendor.rs:905-912, and its on-device twin      *)
+(* mark_backup_sealed (vendor.rs:973-979).                                  *)
 (***************************************************************************)
 
 \* Writing EF_BACKUP_SEALED closes the one-time seed-export window: after it,
-\* BACKUP_EXPORT refuses (vendor.rs:805) and the display's recovery-phrase
+\* BACKUP_EXPORT refuses (vendor.rs:810) and the display's recovery-phrase
 \* reveal is gone, until a reset reopens the window. Modelled UNGATED -- the
 \* real one carries the PIN half and a deliberate hold -- which widens only the
 \* states the marker can be SET in, never the states it can be LOST in, and it

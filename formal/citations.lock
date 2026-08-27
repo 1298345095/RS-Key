@@ -98,8 +98,8 @@ formal/README.md	crates/rsk-fido/src/clientpin.rs	726-811	ctx: &mut Ctx<S, R>,	/
 formal/README.md	crates/rsk-fido/src/clientpin.rs	764-764	if !matched && ctx.dev.otp_key.is_some() {	if !matched && ctx.dev.otp_key.is_some() {
 formal/README.md	crates/rsk-fido/src/clientpin.rs	786-786	if retries == 0 {	if retries == 0 {
 formal/README.md	crates/rsk-fido/src/clientpin.rs	827-831	/// here rather than in each caller: the `pcmr` grant is a flash record that no PIN	fn write_pin_verifier<S: Storage>(
-formal/README.md	crates/rsk-fido/src/clientpin.rs	1074-1078	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
-formal/README.md	crates/rsk-fido/src/clientpin.rs	1080-1086	pub fn spend_and_verify_local_pin<S: Storage>(	}
+formal/README.md	crates/rsk-fido/src/clientpin.rs	1089-1093	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
+formal/README.md	crates/rsk-fido/src/clientpin.rs	1095-1101	pub fn spend_and_verify_local_pin<S: Storage>(	}
 formal/README.md	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
 formal/README.md	crates/rsk-fido/src/config.rs	429-430	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
 formal/README.md	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
@@ -160,7 +160,7 @@ formal/README.md	crates/rsk-fido/src/state.rs	596-609	/// Expire an in-use token
 formal/README.md	crates/rsk-fido/src/state.rs	620-626	pub fn expire_stale_sequences(&mut self, now_ms: u64) {	}
 formal/README.md	crates/rsk-fido/src/u2f.rs	94-94	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());
 formal/README.md	crates/rsk-fido/src/vendor.rs	549-572	fn unlock<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	None => Err(CtapError::InvalidParameter),
-formal/README.md	crates/rsk-fido/src/vendor.rs	895-907	fn backup_finalize<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	.map_err(|_| CtapError::Other)?;
+formal/README.md	crates/rsk-fido/src/vendor.rs	900-912	fn backup_finalize<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	.map_err(|_| CtapError::Other)?;
 formal/README.md	crates/rsk-fs/src/fs.rs	178-178	self.decided[i] |= m;	self.decided[i] |= m;
 formal/README.md	crates/rsk-fs/src/fs.rs	227-227	decided[i] |= m;	decided[i] |= m;
 formal/README.md	crates/rsk-fs/src/fs.rs	232-232	if fid == EF_META || fid == EF_SCRUB_FILLER {	if fid == EF_META || fid == EF_SCRUB_FILLER {
@@ -358,9 +358,9 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	778-778	// A Yubi
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	786-786	if retries == 0 {	if retries == 0 {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	787-792	// The transition into the hard lockout (later attempts are turned	ctx.state.new_pin_mismatches += 1;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	805-806	ctx.state.new_pin_mismatches = 0;	ctx.fs
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1074-1078	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1080-1086	pub fn spend_and_verify_local_pin<S: Storage>(	}
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1114-1116	return LocalPin::Blocked;	if n != PIN_FILE_LEN || pin_data[0] == 0 {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1089-1093	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1095-1101	pub fn spend_and_verify_local_pin<S: Storage>(	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1129-1131	return LocalPin::Blocked;	if n != PIN_FILE_LEN || pin_data[0] == 0 {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	244-244	|| ctx.state.paut.permissions & PERM_ACFG == 0	|| ctx.state.paut.permissions & PERM_ACFG == 0
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	429-430	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
@@ -432,9 +432,9 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	584-599	pub fn retire
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	657-663	pub(crate) fn puat_subcommand_msg(buf: &mut [u8], cmd: u8, subcommand: u8, params: &[u8]) -> usize {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	666-668	fn drop(&mut self) {	// until someone decides whether it is a secret. Nothing else would catch a
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	549-572	fn unlock<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	None => Err(CtapError::InvalidParameter),
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	805-805	if ctx.fs.has_data(EF_BACKUP_SEALED) {	if ctx.fs.has_data(EF_BACKUP_SEALED) {
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	900-907	// no MSE handshake — and say what the touch actually authorises.	.map_err(|_| CtapError::Other)?;
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	968-974	/// `EF_BACKUP_SEALED` marker so the seed can no longer be exported **or** shown as	fs.put(EF_BACKUP_SEALED, &[1]).is_ok()
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	810-810	if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {	if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	905-912	// no MSE handshake — and say what the touch actually authorises.	.map_err(|_| CtapError::Other)?;
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	973-979	/// `EF_BACKUP_SEALED` marker so the seed can no longer be exported **or** shown as	fs.put(EF_BACKUP_SEALED, &[1]).is_ok()
 formal/RSKeySecurityState.tla	crates/rsk-fs/src/fs.rs	318-321	/// A FID can be yielded MORE THAN ONCE — the log-structured backend walks	/// below does).
 formal/RSKeySecurityState.tla	crates/rsk-usb/src/ctaphid.rs	757-762	// frames during fast/crypto processing would consume — and then	if up_pending() {
 formal/RSKeySecurityState.tla	firmware/src/main.rs	613-613	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);

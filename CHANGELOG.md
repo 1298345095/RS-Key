@@ -86,6 +86,31 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted flash probe waived the vendor PIN gate and handed out the device
+  master seed.** `vendor::pin_gate` is the *only* PIN half of the gate on
+  `BACKUP_EXPORT`, `BACKUP_LOAD`, `BACKUP_FINALIZE`, `ATT_IMPORT`, `ATT_CLEAR`,
+  `AUDIT_READ`, `AUDIT_CHECKPOINT`, `AUDIT_CONFIG` and `CONFIG_WRITE`, and it
+  decided "is a PIN configured" on the collapsing `Fs::has_data`. `VENDOR_MSE` is
+  ungated, so the residual barrier was one touch under "Export secret seed?" — and
+  none at all on a `no-touch` build. Measured on a PIN-protected card with the MSE
+  channel re-handshaked and no token: control `Err(PuatRequired)`, one faulted
+  `EF_PIN` probe `Ok(64)` — the 64-byte encrypted seed blob. Both of the gate's
+  records took the fallible probe, not just the one that was driven: a display
+  build's owner often sets only the **device** PIN, and a faulted `EF_DEVICE_PIN`
+  probe waived the gate identically (measured `Ok(64)` with both halves at their
+  old spelling).
+
+- **A faulted `EF_BACKUP_SEALED` probe re-opened the export window
+  `BACKUP_FINALIZE` had sealed** — irreversible short of a reset that destroys the
+  identity it protects. Measured: control after FINALIZE `Err(NotAllowed)`, one
+  faulted probe `Ok(64)`. Its second reader is the trusted display, whose Backup
+  screen offers the on-device recovery-phrase reveal on `!sealed`; `backup_sealed`
+  / `backup_status` resolve to SEALED on a probe the medium could not answer, the
+  same direction `lock_engaged` already took. `pin_is_set` and `device_pin_is_set`
+  move with them: `local_pin_gate` returns `true` outright when no PIN of that
+  scope exists, so the collapsed `false` waived every destructive on-device action
+  rather than raising its gate.
+
 - **The comment that scoped a threat-model clause was wrong about the physics,
   and three registry verdicts argued from it.** `crates/rsk-store/src/lib.rs`
   said the walk's early exit is a read fault *"which a NOR power cut never

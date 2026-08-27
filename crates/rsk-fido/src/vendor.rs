@@ -729,7 +729,10 @@ fn gate<S: Storage, R: Rng>(
 /// that case, so the second factor is collected where it belongs: on the device's own
 /// pad, out of the host's reach.
 fn pin_gate<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> Result<(), CtapError> {
-    if ctx.fs.has_data(EF_PIN) {
+    // `try_*` on BOTH probes: this is the only PIN half of the gate on the seed
+    // export, the attestation identity and the audit chain, and a probe that read as
+    // "no PIN configured" waived it outright.
+    if ctx.fs.try_has_data(EF_PIN).map_err(|_| CtapError::Other)? {
         // A present-but-unsupported protocol is judged first — `0` is a value the
         // platform sent — and an absent one only where the token needs it.
         let proto = crate::clientpin::checked_proto(req.proto_present.then_some(req.proto))?;
@@ -749,7 +752,9 @@ fn pin_gate<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> Result<(), Ct
         ctx.state.mark_token_used(ctx.now_ms);
         return Ok(());
     }
-    if crate::clientpin::device_pin_is_set(ctx.fs) && ctx.presence.uv_available() {
+    if crate::clientpin::try_device_pin_is_set(ctx.fs).map_err(|_| CtapError::Other)?
+        && ctx.presence.uv_available()
+    {
         return device_pin_gate(ctx);
     }
     Ok(())
@@ -802,7 +807,7 @@ fn backup_export<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req, out: &mut [
     if cfg!(feature = "fips-profile") {
         return Err(CtapError::NotAllowed);
     }
-    if ctx.fs.has_data(EF_BACKUP_SEALED) {
+    if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {
         return Err(CtapError::NotAllowed);
     }
     // Name the operation explicitly: this hands the master seed to the host. A generic
@@ -914,7 +919,7 @@ fn backup_finalize<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapRe
 /// stored); `unlocked` says a RAM copy from a vendor UNLOCK is live this power
 /// cycle.
 fn backup_state<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, out: &mut [u8]) -> CtapResult {
-    let sealed = ctx.fs.has_data(EF_BACKUP_SEALED);
+    let sealed = backup_sealed(ctx.fs);
     let has_seed = ctx.fs.has_key(EF_KEY_DEV);
     let locked = lock_engaged(ctx.fs);
     let unlocked = ctx.state.keydev_dec.is_some();
@@ -956,7 +961,7 @@ pub struct BackupStatus {
 /// flags — no CBOR — so the display task can read it directly while the worker is parked.
 pub fn backup_status<S: Storage>(fs: &mut rsk_fs::Fs<S>) -> BackupStatus {
     BackupStatus {
-        sealed: fs.has_data(EF_BACKUP_SEALED),
+        sealed: backup_sealed(fs),
         has_seed: fs.has_key(EF_KEY_DEV),
         exportable: !cfg!(feature = "fips-profile"),
         locked: lock_engaged(fs),
@@ -974,11 +979,25 @@ pub fn mark_backup_sealed<S: Storage>(fs: &mut rsk_fs::Fs<S>) -> bool {
     fs.put(EF_BACKUP_SEALED, &[1]).is_ok()
 }
 
-/// Whether the seed-backup export window is sealed — the cheap `has_data` probe the
-/// Security list row uses for its "Sealed / Review" status, without the `has_seed`
-/// key lookup [`backup_status`] also does.
+/// Whether the seed-backup export window is sealed — the cheap probe the Security
+/// list row uses for its "Sealed / Review" status, without the `has_seed` key lookup
+/// [`backup_status`] also does.
+///
+/// A probe the medium could not answer reads as SEALED. `!sealed` is what re-opens
+/// the export and the on-device recovery-phrase reveal, and `BACKUP_FINALIZE` is
+/// irreversible short of a reset, so the failed probe must not re-open the window it
+/// shut (see [`try_backup_sealed`]).
 pub fn backup_sealed<S: Storage>(fs: &mut rsk_fs::Fs<S>) -> bool {
-    fs.has_data(EF_BACKUP_SEALED)
+    try_backup_sealed(fs).unwrap_or(true)
+}
+
+/// [`backup_sealed`] with a failed probe kept apart from an absence — `Fs::has_data`
+/// answers the same `false` for both, and the absent arm here is the one that hands
+/// out the master seed.
+pub fn try_backup_sealed<S: Storage>(
+    fs: &mut rsk_fs::Fs<S>,
+) -> Result<bool, rsk_sdk::error::Error> {
+    fs.try_has_data(EF_BACKUP_SEALED)
 }
 
 #[cfg(test)]

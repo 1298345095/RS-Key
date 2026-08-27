@@ -55,8 +55,8 @@ struct Host {
     aad: [u8; 65],
 }
 
-fn call(
-    fs: &mut Fs<RamStorage>,
+fn call<S: Storage>(
+    fs: &mut Fs<S>,
     rng: &mut SeqRng,
     state: &mut FidoState,
     presence: &mut dyn UserPresence,
@@ -120,7 +120,7 @@ fn build_mse_coords(buf: &mut [u8], hx: &[u8], hy: &[u8]) -> usize {
 }
 
 /// Run the MSE handshake host-side and return the derived channel.
-fn handshake(fs: &mut Fs<RamStorage>, rng: &mut SeqRng, state: &mut FidoState) -> Host {
+fn handshake<S: Storage>(fs: &mut Fs<S>, rng: &mut SeqRng, state: &mut FidoState) -> Host {
     let host_scalar = [0x42u8; 32];
     let (hx, hy) = P256Key::from_scalar(&host_scalar).unwrap().public_xy();
     let mut req = [0u8; 200];
@@ -2164,4 +2164,192 @@ fn an_unsupported_protocol_is_judged_before_the_missing_token() {
             "protocol {proto}"
         );
     }
+}
+
+/// A provisioned card on a medium whose reads of one chosen record can be made to
+/// fault — the vendor twin of [`setup`].
+fn setup_stuck() -> (
+    Fs<rsk_fs::storage::faults::ProbeStuck>,
+    rsk_fs::storage::faults::ProbeMedium,
+    SeqRng,
+    FidoState,
+) {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    (fs, medium, rng, FidoState::new())
+}
+
+/// R1: `pin_gate` is the ONLY PIN half of the vendor gate, and `VENDOR_MSE` is
+/// ungated — so a faulted `EF_PIN` probe reading as "no PIN configured" handed the
+/// master seed to any host that could take one touch (none at all on a no-touch
+/// build).
+#[cfg(not(feature = "fips-profile"))]
+#[test]
+fn a_faulted_pin_probe_does_not_waive_the_vendor_pin_gate() {
+    let (mut fs, medium, mut rng, mut st) = setup_stuck();
+    fs.put(EF_PIN, &[8, 4, 1]).unwrap();
+    let mut req = [0u8; 32];
+    let n = one_byte_req(&mut req, VENDOR_BACKUP_EXPORT);
+    let mut out = [0u8; 128];
+
+    let _ = handshake(&mut fs, &mut rng, &mut st);
+    assert_eq!(
+        call(
+            &mut fs,
+            &mut rng,
+            &mut st,
+            &mut AlwaysConfirm,
+            &req[..n],
+            &mut out
+        ),
+        Err(CtapError::PuatRequired),
+        "control: a PIN-protected card demands a pinUvAuthToken"
+    );
+
+    let _ = handshake(&mut fs, &mut rng, &mut st);
+    medium.stick(Some(EF_PIN));
+    assert_eq!(
+        call(
+            &mut fs,
+            &mut rng,
+            &mut st,
+            &mut AlwaysConfirm,
+            &req[..n],
+            &mut out
+        ),
+        Err(CtapError::Other),
+        "a faulted EF_PIN probe waived the gate and exported the master seed"
+    );
+}
+
+/// R2: `BACKUP_FINALIZE` is irreversible short of a reset, and one faulted
+/// `EF_BACKUP_SEALED` probe reopened the export window it closed.
+#[cfg(not(feature = "fips-profile"))]
+#[test]
+fn a_faulted_sealed_probe_does_not_reopen_the_export_window() {
+    let (mut fs, medium, mut rng, mut st) = setup_stuck();
+    let mut req = [0u8; 32];
+    let mut out = [0u8; 128];
+
+    let n = one_byte_req(&mut req, VENDOR_BACKUP_FINALIZE);
+    call(
+        &mut fs,
+        &mut rng,
+        &mut st,
+        &mut AlwaysConfirm,
+        &req[..n],
+        &mut out,
+    )
+    .unwrap();
+
+    let n = one_byte_req(&mut req, VENDOR_BACKUP_EXPORT);
+    let _ = handshake(&mut fs, &mut rng, &mut st);
+    assert_eq!(
+        call(
+            &mut fs,
+            &mut rng,
+            &mut st,
+            &mut AlwaysConfirm,
+            &req[..n],
+            &mut out
+        ),
+        Err(CtapError::NotAllowed),
+        "control: a sealed card refuses the export"
+    );
+
+    let _ = handshake(&mut fs, &mut rng, &mut st);
+    medium.stick(Some(EF_BACKUP_SEALED));
+    assert_eq!(
+        call(
+            &mut fs,
+            &mut rng,
+            &mut st,
+            &mut AlwaysConfirm,
+            &req[..n],
+            &mut out
+        ),
+        Err(CtapError::Other),
+        "a faulted EF_BACKUP_SEALED probe reopened the sealed export window"
+    );
+}
+
+/// A presence that offers built-in UV and declines the pad entry — the device-PIN
+/// half of [`pin_gate`] runs only when `uv_available`.
+struct UvDecline;
+impl UserPresence for UvDecline {
+    fn request(&mut self, _confirm: crate::Confirm<'_>) -> Presence {
+        Presence::Confirmed
+    }
+    fn uv_available(&self) -> bool {
+        true
+    }
+    fn collect_device_pin(&mut self, _min_len: usize, _out: &mut [u8]) -> crate::PinEntry {
+        crate::PinEntry::Declined
+    }
+}
+
+/// R1's second spelling: `pin_gate` reads TWO records, and a display build's owner
+/// often sets only the **device** PIN. A faulted `EF_DEVICE_PIN` probe waived the
+/// gate exactly as a faulted `EF_PIN` one did.
+#[cfg(not(feature = "fips-profile"))]
+#[test]
+fn a_faulted_device_pin_probe_does_not_waive_the_vendor_pin_gate() {
+    let (mut fs, medium, mut rng, mut st) = setup_stuck();
+    fs.put(crate::consts::EF_DEVICE_PIN, &[8, 4, 1]).unwrap();
+    let mut req = [0u8; 32];
+    let n = one_byte_req(&mut req, VENDOR_BACKUP_EXPORT);
+    let mut out = [0u8; 128];
+
+    let _ = handshake(&mut fs, &mut rng, &mut st);
+    assert_eq!(
+        call(
+            &mut fs,
+            &mut rng,
+            &mut st,
+            &mut UvDecline,
+            &req[..n],
+            &mut out
+        ),
+        Err(CtapError::OperationDenied),
+        "control: the device PIN is collected on the pad, and declining refuses"
+    );
+
+    let _ = handshake(&mut fs, &mut rng, &mut st);
+    medium.stick(Some(crate::consts::EF_DEVICE_PIN));
+    assert_eq!(
+        call(
+            &mut fs,
+            &mut rng,
+            &mut st,
+            &mut UvDecline,
+            &req[..n],
+            &mut out
+        ),
+        Err(CtapError::Other),
+        "a faulted EF_DEVICE_PIN probe waived the gate and exported the master seed"
+    );
+}
+
+/// R2's second spelling: the trusted display's Backup screen offers the on-device
+/// recovery-phrase reveal on `!sealed`, so the same faulted probe re-opened the
+/// reveal that `BACKUP_FINALIZE` shut. `backup_status` / `backup_sealed` resolve to
+/// SEALED now.
+#[test]
+fn a_faulted_sealed_probe_reads_as_sealed_on_the_display() {
+    let (mut fs, medium, _rng, _st) = setup_stuck();
+    fs.put(EF_BACKUP_SEALED, &[1]).unwrap();
+    assert!(backup_sealed(&mut fs));
+    assert!(backup_status(&mut fs).sealed);
+    medium.stick(Some(EF_BACKUP_SEALED));
+    assert!(
+        backup_sealed(&mut fs),
+        "a faulted probe re-opened the sealed export window for the Security row"
+    );
+    assert!(
+        backup_status(&mut fs).sealed,
+        "and for the Backup screen's recovery-phrase reveal"
+    );
 }

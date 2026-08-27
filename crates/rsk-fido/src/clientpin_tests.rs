@@ -2571,3 +2571,31 @@ fn a_faulted_probe_does_not_let_setpin_replace_the_owners_pin() {
         "a faulted EF_PIN probe let setPIN replace the owner's PIN"
     );
 }
+
+/// `local_pin_gate` returns `true` outright when no PIN of the scope is set — the
+/// hold gesture then stands alone — so a faulted probe reading as "no PIN" waived
+/// every destructive on-device action. Both scopes resolve to SET now.
+#[test]
+fn a_faulted_pin_probe_reads_as_pin_set_for_the_local_gates() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    assert!(
+        !pin_is_set(&mut fs),
+        "control: a fresh card has no clientPIN"
+    );
+    assert!(!device_pin_is_set(&mut fs), "nor a device PIN");
+    fs.put(EF_PIN, &[8, 4, 1]).unwrap();
+    fs.put(EF_DEVICE_PIN, &[8, 4, 1]).unwrap();
+
+    medium.stick(Some(EF_PIN));
+    assert!(
+        pin_is_set(&mut fs),
+        "a faulted EF_PIN probe waived the display's clientPIN gate"
+    );
+    medium.stick(Some(EF_DEVICE_PIN));
+    assert!(
+        device_pin_is_set(&mut fs),
+        "a faulted EF_DEVICE_PIN probe waived the display's device-PIN gate"
+    );
+}

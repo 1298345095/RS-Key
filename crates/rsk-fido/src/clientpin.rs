@@ -1032,8 +1032,12 @@ pub enum SetPinError {
 /// Whether a clientPIN is set. The trusted display gates a destructive local
 /// action behind the PIN only when one exists (otherwise the hold gesture alone
 /// stands in for user verification).
+///
+/// A probe the medium could not answer reads as SET, for the same reason as
+/// [`device_pin_is_set`]: `local_pin_gate` returns `true` outright when no PIN of the
+/// scope exists, so the collapsed `false` waived the gate rather than raising it.
 pub fn pin_is_set<S: Storage>(fs: &mut Fs<S>) -> bool {
-    fs.has_data(EF_PIN)
+    fs.try_has_data(EF_PIN).unwrap_or(true)
 }
 
 /// The PIN's remaining retry budget (the `EF_PIN` counter), or `None` when no PIN is
@@ -1046,8 +1050,19 @@ pub fn pin_retries_left<S: Storage>(fs: &mut Fs<S>) -> Option<u8> {
 
 /// Whether the trusted-display **device PIN** ([`EF_DEVICE_PIN`]) is set. The display
 /// boot-locks and gates its destructive on-device actions on this, not the FIDO clientPIN.
+///
+/// A probe the medium could not answer reads as SET — the display's own gates all
+/// treat `true` as "ask for the PIN first", so the failed probe must not unlock them.
 pub fn device_pin_is_set<S: Storage>(fs: &mut Fs<S>) -> bool {
-    fs.has_data(EF_DEVICE_PIN)
+    try_device_pin_is_set(fs).unwrap_or(true)
+}
+
+/// [`device_pin_is_set`] with a failed probe kept apart from an absence. The vendor
+/// `pin_gate` decides on this whether the seed export needs a second factor at all,
+/// and `Fs::has_data` answers the same `false` for "no device PIN" and "I could not
+/// look".
+pub fn try_device_pin_is_set<S: Storage>(fs: &mut Fs<S>) -> Result<bool, rsk_sdk::error::Error> {
+    fs.try_has_data(EF_DEVICE_PIN)
 }
 
 /// The device PIN's remaining retry budget (read-only, like [`pin_retries_left`]).

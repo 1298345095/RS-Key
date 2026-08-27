@@ -1307,7 +1307,7 @@ falls in 238 states.
 (`crates/rsk-display/src/gates.rs:114-200`) spends the **same** persistent
 `EF_PIN` retry counter the wire path spends, because
 `spend_and_verify_local_pin` is `spend_and_verify_pin_at(EF_PIN, ..)`
-(`crates/rsk-fido/src/clientpin.rs:1080-1086`). A clientPIN refused there is
+(`crates/rsk-fido/src/clientpin.rs:1095-1101`). A clientPIN refused there is
 changePIN's failed old-PIN check performed locally, so it must end the host's
 outstanding grant exactly as `clientpin.rs:786` does. `ends_host_token`
 (`crates/rsk-display/src/gates.rs:139-146`) is the Rust's own test and it is
@@ -1317,7 +1317,7 @@ because a `Blocked` verdict at zero was turned away before any compare.
 
 What the pad does **not** do is go through the CTAP session at all — no ECDH
 regeneration, no RAM 3-strikes lock, no journal
-(`crates/rsk-fido/src/clientpin.rs:1074-1078`) — so `LocalPinWrong` is not a
+(`crates/rsk-fido/src/clientpin.rs:1089-1093`) — so `LocalPinWrong` is not a
 `PinAttempt` here either. The persistent 8-try counter is the whole gate, and a
 host-soft-locked device still takes PIN entry at the pad, which is the
 documented recovery.
@@ -2893,7 +2893,7 @@ abstractions producing traces the firmware cannot follow.
   not permit; `PowerCut` reaches the same flash states and is the realistic
   interrupter.
 - **`BackupFinalize` is ungated.** The real `BACKUP_FINALIZE` carries the PIN
-  half of the gate and a deliberate hold (`vendor.rs:895-907`). Widening where
+  half of the gate and a deliberate hold (`vendor.rs:900-912`). Widening where
   the marker can be **set** never widens where it can be **lost**, and the loss
   is what the invariant is about.
 - **A regenerated seed still opens the credentials made under the old one.**
