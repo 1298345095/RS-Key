@@ -1055,11 +1055,17 @@ def test_the_results_table_is_not_a_source_of_phrases(tree):
     assert ("600", "s") not in pairs and ("7", "s") not in pairs, sorted(pairs)
 
 
-@pytest.mark.parametrize("spoken", ("2026-08-27", "WORKERS=2"))
+#: `"date"` rather than the date: the fixture stamps its record with TODAY
+#: (`a_minute_from_now`), so the day this case speaks has to come from the fixture
+#: too. Hard-coded, it asserted the gate over a date the fixture had stopped
+#: publishing — green for one day, then red on the rollover with nothing changed.
+@pytest.mark.parametrize("spoken", ("date", "WORKERS=2"))
 def test_the_provenance_a_region_prints_verbatim(tree, spoken):
     """The date's three numbers are all under the value floor and `WORKERS=2`
     wears its unit on the left, so `PAIR` pairs it with the next word. Each is
     published on three pages and neither was held by anything."""
+    if spoken == "date":
+        spoken = tree.when.split()[0]
     assert second_copy(tree, f"Recorded on {spoken} on this box.\n"), spoken
 
 
