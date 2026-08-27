@@ -220,6 +220,7 @@ pub mod faults {
         /// never runs.
         skip: Rc<Cell<u32>>,
         refused: Rc<Cell<Option<u16>>>,
+        truncate: Rc<Cell<bool>>,
         err: bool,
     }
 
@@ -232,6 +233,7 @@ pub mod faults {
         once: Rc<Cell<bool>>,
         skip: Rc<Cell<u32>>,
         refused: Rc<Cell<Option<u16>>>,
+        truncate: Rc<Cell<bool>>,
     }
 
     impl ProbeStuck {
@@ -241,6 +243,7 @@ pub mod faults {
             let once = Rc::new(Cell::new(false));
             let skip = Rc::new(Cell::new(0));
             let refused = Rc::new(Cell::new(None));
+            let truncate = Rc::new(Cell::new(false));
             (
                 Self {
                     inner: inner.clone(),
@@ -248,6 +251,7 @@ pub mod faults {
                     once: once.clone(),
                     skip: skip.clone(),
                     refused: refused.clone(),
+                    truncate: truncate.clone(),
                     err: false,
                 },
                 ProbeMedium {
@@ -256,6 +260,7 @@ pub mod faults {
                     once,
                     skip,
                     refused,
+                    truncate,
                 },
             )
         }
@@ -288,6 +293,12 @@ pub mod faults {
         /// what the guards that check their own delete are made of.
         pub fn refuse_remove(&self, fid: Option<u16>) {
             self.refused.set(fid);
+        }
+        /// Cut every `for_each_key` walk short before it yields anything, as
+        /// [`TruncatedWalk`] does permanently. Switchable, because the state that
+        /// matters is what the cache still believes AFTER the medium recovers.
+        pub fn truncate_walk(&self, on: bool) {
+            self.truncate.set(on);
         }
         /// The bytes stored for `fid` ON THE MEDIUM, fault or no fault.
         pub fn value(&self, fid: u16) -> Option<Vec<u8>> {
@@ -342,6 +353,9 @@ pub mod faults {
             self.inner.borrow_mut().size(fid)
         }
         fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+            if self.truncate.get() {
+                return false;
+            }
             self.inner.borrow_mut().for_each_key(f)
         }
         fn last_error(&self) -> bool {

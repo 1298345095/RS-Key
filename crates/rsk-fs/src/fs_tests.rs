@@ -1238,3 +1238,41 @@ fn a_truncated_scan_leaves_no_slot_reading_free() {
     fs.present_slots(BASE, &mut slots);
     assert_eq!(slots, [false, true, false, false]);
 }
+
+/// [`Fs::scan`] latches `scan_truncated` and [`Fs::factory_wipe`] resets the caches
+/// it describes — but not that flag. So a card whose boot walk hit ONE transient
+/// fault reported every slot occupied for the rest of the power cycle, factory reset
+/// included: `credential_store` and OATH's `free_slot` answer FULL over a store that
+/// is provably empty. The doc comment's own defence — "a fresh `Fs` that has not
+/// scanned still reports free — its store is empty" — is exactly this case.
+#[test]
+fn a_factory_wipe_clears_the_truncated_scan_flag() {
+    use crate::storage::faults::ProbeStuck;
+    const BASE: u16 = 0x2000;
+    let (backend, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.put(BASE + 1, b"a live credential record").unwrap();
+
+    // A reboot whose walk is cut short by a transient read fault.
+    let mut fs = Fs::new(fs.into_storage());
+    medium.truncate_walk(true);
+    fs.scan();
+    let mut slots = [false; 4];
+    fs.present_slots(BASE, &mut slots);
+    assert_eq!(
+        slots, [true; 4],
+        "control: a walk that enumerated nothing leaves no slot free"
+    );
+
+    // The medium recovers and the card is factory-reset.
+    medium.truncate_walk(false);
+    fs.factory_wipe(|_| false, |_| false, |_| false).unwrap();
+    let mut seen = 0;
+    fs.for_each_key(&mut |_| seen += 1);
+    assert_eq!(seen, 0, "the store really is empty");
+    fs.present_slots(BASE, &mut slots);
+    assert_eq!(
+        slots, [false; 4],
+        "a just-wiped store reported every slot occupied"
+    );
+}

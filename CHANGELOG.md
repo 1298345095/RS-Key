@@ -86,6 +86,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **A card whose boot walk hit one transient fault reported every credential slot
+  FULL for the rest of the power cycle — a factory reset included.** `Fs::scan`
+  latches `scan_truncated`, and `present_slots` answers "occupied" over the whole
+  range while it is set, which is the right trade for a walk that decided nothing.
+  `factory_wipe` resets the caches that flag describes — `present`, `decided`, the
+  dynamic set — but not the flag. Measured after one transient boot-walk fault and
+  a successful wipe: `for_each_key` yields nothing (`seen = 0`, the store really is
+  empty) while `present_slots` still answers `[true, true, true, true]`, so
+  `credential_store` and OATH's `free_slot` refuse on a card that was just reset.
+  The doc comment's own defence — "a fresh `Fs` that has not scanned still reports
+  free — its store is empty" — is precisely the case it got wrong. The wipe clears
+  it now, and it may: the wipe does not return at all without a COMPLETE walk of
+  every phase, which is the same evidence `scan` requires.
+
 - **A faulted probe waived the OpenPGP touch gate, and lowered a UIF the card
   documents as unchangeable.** `check_uif` is the touch gate itself — PSO:CDS,
   PSO:DEC and INTERNAL AUTHENTICATE all pass through it — and it decided on a

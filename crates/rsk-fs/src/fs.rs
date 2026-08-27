@@ -106,6 +106,11 @@ pub struct Fs<S: Storage> {
     /// slot bitmap answers from RAM alone and has no such fallback. Distinct from
     /// "nothing decided yet" — a fresh `Fs` that has not scanned has an empty
     /// `present` map and reports free, which is what it is.
+    ///
+    /// It is a claim about ONE walk, so anything that replaces the store it walked
+    /// clears it — [`factory_wipe`](Self::factory_wipe) does. Left latched, one
+    /// transient boot fault made every slot read occupied for the rest of the power
+    /// cycle, a factory reset included.
     scan_truncated: bool,
 }
 
@@ -450,8 +455,13 @@ impl<S: Storage> Fs<S> {
         }
         // The caches described the now-erased store; reset them so any reuse before
         // the reboot re-probes the backend (the dynamic set is gone too), then scrub.
+        // `scan_truncated` goes with them: it is a claim about the boot walk over a
+        // store that no longer exists, and this wipe would not have returned without
+        // a COMPLETE walk of every phase — so the empty index is authoritative and
+        // `present_slots` may report free again.
         self.present.fill(0);
         self.decided.fill(0);
+        self.scan_truncated = false;
         self.dynamic.clear();
         self.storage.compact()
     }
