@@ -32,15 +32,19 @@ Five rules are about the bundle being EVIDENCE rather than prose:
   and the whole point of the first closed slice is that its cost is measured;
   the calibration counterpart's estimate is labelled as one and lives in the
   design page, not here;
-* every `[[mutation]]` records the assertion that fell and its DIRECTION, and
-  says whether that describes the modelled defect or its inverse. Two of
-  twenty-four co-refutation patches in this tree scored a kill for the inverse
-  defect, and the tell was that every failure said "should have succeeded".
+* every `[[mutation]]` records the assertion that fell and its DIRECTION, and an
+  `inverse` one is DISPOSED OF rather than published. Two of twenty-four
+  co-refutation patches in this tree scored a kill for the inverse defect, and
+  the tell was that every failure said "should have succeeded"; such a row is a
+  finding about the mutant and not a result about the property, so it owes the
+  corrected mutant that supersedes it or the reason it stands, and the success
+  line counts it apart from the verdicts.
 
 Deliberately not here: whether the numbers are RIGHT. Nothing can check that a
-recorded wall-clock is the one the run took. What this row keeps honest is that
-no field of the contract was quietly dropped, that every artifact it points at
-still exists, and that no cost was written as a range.
+recorded wall-clock is the one the run took, or that a row calling itself
+`modelled` was read that way. What this row keeps honest is that no field of the
+contract was quietly dropped, that every claim it makes about the tree resolves
+in the tree, and that no cost was written as a range.
 """
 
 import hashlib
@@ -163,6 +167,15 @@ PUNCTUATION_ONLY = re.compile(r"[\W_]+")
 #: An assertion that fell describes the modelled defect, or its inverse. Anything
 #: else is a word nobody has to defend.
 DIRECTIONS = ("modelled", "inverse")
+
+#: An `inverse` kill is a finding ABOUT THE MUTANT and not a result about the
+#: property, so the row owes what became of it. Refusing the word outright was
+#: the other option and is worse three ways: the cheapest way past a refusal is
+#: to type `modelled`, which nothing in this tree resolves against a real run; a
+#: one-word vocabulary is a constant, and a field nothing branches on is a
+#: comment with a type; and the field exists precisely to make the 2-of-24 case
+#: SAYABLE, so unsaying it is the verdict column this register replaces.
+DISPOSITIONS = ("superseded", "kept-as-a-finding")
 
 #: The two rosters above must name the same ten groups. One in `GROUPS` and not
 #: in `FLOORS` is a `KeyError`; one in `FLOORS` and not in `GROUPS` is silently
@@ -391,6 +404,9 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
                     " an estimate, and an estimate in any of the three voids the measurement"
                 )
 
+    rows = [row for row in doc.get("mutation", []) if isinstance(row, dict)]
+    named = [str(row.get("mutant", "")) for row in rows]
+    inverse = 0
     for index, row in enumerate(doc.get("mutation", []), 1):
         where = f"{BUNDLE} mutation #{index} ({row.get('mutant', '?')})"
         if row.get("direction") not in DIRECTIONS:
@@ -398,11 +414,36 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
                 f"{where}: direction {row.get('direction')!r} is not one of {DIRECTIONS}"
                 " — a red run is not evidence until the direction is read"
             )
+        elif row.get("direction") == "inverse":
+            inverse += 1
+            disposition = row.get("disposition")
+            if disposition not in DISPOSITIONS:
+                findings.append(
+                    f"{where}: an INVERSE kill is a finding about the mutant, not a"
+                    f" result about the property — `disposition` {disposition!r} is"
+                    f" not one of {DISPOSITIONS}"
+                )
+            elif disposition == "superseded":
+                # Its own name would satisfy a plain membership test, and a row
+                # superseded by itself is the claim with nothing behind it again.
+                others = set(named) - {str(row.get("mutant", ""))}
+                if str(row.get("superseded_by", "")) not in others:
+                    findings.append(
+                        f"{where}: `superseded_by` {row.get('superseded_by')!r} names"
+                        " no OTHER row of this group — the corrected mutant is what"
+                        " makes this one a step rather than a result"
+                    )
+            if not str(row.get("reading", "")).strip():
+                findings.append(
+                    f"{where}: an inverse kill with no `reading` — the direction is"
+                    " the whole content, and nothing else in the row states it"
+                )
 
     summary = (
         f"bundle-gate: ok — {BUNDLE.name} carries {len(GROUPS)} groups and {total}"
         f" leaves, {len(doc.get('artifact', []))} raw artifact(s),"
-        f" {len(doc.get('mutation', []))} mutation verdict(s)"
+        f" {len(doc.get('mutation', [])) - inverse} mutation verdict(s)"
+        f" and {inverse} disposed as inverse"
     )
     return findings, summary
 

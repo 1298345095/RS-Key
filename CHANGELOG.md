@@ -747,6 +747,28 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **`direction = "inverse"` was publishable as evidence.** `bundle_gate.py`
+  vocabulary-checks a mutation row's direction, and `"banana"` is refused with
+  *"a red run is not evidence until the direction is read"* — while `"inverse"`,
+  the word that says the kill was for the **opposite** defect, passed at
+  **EXIT=0**. Measured history: **2 of 24** co-refutation patches in this tree
+  modelled the inverse defect and scored a kill, and the tell was that every
+  failure said *"should have succeeded"* and none said *"should have been
+  refused"*. That is a finding about the mutant, not a result about the
+  property.
+  *Admitted with a recorded disposition rather than refused outright, and the
+  argument is the point.* Refusing the word makes the honest answer the
+  expensive one: the cheapest way past a refusal is to type `modelled`, which
+  nothing in this tree resolves against a real run, so the gate would certify
+  the lie it was added to prevent. It would also collapse `DIRECTIONS` to one
+  member — a field nothing branches on is a comment with a type — and unsay the
+  exact case the field was created to make sayable. So an `inverse` row owes a
+  `disposition`: `superseded`, which must name **another** row of the group as
+  the corrected mutant (its own name would satisfy a plain membership test), or
+  `kept-as-a-finding`, which must carry the `reading` that argues it. The
+  success line counts them apart — `9 mutation verdict(s) and 1 disposed as
+  inverse` — so a disposed row cannot be read as a kill. All 10 current rows are
+  `modelled`; nothing in the bundle moved.
 - **One rule about "which silicon", enforced in one of the two places it is
   asked.** `platform_gate.py` holds its own registry's `board_revision` to a
   concrete RP2350 stepping, and `evidence_gate.py` shares the *token* — it reads

@@ -374,6 +374,77 @@ def test_a_mutation_with_no_direction_is_not_a_verdict(tmp_path):
     assert any("is not one of" in p for p in findings(root)), findings(root)
 
 
+def test_an_inverse_kill_with_no_disposition_is_not_a_verdict(tmp_path):
+    """`"inverse"` was in the vocabulary and cost nothing: `"banana"` was refused
+    and the word that names a kill for the OPPOSITE defect published at exit 0.
+    Refusing it outright would have been worse — the cheapest way past a refusal
+    is to type `modelled`, which nothing here resolves against a real run."""
+    root = tree(tmp_path)
+    edit(root, 'direction = "modelled"', 'direction = "inverse"')
+    assert any("an INVERSE kill is a finding about the mutant" in p for p in findings(root)), (
+        findings(root)
+    )
+
+
+@pytest.mark.parametrize("value", ["banana", "", "modelled ", "superseded_by", "n/a"])
+def test_an_inverse_disposition_outside_the_vocabulary(tmp_path, value):
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["mutation"][0].update(direction="inverse", disposition=value))
+    assert any("is not one of ('superseded'" in p for p in findings(root)), findings(root)
+
+
+def test_a_superseded_inverse_kill_names_the_row_that_replaced_it(tmp_path):
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["mutation"][0].update(
+        direction="inverse", disposition="superseded", superseded_by="a mutant nobody drove"))
+    assert any("names no OTHER row" in p for p in findings(root)), findings(root)
+
+
+def test_an_inverse_kill_cannot_supersede_itself(tmp_path):
+    """A plain membership test over the group's own names is satisfied by the
+    row's own `mutant`, which is the claim with nothing behind it again."""
+    root = tree(tmp_path)
+
+    def selfsame(doc):
+        row = doc["mutation"][0]
+        row.update(direction="inverse", disposition="superseded", superseded_by=row["mutant"])
+
+    rewrite(root, selfsame)
+    assert any("names no OTHER row" in p for p in findings(root)), findings(root)
+
+
+def test_an_inverse_kill_kept_as_a_finding_still_owes_its_reading(tmp_path):
+    """`reading` is where the direction is argued, and it is the whole content of
+    a row that admits its kill was for the other defect."""
+    root = tree(tmp_path)
+
+    def strip(doc):
+        row = doc["mutation"][0]
+        row.update(direction="inverse", disposition="kept-as-a-finding")
+        row["reading"] = "   "
+
+    rewrite(root, strip)
+    assert any("with no `reading`" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize("disposition", bundle_gate.DISPOSITIONS)
+def test_a_disposed_inverse_kill_is_admitted_and_counted_apart(tmp_path, disposition):
+    """The positive arm, and the reason the word is not simply refused: an
+    inverse kill stays SAYABLE, and the success line says how many there are so
+    it cannot be read as a verdict."""
+    root = tree(tmp_path)
+
+    def dispose(doc):
+        rows = doc["mutation"]
+        rows[0].update(direction="inverse", disposition=disposition,
+                       superseded_by=rows[1]["mutant"])
+
+    rewrite(root, dispose)
+    problems, summary = bundle_gate.audit(root)
+    assert problems == [], problems
+    assert "9 mutation verdict(s) and 1 disposed as inverse" in summary, summary
+
+
 def test_a_mutation_that_does_not_say_which_assertion_fell(tmp_path):
     root = tree(tmp_path)
     import re
