@@ -123,7 +123,12 @@ assurance_trace_is_image_neutral() {
   local dir src elf_before elf_poison control
   dir=$(mktemp -d)
   src="$dir/src"
-  rsync -a --exclude .git --exclude target --exclude result --exclude formal/out ./ "$src/"
+  # `formal/states` too: TLC's on-disk state queues are gitignored run output, hold
+  # no Rust, no manifest and nothing any `include_*!` reaches, so they cannot move
+  # the ELF this row builds three times — and at ~6 GB they were the difference
+  # between the row running and the whole gate dying on ENOSPC.
+  rsync -a --exclude .git --exclude target --exclude result --exclude formal/out \
+    --exclude formal/states ./ "$src/"
 
   if cargo tree -p firmware -e features | grep -q 'rsk-fido feature "assurance-trace"'; then
     echo "FAIL: firmware enables rsk-fido/assurance-trace." >&2
