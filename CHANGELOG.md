@@ -68,6 +68,27 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **Eleven numbers on two pages that no rule reaches, corrected by hand.**
+  `docs/authorization-slice.md` was measured at the commit it landed in and the
+  assurance registry has grown since: **57 → 59** properties, **44 → 46**
+  modelled-only and **194 → 199** configurations tiered on its registry-wide
+  line; **44 → 45** configurations checking `NoAuthorizationBypass` at four
+  sites; **1 → 4** Kani harnesses in `SEC-FIDO-001`'s row; **2 → 3**
+  configurations for `SEC-FIDO-007` and `SEC-FIDO-008` in two places each. The
+  page's own falsifying command was wrong too — plain `grep -l
+  NoAuthorizationBypass` prints **47** because it also matches the tier-A
+  `NoAuthorizationBypassA` in two configurations, so the page now prints
+  `grep -lw`, which agrees with the registry's own derivation at 45. And one
+  sentence was **inverted**, not merely stale: `SEC-FIDO-001` was said to lead
+  on three evidence columns "though not on harness count"; it now leads on all
+  four, uniquely, with `SEC-STORE-002` second at three. Separately,
+  `formal/README.md` still said the co-mutant roster is **69 entries: 65
+  patches** where `comutants.toml` holds **71: 67 patches** — the same figure
+  the generated paragraph in `docs/testing.md` prints correctly, which is what
+  a second copy does. None of these is in the run-count gate's reach: they are
+  the *assurance* registry's numbers and generating them is a different
+  criterion's stage 0, noted where the exemption for one of them already says
+  so.
 - **Twelve spellings the shape rules walked past.** Each measured at exit 0
   and each now a case: `195 states` and `195 mutants` (what a run *produced* is
   a run-count by the same definition as what it covered — and `77.6 M states`
