@@ -505,6 +505,16 @@ def test_the_model_moved_under_the_recorded_run(tree):
     assert only(tree.problems(), "formal/Mini.tla has moved since")
 
 
+def test_a_comment_in_the_model_is_not_the_model(tree):
+    """These modules carry `file.rs:NNN` citations that `citation_gate.py`
+    re-anchors every time the code under them moves. Driven against a real
+    commit: a name-only diff called six modules changed over an edit that
+    refreshed nothing but line numbers, and the row went red."""
+    tree.write("formal/Mini.tla", MINI.replace(
+        "Init == TRUE", "\\* crates/rsk-fs/src/fs.rs:521 -- the citation moved\nInit == TRUE"))
+    assert not only(tree.problems(), "has moved since"), tree.problems()
+
+
 def test_a_page_beside_the_model_is_not_the_model(tree):
     """The other direction: `formal/README.md` carries generated regions that
     `--write` moves right after `--record`, so a rule over the whole directory
@@ -678,11 +688,17 @@ def test_a_provenance_field_the_banner_contradicts(tree, field, typed):
     assert only(tree.problems(), f"recorded {field}="), tree.problems()
 
 
-def test_kept_summaries_from_two_different_runs(tree):
+@pytest.mark.parametrize("was, now", (
+    ("2 workers", "9 workers"), ("1 cores", "8 cores"), (os.uname().machine, "vax"),
+))
+def test_kept_summaries_from_two_different_runs(tree, was, now):
     """One disagreement among the rows is a record assembled from two runs, and
-    it is reported once rather than once per row."""
-    tree.edit("formal/runs.toml", "Mut_BugFooOpens.cfg with 2 workers on 1 cores",
-              "Mut_BugFooOpens.cfg with 9 workers on 1 cores")
+    it is reported once rather than once per row. `arch` is in the tuple for the
+    reason `queue` is read at all: it was captured and compared to nothing, and a
+    JVM does not print the brand string `host` wears, so rows agreeing with each
+    other is the only checkable claim left in it."""
+    head = f"Mut_BugFooOpens.cfg with 2 workers on 1 cores (Some OS {os.uname().machine})"
+    tree.edit("formal/runs.toml", head, head.replace(was, now))
     assert len(only(tree.problems(), "disagree about date/workers/cores")) == 1
 
 
@@ -1389,6 +1405,26 @@ def test_a_tracked_page_the_scan_cannot_decode(tree):
         "# Cost\n\nCaf\xe9 ran `run-tlc.sh safety` in 2916 s.\n".encode("latin-1"))
     tree.pending.add("docs/other.md")
     assert only(tree.problems(), "does not decode as UTF-8")
+
+
+def test_a_tracked_page_the_scan_cannot_open(tree):
+    """The other silence in the same place: a page that is THERE and cannot be
+    read left the scan with nothing said, the way one that does not decode did."""
+    tree.write("docs/shut.md", "# Shut\n\n`run-tlc.sh safety` took 2916 s.\n")
+    (tree.root / "docs/shut.md").chmod(0o000)
+    try:
+        assert only(tree.problems(), "cannot be read")
+    finally:
+        (tree.root / "docs/shut.md").chmod(0o644)
+
+
+def test_a_tracked_page_that_is_only_gone_is_not_one(tree):
+    """And the direction that must NOT redden: a tracked file deleted and not yet
+    `git rm`ed is an ordinary working tree, not a page the scan cannot read."""
+    tree.write("docs/going.md", "# Going\n\nNothing here.\n")
+    tree.track()
+    (tree.root / "docs/going.md").unlink()
+    assert not only(tree.problems(), "cannot be read")
 
 
 def test_a_binary_file_under_a_scanned_tree_is_not_a_page(tree):

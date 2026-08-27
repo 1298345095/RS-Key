@@ -785,7 +785,7 @@ def check_tlc(where, run, findings):
                 " not — re-record the run, the row has nothing to check it against"
             )
             continue
-        stamps.add((found["date"], found["workers"], found["cores"]))
+        stamps.add((found["date"], found["workers"], found["cores"], found["arch"]))
         green = row["verdict"].startswith("GREEN")
         # TLC prints a summary on every run that reaches a verdict, so a GREEN
         # row without one is not the run it says it is — and `check_record`'s
@@ -845,11 +845,16 @@ def check_tlc(where, run, findings):
     # date is wrong" is the report defect where the reader is told the tree is.
     if len(stamps) > 1:
         findings.append(
-            f"{where}: the kept summaries disagree about date/workers/cores"
+            f"{where}: the kept summaries disagree about date/workers/cores/arch"
             f" ({len(stamps)} readings) — a record assembled from two runs"
         )
     elif stamps:
-        (date, workers, cores), = stamps
+        # `arch` is here for the reason `queue` is read at all: it was captured by
+        # `TLC_ROW` and compared to nothing. A JVM does not print the brand string
+        # `host` wears, so the only checkable claim left in it is that every row
+        # says the same box — which `provenance` asks of the LOGS at `--record`
+        # time and nothing asked of the record afterwards.
+        (date, workers, cores, _), = stamps
         # `host` is the log's core count wearing the local machine's brand
         # string, so the banner holds the half of it a JVM knows. Read as a
         # number rather than as `host`'s own spelling of it, which is `1 cores`.
@@ -878,20 +883,53 @@ MODEL = (":(glob)formal/*.tla", ":(glob)formal/*.cfg", "formal/floors.txt",
          "formal/run-tlc.sh", "formal/gen-configs.sh")
 
 
+#: A comment is not a state space. These modules carry `file.rs:NNN` citations
+#: that `citation_gate.py` re-anchors every time the code under them moves, and a
+#: name-only diff called six of them changed over a commit that refreshed nothing
+#: but line numbers -- driven, and it reddened the row. So the comparison is of
+#: what TLC would read. A `#` is only a comment in a shell script at the start of
+#: a line, because one inside a string is not, and in a `.tla` it is an operator.
+COMMENTS = {
+    ".tla": (re.compile(r"\(\*.*?\*\)", re.S), re.compile(r"\\\*.*$", re.M)),
+    ".cfg": (re.compile(r"\(\*.*?\*\)", re.S), re.compile(r"\\\*.*$", re.M)),
+    ".txt": (re.compile(r"\\\*.*$", re.M), re.compile(r"^[ \t]*#.*$", re.M)),
+    ".sh": (re.compile(r"^[ \t]*#.*$", re.M),),
+}
+
+
+def uncommented(rel, text):
+    """`text` as TLC would read it: no comments, no blank lines."""
+    for rule in COMMENTS.get(pathlib.PurePosixPath(rel).suffix, ()):
+        text = rule.sub("", text)
+    return "\n".join(line.rstrip() for line in text.splitlines() if line.strip())
+
+
 def checked_out_since(root, commit):
-    """What of [`MODEL`] this working tree has that `commit` did not.
+    """What of [`MODEL`] this working tree MEANS that `commit` did not.
 
     The gate reads model CONTENT for exactly two things -- the `Bug*` switch
     names and `Shipped.cfg`'s `INVARIANTS` -- so an edit that changed the state
     space without moving the roster or `floors.txt` left every published count
     stale and the row green. The record carries the commit; this is the question
-    it lets the row ask. Empty over the 32 commits since the recorded run.
+    it lets the row ask.
     """
-    done = subprocess.run(
+    listed = subprocess.run(
         ["git", "-C", str(root), "diff", "--name-only", commit, "--", *MODEL],
         capture_output=True, text=True,
     )
-    return sorted(q for q in done.stdout.split("\n") if q) if done.returncode == 0 else []
+    if listed.returncode != 0:
+        return []
+    moved = []
+    for rel in sorted(q for q in listed.stdout.split("\n") if q):
+        was = subprocess.run(
+            ["git", "-C", str(root), "show", f"{commit}:{rel}"], capture_output=True, text=True
+        )
+        here = root / rel
+        if was.returncode != 0 or not here.is_file():
+            moved.append(rel)
+        elif uncommented(rel, was.stdout) != uncommented(rel, here.read_text()):
+            moved.append(rel)
+    return moved
 
 
 def check_record(root, runs, listed, floor_rows, findings):
@@ -1290,6 +1328,15 @@ def scanned(root, findings=None):
                 )
             continue
         except OSError:
+            # A page that is THERE and cannot be read is the same silence as one
+            # that does not decode. A missing one is not: a tracked file deleted
+            # but not yet `git rm`ed is an ordinary working tree, not a hole.
+            if findings is not None and path.exists():
+                findings.append(
+                    f"{rel}: tracked under a scanned tree and cannot be read — a page"
+                    " the scan skips is a page a run-count can be typed into with"
+                    " nothing to see it"
+                )
             continue
         out.append(path)
     return out
