@@ -624,6 +624,20 @@ def test_a_verdict_arguing_from_a_clause_owes_a_pin_inside_it(tree):
     assert any("owes a `rests_on` pin inside TM-HOST-POWER-CUT" in p for p in found), found
 
 
+def test_a_why_arguing_from_a_clause_id_that_does_not_exist_is_refused(tree):
+    """The demand is keyed on the `why` naming a clause, so a TYPO drops it.
+
+    Measured on the real tree before this rule: mistype the id and delete the
+    pin, and the row exits 0 — one character buys the exemption the rule above
+    exists to refuse. It is the shape this repo keeps shipping: a guard bypassed
+    by a spelling nobody enumerated, here inside the guard written to close it.
+    """
+    edit(tree, threat_gate.CLAUSES, "not TM-HOST-POWER-CUT,", "not TM-HOST-POWERCUT,")
+    edit(tree, threat_gate.CLAUSES, f'rests_on = ["{PIN}"]\n', "")
+    found = problems(tree)
+    assert any("TM-HOST-POWERCUT" in p and "is no clause of" in p for p in found), found
+
+
 def test_a_pin_from_a_clause_the_why_never_names_is_refused(tree):
     """Ownership: a pin may only lock text of the clause it argues from."""
     edit(

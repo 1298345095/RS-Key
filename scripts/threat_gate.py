@@ -438,6 +438,16 @@ def check_rests_on(
     for pid, entry in untraced.items():
         named = dict.fromkeys(CLAUSE_ID.findall(entry.get("why", "")))
         argues = [cid for cid in named if cid in clauses]
+        # An id that resolves to no clause would otherwise DROP the demand below:
+        # a `why` arguing from `TM-HOST-POWERCUT` owes a pin nowhere, so one typo
+        # buys the exemption this rule exists to refuse.
+        for cid in named:
+            if cid not in clauses:
+                problems.append(
+                    f"{pid}: its `why` argues from {cid}, which is no clause of"
+                    f" {CLAUSES} — a verdict cannot rest on a clause that is not"
+                    " there, and a misspelt id owes a pin to nothing"
+                )
         dependents.append((pid, entry, argues, argues))
 
     for label, entry, owners, owed in dependents:

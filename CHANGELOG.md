@@ -991,6 +991,17 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **One typo bought the exemption the new clause-lock rule exists to refuse.**
+  The rule that makes a pin *owed* reads the `[[untraced]]` entry's `why` for a
+  clause id — naming a clause is the dependency, so the pin arrives with it. But
+  the demand was keyed on ids that RESOLVE: write `TM-HOST-POWERCUT` for
+  `TM-HOST-POWER-CUT`, drop the `rests_on`, and the entry argues from nothing the
+  gate recognises, so nothing is owed. Measured on the shipped tree, that edit
+  exited **0**. A `TM-…` id in a `why` that is no clause of the registry is now a
+  finding in its own right. This is the shape the guard was written to close,
+  found inside the guard — the same "bypassed by a spelling nobody enumerated"
+  that `threat_gate.py`'s markdown parser has been bitten by before.
+
 - **Two more spellings of "the sentence is gone" that the clause lock read as
   present.** `rests_on` matches a pinned sentence against a clause's body with
   HTML comments stripped, because commenting one out takes it off the page and
