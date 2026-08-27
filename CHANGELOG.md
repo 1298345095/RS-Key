@@ -968,13 +968,36 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   which is the same dropped field wearing three characters. The method row's two
   prose fields are held to a non-answer vocabulary now (`n/a`, `N / A`, `none`,
   `nil`, `TBD`, `todo`, `unknown`, `-`, `—`, `?`, `.`, `…`, a non-string).
-  Scoped to those two and **not** to every leaf for a measured reason: `cfg` and
-  `features` answer `none` in four rows each, and `none` is an answer there.
   A string-valued `bound_*` is held to it as well, and that too was the fix's own
   hole: half the bounds are numbers and `bound_totals` is a sentence, so
   requiring the *key* was satisfied by a row whose only bound read `"n/a"` —
   measured green before the extension. A numeric bound is never a non-answer,
   because `bound_reset_window = 0` is a real one.
+  *And the scoping reached 18 of the bundle's 348 string leaves.* A sweep
+  setting each leaf to `"n/a"` in turn measured **57** refusals, of which the
+  non-answer rule owned **18** — all `[[method]]` — and **266** at **EXIT=0**:
+  `mutation.fell`, `mutation.verdict`, `mutation.expected`, `build.commit`,
+  `tool.version`, `property.statement`, `cost.basis` and `freshness.measured`
+  among them, while `bundle_gate.py`'s own docstring says every `[[mutation]]`
+  records the assertion that **fell**. Every string leaf answers something now;
+  all 348 refuse `"n/a"`. The exemption the scoping was argued from is two
+  leaves and is written per VALUE, not per field — `method.cfg` and
+  `method.features` may say `none` (five rows and four, not "four each") and
+  `cfg = "n/a"` is still a finding.
+  *And the vocabulary was bypassed by punctuation.* It compared with whitespace
+  removed and a trailing `.!?…` stripped, so `;` and `:` bought a second
+  spelling: `n.a.`, `t.b.d.`, `N/A;`, `todo:`, `not-applicable`, `(none)`,
+  `N.A` and `tbd;` were all **EXIT=0**. Compared on alphanumerics only now, with
+  `tba`, `noanswer`, `seeabove` and `ditto` added. Still a blacklist and still
+  incomplete — `n/a (none)` normalizes to `nanone` and passes, and refusing a
+  one-character word was tried and **refuted**: `mutation.level` is `A`, `B` and
+  `C`, so a bare `0` or `x` gets through. What carries the weight is the leaf.
+  *And the `bound_*` roster's own ratchet was one key.* Reducing all 8 rows to a
+  single `bound_nothing = 0` was **EXIT=0** over 397 leaves, as were
+  `bound_x = false`, `bound_x = ["n/a"]` and a key named literally `bound_` —
+  which `any(k.startswith("bound_"))` is true of. There is a floor per row (2)
+  and over the group (24), both under the measured 30 across 8 rows with the
+  smallest row at 2; a flag is not a bound; and the bare prefix is not a name.
 - **A bundle's `method.artifact` named a proof nothing resolved against the
   tree.** The first closed slice's evidence register names, per method row, the
   artifact that discharged the obligation — `crates/rsk-fido/src/state_kani.rs::no_authorization_bypass_walk_owner`

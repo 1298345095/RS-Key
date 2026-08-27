@@ -218,18 +218,76 @@ def test_a_bound_is_owed_per_row_and_not_per_group(tmp_path):
     assert any("method #8: no `bound_*`" in p for p in findings(root)), findings(root)
 
 
-def test_one_bound_key_of_any_name_satisfies_the_row(tmp_path):
+def test_a_bound_key_of_any_name_satisfies_the_row(tmp_path):
     """Bounds are per method — a sequence length here, a cardinality there — so
-    naming one key would be requiring the wrong one."""
+    naming one key would be requiring the wrong one. The NAMES are free; how
+    many there are is not."""
+    root = tree(tmp_path)
+
+    def rename(doc):
+        for row in doc["method"]:
+            for order, key in enumerate([k for k in row if k.startswith("bound_")]):
+                row[f"bound_a_name_nobody_wrote_{order}"] = row.pop(key)
+
+    rewrite(root, rename)
+    assert findings(root) == []
+
+
+def test_every_row_reduced_to_one_bound(tmp_path):
+    """The ratchet the roster left: `REQUIRED`'s `bound_*` is satisfied by ONE
+    key, so all 8 rows at a single `bound_nothing = 0` was EXIT=0 over 397
+    leaves — the measured hole was zero bounds and its replacement was one."""
     root = tree(tmp_path)
 
     def strip(doc):
-        row = doc["method"][0]
-        for key in [k for k in row if k.startswith("bound_")][1:]:
-            row.pop(key)
+        for row in doc["method"]:
+            for key in [k for k in row if k.startswith("bound_")]:
+                row.pop(key)
+            row["bound_nothing"] = 0
 
     rewrite(root, strip)
-    assert findings(root) == []
+    problems = findings(root)
+    assert any("bound(s), under the floor of 2" in p for p in problems), problems
+    assert any("key(s) over the method rows" in p for p in problems), problems
+
+
+def test_a_bound_that_is_a_flag(tmp_path):
+    """`bound_x = false` cleared the roster and bounds nothing."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["method"][0].update({"bound_states": False}))
+    assert any("never a flag" in p for p in findings(root)), findings(root)
+
+
+def test_a_key_named_literally_bound_underscore(tmp_path):
+    """The wildcard itself: `any(k.startswith("bound_"))` is true of `bound_`."""
+    root = tree(tmp_path)
+
+    def wildcard(doc):
+        row = doc["method"][1]
+        for key in [k for k in row if k.startswith("bound_")]:
+            row.pop(key)
+        row["bound_"] = 1
+        row["bound_states"] = 2
+        row["bound_pairs"] = 3
+
+    rewrite(root, wildcard)
+    assert any("is the prefix and not a name" in p for p in findings(root)), findings(root)
+
+
+def test_a_bound_group_stripped_to_just_over_the_row_floor(tmp_path):
+    """Eight rows at the per-row floor is 16 against the 30 the bundle carries,
+    which is why the group has a floor of its own."""
+    root = tree(tmp_path)
+
+    def thin(doc):
+        for row in doc["method"]:
+            for key in [k for k in row if k.startswith("bound_")][2:]:
+                row.pop(key)
+
+    rewrite(root, thin)
+    problems = findings(root)
+    assert not any("bound(s), under the floor of 2" in p for p in problems), problems
+    assert any("key(s) over the method rows" in p for p in problems), problems
 
 
 @pytest.mark.parametrize(
@@ -248,13 +306,61 @@ def test_a_prose_field_occupied_by_a_non_answer(tmp_path, field, value):
 
 
 def test_none_is_an_answer_where_none_is_an_answer(tmp_path):
-    """The reason the rule is a named pair of fields and not every leaf: eight
-    method rows answer `cfg` and `features` with exactly `none`, and a global
-    non-answer vocabulary would redden every one of them."""
+    """The two leaves the widening below is exempted at, and the only two: five
+    method rows answer `cfg` with exactly `none` and four answer `features`,
+    and there `none` means the build had none of it."""
     root = tree(tmp_path)
     doc = tomllib.loads((root / bundle_gate.BUNDLE).read_text())
-    assert [r["cfg"] for r in doc["method"]].count("none") >= 4, doc["method"]
+    assert [r["cfg"] for r in doc["method"]].count("none") == 5, doc["method"]
+    assert [r.get("features") for r in doc["method"]].count("none") == 4, doc["method"]
     assert findings(root) == []
+
+
+@pytest.mark.parametrize("field", ["cfg", "features"])
+def test_the_exemption_is_the_value_and_not_the_field(tmp_path, field):
+    """Exempting the two FIELDS outright takes `cfg = "n/a"` back — the same
+    dropped field one spelling over, which is the defect this rule is named for."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["method"][0].update({field: "n/a"}))
+    assert any("which answers nothing" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["mutation.fell", "mutation.verdict", "mutation.expected", "build.commit",
+     "build.host_triple", "tool.version", "property.statement", "property.invariant",
+     "cost.basis", "freshness.measured"],
+)
+def test_a_leaf_outside_the_two_prose_fields_occupied_by_a_non_answer(tmp_path, path):
+    """The measured scope of the first version: a sweep setting each of the
+    bundle's 348 string leaves to `"n/a"` in turn left 266 at EXIT=0, and the
+    non-answer rule owned 18 of the 57 refusals — all of them `[[method]]`.
+    Every one of these was green while the docstring said each `[[mutation]]`
+    records the assertion that FELL."""
+    group, field = path.split(".")
+    root = tree(tmp_path)
+
+    def occupy(doc):
+        rows = doc[group] if isinstance(doc[group], list) else [doc[group]]
+        assert field in rows[0], f"{path} is not in the bundle any more"
+        rows[0][field] = "n/a"
+
+    rewrite(root, occupy)
+    assert any("which answers nothing" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    ["n.a.", "t.b.d.", "N/A;", "todo:", "not-applicable", "(none)", "TBA",
+     "no answer", "see above", "ditto", "N.A", "tbd;", "  none  "],
+)
+def test_a_non_answer_wearing_punctuation(tmp_path, spelling):
+    """The vocabulary compared with whitespace removed and a trailing `.!?…`
+    stripped, so `;` and `:` bought a second spelling of the same word and all
+    of these were EXIT=0. Normalized to alphanumerics now."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["mutation"][0].update({"fell": spelling}))
+    assert any("which answers nothing" in p for p in findings(root)), findings(root)
 
 
 def test_a_method_artifact_naming_a_harness_that_is_gone(tmp_path):
@@ -374,8 +480,6 @@ def test_a_bound_written_as_prose_answers_something(tmp_path):
 
     def blank(doc):
         row = doc["method"][2]
-        for key in [k for k in row if k.startswith("bound_")][1:]:
-            row.pop(key)
         row[[k for k in row if k.startswith("bound_")][0]] = "n/a"
 
     rewrite(root, blank)

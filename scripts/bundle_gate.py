@@ -18,10 +18,13 @@ findings, in every group, at every depth. That is the only form in which
 
 Five rules are about the bundle being EVIDENCE rather than prose:
 
-* every `[[method]]` carries its bound as STRUCTURED data — a `bound_*` key —
-  and answers its two prose fields with something. Stripping all 30 `bound_*`
-  keys from all 8 rows left the exit at 0, and `shipped_relation = "n/a"` still
-  does; a scope sentence was demanded and the bounds it is about were not;
+* every `[[method]]` carries its bounds as STRUCTURED data — `bound_*` keys, at
+  a floor per row and over the group — and every STRING LEAF of the bundle
+  answers something. Stripping all 30 `bound_*` keys from all 8 rows left the
+  exit at 0, and so did reducing all 8 to a single `bound_nothing = 0`; a scope
+  sentence was demanded and the bounds it is about were not. The non-answer rule
+  scoped to two prose fields reached 18 of 348 string leaves — `mutation.fell`
+  and `build.commit` among the 266 that took `"n/a"` at exit 0;
 * every `[[method]]`'s `artifact` resolves against the tree. The field is the
   row's whole claim — this obligation, discharged by that proof — and nothing
   read it: renaming `no_authorization_bypass_walk_owner` left the exit at 0, and
@@ -130,6 +133,12 @@ FLOORS = {
 #: estimate wearing a measurement's field.
 COST_FIELDS = ("human_minutes", "runner_seconds", "peak_memory_mb")
 
+#: Bounds per method row, and over the group. Both under the measurement — 30
+#: keys across 8 rows, the smallest row carrying 2 — the way every other ratchet
+#: here is. Two numbers, because 8 rows at the per-row floor is 16 against the 30
+#: the bundle has, and a 47% strip with the row green is the same hole again.
+BOUND_FLOOR, BOUNDS_FLOOR = 2, 24
+
 #: What makes a word of a `[[method]] artifact` a REFERENCE and not prose. Six
 #: spellings sit in the eight rows — a repo path, a bare `Name.cfg`,
 #: `path::symbol`, an elided `…suffix`, and two rows trailing off into prose
@@ -204,22 +213,33 @@ METHOD_KIND = {
 #: `shipped_relation = "n/a"` cleared the rule that exists to demand the sentence.
 PROSE_FIELDS = ("obligation", "shipped_relation")
 
-#: Words that occupy a field without answering it. Scoped to [`PROSE_FIELDS`] and
-#: not to every leaf, because `cfg = "none"` and `features = "none"` ARE answers
-#: — eight rows of them — and a global rule would redden every one. Compared with
-#: internal whitespace removed and case folded, so `N / A` is the same word.
+#: Words that occupy a field without answering it, over EVERY string leaf.
+#: Scoping this to [`PROSE_FIELDS`] reached 18 of the bundle's 348 string leaves,
+#: and the sweep that set each of them to `"n/a"` in turn found 266 still at exit
+#: 0 — `mutation.fell`, `mutation.verdict`, `mutation.expected`, `build.commit`,
+#: `tool.version`, `property.statement`, `cost.basis` and `freshness.measured`
+#: among them, while this file's own docstring says every `[[mutation]]` records
+#: the assertion that FELL. Compared through [`core`], so punctuation buys no
+#: second spelling. Still a blacklist, and still incomplete — `n/a (none)`
+#: normalizes to `nanone` and passes; what carries the weight is the leaf.
 NON_ANSWERS = frozenset(
     {
-        "n/a", "n\\a", "na", "notapplicable",
+        "na", "notapplicable", "noanswer", "seeabove", "ditto",
         "none", "nil", "null", "nothing",
         "unknown", "unspecified", "undefined", "unclear",
-        "tbd", "tobedetermined", "todo", "xxx", "pending", "wip",
+        "tbd", "tba", "tobedetermined", "todo", "xxx", "pending", "wip",
     }
 )
 
-#: `-`, `--`, `—`, `?`, `.`, `...`, `…`: the same non-answer with no letters in
-#: it, which is the half a vocabulary alone cannot hold.
-PUNCTUATION_ONLY = re.compile(r"[\W_]+")
+#: The two leaves where `none` IS an answer, and the reason the widening above is
+#: per leaf and not per field: five method rows answer `cfg` with `none` and four
+#: answer `features`, and both mean the build had none of it. The VALUE is named
+#: too, because exempting the fields outright takes `cfg = "n/a"` back.
+NONE_IS_AN_ANSWER = ("method.cfg", "method.features")
+
+#: A row index inside a leaf path, so the exemption above is written once rather
+#: than once per row.
+ROW_INDEX = re.compile(r"\[\d+\]")
 
 #: An assertion that fell describes the modelled defect, or its inverse. Anything
 #: else is a word nobody has to defend.
@@ -240,29 +260,37 @@ DISPOSITIONS = ("superseded", "kept-as-a-finding")
 assert set(GROUPS) == set(FLOORS) == set(REQUIRED), "GROUPS, FLOORS and REQUIRED drifted"
 
 
-def leaves(value, path="") -> tuple[int, list[str]]:
-    """(leaf count, the paths that are empty) under `value`."""
+def walk(value, path=""):
+    """Every leaf under `value`, as (path, leaf).
+
+    An EMPTY dict or list yields `(path, None)`: a heading with nothing under it
+    is a hole, not a leaf. TOML has no null, so `None` cannot be a real value.
+    """
     if isinstance(value, dict):
         if not value:
-            return 0, [path or "<root>"]
-        total, empty = 0, []
+            yield path or "<root>", None
         for key, item in value.items():
-            found, holes = leaves(item, f"{path}.{key}" if path else key)
-            total += found
-            empty += holes
-        return total, empty
-    if isinstance(value, list):
+            yield from walk(item, f"{path}.{key}" if path else key)
+    elif isinstance(value, list):
         if not value:
-            return 0, [path]
-        total, empty = 0, []
+            yield path, None
         for index, item in enumerate(value):
-            found, holes = leaves(item, f"{path}[{index + 1}]")
-            total += found
-            empty += holes
-        return total, empty
-    if isinstance(value, str) and not value.strip():
-        return 1, [path]
-    return 1, []
+            yield from walk(item, f"{path}[{index + 1}]")
+    else:
+        yield path, value
+
+
+def leaves(value, path="") -> tuple[int, list[str]]:
+    """(leaf count, the paths that are empty) under `value`."""
+    total, empty = 0, []
+    for where, leaf in walk(value, path):
+        if leaf is None:
+            empty.append(where)
+            continue
+        total += 1
+        if isinstance(leaf, str) and not leaf.strip():
+            empty.append(where)
+    return total, empty
 
 
 def resolve(root: pathlib.Path, name: str) -> pathlib.Path | None:
@@ -308,44 +336,100 @@ def declarations(target: pathlib.Path) -> tuple[list[str], set[str]]:
     return names, proofs
 
 
-def answers(value) -> bool:
-    """Whether a prose field says anything at all.
+def core(value: str) -> str:
+    """`value` as one word: case folded, with every non-alphanumeric removed.
 
-    Case folded with the internal whitespace removed, so `N / A` is `n/a`, and a
-    trailing full stop does not buy a second spelling of the same non-answer.
+    `n/a`, `N / A`, `n.a.`, `N/A;`, `(none)`, `not-applicable` and `todo:` are
+    one non-answer in seven spellings. The first version removed whitespace and
+    stripped a trailing `.!?…`, so five of the seven were exit 0 — a vocabulary
+    that has to enumerate punctuation is bypassed by the next mark typed.
+    """
+    return re.sub(r"[^0-9a-z]", "", value.lower())
+
+
+def answers(value) -> bool:
+    """Whether a leaf says anything at all.
+
+    A bare `0` or `x` still passes. Refusing a one-character word was the obvious
+    close and is wrong: `mutation.level` is `A`, `B` and `C`, six real answers
+    one character long, and the rule reddened every one of them.
     """
     if not isinstance(value, str):
         return False
-    core = "".join(value.split()).rstrip(".!?…").lower()
-    return bool(core) and core not in NON_ANSWERS and not PUNCTUATION_ONLY.fullmatch(core)
+    word = core(value)
+    return bool(word) and word not in NON_ANSWERS
+
+
+def leaf_answers(doc: dict, findings: list[str]) -> None:
+    """Every string leaf of the bundle says something, not just the two prose ones."""
+    for path, value in walk(doc):
+        if not isinstance(value, str) or not value.strip():
+            continue  # a blank leaf is the `leaves` rule's, reported once
+        if ROW_INDEX.sub("", path) in NONE_IS_AN_ANSWER and core(value) == "none":
+            continue
+        if not answers(value):
+            findings.append(
+                f"{BUNDLE}: `{path}` is {value!r}, which answers nothing — a field"
+                " occupied by a non-answer is the same field dropped, in a spelling"
+                " the REQUIRED roster cannot see"
+            )
 
 
 def method_answers(doc: dict, findings: list[str]) -> None:
-    """A method row's prose fields are answered, not occupied.
+    """A method row's two prose fields are PROSE.
 
-    `shipped_relation` was required and refused a dropped key, an empty string
-    and a whitespace-only one — and took `"n/a"` at exit 0, which is the same
-    dropped field wearing three characters.
+    Their string values are [`leaf_answers`]'s, like every other leaf's. What is
+    left here is the other half: a number in `obligation` is not a non-answer in
+    any vocabulary, and it is not a sentence either.
     """
     for index, row in enumerate(doc.get("method", []), 1):
         if not isinstance(row, dict):
             continue
-        # And every `bound_*` written as PROSE, because half of them are: a
-        # cardinality is a number and `bound_totals` is a sentence, so requiring
-        # the key is satisfied by one bound reading `n/a` — which was measured.
-        fields = list(PROSE_FIELDS) + [
-            key for key in row if key.startswith("bound_") and isinstance(row[key], str)
-        ]
-        for field in fields:
-            value = row.get(field)
-            if field not in row or (isinstance(value, str) and not value.strip()):
-                continue  # dropped or blank: reported once, by the rules that own it
-            if not answers(value):
+        for field in PROSE_FIELDS:
+            if field in row and not isinstance(row[field], str):
                 findings.append(
-                    f"{BUNDLE} method #{index}: `{field}` is {value!r}, which answers"
-                    " nothing — a required field occupied by a non-answer is the same"
-                    " field dropped, in a spelling the REQUIRED roster cannot see"
+                    f"{BUNDLE} method #{index}: `{field}` is {row[field]!r}, which"
+                    " answers nothing — a required field occupied by a non-answer is"
+                    " the same field dropped, in a spelling the roster cannot see"
                 )
+
+
+def method_bounds(doc: dict, findings: list[str]) -> None:
+    """A method row's bounds are BOUNDS, and there are enough of them.
+
+    `REQUIRED`'s `bound_*` is satisfied by one key: reducing all 8 rows to a
+    single `bound_nothing = 0` was exit 0, and so were `bound_x = false`,
+    `bound_x = ["n/a"]` and a key named literally `bound_`. The measured hole was
+    zero bounds and the ratchet it left was one.
+    """
+    total = 0
+    for index, row in enumerate(doc.get("method", []), 1):
+        if not isinstance(row, dict):
+            continue
+        where = f"{BUNDLE} method #{index}"
+        bounds = [key for key in row if key.startswith("bound_") and key != "bound_"]
+        total += len(bounds)
+        if "bound_" in row:
+            findings.append(
+                f"{where}: `bound_` is the prefix and not a name — a key that IS the"
+                " wildcard answers the roster and bounds nothing"
+            )
+        for key in bounds:
+            if isinstance(row[key], bool):
+                findings.append(
+                    f"{where}: `{key}` is {row[key]!r} — a bound is a number, or the"
+                    " sentence saying why it is not one, and never a flag"
+                )
+        if len(bounds) < BOUND_FLOOR:
+            findings.append(
+                f"{where}: {len(bounds)} bound(s), under the floor of {BOUND_FLOOR}"
+            )
+    if total < BOUNDS_FLOOR:
+        findings.append(
+            f"{BUNDLE}: {total} `bound_*` key(s) over the method rows, under the"
+            f" floor of {BOUNDS_FLOOR} — a scope sentence beside one bound is the"
+            " same row the roster was added to refuse"
+        )
 
 
 def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> None:
@@ -513,7 +597,9 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
     if subject not in known:
         findings.append(f"{BUNDLE}: property `{subject}` is in no row of {REGISTRY}")
 
+    leaf_answers(doc, findings)
     method_answers(doc, findings)
+    method_bounds(doc, findings)
     method_references(root, doc, findings)
 
     for index, row in enumerate(doc.get("artifact", []), 1):
