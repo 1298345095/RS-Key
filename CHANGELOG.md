@@ -747,6 +747,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **One rule about "which silicon", enforced in one of the two places it is
+  asked.** `platform_gate.py` holds its own registry's `board_revision` to a
+  concrete RP2350 stepping, and `evidence_gate.py` shares the *token* — it reads
+  `platform_gate.BOARD_REVISION` — but shared the token and not the rule: a
+  bundle's `build.board_revision` was accepted on being non-empty, while every
+  *other* leaf of the same bundle was searched with the regex. Measured:
+  `board_revision = "a red Pico 2 I had lying around"` beside a `hardware`
+  subject published **"1 of 59 carry a result measured on a board, each naming
+  the revision it was taken on"** at **EXIT=0**. The declaration is held to the
+  same vocabulary now, and the axis counts a stepping rather than a string, so
+  the sentence and the finding cannot disagree. Seven table cases over the value
+  spellings — a description of a desk, a lowercase `rp2350 a2`, the part with no
+  stepping, the bare `A2`, and `B1`, which is a Kani claim's name and not
+  silicon.
 - **The bundle demanded a scope *sentence* and not the structured bounds it is
   about.** Roadmap §7.2 stores a proof's bound as data — sequence length,
   symbolic bytes, cardinality, unwind, `cfg`/features, the shipped-domain

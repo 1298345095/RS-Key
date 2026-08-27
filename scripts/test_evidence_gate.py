@@ -28,6 +28,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import assurance_gate
 import evidence_gate
 import gate_lines
+import platform_gate
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -629,6 +630,29 @@ def test_the_bundle_may_say_a_stepping_change_expires_it(tree):
                 '\n[freshness]\nexpires_on_stepping = "an RP2350 stepping change — nothing here"\n')
     tree.regenerate()
     assert tree.problems() == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["a red Pico 2 I had lying around", "the blue one on the desk", "rp2350 a2",
+     "RP2350", "A2", "Pico 2 W", "B1"],
+)
+def test_a_board_revision_that_names_no_stepping(tree, value):
+    """The measured hole: `platform_gate.py` held its own registry to this
+    vocabulary and the bundle's declaration took any non-empty string, so a
+    description of a desk published `1 of 59` carrying a board result."""
+    tree.write("assurance/bundle/SEC-T-001.toml",
+               tree.bundle(subjects='["hardware"]',
+                           extra_build=f'board_revision = "{value}"\n'))
+    assert only(tree.problems(), "names no RP2350 stepping"), value
+    assert tree.vector("SEC-T-001")["hardware"] == 0, value
+
+
+def test_the_two_registries_share_one_board_vocabulary(tree):
+    """Not a second `re.compile`: two definitions of "which silicon" are two
+    answers, and the axis and its sibling row would drift apart on the value
+    neither of them was written against."""
+    assert evidence_gate.BOARD_REVISION is platform_gate.BOARD_REVISION
 
 
 def test_a_board_revision_with_no_result_on_it(tree):

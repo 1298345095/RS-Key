@@ -63,7 +63,12 @@ tree's is `matrix_gate.py`'s; whether a bundle carries the ten-group contract is
   board field nothing rests on cannot sit there while the axis reads 0. The
   third spelling is the review's: `expires_on_stepping` is the bundle schema's
   own board-dependency field and the first two rules walked straight past a
-  stepping named in it, which is closing one spelling of two all over again;
+  stepping named in it, which is closing one spelling of two all over again. And
+  the declaration itself is held to `platform_gate.py`'s vocabulary, not merely
+  to being non-empty: the token was shared and the RULE was not, so every OTHER
+  leaf was searched for a real stepping while `build.board_revision` took
+  anything — `"a red Pico 2 I had lying around"` published **1 of 59** carrying
+  a result measured on a board;
 * **an axis's reader must still reach the tree.** Each derivation is floored
   where its SOURCE exists and it found none of it — sessions with no replaying
   module, comutants resolving to no invariant, a ledger disposing of no
@@ -546,8 +551,19 @@ def vectors(root, findings):
                     " history does not have — an evidence date nothing can check"
                 )
             board = str(doc.get("build", {}).get(BOARD_FIELD, "")).strip()
+            # The same vocabulary the sibling registry is held to. Sharing the
+            # TOKEN and not the RULE was the gap: `board_mentions` searched every
+            # other leaf with it while the declaration itself took any non-empty
+            # string, and "a red Pico 2 I had lying around" published 1 of 59.
+            stepping = bool(BOARD_REVISION.search(board))
             reasons = hardware_claims(doc)
             mentions = [where for where in board_mentions(doc) if where != f"build.{BOARD_FIELD}"]
+            if board and not stepping:
+                findings.append(
+                    f"{pid}: its bundle records `build.{BOARD_FIELD}` {board!r},"
+                    " which names no RP2350 stepping — a part with a revision, not"
+                    " a description of a desk"
+                )
             if reasons and not board:
                 findings.append(
                     f"{pid}: its bundle claims a board result ({'; '.join(reasons)})"
@@ -567,7 +583,7 @@ def vectors(root, findings):
                     " result on it — a board field nothing rests on is decoration,"
                     " and the axis stays 0 while the page reads as if it did not"
                 )
-            vector["hardware"] += 1 if reasons and board else 0
+            vector["hardware"] += 1 if reasons and stepping else 0
             vector["freshness"], vector["commit"], vector["behind"] = verdict, commit, behind
 
         written = entry.get("status", "?")
