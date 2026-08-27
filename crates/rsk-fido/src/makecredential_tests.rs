@@ -2659,3 +2659,52 @@ fn the_trace_reader_reports_the_two_fields_the_gate_is_a_function_of() {
     // the mapper must not invent one from a default.
     assert_eq!(trace_request_flags(&[0xFF, 0xFF]), None);
 }
+
+/// §6.1.2 steps 7/10: with a PIN configured, a DISCOVERABLE credential still needs
+/// a pinUvAuthToken. The whole test is `has_data(EF_PIN)`, which answers the same
+/// `false` for "no PIN" and for a probe the flash could not serve — so a faulted
+/// read made the request look like one on an unprotected authenticator and minted
+/// the credential on user presence alone, `uv` clear.
+#[test]
+fn a_faulted_pin_probe_does_not_drop_the_makecredential_uv_gate() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let dev = Device {
+        serial_hash: &[0xAB; 32],
+        serial_id: &[1, 2, 3, 4, 5, 6, 7, 8],
+        otp_key: None,
+    };
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev, &mut fs, &mut rng).unwrap();
+    let mut pin_file = [0u8; 35];
+    pin_file[0] = 8; // retries
+    pin_file[1] = 4; // length
+    pin_file[2] = 1; // format
+    fs.put(EF_PIN, &pin_file).unwrap();
+
+    let req = build_request(true);
+    let mut out = [0u8; 1024];
+    let mut state = crate::FidoState::new();
+    let mut presence = crate::AlwaysConfirm;
+    // With the PIN readable the gate is the spec's: a token-less rk request is
+    // refused with PUAT_REQUIRED.
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev,
+        fs: &mut fs,
+        rng: &mut rng,
+        state: &mut state,
+        now_ms: 1000,
+    };
+    assert_eq!(
+        make_credential(&mut ctx, &req, &mut out),
+        Err(CtapError::PuatRequired)
+    );
+    medium.stick(Some(EF_PIN));
+    assert_eq!(
+        make_credential(&mut ctx, &req, &mut out),
+        Err(CtapError::Other),
+        "a faulted EF_PIN probe read as 'no PIN configured' and minted the credential"
+    );
+}

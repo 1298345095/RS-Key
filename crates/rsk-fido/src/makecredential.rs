@@ -493,7 +493,9 @@ fn enforce_pin<S: Storage, R: Rng>(
     rp_id_hash: &[u8; 32],
     proto: Option<PinProto>,
 ) -> Result<UvOutcome, CtapError> {
-    let pin_set = ctx.fs.has_data(EF_PIN);
+    // A probe the flash could not serve must not read as "no PIN configured": that
+    // is the arm that makes a discoverable credential on user presence alone.
+    let pin_set = ctx.fs.try_has_data(EF_PIN).map_err(|_| CtapError::Other)?;
     match req.pin_uv_auth_param {
         // Zero-length probe: a selection gesture — wait for a touch, then report
         // the PIN state. With no button configured this confirms instantly. CTAP 2.1

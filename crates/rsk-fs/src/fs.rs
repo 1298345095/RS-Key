@@ -99,6 +99,14 @@ pub struct Fs<S: Storage> {
     /// it was a `debug_assert!` — compiled out of the release image, where the drop
     /// then went entirely unrecorded (audit run-36).
     over_cap: bool,
+    /// Set by [`scan`](Self::scan) when the boot enumeration was cut short, so the
+    /// FIDs it never reached are unknown rather than absent. Only
+    /// [`present_slots`](Self::present_slots) reads it: the per-key probes fall
+    /// through to the backend on an undecided FID and are sound already, but the
+    /// slot bitmap answers from RAM alone and has no such fallback. Distinct from
+    /// "nothing decided yet" — a fresh `Fs` that has not scanned has an empty
+    /// `present` map and reports free, which is what it is.
+    scan_truncated: bool,
 }
 
 impl<S: Storage> Fs<S> {
@@ -110,6 +118,7 @@ impl<S: Storage> Fs<S> {
             present: [0u8; FID_PRESENT_BYTES],
             decided: [0u8; FID_PRESENT_BYTES],
             write_gen: 0,
+            scan_truncated: false,
         }
     }
 
@@ -169,17 +178,23 @@ impl<S: Storage> Fs<S> {
         self.decided[i] |= m;
     }
 
-    /// [`record`](Self::record), but only when the backend actually answered.
+    /// Judge one backend probe: `Err` iff the backend FAILED, `Ok(None)` only for
+    /// an absence it actually reported, and the answer cached only when there was
+    /// one.
     ///
-    /// `Storage::read`/`size` return `None` both for "absent" and for "the read
-    /// failed", and `record` sets the DECIDED bit — so caching a fault turns one
-    /// transient error into a permanent "file absent" for the rest of the boot,
-    /// opening every gate that reads `has_data` (audit run-36). An undecided FID is
-    /// simply re-probed next time, which is the pre-cache behaviour.
-    fn record_unless_faulted(&mut self, fid: u16, present: bool) {
-        if !self.storage.last_error() {
-            self.record(fid, present);
+    /// `Storage::read`/`size` return `None` for both outcomes. Caching a fault would
+    /// set the DECIDED bit and turn one transient error into a permanent "file
+    /// absent" for the rest of the boot (audit run-36); leaving the FID undecided
+    /// re-probes it next time, which is the pre-cache behaviour. Separating the two
+    /// at the RETURN is the other half, and the one the `try_*` probes publish —
+    /// see [`try_has_data`](Self::try_has_data).
+    #[inline]
+    fn settle<T>(&mut self, fid: u16, r: Option<T>) -> Result<Option<T>> {
+        if r.is_none() && self.storage.last_error() {
+            return Err(Error::MemoryFatal);
         }
+        self.record(fid, r.is_some());
+        Ok(r)
     }
 
     /// Mark `fid` known absent (sets the authority bit, clears present).
@@ -238,38 +253,61 @@ impl<S: Storage> Fs<S> {
         if complete {
             decided.fill(0xFF);
         }
+        self.scan_truncated = !complete;
     }
 
     /// Copy file contents into `buf`; returns the value's full length, or `None`.
+    ///
+    /// A probe the backend could not complete reads as an absence here — see
+    /// [`try_read`](Self::try_read) for when that collapse is not allowed.
     pub fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+        self.try_read(fid, buf).ok().flatten()
+    }
+
+    /// [`read`](Self::read) with the failed probe kept apart from the absence:
+    /// `Ok(None)` is a confirmed absence, `Err` is "the backend could not answer".
+    ///
+    /// An absent record is how this firmware spells *no gate configured* and *not
+    /// provisioned yet*, so a caller that takes `None` for a decision acts on a
+    /// flash fault — one faulted `EF_PIN` probe re-seeded PIV's factory PIN, PUK
+    /// and management key over the owner's. Use these `try_*` probes wherever the
+    /// absent arm overwrites configured material or opens a gate; the collapsing
+    /// ones stay right where an absence costs a status field or a repeated repair.
+    pub fn try_read(&mut self, fid: u16, buf: &mut [u8]) -> Result<Option<usize>> {
         if self.known_absent(fid) {
-            return None; // confirmed absent — skip the backend's full scan
+            return Ok(None); // confirmed absent — skip the backend's full scan
         }
         // Present or unknown: the backend (reliable per-key `fetch_item`) is the
         // source of truth; cache what it says so the next probe is O(1).
         let r = self.storage.read(fid, buf);
-        self.record_unless_faulted(fid, r.is_some());
-        r
+        self.settle(fid, r)
     }
 
-    /// Length of the file's contents, or `None` if absent.
+    /// Length of the file's contents, or `None` if absent (or unreadable — see
+    /// [`try_read`](Self::try_read)).
     pub fn size(&mut self, fid: u16) -> Option<usize> {
-        if self.known_absent(fid) {
-            return None;
-        }
-        let r = self.storage.size(fid);
-        self.record_unless_faulted(fid, r.is_some());
-        r
+        self.try_size(fid).ok().flatten()
     }
 
-    /// Whether the file exists with non-empty contents.
-    pub fn has_data(&mut self, fid: u16) -> bool {
+    /// [`size`](Self::size), fallible — see [`try_read`](Self::try_read).
+    fn try_size(&mut self, fid: u16) -> Result<Option<usize>> {
         if self.known_absent(fid) {
-            return false; // confirmed absent — skip the backend's full scan
+            return Ok(None);
         }
         let r = self.storage.size(fid);
-        self.record_unless_faulted(fid, r.is_some());
-        r.is_some_and(|n| n > 0)
+        self.settle(fid, r)
+    }
+
+    /// Whether the file exists with non-empty contents — `false` for an
+    /// unreadable one too, which is the collapse [`try_has_data`](Self::try_has_data)
+    /// exists to keep out.
+    pub fn has_data(&mut self, fid: u16) -> bool {
+        self.try_has_data(fid).unwrap_or(false)
+    }
+
+    /// [`has_data`](Self::has_data), fallible — see [`try_read`](Self::try_read).
+    pub fn try_has_data(&mut self, fid: u16) -> Result<bool> {
+        Ok(self.try_size(fid)?.is_some_and(|n| n > 0))
     }
 
     /// Invoke `f` once per live key in the backend, in a single storage pass.
@@ -289,7 +327,7 @@ impl<S: Storage> Fs<S> {
         self.storage.for_each_key(f)
     }
 
-    /// Fill `out[i]` with whether `base + i` is known present, read straight from
+    /// Fill `out[i]` with whether `base + i` may hold a record, read straight from
     /// the in-RAM present index — no backend scan. Occupancy-equivalent to a
     /// [`for_each_key`](Self::for_each_key) pass over the range (both derive from
     /// the boot [`scan`](Self::scan) seed, kept live by every `put`/`delete`), but
@@ -297,13 +335,22 @@ impl<S: Storage> Fs<S> {
     /// only the occupied-slot bitmap over a FID range (credMgmt enumerate,
     /// makeCredential dedup / free-slot); occupied slots must still be `read` for
     /// their data. A `present` bit is only ever set by a confirmed put/read, so a
-    /// stale-positive at worst costs one skipped `read`; the absent direction keeps
-    /// the same torn-migration semantics as the bulk pass (no new false-absent).
+    /// stale-positive at worst costs one skipped `read`.
+    ///
+    /// A clear `present` bit means two different things after a boot
+    /// [`scan`](Self::scan): a slot the walk proved empty, and — if a read fault cut
+    /// the walk short — one it never reached. `makeCredential` writes the first free
+    /// slot it is handed WITHOUT re-reading it, so answering the second "free"
+    /// overwrites a live credential. A truncated scan therefore reports the whole
+    /// range occupied, which costs capacity instead. Every other caller re-`read`s a
+    /// slot it was told is occupied and skips the empty ones, so the cost stops at
+    /// one wasted probe. A scan that COMPLETED is bit-for-bit the raw index, and a
+    /// fresh `Fs` that has not scanned still reports free — its store is empty.
     pub fn present_slots(&self, base: u16, out: &mut [bool]) {
         for (i, b) in out.iter_mut().enumerate() {
             *b = base
                 .checked_add(i as u16)
-                .is_some_and(|fid| self.present_bit(fid));
+                .is_some_and(|fid| self.scan_truncated || self.present_bit(fid));
         }
     }
 
@@ -563,6 +610,11 @@ impl<S: Storage> Fs<S> {
         self.has_data(fid.get())
     }
 
+    /// [`has_key`](Self::has_key), fallible — see [`try_read`](Self::try_read).
+    pub fn try_has_key(&mut self, fid: KeyFid) -> Result<bool> {
+        self.try_has_data(fid.get())
+    }
+
     /// Delete a key slot.
     pub fn delete_key(&mut self, fid: KeyFid) -> Result<()> {
         self.delete(fid.get())
@@ -573,15 +625,27 @@ impl<S: Storage> Fs<S> {
     // `read` reports the value's full length, which can exceed our scratch buffer
     // (corrupt/oversized EF_META), so clamp before slicing.
 
-    /// Copy the metadata for `fid` into `out`; returns its full length.
+    /// Copy the metadata for `fid` into `out`; returns its full length. An EF_META
+    /// read that FAILED reads as "no record" here — see
+    /// [`try_meta_find`](Self::try_meta_find).
     pub fn meta_find(&mut self, fid: u16, out: &mut [u8]) -> Option<usize> {
+        self.try_meta_find(fid, out).ok().flatten()
+    }
+
+    /// [`meta_find`](Self::meta_find), fallible — see [`try_read`](Self::try_read).
+    /// EF_META carries the PIV slots' algorithm and touch policy, and a missing
+    /// record there resolves to the published default, so the collapse costs a
+    /// touch gate.
+    pub fn try_meta_find(&mut self, fid: u16, out: &mut [u8]) -> Result<Option<usize>> {
         if self.known_absent(EF_META) {
-            return None;
+            return Ok(None);
         }
         let mut scratch = [0u8; META_MAX];
         let read = self.storage.read(EF_META, &mut scratch);
-        self.record_unless_faulted(EF_META, read.is_some());
-        let n = read?.min(scratch.len());
+        let Some(n) = self.settle(EF_META, read)? else {
+            return Ok(None);
+        };
+        let n = n.min(scratch.len());
         let blob = &scratch[..n];
         let mut i = 0;
         while i + META_REC_HDR <= blob.len() {
@@ -595,11 +659,11 @@ impl<S: Storage> Fs<S> {
             if rec_fid == fid {
                 let m = len.min(out.len());
                 out[..m].copy_from_slice(&blob[start..start + m]);
-                return Some(len);
+                return Ok(Some(len));
             }
             i = end;
         }
-        None
+        Ok(None)
     }
 
     /// Insert or replace the metadata for `fid`.

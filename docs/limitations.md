@@ -129,6 +129,18 @@ covers the security boundary. This page covers feature and hardware gaps.
   *Status: needs a fuse-rooted latch that closes the migration window once the
   device is provisioned; the analysis is audit run-27 #8, the decision is the
   maintainer's because it makes `lock-page58` load-bearing for boot correctness.*
+- **A flash read that fails still reads as an absent record in most of the
+  tree.** The store's `read` and `size` return the same "nothing there" for a key
+  that was never written and for one the medium could not serve, and an absent
+  record is how the firmware spells *not provisioned* and *no gate configured*.
+  Every place where that reading would overwrite configured material or open a
+  gate now uses a probe that keeps the two apart and refuses the command instead
+  — twelve sites across PIV, OpenPGP, FIDO and OATH. The rest still collapse them
+  on purpose: their absent arm reports a status field, repeats an idempotent
+  repair, or already fails closed. What is not settled is who can produce such a
+  fault on this hardware. A chip or bus fault does; whether a NOR power cut can is
+  a board measurement nobody has taken. *Status: the dangerous arm is closed; the
+  reachability question is open and belongs with `PLAT-FLASH-001`.*
 - **PIV data objects are access-gated, not sealed.** SP 800-73-4 pt1 Table 3
   gives four of them a read condition of PIN — Cardholder Fingerprints
   (`5FC103`), Facial Image (`5FC108`), Printed Information (`5FC109`) and Iris

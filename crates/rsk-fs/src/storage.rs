@@ -202,6 +202,105 @@ pub mod faults {
         }
     }
 
+    /// A RAM medium whose `read`/`size` of ONE chosen fid fail while every other
+    /// value still reads: the single faulted probe, aimed at the record a caller is
+    /// about to make a decision about.
+    ///
+    /// [`Storage::read`] answers `None` for that and for an absent key alike, and an
+    /// absent record is how this firmware spells *not provisioned* — so this is the
+    /// medium that separates "no PIN configured" from "I could not look". It reports
+    /// through [`Storage::last_error`] exactly as the device's `SeqStorage` does.
+    pub struct ProbeStuck {
+        inner: Rc<RefCell<RamStorage>>,
+        stuck: Rc<Cell<Option<u16>>>,
+        once: Rc<Cell<bool>>,
+        err: bool,
+    }
+
+    /// The other end of a [`ProbeStuck`]: arms the fault, and reads the medium past
+    /// `Fs`'s present cache — the only place a re-seed that really landed can be
+    /// told from one the cache merely reports.
+    pub struct ProbeMedium {
+        inner: Rc<RefCell<RamStorage>>,
+        stuck: Rc<Cell<Option<u16>>>,
+        once: Rc<Cell<bool>>,
+    }
+
+    impl ProbeStuck {
+        pub fn new() -> (Self, ProbeMedium) {
+            let inner = Rc::new(RefCell::new(RamStorage::new()));
+            let stuck = Rc::new(Cell::new(None));
+            let once = Rc::new(Cell::new(false));
+            (
+                Self {
+                    inner: inner.clone(),
+                    stuck: stuck.clone(),
+                    once: once.clone(),
+                    err: false,
+                },
+                ProbeMedium { inner, stuck, once },
+            )
+        }
+    }
+
+    impl ProbeMedium {
+        /// Fail every read of `fid` (`None` clears the fault).
+        pub fn stick(&self, fid: Option<u16>) {
+            self.stuck.set(fid);
+            self.once.set(false);
+        }
+        /// Fail the NEXT read of `fid` and then recover. A persistent fault is
+        /// caught by whichever guard reads the record first, so it cannot falsify
+        /// the ones further down the same command — the transient one can.
+        pub fn stick_once(&self, fid: u16) {
+            self.stuck.set(Some(fid));
+            self.once.set(true);
+        }
+        /// The bytes stored for `fid` ON THE MEDIUM, fault or no fault.
+        pub fn value(&self, fid: u16) -> Option<Vec<u8>> {
+            let mut buf = [0u8; crate::MAX_VALUE_BYTES];
+            let n = self.inner.borrow_mut().read(fid, &mut buf)?;
+            Some(buf[..n.min(buf.len())].to_vec())
+        }
+    }
+
+    impl Storage for ProbeStuck {
+        fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+            if self.stuck.get() == Some(fid) {
+                self.err = true;
+                if self.once.get() {
+                    self.stuck.set(None);
+                }
+                return None;
+            }
+            self.err = false;
+            self.inner.borrow_mut().read(fid, buf)
+        }
+        fn write(&mut self, fid: u16, data: &[u8]) -> Result<()> {
+            self.inner.borrow_mut().write(fid, data)
+        }
+        fn remove(&mut self, fid: u16) -> Result<()> {
+            self.inner.borrow_mut().remove(fid)
+        }
+        fn size(&mut self, fid: u16) -> Option<usize> {
+            if self.stuck.get() == Some(fid) {
+                self.err = true;
+                if self.once.get() {
+                    self.stuck.set(None);
+                }
+                return None;
+            }
+            self.err = false;
+            self.inner.borrow_mut().size(fid)
+        }
+        fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+            self.inner.borrow_mut().for_each_key(f)
+        }
+        fn last_error(&self) -> bool {
+            self.err
+        }
+    }
+
     /// A RAM medium whose `remove` refuses one chosen fid while every other value
     /// still deletes — the other half of a [`MetaStuck`], and the one a sweep must
     /// stop on. [`crate::Fs::force_delete_halves`] removes UNCONDITIONALLY, so the

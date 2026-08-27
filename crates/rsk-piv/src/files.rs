@@ -275,22 +275,30 @@ pub fn put_pin_verifier<S: Storage>(
     r
 }
 
+/// Is `fid` provisioned? A probe the medium could not answer is a memory failure
+/// here, never an absence: every guard below writes a FACTORY DEFAULT over the
+/// file it reads absent, so one faulted `EF_PIN` probe replaced the owner's
+/// verifier and `VERIFY 123456` opened the card. `Fs::has_data` collapses the two.
+fn provisioned<S: Storage>(fs: &mut Fs<S>, fid: u16) -> Result<bool, Sw> {
+    fs.try_has_data(fid).map_err(|_| Sw::MEMORY_FAILURE)
+}
+
 /// Create the PIN/PUK/retry files, the default management key and the F9
 /// attestation key + its self-signed P-384 certificate on first use.
 /// Idempotent — every step is guarded by a has-data check.
 pub fn scan_files<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng) -> Result<(), Sw> {
-    if !fs.has_data(EF_PIN) {
+    if !provisioned(fs, EF_PIN)? {
         put_pin_verifier(dev, fs, EF_PIN, &DEFAULT_PIN)?;
     }
-    if !fs.has_data(EF_PUK) {
+    if !provisioned(fs, EF_PUK)? {
         put_pin_verifier(dev, fs, EF_PUK, &DEFAULT_PUK)?;
     }
-    if !fs.has_data(EF_RETRIES) {
+    if !provisioned(fs, EF_RETRIES)? {
         let d = DEFAULT_RETRIES;
         fs.put(EF_RETRIES, &[d, d, d, d])
             .map_err(|_| Sw::MEMORY_FAILURE)?;
     }
-    let minted_mgm = !fs.has_key(key_fid(SLOT_CARDMGM));
+    let minted_mgm = !provisioned(fs, key_fid(SLOT_CARDMGM).get())?;
     if minted_mgm {
         let mut key = DEFAULT_MGM;
         let r = seal::seal_put(dev, fs, rng, key_fid(SLOT_CARDMGM), &key);
@@ -309,7 +317,8 @@ pub fn scan_files<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng) -
     // therefore an unconditional rewrite — `meta_add` replaces.
     let have_meta = {
         let mut meta = [0u8; 8];
-        fs.meta_find(key_fid(SLOT_CARDMGM).get(), &mut meta)
+        fs.try_meta_find(key_fid(SLOT_CARDMGM).get(), &mut meta)
+            .map_err(|_| Sw::MEMORY_FAILURE)?
             .is_some()
     };
     if minted_mgm || !have_meta {
@@ -344,7 +353,7 @@ pub fn scan_files<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng) -
                 .map_err(|_| Sw::MEMORY_FAILURE)?;
         }
     }
-    if !fs.has_key(key_fid(SLOT_ATTESTATION)) {
+    if !provisioned(fs, key_fid(SLOT_ATTESTATION).get())? {
         let key = PrivKey::generate(Curve::P384, &mut crate::EcRng(rng)).ok_or(Sw::EXEC_ERROR)?;
         seal::store_ec_key(dev, fs, rng, key_fid(SLOT_ATTESTATION), &key)?;
         let mut point = [0u8; MAX_EC_POINT];

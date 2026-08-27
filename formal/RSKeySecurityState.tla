@@ -46,9 +46,9 @@ CONSTANTS
 CONSTANTS
     BugResetGatesFirst,           \* reset.rs:82-83   two-phase wipe order
     BugCredBeforeRp,              \* credential.rs:832-852 registration order
-    BugTokenSurvivesPinChange,    \* clientpin.rs:313  resetPinUvAuthToken
-    BugSetPinKeepsPpuat,          \* clientpin.rs:214-218
-    BugChangePinKeepsPpuat,       \* clientpin.rs:302-306
+    BugTokenSurvivesPinChange,    \* clientpin.rs:316  resetPinUvAuthToken
+    BugSetPinKeepsPpuat,          \* clientpin.rs:217-221
+    BugChangePinKeepsPpuat,       \* clientpin.rs:305-309
     BugStopUsingKeepsPerms,       \* state.rs:584-599  stopUsingPinUvAuthToken
     BugNoConsumeAfterUp,          \* state.rs:560-571  GHSA-wqjm-653g-hgw3
     \* the three below cite crates/rsk-device/src/presence.rs -- the bare name
@@ -62,23 +62,23 @@ CONSTANTS
     BugBackupSealedNotAGate,      \* reset.rs:187-208 is_fido_gate_fid (run-36)
     BugConsumeKeepsMcGa,          \* state.rs:566-571  a narrowed 6.5.5.7 triad
     BugNoDropStaleCancelAtEntry,  \* crates/rsk-device/src/presence.rs:195-196
-    BugWrongPinKeepsToken,        \* clientpin.rs:783  the pre-E38 tree
+    BugWrongPinKeepsToken,        \* clientpin.rs:786  the pre-E38 tree
     BugSeedDoesNotLead,           \* reset.rs:67-79 / fs.rs `first`, pre-0x08BF
     BugNoTouchRequired,           \* the presence gate on mc / ga
     BugStateResetAfterWipe,       \* reset.rs:63-66 ctx.state.reset() ordering
     BugPanelCancelable,           \* the panel's half of request_cancel's scope test
     BugUnscopedOtpCancel,         \* crates/rsk-device/src/presence.rs:127
     BugLocalPinKeepsToken,        \* crates/rsk-display/src/gates.rs:146
-    BugSetPinOverExisting,        \* clientpin.rs:185-187 setPIN over a live PIN
+    BugSetPinOverExisting,        \* clientpin.rs:188-190 setPIN over a live PIN
     BugHostPreemptsLocalWait,     \* the button's owner, taken by a host command
     BugLocalPinIgnoresBudget,     \* crates/rsk-display/src/gates.rs:126-128
     BugPpuatIsAGate,              \* eab4b5c: EF_PAUTHTOKEN in the deferred phase
-    BugPinWriteBeforeRevoke,      \* clientpin.rs:214-218, :300-304 -- the order
+    BugPinWriteBeforeRevoke,      \* clientpin.rs:217-221, :300-304 -- the order
     \* The two halves of the token-less carve-out, one switch each, so a RED
     \* names which half was load-bearing -- the split TraceSecurity's own
     \* MutateUvNotRqd / MutateAlwaysUvArm already make one layer out.
-    BugUvNotRqdIgnoresRk,         \* makecredential.rs:543-545 makeCredUvNotRqd
-    BugTokenlessIgnoresAlwaysUv   \* makecredential.rs:537-539 the alwaysUv arm
+    BugUvNotRqdIgnoresRk,         \* makecredential.rs:545-547 makeCredUvNotRqd
+    BugTokenlessIgnoresAlwaysUv   \* makecredential.rs:539-541 the alwaysUv arm
 
 (* Mutation switches for the LIVENESS properties. Kept apart from the set above *)
 (* because they break no invariant -- a wedge is a perfectly safe state -- so    *)
@@ -97,7 +97,7 @@ CONSTANT BugFairnessFoldsLocalCeremony
 
 (* A PROPOSED fix, not a defect: order phase 1 of the reset sweep so no EF_RP  *)
 (* entry is dropped while its EF_CRED record is still live. The shipped        *)
-(* `sweep` batches both in `for_each_key` order, which fs.rs:280-283 documents *)
+(* `sweep` batches both in `for_each_key` order, which fs.rs:318-321 documents *)
 (* as store order rather than FID order, so the batch can delete the metadata  *)
 (* first. TRUE models the fix; FALSE is the tree as it stands.                 *)
 CONSTANT FixSweepDropsCredsBeforeRpEntries
@@ -105,7 +105,7 @@ CONSTANT FixSweepDropsCredsBeforeRpEntries
 (* A second PROPOSED fix. `authorize_cm` consults the persistent grant FIRST   *)
 (* and returns Ok with no PIN check (credmgmt.rs:240-242), so a leftover       *)
 (* EF_PAUTHTOKEN on a PIN-less key still authorizes the three read            *)
-(* subcommands. clientpin.rs:214-218 already names that torn state but closes  *)
+(* subcommands. clientpin.rs:217-221 already names that torn state but closes  *)
 (* only the exit where the user sets a PIN again. TRUE models refusing a       *)
 (* persistent grant when EF_PIN is absent -- one owner, one line.              *)
 CONSTANT FixPpuatRequiresPin
@@ -140,7 +140,7 @@ Symm == Permutations(RPs) \cup Permutations(Channels)
 
 (* PERM_* bits, state.rs:22-28. Restricted to the sets a host actually asks  *)
 (* for, which keeps the token's value space at 5 instead of 16: getPinToken  *)
-(* 0x05 grants exactly {mc,ga} (clientpin.rs:388-392), and                   *)
+(* 0x05 grants exactly {mc,ga} (clientpin.rs:391-395), and                   *)
 (* consume_after_user_presence leaves {} (lbw only, state.rs:568).           *)
 Perms    == {"mc", "ga", "cm", "acfg"}
 PermSets == { {}, {"mc","ga"}, {"cm"}, {"acfg"}, {"ga","acfg"} }
@@ -481,7 +481,7 @@ OtpCancelWait ==
 (***************************************************************************)
 
 \* THE FOUR CALL SITES DO NOT TEST THE SAME THING, and the difference is
-\* load-bearing. makeCredential (makecredential.rs:513-516) and getAssertion
+\* load-bearing. makeCredential (makecredential.rs:515-518) and getAssertion
 \* (getassertion.rs:384-387) test the MAC, `user_verified()` -- which is
 \* `in_use && user_verified` (state.rs:666-668) -- the permission bit and the
 \* rpId binding. authenticatorConfig (config.rs:243-245) and
@@ -520,13 +520,13 @@ UvRequired == pin.set \/ gate.alwaysUv
 OpGuard(p, rp)  == IF UvRequired THEN TokenGuardUv(p, rp) ELSE TRUE
 OpPolicy(p, rp) == IF UvRequired THEN TokenPolicy(p, rp) ELSE TRUE
 
-\* THE TOKEN-LESS CARVE-OUT -- makecredential.rs:527-546, the `None` arm of
+\* THE TOKEN-LESS CARVE-OUT -- makecredential.rs:529-548, the `None` arm of
 \* `enforce_pin`, which `assurance/token_refinement.toml` owns as the `UseMc`
 \* volatile writer and outcome producer. `disc` is the request's `rk`, an INPUT
 \* and not state, which is why the two arms below are a function of it:
-\*   makecredential.rs:537-539 -- CTAP 2.1 6.1.2 steps 6.2/6.4: alwaysUv with no
+\*   makecredential.rs:539-541 -- CTAP 2.1 6.1.2 steps 6.2/6.4: alwaysUv with no
 \*     way to verify refuses whatever `rk` says;
-\*   makecredential.rs:543-545 -- steps 7/10, makeCredUvNotRqd: with a PIN set a
+\*   makecredential.rs:545-547 -- steps 7/10, makeCredUvNotRqd: with a PIN set a
 \*     DISCOVERABLE credential still needs a token, a non-discoverable one does
 \*     not (issue #51).
 \* Step 6.3's third arm -- a pad UPGRADES a token-less request to built-in UV
@@ -587,7 +587,7 @@ ConsumedTok ==
              ELSE [tok EXCEPT !.perms = {}]
 
 \* makeCredential/getAssertion bind an unbound pinUvAuthToken to the request's
-\* rpId before consuming its permissions (makecredential.rs:521-523,
+\* rpId before consuming its permissions (makecredential.rs:523-525,
 \* getassertion.rs:394-396).
 BoundConsumedTok(r) ==
     LET consumed == ConsumedTok IN
@@ -596,11 +596,11 @@ BoundConsumedTok(r) ==
         ELSE consumed
 
 (***************************************************************************)
-(* clientPIN. clientpin.rs:318-395 (getPinToken) and :718-803 (the verify). *)
+(* clientPIN. clientpin.rs:321-398 (getPinToken) and :718-803 (the verify). *)
 (***************************************************************************)
 
-\* clientpin.rs:343-346 -- a PIN must exist, have budget, and the RAM soft lock
-\* must not be engaged. clientpin.rs:739 self-defends the decrement at zero.
+\* clientpin.rs:346-349 -- a PIN must exist, have budget, and the RAM soft lock
+\* must not be engaged. clientpin.rs:742 self-defends the decrement at zero.
 PinAttemptEnabled == pin.set /\ pin.retries > 0 /\ ~lock.soft
 
 \* The requirement the soft lock encodes: after MismatchLimit consecutive
@@ -609,20 +609,20 @@ PinAttemptEnabled == pin.set /\ pin.retries > 0 /\ ~lock.soft
 \* reset -- which is the whole point of ctap.rs:354-361.
 PinAttemptPolicy == pin.set /\ pin.retries > 0 /\ lock.policyMism < MismatchLimit
 
-\* clientpin.rs:742-808. The lockout ladder: spend, read back, compare.
+\* clientpin.rs:745-811. The lockout ladder: spend, read back, compare.
 PinAttempt(correct) ==
     /\ Idle
     /\ PinAttemptEnabled
     /\ viol' = IF PinAttemptPolicy THEN viol
                                    ELSE viol \cup {"NoAuthorizationBypass"}
     /\ IF correct
-         THEN \* clientpin.rs:802-803 reset the budget and the mismatch batch.
+         THEN \* clientpin.rs:805-806 reset the budget and the mismatch batch.
               /\ pin' = [pin EXCEPT !.retries = MaxRetries]
               /\ lock' = [soft |-> FALSE, mism |-> 0, policyMism |-> 0]
          ELSE LET r == pin.retries - 1 IN
               /\ pin' = [pin EXCEPT !.retries = r]
               /\ lock' = IF r = 0
-                           THEN lock            \* clientpin.rs:784-789 hard lock
+                           THEN lock            \* clientpin.rs:787-792 hard lock
                            ELSE [lock EXCEPT
                                    !.mism = lock.mism + 1,
                                    !.policyMism =
@@ -632,7 +632,7 @@ PinAttempt(correct) ==
                                    !.soft = (lock.mism + 1) >= MismatchLimit]
 
 \* getPinUvAuthTokenUsingPinWithPermissions: a correct PIN mints a fresh
-\* session token (clientpin.rs:418-431) and resets the credMgmt cursor
+\* session token (clientpin.rs:421-434) and resets the credMgmt cursor
 \* (state.rs:525-539).
 GetPinToken(ps, r) ==
     /\ PinAttempt(TRUE)
@@ -644,7 +644,7 @@ GetPinToken(ps, r) ==
     /\ upSpent' = FALSE
     /\ UNCHANGED << gate, store, pres, sys, op, snap, ram >>
 
-\* clientpin.rs:775 regenerates the ECDH key on a mismatch and :779 drops any
+\* clientpin.rs:778 regenerates the ECDH key on a mismatch and :779 drops any
 \* outstanding pinUvAuthToken with it, through all three doors -- measured off a
 \* YubiKey rather than taken from the spec, and it is the safe direction. The
 \* model used to say the token was untouched here, which is the tree as it stood
@@ -663,8 +663,8 @@ WrongPin ==
     /\ UNCHANGED << gate, store, pres, sys, op, snap, upSpent, ram >>
 
 \* getPinUvAuthTokenUsingPinWithPermissions with `pcmr`: mints the PERSISTENT
-\* token, a flash record that outlives the power cycle (clientpin.rs:411-416,
-\* seed.rs:291-302). Holding it IS the grant (credmgmt.rs:249-266).
+\* token, a flash record that outlives the power cycle (clientpin.rs:414-419,
+\* seed.rs:302-313). Holding it IS the grant (credmgmt.rs:249-266).
 MintPpuat ==
     /\ PinAttempt(TRUE)
     /\ gate' = [gate EXCEPT !.ppuat = TRUE, !.ppuatStale = FALSE]
@@ -679,9 +679,9 @@ MintPpuat ==
 \* It spends the SAME persistent retry counter the wire path spends -- a correct
 \* PIN refills it, a wrong one costs a try -- because
 \* `spend_and_verify_local_pin` is `spend_and_verify_pin_at(EF_PIN, ..)`
-\* (crates/rsk-fido/src/clientpin.rs:1077-1083). What it deliberately does NOT
+\* (crates/rsk-fido/src/clientpin.rs:1080-1086). What it deliberately does NOT
 \* touch is the CTAP session: no ECDH regeneration, no RAM 3-strikes lock, no
-\* journal (crates/rsk-fido/src/clientpin.rs:1071-1075). So this is not a
+\* journal (crates/rsk-fido/src/clientpin.rs:1074-1078). So this is not a
 \* PinAttempt: the pad neither consults `lock.soft` nor arms it, and the
 \* persistent 8-try counter is the whole gate. A host-soft-locked device still
 \* takes PIN entry at the pad, which is the documented recovery.
@@ -689,7 +689,7 @@ MintPpuat ==
 \* gate" while nothing could see it move: deleting it left the reachable space
 \* BIT-IDENTICAL at 79 985 500 states. `spend_and_verify_pin_at` refuses at zero
 \* before any compare and a correct PIN at zero must not refill
-\* (crates/rsk-fido/src/clientpin.rs:1111-1113), which is the same shape
+\* (crates/rsk-fido/src/clientpin.rs:1114-1116), which is the same shape
 \* PinAttemptEnabled / PinAttemptPolicy carry for the wire path.
 LocalPinGuard  == IF BugLocalPinIgnoresBudget THEN pin.set
                                               ELSE pin.set /\ pin.retries > 0
@@ -698,7 +698,7 @@ LocalPinEnabled == Idle /\ LocalPinGuard
 
 \* E66. A clientPIN refused at the pad is changePIN's failed old-PIN check
 \* performed locally, and over USB that check ends the host's outstanding
-\* pinUvAuthToken (clientpin.rs:783) -- so it must here too, or the panel is a
+\* pinUvAuthToken (clientpin.rs:786) -- so it must here too, or the panel is a
 \* door the revocation rule does not cover. `ends_host_token`
 \* (crates/rsk-display/src/gates.rs:139-146) is the Rust's own test and it is
 \* deliberately narrow in two ways the model reproduces: the FIDO scope only (the
@@ -726,7 +726,7 @@ LocalPinWrong ==
     /\ UNCHANGED << gate, store, lock, pres, sys, op, snap, upSpent, ram >>
 
 \* A correct PIN at the pad refills the persistent budget
-\* (crates/rsk-fido/src/clientpin.rs:1077-1083) and grants NOTHING host-visible:
+\* (crates/rsk-fido/src/clientpin.rs:1080-1086) and grants NOTHING host-visible:
 \* no token, no `pcmr`, no CCID security status. It also leaves the RAM soft lock
 \* armed, which fails closed -- the host stays blocked until a replug.
 LocalPinOk ==
@@ -741,7 +741,7 @@ LocalPinOk ==
 (* setPIN / changePIN -- multi-write, so a power cut has a position.        *)
 (***************************************************************************)
 
-\* clientpin.rs:185-187: a PIN already set may only be replaced by changePIN,
+\* clientpin.rs:188-190: a PIN already set may only be replaced by changePIN,
 \* which spends a retry and verifies the old one. setPIN carries no such check,
 \* so this test IS the authorization -- and it needs a Policy like every other
 \* gate here, not just an enabling conjunct. A step that is merely never ENABLED
@@ -760,7 +760,7 @@ SetPinStart ==
     /\ UNCHANGED << pin, gate, store, lock, tok, plat, pres, walk, sys, snap,
                     upSpent, ram >>
 
-\* THE ORDER IS THE REQUIREMENT, at both PIN flows (clientpin.rs:214-218 and
+\* THE ORDER IS THE REQUIREMENT, at both PIN flows (clientpin.rs:217-221 and
 \* :300-304, step 15 of 6.5.5.6). Revoke the persistent grant BEFORE the new
 \* verifier lands, or a power cut between the two writes leaves the old holder
 \* authorized against a PIN they no longer know -- and with the new PIN in place
@@ -790,13 +790,13 @@ SetPinWrite ==
     /\ snap' = NoSnap
     /\ UNCHANGED << gate, store, tok, plat, pres, walk, sys, upSpent, ram >>
 
-ChangePinStart == \* clientpin.rs:237-278: gates, then spend-and-verify.
+ChangePinStart == \* clientpin.rs:240-281: gates, then spend-and-verify.
     /\ PinAttempt(TRUE)
     /\ op' = [kind |-> "chpin", t |-> Fido, rp |-> NoRp, step |-> 0]
     /\ UNCHANGED << gate, store, tok, plat, pres, walk, sys, snap, upSpent,
                     ram >>
 
-\* clientpin.rs:302-306, step 15 of 6.5.5.6: revoke the persistent grant BEFORE
+\* clientpin.rs:305-309, step 15 of 6.5.5.6: revoke the persistent grant BEFORE
 \* the new verifier lands, or a power cut leaves the old holder authorized
 \* against a PIN they no longer know.
 ChangePinClearPpuat ==
@@ -809,7 +809,7 @@ ChangePinClearPpuat ==
     /\ UNCHANGED << pin, store, lock, tok, plat, pres, walk, sys, snap,
                     upSpent, viol, ram >>
 
-ChangePinWrite == \* clientpin.rs:307 store_new_pin
+ChangePinWrite == \* clientpin.rs:310 store_new_pin
     /\ op.kind = "chpin"
     /\ op.step = (IF BugPinWriteBeforeRevoke THEN 0 ELSE 1)
     /\ viol' = IF PinVerifierLandsPolicy THEN viol
@@ -820,7 +820,7 @@ ChangePinWrite == \* clientpin.rs:307 store_new_pin
     /\ snap' = NoSnap
     /\ UNCHANGED << gate, store, tok, plat, pres, walk, sys, upSpent, ram >>
 
-\* clientpin.rs:313 resetPinUvAuthToken -- RAM only, and it must end every
+\* clientpin.rs:316 resetPinUvAuthToken -- RAM only, and it must end every
 \* session credential the old PIN authorized (state.rs:525-539).
 ChangePinRotateToken ==
     /\ op.kind = "chpin" /\ op.step = 2
@@ -855,7 +855,7 @@ StopUsingToken ==
 (* makeCredential / getAssertion.                                          *)
 (***************************************************************************)
 
-\* makecredential.rs:511-519. Needs PERM_MC and a touch.
+\* makecredential.rs:513-521. Needs PERM_MC and a touch.
 RegisterStart(r, t) ==
     /\ Idle
     /\ ButtonFreeGuard
@@ -870,7 +870,7 @@ RegisterStart(r, t) ==
     \* buys the shipped tree no state at all. It exists to be MUTATED --
     \* BugUvNotRqdIgnoresRk drops the `disc` conjunct and a discoverable
     \* registration is then served with a PIN set and no token, which is the
-    \* defect deleting makecredential.rs:543-545 makes.
+    \* defect deleting makecredential.rs:545-547 makes.
     /\ (OpGuard("mc", r) \/ McTokenlessGuard(TRUE))
     /\ viol' = (IF OpPolicy("mc", r) \/ McTokenlessPolicy(TRUE)
                   THEN viol ELSE viol \cup TokenBypass)
@@ -932,8 +932,8 @@ RegisterWriteB ==
                     viol, ram >>
 
 \* THE NON-DISCOVERABLE REGISTRATION, and the reason it is not `RegisterStart`
-\* with a flag: it writes NOTHING. makecredential.rs:777-778 stores only under
-\* `req.rk`, and makecredential.rs:752-754 says why -- "a non-discoverable
+\* with a flag: it writes NOTHING. makecredential.rs:779-780 stores only under
+\* `req.rk`, and makecredential.rs:754-756 says why -- "a non-discoverable
 \* credential keeps no on-device state at all". So there is no `rp` to carry
 \* either: `store` is exactly what it observes per relying party, and a
 \* credential the device does not record is one it cannot tell apart from
@@ -1065,7 +1065,7 @@ BackupFinalize ==
 \* WIDER than the firmware in two directions, both sound: the model has no device
 \* lock, so it does not require the seed to be stored WRAPPED (only a locked
 \* device has an EF_KEY_DEV_ENC to open), and it omits AUT_DISABLE
-\* (config.rs:417-418), which only ever CLEARS the copy.
+\* (config.rs:429-430), which only ever CLEARS the copy.
 DeviceUnlock ==
     /\ Idle
     /\ store.seed
@@ -1660,7 +1660,7 @@ NoTokenAfterInvalidation ==
     \* zero permissions is the whole defence (state.rs:552-553).
     /\ ~(plat.held /\ plat.revoked /\ tok.perms # {})
     \* And every path that revokes the persistent grant must DELETE the record,
-    \* not merely stop honouring it (clientpin.rs:214-218, :300-304).
+    \* not merely stop honouring it (clientpin.rs:217-221, :300-304).
     /\ ~(gate.ppuat /\ gate.ppuatStale)
 
 \* The three flash-shaped invariants below are asserted over QUIESCENT states

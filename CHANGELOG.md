@@ -80,6 +80,53 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   configurations, the floors and the two scripts. Empty over the 32 commits since
   the recorded run.
 
+### Security
+
+- **One faulted flash probe re-seeded the factory PIN, PUK and management key at
+  an unauthenticated PIV `SELECT`.** `Storage::read`/`size` answer the same `None`
+  for "no such record" and for "that read failed", and an absent record is how
+  this firmware spells *not provisioned yet* and *no gate configured* — so the two
+  collapse at the place it costs most. Measured over one faulted `EF_PIN` probe:
+  `SELECT` → `9000`, the PIN record replaced byte-for-byte with the `DEFAULT_PIN`
+  verifier, `VERIFY` of the owner's PIN → `63C2`, `VERIFY 123456` → `9000`. It is
+  a class, not a site, and PIV was not the worst of it: FIDO's `ensure_seed` ran
+  the same guard over `EF_KEY_DEV` at **boot**, so one faulted probe minted a new
+  device seed over the live one and every credential derived from it — no host
+  command involved. Also measured re-seeded: OpenPGP's `PW1` verifier (`123456`
+  then verifies, and the owner's PW1 does not), the PIV management key, the FIDO
+  signature counter and large-blob array. And the gates: OATH's OTP-PIN check
+  handed the stored passwords to an unauthenticated host, `clientPin`'s `setPIN`
+  let one install a PIN over the owner's, `alwaysUv` resolved to the compile
+  default, and the makeCredential and largeBlobs UV gates both dropped to user
+  presence.
+
+  `Fs` published no way to tell an absence from a failed read — the distinction
+  existed inside the crate (`Storage::last_error`, used to keep the present-cache
+  honest) and stopped at its edge, so "check whether the read faulted" was not
+  expressible at a call site. It is now: `Fs::try_read`, `try_has_data`,
+  `try_has_key` and `try_meta_find` answer `Err` for a probe the backend could not
+  complete and `Ok` only for one it answered, and the collapsing `read`/`has_data`
+  /`meta_find` are defined in terms of them, so the collapse is one visible line
+  per method instead of a property of the type. Twelve sites across five crates
+  took the fallible probe — every one whose *absent* arm overwrites configured
+  material or opens a gate. Sites where the absent arm only reports a status
+  field, repeats an idempotent repair, or fails the command closed keep
+  `has_data`; they are named in `try_read`'s documentation rather than converted.
+
+- **A boot scan a read fault cut short made every credential slot it never
+  reached read FREE, and `makeCredential` writes a free slot without re-reading
+  it.** `Fs::present_slots` answered from the raw present bit, which is clear both
+  for a slot the walk proved empty and for one the walk never got to — measured,
+  a truncated scan gave `[false, false, false, false]` over a range where
+  `Fs::read` still returned the live record. The two are the same class as the
+  faulted probe above, one call out: `for_each_key`'s completeness flag was
+  already captured by `scan` and then used for nothing but the decided-bitmap
+  fill. `scan` remembers it now, and a range it could not enumerate reports
+  occupied — `credential_store` answers `KEY_STORE_FULL` instead of minting over a
+  live passkey, and every other reader re-`read`s the slot it was told about and
+  skips the empty ones. A scan that COMPLETED is bit-for-bit the old answer, and a
+  fresh `Fs` that has not scanned still reports free.
+
 ### Fixed
 
 - **Three ceilings shipped with the defect their own series had measured.**

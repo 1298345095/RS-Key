@@ -1516,7 +1516,10 @@ pub fn protect_mgm_key<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn R
     // Read any existing PivmanData up front (before the writes below), so the new
     // record can carry its timestamp / flags forward.
     let mut prior_buf = [0u8; 64];
-    let prior = match fs.read(EF_PIVMAN_DATA, &mut prior_buf) {
+    let Ok(prior_len) = fs.try_read(EF_PIVMAN_DATA, &mut prior_buf) else {
+        return Sw::MEMORY_FAILURE;
+    };
+    let prior = match prior_len {
         Some(n) => &prior_buf[..n.min(prior_buf.len())],
         None => &[][..],
     };
@@ -1528,8 +1531,15 @@ pub fn protect_mgm_key<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn R
     // property of the key bytes, so re-keying does not retire it; anything but a
     // stored ALWAYS resolves to the published default, which keeps a spurious or
     // torn record from inventing one.
+    // `try_meta_find`, not `meta_find`: a head the medium could not read answers the
+    // same `None` as one that was never written, and the default it resolves to is
+    // TOUCHPOLICY_NEVER — so a faulted probe would retire the owner's touch gate on
+    // the way through, and the rebuild below would make that permanent.
     let mut cur = [0u8; 8];
-    let touch = match fs.meta_find(key_fid(SLOT_CARDMGM).get(), &mut cur) {
+    let Ok(head) = fs.try_meta_find(key_fid(SLOT_CARDMGM).get(), &mut cur) else {
+        return Sw::MEMORY_FAILURE;
+    };
+    let touch = match head {
         Some(n) if n >= 3 && cur[2] == TOUCHPOLICY_ALWAYS => TOUCHPOLICY_ALWAYS,
         _ => TOUCHPOLICY_NEVER,
     };

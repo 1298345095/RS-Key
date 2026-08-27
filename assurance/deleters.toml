@@ -72,7 +72,7 @@ head_minters = ["crates/rsk-piv"]
 
 [[site]]
 file = "crates/rsk-fido/src/config.rs"
-line = 344
+line = 356
 call = "ctx.fs.delete(EF_ALWAYS_UV).map_err(|_| CtapError::Other)?;"
 verb = "delete"
 answer = "read"
@@ -83,7 +83,7 @@ why = "the record IS the alwaysUv policy, and toggleAlwaysUv's whole effect is m
 
 [[site]]
 file = "crates/rsk-fido/src/config.rs"
-line = 377
+line = 389
 call = ".and_then(|()| ctx.fs.delete_key(EF_KEY_DEV))"
 verb = "delete_key"
 answer = "read"
@@ -94,7 +94,7 @@ why = "AUT_ENABLE wraps the seed and then drops the plain copy: a survivor means
 
 [[site]]
 file = "crates/rsk-fido/src/config.rs"
-line = 416
+line = 428
 call = ".delete_key(EF_KEY_DEV_ENC)"
 verb = "delete_key"
 answer = "read"
@@ -105,7 +105,7 @@ why = "AUT_DISABLE's mirror — a surviving wrapped copy keeps lock_engaged true
 
 [[site]]
 file = "crates/rsk-fido/src/config.rs"
-line = 429
+line = 441
 call = "ctx.fs.delete(EF_EA_RPIDS).map_err(|_| CtapError::Other)?;"
 verb = "delete"
 answer = "read"
@@ -226,14 +226,14 @@ why = "the sweep. Best-effort in the sense that a torn wipe is a state the desig
 
 [[site]]
 file = "crates/rsk-fido/src/seed.rs"
-line = 327
+line = 338
 call = "fs.force_delete(EF_PAUTHTOKEN.get())"
 verb = "force_delete"
 answer = "read"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "must-read"
-why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared. The folded answer is kept deliberately (reviewed 0x0989): the record half here is only ever the shared blob being unreadable, but that is equally true of vendor.rs:425/428 and crates/rsk-openpgp/src/putdata.rs:151/155, and splitting the halves for this caller alone would re-open the swallowed drop 0x0987 closed. One-shot commands lose the command, not a sweep's range."
+why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared. The folded answer is kept deliberately (reviewed 0x0989): the record half here is only ever the shared blob being unreadable, but that is equally true of vendor.rs:425/428 and crates/rsk-openpgp/src/putdata.rs:159/165, and splitting the halves for this caller alone would re-open the swallowed drop 0x0987 closed. One-shot commands lose the command, not a sweep's range."
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
@@ -303,7 +303,7 @@ why = "VERIFY PIN raises the same validated flag VALIDATE does, so an OTP-PIN th
 
 [[site]]
 file = "crates/rsk-oath/src/lib.rs"
-line = 1543
+line = 1553
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -314,7 +314,7 @@ why = "wipe_oath's sweep, credentials first then the unlock records; OATH fids c
 
 [[site]]
 file = "crates/rsk-openpgp/src/init.rs"
-line = 164
+line = 178
 call = "let _ = fs.delete(EF_RC);"
 verb = "delete"
 answer = "discarded"
@@ -325,7 +325,7 @@ why = "scan_files runs neutralize_default_reset_code and it is idempotent, so a 
 
 [[site]]
 file = "crates/rsk-openpgp/src/init.rs"
-line = 165
+line = 179
 call = "let _ = fs.delete_key(EF_DEK_RC);"
 verb = "delete_key"
 answer = "discarded"
@@ -402,8 +402,8 @@ why = "the DEK sealed under that reset code. A survivor of either half leaves th
 
 [[site]]
 file = "crates/rsk-openpgp/src/putdata.rs"
-line = 151
-call = "if fs.has_key(slot) && fs.force_delete(slot.get()).is_err() {"
+line = 159
+call = "Ok(true) if fs.force_delete(slot.get()).is_err() => return Sw::MEMORY_FAILURE,"
 verb = "force_delete"
 answer = "read"
 class = "secret-or-gate"
@@ -413,8 +413,8 @@ why = "SEC-POL-003: changing a slot's algorithm attribute invalidates its key, a
 
 [[site]]
 file = "crates/rsk-openpgp/src/putdata.rs"
-line = 155
-call = "if fs.has_data(public) && fs.force_delete(public).is_err() {"
+line = 165
+call = "Ok(true) if fs.force_delete(public).is_err() => return Sw::MEMORY_FAILURE,"
 verb = "force_delete"
 answer = "read"
 class = "secret-or-gate"
@@ -424,7 +424,7 @@ why = "the public half of the same invalidation — a point still served for a k
 
 [[site]]
 file = "crates/rsk-openpgp/src/putdata.rs"
-line = 198
+line = 209
 call = "let _ = fs.delete(target);"
 verb = "delete"
 answer = "discarded"
@@ -479,7 +479,7 @@ why = "and its second. Both slots' valid bits come off flash in the response tha
 
 [[site]]
 file = "crates/rsk-piv/src/files.rs"
-line = 484
+line = 493
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"

@@ -1029,8 +1029,14 @@ impl<'a> OathApplet<'a> {
     /// A store with neither a code nor a PIN stays open, as YKOATH intends for a
     /// code-less applet — this only makes the credential the owner *did* create
     /// mean something.
+    /// A probe the medium could not answer is refused, not read as "no PIN set":
+    /// `Fs::has_data` collapses the two, and the absent arm here hands the stored
+    /// credentials to an unauthenticated host.
     fn otp_pin_gate<S: Storage>(&self, fs: &mut Fs<S>) -> Result<(), Sw> {
-        if fs.has_data(EF_OTP_PIN) && !self.otp_pin_verified {
+        let set = fs
+            .try_has_data(EF_OTP_PIN)
+            .map_err(|_| Sw::MEMORY_FAILURE)?;
+        if set && !self.otp_pin_verified {
             return Err(Sw::SECURITY_STATUS_NOT_SATISFIED);
         }
         Ok(())
@@ -1056,8 +1062,12 @@ impl<'a> OathApplet<'a> {
         {
             return Sw::SECURITY_STATUS_NOT_SATISFIED;
         }
-        if fs.has_data(EF_OTP_PIN) {
-            return Sw::CONDITIONS_NOT_SATISFIED;
+        // A faulted probe must not read as "no PIN yet": that arm overwrites the
+        // owner's OTP-PIN with the caller's.
+        match fs.try_has_data(EF_OTP_PIN) {
+            Ok(true) => return Sw::CONDITIONS_NOT_SATISFIED,
+            Err(_) => return Sw::MEMORY_FAILURE,
+            Ok(false) => {}
         }
         let Some(pw) = find_tag(&apdu.data[..apdu.nc], TAG_PASSWORD as u16) else {
             return Sw::WRONG_DATA;

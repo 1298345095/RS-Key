@@ -1414,7 +1414,7 @@ fn wrong_pin_decrements_then_locks_out() {
 fn the_legacy_get_pin_token_refuses_an_rp_id() {
     // CTAP 2.1 §6.5.5.7: subCommand 5 takes neither permissions nor an rpId —
     // it grants the fixed mc|ga set and no rp binding. The refusal was held by
-    // nothing: `clientpin.rs:392` hands `req.rp_id` to `issue_token` whatever the
+    // nothing: `clientpin.rs:395` hands `req.rp_id` to `issue_token` whatever the
     // subcommand, so relaxing the guard mints a legacy token BOUND to an rp the
     // caller named. Found by the reverse mutation pass (D2).
     let (mut fs, mut rng) = setup();
@@ -2229,9 +2229,9 @@ fn cose_with_alg(x: &[u8; 32], y: &[u8; 32], alg: Option<i64>) -> std::vec::Vec<
 /// them holds back.
 ///
 /// `pinHashEnc` arrives straight from the CBOR decoder (`clientpin.rs:91`) and
-/// nothing bounds it; `macd` is `[0u8; 112]` and `clientpin.rs:256` copies
+/// nothing bounds it; `macd` is `[0u8; 112]` and `clientpin.rs:259` copies
 /// `newPinEnc ‖ pinHashEnc` into it BEFORE the MAC is verified. Widen that guard
-/// (`clientpin.rs:241-243`) to `&&` — the shape a cargo-mutants MISSED row left
+/// (`clientpin.rs:244-246`) to `&&` — the shape a cargo-mutants MISSED row left
 /// open with "the consequence is not yet determined" — and a correct `newPinEnc`
 /// with an over-long `pinHashEnc` walks past it into a slice-index panic,
 /// unauthenticated. Both protocols, because 112 is `80 + 32` on two and `64 + 48`
@@ -2523,4 +2523,51 @@ fn a_torn_change_pin_never_leaves_the_grant_under_the_new_pin() {
     }
     assert!(saw_torn, "vacuous: no budget tore the change");
     assert!(saw_landed, "vacuous: no budget landed the new verifier");
+}
+
+/// setPIN's only guard is `has_data(EF_PIN)`, so a probe the flash could not serve
+/// let an unauthenticated host install its own PIN over the owner's — the case
+/// `Storage::last_error` was added for (audit run-36) and the half of it the
+/// present-cache alone never closed: nothing is memoised, and the single call
+/// still answers "no PIN set".
+#[test]
+fn a_faulted_probe_does_not_let_setpin_replace_the_owners_pin() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    let mut state = FidoState::new();
+    let plat = key_agreement(&mut fs, &mut rng, &mut state, PinProto::Two, 2);
+    let mut out = [0u8; 256];
+    run(
+        &mut fs,
+        &mut rng,
+        &mut state,
+        &plat.set_pin_req(PIN),
+        &mut out,
+    )
+    .unwrap();
+    let owner = medium
+        .value(EF_PIN)
+        .expect("the owner's PIN record is on the medium");
+
+    medium.stick(Some(EF_PIN));
+    let plat2 = key_agreement(&mut fs, &mut rng, &mut state, PinProto::Two, 2);
+    assert_eq!(
+        run(
+            &mut fs,
+            &mut rng,
+            &mut state,
+            &plat2.set_pin_req(NEW_PIN),
+            &mut out
+        ),
+        Err(CtapError::Other),
+        "setPIN over a PIN it could not read must fail, not install a new one"
+    );
+    assert_eq!(
+        medium.value(EF_PIN).as_deref(),
+        Some(&owner[..]),
+        "a faulted EF_PIN probe let setPIN replace the owner's PIN"
+    );
 }

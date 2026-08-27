@@ -321,12 +321,24 @@ const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
 /// applies. authenticatorReset deletes the record, so a reset returns to that
 /// default. Used by getInfo (`options.alwaysUv`) and the makeCredential /
 /// getAssertion UV gate.
+/// A record the medium could not read resolves to ON, not to the compile default:
+/// this is the UV requirement for every makeCredential and getAssertion, and
+/// `Fs::read` answers the same `None` for "never configured" and "that read
+/// failed" — so a faulted probe dropped the gate to user presence. See
+/// [`always_uv_state`].
 pub(crate) fn always_uv_enabled<S: Storage>(fs: &mut Fs<S>) -> bool {
+    always_uv_state(fs).unwrap_or(true)
+}
+
+/// [`always_uv_enabled`] with the failed read kept apart from the absence, for
+/// `toggleAlwaysUv` — which flips the value it reads, so answering it the strict
+/// way would turn one faulted probe into an explicit stored OFF.
+fn always_uv_state<S: Storage>(fs: &mut Fs<S>) -> rsk_sdk::error::Result<bool> {
     let mut v = [0u8; 1];
-    match fs.read(EF_ALWAYS_UV, &mut v) {
+    Ok(match fs.try_read(EF_ALWAYS_UV, &mut v)? {
         Some(n) if n >= 1 => v[0] != 0,
         _ => DEFAULT_ALWAYS_UV,
-    }
+    })
 }
 
 /// `toggleAlwaysUv` (CTAP 2.1 §6.11): flip the alwaysUv state. While enabled,
@@ -339,7 +351,7 @@ pub(crate) fn always_uv_enabled<S: Storage>(fs: &mut Fs<S>) -> bool {
 /// before and only an `always-uv` build ever writes the `[0]` explicit-off. State
 /// persists until authenticatorReset (flash, CTAP 2.1).
 fn toggle_always_uv<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
-    let next = !always_uv_enabled(ctx.fs);
+    let next = !always_uv_state(ctx.fs).map_err(|_| CtapError::Other)?;
     if next == DEFAULT_ALWAYS_UV {
         ctx.fs.delete(EF_ALWAYS_UV).map_err(|_| CtapError::Other)?;
     } else {

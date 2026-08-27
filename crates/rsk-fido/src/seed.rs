@@ -80,7 +80,18 @@ const ENCID_SALT: [u8; 32] = [0u8; 32];
 pub const LOCK_BLOB_LEN: usize = 12 + 32 + 16;
 
 /// Whether the soft lock is engaged (the wrapped blob is what's on flash).
+/// A probe the medium could not answer reads as ENGAGED — every caller treats
+/// `true` as "refuse until unlocked", and [`ensure_seed`] treats it as "do not
+/// mint a seed over this one" (see [`lock_state`]).
 pub fn lock_engaged<S: Storage>(fs: &mut Fs<S>) -> bool {
+    lock_state(fs).unwrap_or(true)
+}
+
+/// [`lock_engaged`] with a failed probe kept apart from an absence.
+/// `Fs::has_key` answers the same `false` for both, and this pair is what
+/// `ensure_seed` decides seed regeneration on — the one write on the device that
+/// destroys every credential derived from the old seed.
+pub fn lock_state<S: Storage>(fs: &mut Fs<S>) -> Result<bool> {
     // Both halves, not just the sealed copy. `aut_enable` writes `EF_KEY_DEV_ENC`
     // and *then* deletes the plaintext `EF_KEY_DEV`; a power cut between the two
     // left both records, and testing only the sealed one reported `locked: true`
@@ -88,7 +99,7 @@ pub fn lock_engaged<S: Storage>(fs: &mut Fs<S>) -> bool {
     // operation worked and BACKUP_EXPORT still handed out the seed without the lock
     // key. Reading the torn state as *unlocked* is the truth, and it lets
     // `rsk lock enable` simply be retried (audit run-33).
-    fs.has_key(EF_KEY_DEV_ENC) && !fs.has_key(EF_KEY_DEV)
+    Ok(fs.try_has_key(EF_KEY_DEV_ENC)? && !fs.try_has_key(EF_KEY_DEV)?)
 }
 
 /// Wrap the seed value under a host-supplied 32-byte lock key (AUT_ENABLE).
@@ -556,8 +567,8 @@ pub fn migrate_keydev_pin<S: Storage>(dev: &Device, fs: &mut Fs<S>, pin_hash: &[
 /// the seed is unreadable here anyway).
 /// Refines `RSKeySecurityState!RamNeverOutlivesFlashSeed` — SEC-FIDO-007.
 pub fn ensure_seed<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut impl Rng) -> Result<()> {
-    let locked = lock_engaged(fs);
-    if !fs.has_key(EF_KEY_DEV) && !locked {
+    let locked = lock_state(fs)?;
+    if !fs.try_has_key(EF_KEY_DEV)? && !locked {
         let mut seed = [0u8; 32];
         loop {
             rng.fill(&mut seed);
@@ -569,10 +580,13 @@ pub fn ensure_seed<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut impl Rng)
         seed.zeroize();
         r?;
     }
-    if !fs.has_data(EF_COUNTER) {
+    // Not `has_data`: a faulted probe here would roll the signature counter back
+    // to zero and overwrite the large-blob array — the same absent-means-first-boot
+    // reading the seed guard above makes, at two records the owner cannot rebuild.
+    if !fs.try_has_data(EF_COUNTER)? {
         fs.put(EF_COUNTER, &[0u8; 4])?;
     }
-    if !fs.has_data(EF_LARGEBLOB) {
+    if !fs.try_has_data(EF_LARGEBLOB)? {
         fs.put(EF_LARGEBLOB, &LARGEBLOB_INITIAL)?;
     }
     if !locked {

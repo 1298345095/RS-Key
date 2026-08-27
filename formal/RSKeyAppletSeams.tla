@@ -119,7 +119,7 @@ VARIABLES
     \* only status here that is a two-part thing.
     fresh,
     \* Whether OATH has an access code provisioned. It decides what a SELECT
-    \* means: `validated = !code_set` (crates/rsk-oath/src/lib.rs:1215-1219), so
+    \* means: `validated = !code_set` (crates/rsk-oath/src/lib.rs:1225-1229), so
     \* a code-less applet is unlocked by design and only a provisioned one has a
     \* status a SELECT can take away.
     oathCodeSet,
@@ -176,7 +176,7 @@ Init ==
 \* Every status an applet owns, gone. This is `Session::reset`
 \* (crates/rsk-piv/src/lib.rs:199-203), `pin::Session::reset`
 \* (crates/rsk-openpgp/src/pin.rs:67-80) and OATH's `deselect`
-\* (crates/rsk-oath/src/lib.rs:1185-1189) -- three functions, one meaning.
+\* (crates/rsk-oath/src/lib.rs:1195-1199) -- three functions, one meaning.
 ClearedFor(h, a) ==
     [r \in Refs |-> IF RefOwner(r) = a
                       THEN (r = "oathCode" /\ ~oathCodeSet) ELSE h[r]]
@@ -193,7 +193,7 @@ AllCleared == [r \in Refs |-> r = "oathCode" /\ ~oathCodeSet]
 \* 800-73-4 pt2 3.1.1 makes it a `shall`, OpenPGP 3.4.1 4.2 says access status
 \* holds until a select to a DIFFERENT DF, and a YubiKey 5.7.4 was measured
 \* keeping all of it). OATH does not: it ignores the flag and re-locks
-\* (crates/rsk-oath/src/lib.rs:1193), which is a recorded, deliberate asymmetry
+\* (crates/rsk-oath/src/lib.rs:1203), which is a recorded, deliberate asymmetry
 \* rather than an oversight -- it has no oracle reading behind it.
 Reselect(a) ==
     /\ sel = a
@@ -298,7 +298,7 @@ PgpChangeRefused(r) ==
     /\ refused' = r
     /\ UNCHANGED << sel, fresh, pfresh, oneShotSig, oathCodeSet, viol >>
 
-\* OATH VERIFY PIN (crates/rsk-oath/src/lib.rs:1157-1172) clears BOTH flags at
+\* OATH VERIFY PIN (crates/rsk-oath/src/lib.rs:1167-1182) clears BOTH flags at
 \* entry and re-sets them only on success: `validated` is reachable THROUGH the
 \* OTP PIN as well as through the access code, so one bool carries two
 \* provenances and both have to fall.
@@ -311,7 +311,7 @@ OathVerifyOtpPin(ok) ==
     /\ UNCHANGED << sel, fresh, pfresh, oneShotSig, psig, oathCodeSet, viol >>
 
 \* aa47867: a refused CHANGE of the OTP PIN drops the standing authentication,
-\* both halves (crates/rsk-oath/src/lib.rs:1134-1135). Before it, `0xB2` VERIFY
+\* both halves (crates/rsk-oath/src/lib.rs:1144-1145). Before it, `0xB2` VERIFY
 \* closed the safe on a wrong PIN and `0xB3` CHANGE did not -- so the whole retry
 \* budget could be burned through CHANGE while GET CREDENTIAL went on serving
 \* the stored password.
@@ -534,7 +534,7 @@ PowerCycle ==
 \* step that changes nothing, so a mutant that made it reach would be visible.
 FidoReset == UNCHANGED vars
 
-\* `Fs::factory_wipe` (crates/rsk-fs/src/fs.rs:348-395) is FLASH-only: it never
+\* `Fs::factory_wipe` (crates/rsk-fs/src/fs.rs:395-442) is FLASH-only: it never
 \* sees an applet, so every in-RAM status here stands over freshly-defaulted
 \* verifiers until the reboot both callers queue immediately after
 \* (crates/rsk-device/src/ccid.rs:310-319, crates/rsk-display/src/pin.rs:681-689).

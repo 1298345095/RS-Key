@@ -182,7 +182,10 @@ fn set_pin<S: Storage, R: Rng>(
     require_pin_inputs(req, true, false)?;
     // §6.5.5.5: "If a PIN has already been set, authenticator returns
     // CTAP2_ERR_PIN_AUTH_INVALID error" — changePIN is the only way to replace one.
-    if ctx.fs.has_data(EF_PIN) {
+    // Not `has_data`: it answers the same `false` for "no PIN" and for a probe the
+    // flash could not serve, and this is the whole guard — so a faulted read let an
+    // unauthenticated host install its own PIN over the owner's.
+    if ctx.fs.try_has_data(EF_PIN).map_err(|_| CtapError::Other)? {
         return Err(CtapError::PinAuthInvalid);
     }
     let new_pin_enc = req.new_pin_enc.unwrap();

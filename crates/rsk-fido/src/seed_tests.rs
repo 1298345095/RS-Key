@@ -2,6 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
+use crate::consts::EF_COUNTER;
 use rsk_fs::storage::ram::RamStorage;
 
 /// Test-only: `seed` AES-CBC-encrypted under `dev`'s arm (fixed serial-hash IV)
@@ -539,4 +540,52 @@ fn enc_identifier_is_not_the_seed_nor_the_at_rest_key() {
     let mut sibling = [0u8; 16];
     hkdf_sha256(d.serial_hash, &seed, INFO_SEED_ENC, &mut sibling).unwrap();
     assert_ne!(id, sibling, "labels must separate the domains");
+}
+
+/// A faulted `EF_KEY_DEV` probe must not mint a new device seed over the one on
+/// flash — every credential the key holds is derived from it, so that write is
+/// the most destructive one this firmware makes.
+///
+/// `Fs::has_key` answers the same `false` for "never provisioned" and for a probe
+/// the medium could not serve, and `ensure_seed`'s first-boot guard is exactly
+/// that test — `lock_engaged` included, which is why both halves are fallible now.
+#[test]
+fn a_faulted_probe_does_not_mint_a_second_device_seed() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&d, &mut fs, &mut SeqRng(1)).unwrap();
+    let seed = load_keydev(&d, &mut fs).expect("the device seed is provisioned");
+    let stored = medium
+        .value(EF_KEY_DEV.get())
+        .expect("and is on the medium");
+    let counter = medium
+        .value(EF_COUNTER)
+        .expect("so is the signature counter");
+
+    // The next boot re-runs `ensure_seed`, with EF_KEY_DEV's reads faulting.
+    let mut fs = Fs::new(fs.into_storage());
+    fs.scan();
+    medium.stick(Some(EF_KEY_DEV.get()));
+    assert!(
+        ensure_seed(&d, &mut fs, &mut SeqRng(2)).is_err(),
+        "a boot that could not read the seed record must fail, not re-provision"
+    );
+    assert_eq!(
+        medium.value(EF_KEY_DEV.get()).as_deref(),
+        Some(&stored[..]),
+        "a faulted probe minted a new device seed over the live one"
+    );
+    assert_eq!(
+        medium.value(EF_COUNTER).as_deref(),
+        Some(&counter[..]),
+        "and rolled the signature counter back to zero"
+    );
+    medium.stick(None);
+    assert_eq!(
+        load_keydev(&d, &mut fs),
+        Some(seed),
+        "the credentials derived from this seed must still resolve"
+    );
 }

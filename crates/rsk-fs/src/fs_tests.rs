@@ -1160,3 +1160,81 @@ fn force_delete_halves_keeps_the_value_and_the_record_apart() {
         "the record is what the error is about — it stands"
     );
 }
+
+/// The three answers, kept apart. `Storage::read`/`size` collapse "no such record"
+/// and "that read failed" into one `None`, and an absent record is how this
+/// firmware spells *not provisioned* — so the collapsing probes must keep behaving
+/// exactly as before, and the `try_*` ones must separate the two. Both halves
+/// matter: a fix that answered `Err` for a genuine absence would stop an
+/// unprovisioned card from ever provisioning.
+#[test]
+fn a_failed_probe_is_an_error_and_an_absence_is_still_an_absence() {
+    use crate::storage::faults::ProbeStuck;
+    const LIVE: u16 = 0x1081;
+    const NEVER: u16 = 0x1082;
+    let (backend, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.put(LIVE, b"the owner's verifier").unwrap();
+    fs.meta_add(LIVE, &[0x03, 0x00, 0x02]).unwrap();
+
+    // A record that was never written: absent, and cheaply so. This is the arm
+    // first-use provisioning rides on.
+    assert_eq!(fs.try_has_data(NEVER), Ok(false));
+    assert_eq!(fs.try_read(NEVER, &mut [0u8; 8]), Ok(None));
+    assert_eq!(fs.try_meta_find(NEVER, &mut [0u8; 8]), Ok(None));
+
+    // The same answers for a live record the medium refuses — with the fault kept.
+    medium.stick(Some(LIVE));
+    assert_eq!(fs.try_has_data(LIVE), Err(Error::MemoryFatal));
+    assert_eq!(fs.try_read(LIVE, &mut [0u8; 8]), Err(Error::MemoryFatal));
+    assert!(!fs.has_data(LIVE), "the collapsing probe is unchanged");
+    assert_eq!(fs.read(LIVE, &mut [0u8; 8]), None);
+    medium.stick(Some(EF_META));
+    assert_eq!(
+        fs.try_meta_find(LIVE, &mut [0u8; 8]),
+        Err(Error::MemoryFatal)
+    );
+    assert_eq!(fs.meta_find(LIVE, &mut [0u8; 8]), None);
+
+    // And none of it was memoised: the medium recovers, the record is back.
+    medium.stick(None);
+    assert!(fs.try_has_data(LIVE).unwrap());
+    assert_eq!(fs.try_meta_find(LIVE, &mut [0u8; 8]).unwrap(), Some(3));
+}
+
+/// A boot [`scan`](Fs::scan) cut short by a read fault leaves the FIDs it never
+/// reached UNKNOWN, and a clear `present` bit means "unknown" as readily as
+/// "empty". `present_slots` is the one reader with no backend to fall through to,
+/// and `credential_store` writes the first slot it is told is free WITHOUT
+/// re-reading it — so a truncated walk turned a live credential's slot into a
+/// free one. The range reads occupied now, which costs capacity, not records.
+#[test]
+fn a_truncated_scan_leaves_no_slot_reading_free() {
+    use crate::storage::faults::TruncatedWalk;
+    const BASE: u16 = 0x2000;
+    let mut fs = Fs::new(TruncatedWalk::new());
+    fs.put(BASE + 1, b"a live credential record").unwrap();
+
+    // A reboot: the same medium, a fresh cache, and a walk that yields nothing.
+    let mut fs = Fs::new(fs.into_storage());
+    fs.scan();
+    let mut slots = [false; 4];
+    fs.present_slots(BASE, &mut slots);
+    assert_eq!(
+        slots, [true; 4],
+        "a walk that enumerated nothing decided nothing — no slot here is free"
+    );
+    assert_eq!(
+        fs.read(BASE + 1, &mut [0u8; 32]),
+        Some(24),
+        "and the record the walk missed is still readable per key"
+    );
+
+    // A COMPLETE walk over the same records is bit-for-bit the raw present index.
+    let mut fs = Fs::new(RamStorage::new());
+    fs.put(BASE + 1, b"a live credential record").unwrap();
+    fs.scan();
+    let mut slots = [false; 4];
+    fs.present_slots(BASE, &mut slots);
+    assert_eq!(slots, [false, true, false, false]);
+}

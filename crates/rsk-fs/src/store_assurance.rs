@@ -96,23 +96,24 @@ impl<S: Storage> Fs<S> {
         }
     }
 
-    /// `Put`'s cache clause (`fs.rs:413-433` → `mark_present`).
+    /// `Put`'s cache clause (`fs.rs:460-480` → `mark_present`).
     pub fn step_put(&mut self, fid: u16) {
         self.mark_present(fid);
     }
 
-    /// `Delete`'s cache clause (`fs.rs:473-482` → `mark_absent`).
+    /// `Delete`'s cache clause (`fs.rs:520-529` → `mark_absent`).
     pub fn step_delete(&mut self, fid: u16) {
         self.mark_absent(fid);
     }
 
     /// `Confirm(f)`'s cache clause: the backend answered, so cache what it said —
-    /// unless it faulted, in which case nothing is cached at all.
+    /// unless it faulted, in which case nothing is cached at all. The `Result`
+    /// `settle` also carries is the *return* half, which `Confirm` does not model.
     pub fn step_confirm(&mut self, fid: u16, live: bool) {
-        self.record_unless_faulted(fid, live);
+        let _ = self.settle(fid, live.then_some(()));
     }
 
-    /// The reader `NoFalseAbsent` is stated over (`fs.rs:150-152`).
+    /// The reader `NoFalseAbsent` is stated over (`fs.rs:159-161`).
     pub fn reads_absent(&self, fid: u16) -> bool {
         self.known_absent(fid)
     }

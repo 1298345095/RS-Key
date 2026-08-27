@@ -141,19 +141,30 @@ pub fn put_data<S: Storage>(fs: &mut Fs<S>, sess: &Session, fid: u16, data: &[u8
 
     // Refines `RSKeyAppletPolicies!AttributeChangeInvalidatesTheKey` — SEC-POL-003.
     if let Some(slot) = algorithm_slot(fid) {
+        // Every probe below is fallible on purpose: an unreadable attribute reads as
+        // the default and an unreadable key slot reads as empty, and either one lets
+        // the invalidation be skipped while the attribute changes underneath a key
+        // that stays.
         let mut current = [0u8; 16];
-        let current = match fs.read(target, &mut current) {
+        let Ok(stored) = fs.try_read(target, &mut current) else {
+            return Sw::MEMORY_FAILURE;
+        };
+        let current = match stored {
             Some(n) if n > 0 => &current[..n.min(current.len())],
             _ => DEFAULT_ALGO,
         };
         let replacement = if data.is_empty() { DEFAULT_ALGO } else { data };
         if current != replacement {
-            if fs.has_key(slot) && fs.force_delete(slot.get()).is_err() {
-                return Sw::MEMORY_FAILURE;
+            match fs.try_has_key(slot) {
+                Ok(true) if fs.force_delete(slot.get()).is_err() => return Sw::MEMORY_FAILURE,
+                Err(_) => return Sw::MEMORY_FAILURE,
+                _ => {}
             }
             let public = slot_pub_fid(slot);
-            if fs.has_data(public) && fs.force_delete(public).is_err() {
-                return Sw::MEMORY_FAILURE;
+            match fs.try_has_data(public) {
+                Ok(true) if fs.force_delete(public).is_err() => return Sw::MEMORY_FAILURE,
+                Err(_) => return Sw::MEMORY_FAILURE,
+                _ => {}
             }
         }
     }

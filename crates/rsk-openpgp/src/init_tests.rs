@@ -4,6 +4,7 @@
 use super::*;
 use crate::dying_storage::DyingStorage;
 use rsk_fs::storage::ram::RamStorage;
+use rsk_sdk::Sw;
 
 /// Deterministic counter RNG for tests.
 struct CountRng(u8);
@@ -282,4 +283,87 @@ fn a_refused_sex_repair_leaves_the_old_byte_and_retries() {
     assert_eq!(&b[..n], SEX_DEFAULT);
     budget.set(0);
     scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+}
+
+/// The same shape as PIV's `scan_files`, at boot instead of at SELECT: one
+/// faulted probe must not re-seed the factory PW1 verifier.
+///
+/// `Storage::read`/`size` answer the same `None` for "no such record" and for
+/// "that read failed", and every guard here writes a factory default over the
+/// file it reads absent — so a faulted `EF_PW1` probe put `PW1_DEFAULT` back over
+/// the owner's verifier, locking the owner out and handing `123456` the PW1
+/// security status. `scan_files` runs from `main`'s boot path, so no host command
+/// is needed to reach it.
+#[test]
+fn a_faulted_probe_does_not_reseed_the_factory_pw1() {
+    const OWNER_PW1: &[u8] = b"9988776655";
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    let mut sess = crate::pin::Session::default();
+    let mut change = PW1_DEFAULT.to_vec();
+    change.extend_from_slice(OWNER_PW1);
+    assert_eq!(
+        crate::pin::change_pin(
+            &dev(),
+            &mut fs,
+            &mut sess,
+            &mut CountRng(9),
+            0,
+            0x81,
+            &change
+        ),
+        Sw::OK
+    );
+    let owner = medium
+        .value(EF_PW1)
+        .expect("the owner's verifier is on the medium");
+
+    // The next boot re-runs `scan_files`, with EF_PW1's reads faulting.
+    let mut fs = Fs::new(fs.into_storage());
+    fs.scan();
+    medium.stick(Some(EF_PW1));
+    let r = scan_files(&dev(), &mut fs, &mut CountRng(0));
+    assert_eq!(
+        medium.value(EF_PW1).as_deref(),
+        Some(&owner[..]),
+        "a faulted EF_PW1 probe re-seeded the owner's verifier with PW1_DEFAULT"
+    );
+    assert_eq!(
+        r,
+        Err(Error::Storage),
+        "an init that could not read the files it provisions must say so"
+    );
+
+    // The medium recovers; the card must be exactly as its owner left it.
+    medium.stick(None);
+    let mut sess = crate::pin::Session::default();
+    assert_ne!(
+        crate::pin::verify(
+            &dev(),
+            &mut fs,
+            &mut sess,
+            &mut CountRng(0),
+            0,
+            0x81,
+            PW1_DEFAULT
+        ),
+        Sw::OK,
+        "the factory PW1 must not verify on a card whose owner changed it"
+    );
+    let mut sess = crate::pin::Session::default();
+    assert_eq!(
+        crate::pin::verify(
+            &dev(),
+            &mut fs,
+            &mut sess,
+            &mut CountRng(0),
+            0,
+            0x81,
+            OWNER_PW1
+        ),
+        Sw::OK,
+        "and the owner's PW1 must still verify"
+    );
 }

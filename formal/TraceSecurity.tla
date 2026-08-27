@@ -127,7 +127,7 @@ R4bEventConsensus ==
 (* BugTokenlessIgnoresAlwaysUv there.                                       *)
 (***************************************************************************)
 
-\* CTAP 2.1 6.1.2, crates/rsk-fido/src/makecredential.rs:528-546. Two arms, and
+\* CTAP 2.1 6.1.2, crates/rsk-fido/src/makecredential.rs:530-548. Two arms, and
 \* the recording now carries both:
 \*   step 6.2/6.4 -- alwaysUv with no way to verify refuses whatever `rk` says;
 \*   step 10      -- otherwise a DISCOVERABLE credential still needs a token
@@ -142,7 +142,7 @@ R4bEventConsensus ==
 \* only where it is a function of these two, and the recording it was omitted for
 \* is the one that refutes `pin.set /\ rk` on its own (event 26: alwaysUv on,
 \* rk FALSE, PUAT_REQUIRED, where that rule predicts served). The pad is
-\* `clientpin.rs:609`'s first conjunct, recorded per boundary.
+\* `clientpin.rs:612`'s first conjunct, recorded per boundary.
 \*
 \* `alwaysUv` here is B's, and B reads it from the RECORD (`Beta`, above). The
 \* firmware falls back to `cfg!(feature = "always-uv")` when EF_ALWAYS_UV is

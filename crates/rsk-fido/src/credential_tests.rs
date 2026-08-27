@@ -684,3 +684,58 @@ fn a_failed_registration_never_leaves_a_credential_without_its_rp() {
         "vacuous: no write budget produced a partial registration"
     );
 }
+
+/// The consequence `Fs::present_slots` answers for: `credential_store` writes the
+/// first slot the bitmap calls free without re-reading it, so after a boot scan a
+/// read fault cut short it minted straight over a live discoverable credential.
+/// KEY_STORE_FULL is the honest answer on a store it cannot enumerate.
+#[test]
+fn a_truncated_scan_does_not_let_a_new_credential_land_on_a_live_one() {
+    use rsk_fs::storage::faults::TruncatedWalk;
+    let d = dev();
+    let rp_hash = sha256(b"example.com");
+    let mut fs = Fs::new(TruncatedWalk::new());
+    let mut out = [0u8; 512];
+    let len = credential_create(&SEED, &d, &input(), &rp_hash, &IV, &mut out).unwrap();
+    credential_store(
+        &SEED,
+        &d,
+        &mut fs,
+        &out[..len],
+        &rp_hash,
+        "example.com",
+        &[0xDE, 0xAD, 0xBE, 0xEF],
+        &[],
+    )
+    .unwrap();
+    let mut first = [0u8; 1024];
+    let n = fs.read(EF_CRED, &mut first).unwrap();
+
+    // A reboot whose enumeration faults: slot 0 holds a live credential the walk
+    // never yielded.
+    let mut fs = Fs::new(fs.into_storage());
+    fs.scan();
+    let other = sha256(b"other.example");
+    let len2 = credential_create(&SEED, &d, &input(), &other, &IV, &mut out).unwrap();
+    assert_eq!(
+        credential_store(
+            &SEED,
+            &d,
+            &mut fs,
+            &out[..len2],
+            &other,
+            "other.example",
+            &[0x01, 0x02],
+            &[],
+        ),
+        Err(Error::NoMemory),
+        "a store that cannot enumerate itself must refuse, not pick slot 0"
+    );
+    let mut still = [0u8; 1024];
+    assert_eq!(fs.read(EF_CRED, &mut still), Some(n));
+    assert_eq!(
+        still[..n],
+        first[..n],
+        "the live credential was overwritten"
+    );
+}

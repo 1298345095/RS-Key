@@ -5,7 +5,7 @@
 //! site** rather than the state predicates behind it.
 //!
 //! Only one of the four token gates can be reached this way. The other three
-//! (`config.rs:243`, `getassertion.rs:384`, `makecredential.rs:513`) are inline
+//! (`config.rs:243`, `getassertion.rs:384`, `makecredential.rs:515`) are inline
 //! in functions that need a `Ctx`, and a `Ctx` drags `p256` into the reachable
 //! set, where Kani 0.67.0 does not merely time out — it aborts in codegen:
 //! `crypto-bigint 0.7.5 UintRef::lowest_u64` panics cprover_bindings' typecheck
@@ -71,7 +71,7 @@ fn no_token_after_invalidation_at_call_site() {
     let mut st = FidoState::new();
     let proto = PinProto::Two;
 
-    // Issuance, in `clientpin.rs:417-423`'s order, with a symbolic permission set.
+    // Issuance, in `clientpin.rs:420-426`'s order, with a symbolic permission set.
     let perms0: u8 = kani::any();
     st.reset_pin_uv_auth_token(&mut rng);
     st.begin_using_token(false, 1_000);
@@ -340,7 +340,7 @@ fn no_authorization_bypass_rps_begin_at_call_site() {
     let mut st = FidoState::new();
     let proto = PinProto::Two;
 
-    // Issuance in `clientpin.rs:417-431`'s order, with the permission set and the
+    // Issuance in `clientpin.rs:420-434`'s order, with the permission set and the
     // rpId binding both symbolic — the two halves the Begin's gate reads.
     let perms0: u8 = kani::any();
     let scoped: bool = kani::any();

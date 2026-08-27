@@ -3,6 +3,7 @@
 
 use super::*;
 use rsk_ec::{Curve, PrivKey};
+use rsk_fs::storage::faults::ProbeStuck;
 use rsk_fs::storage::ram::RamStorage;
 
 use std::cell::Cell;
@@ -422,7 +423,7 @@ fn a_wrong_pin_is_refused_on_the_kbase_fallback_path() {
     // wrong PIN accepted AND stored as the new one. Killed by no test, because
     // the fallback is only reachable on an OTP-provisioned device and every PIV
     // test that offers a wrong PIN runs without one (found by the reverse
-    // mutation pass, D2). Its FIDO twin at `clientpin.rs:761` is not the same
+    // mutation pass, D2). Its FIDO twin at `clientpin.rs:764` is not the same
     // shape: there the `ct_eq` sits inside the block, so a widened guard still
     // cannot write.
     const OTP: [u8; 32] = [0x44; 32];
@@ -8187,5 +8188,125 @@ fn metadata_answers_over_an_orphaned_head() {
         metadata_over_an_orphan_head_algo(false, ALGO_RSA_FIXTURE),
         Sw::EXEC_ERROR,
         "RSA loads the modulus from the key, so the same orphan fails there"
+    );
+}
+
+/// One faulted flash probe at an unauthenticated `SELECT` must not re-seed the
+/// factory PIN, PUK and management key.
+///
+/// [`scan_files`] provisions on `!has_data`, and `Storage::read`/`size` answer the
+/// same `None` for "no such record" and for "that read failed" — so one faulted
+/// `EF_PIN` probe, read as an absence, replaced the owner's verifier byte for byte
+/// with `DEFAULT_PIN` and `VERIFY 123456` opened the applet. Driven over the wire
+/// because `select` is where the probe happens and `VERIFY` is where the takeover
+/// shows: the record comparison alone would pass on a fix that merely skipped the
+/// write and left the gate answering for a file it never read.
+#[test]
+fn a_faulted_probe_at_select_does_not_reseed_the_factory_pin() {
+    const OWNER_PIN: [u8; 8] = *b"00112233";
+    let (backend, medium) = ProbeStuck::new();
+    let rng = RefCell::new(TestRng(7));
+    let pres = RefCell::new(AlwaysConfirm);
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    // A provisioned card whose owner moved the PIN off the factory value.
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    let mut msg = DEFAULT_PIN.to_vec();
+    msg.extend_from_slice(&OWNER_PIN);
+    assert_eq!(
+        run(&mut app, &mut fs, INS_CHANGE_PIN, 0, 0x80, &msg).0,
+        Sw::OK
+    );
+    let owner = medium
+        .value(EF_PIN)
+        .expect("the owner's verifier is on the medium");
+
+    // A power cycle — a fresh applet clears `files_ensured`, so the next SELECT is
+    // the one that probes — with EF_PIN's reads faulting from here on.
+    let mut fs = Fs::new(fs.into_storage());
+    fs.scan();
+    medium.stick(Some(EF_PIN));
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    let mut out = [0u8; 256];
+    let sw = Applet::select(&mut app, false, &mut fs, &mut ResBuf::new(&mut out));
+    assert_eq!(
+        medium.value(EF_PIN).as_deref(),
+        Some(&owner[..]),
+        "a faulted EF_PIN probe re-seeded the owner's verifier with DEFAULT_PIN"
+    );
+    assert_eq!(
+        sw,
+        Sw::MEMORY_FAILURE,
+        "a SELECT that could not read the files it provisions must say so"
+    );
+
+    // The medium recovers; nothing about the card may have moved.
+    medium.stick(None);
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    assert_eq!(
+        run(&mut app, &mut fs, INS_VERIFY, 0, 0x80, &DEFAULT_PIN).0,
+        Sw::new(0x63, 0xC2),
+        "the factory PIN must not open a card whose owner changed it"
+    );
+    assert_eq!(
+        run(&mut app, &mut fs, INS_VERIFY, 0, 0x80, &OWNER_PIN).0,
+        Sw::OK,
+        "and the owner's PIN must still open it"
+    );
+}
+
+/// `protect_mgm_key` rebuilds the 0x9B meta head, and the one property of the slot
+/// it is not asked to change is the touch gate `SET MGM KEY P2 = 0xFE` raised.
+/// It reads that byte with `meta_find`, which answers the same `None` for a head
+/// that was never written and for an EF_META read the flash could not serve — and
+/// an absent head resolves to TOUCHPOLICY_NEVER, so a faulted probe retired the
+/// owner's touch gate and the rebuild made that permanent.
+#[test]
+fn a_faulted_meta_probe_does_not_retire_the_management_touch_gate() {
+    let (backend, medium) = ProbeStuck::new();
+    let rng = RefCell::new(TestRng(7));
+    let pres = RefCell::new(AlwaysConfirm);
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    auth_mgm(&mut app, &mut fs);
+    // Re-key 0x9B with P2 = 0xFE — the one way to raise the touch gate.
+    let mut body = vec![ALGO_AES192, SLOT_CARDMGM, 24];
+    body.extend_from_slice(&DEFAULT_MGM);
+    assert_eq!(
+        run(&mut app, &mut fs, INS_SET_MGMKEY, 0xFF, 0xFE, &body).0,
+        Sw::OK
+    );
+    let mut head = [0u8; 8];
+    assert_eq!(
+        fs.meta_find(key_fid(SLOT_CARDMGM).get(), &mut head)
+            .map(|n| head[..n.min(head.len())][2]),
+        Some(TOUCHPOLICY_ALWAYS),
+        "the gate the owner raised"
+    );
+
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    // ONE faulted EF_META read, not a stuck one: `meta_add` further down refuses a
+    // persistently unreadable blob on its own, which would mask this guard entirely.
+    medium.stick_once(rsk_fs::EF_META);
+    medium.stick_once(rsk_fs::EF_META);
+    assert_eq!(
+        protect_mgm_key(&dev, &mut fs, &mut TestRng(3)),
+        Sw::MEMORY_FAILURE,
+        "a rebuild that could not read the head it carries forward must refuse"
+    );
+    let mut head = [0u8; 8];
+    assert_eq!(
+        fs.meta_find(key_fid(SLOT_CARDMGM).get(), &mut head)
+            .map(|n| head[..n.min(head.len())][2]),
+        Some(TOUCHPOLICY_ALWAYS),
+        "a faulted EF_META probe retired the management key's touch gate"
     );
 }

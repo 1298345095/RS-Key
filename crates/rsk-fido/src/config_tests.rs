@@ -587,3 +587,21 @@ fn an_unsupported_protocol_is_judged_before_the_subcommand_and_the_token() {
         assert_eq!(run(&mut state, &req), Err(want), "subcommand {sub:#x}");
     }
 }
+
+/// `alwaysUv` is the UV requirement for every makeCredential and getAssertion, and
+/// an absent `EF_ALWAYS_UV` means "the compile default" — normally OFF. `Fs::read`
+/// answers the same `None` for that and for a read the flash could not serve, so a
+/// faulted probe silently dropped the gate to user presence. It resolves ON now.
+#[test]
+fn a_faulted_always_uv_read_resolves_to_on() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    fs.put(EF_ALWAYS_UV, &[1]).unwrap();
+    assert!(crate::config::always_uv_enabled(&mut fs));
+    medium.stick(Some(EF_ALWAYS_UV));
+    assert!(
+        crate::config::always_uv_enabled(&mut fs),
+        "a faulted EF_ALWAYS_UV read dropped the UV gate to the compile default"
+    );
+}

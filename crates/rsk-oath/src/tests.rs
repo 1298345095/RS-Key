@@ -83,14 +83,14 @@ fn new_fs() -> Fs<RamStorage> {
     fs
 }
 
-fn select(app: &mut OathApplet, fs: &mut Fs<RamStorage>) -> (Sw, Vec<u8>) {
+fn select<S: Storage>(app: &mut OathApplet, fs: &mut Fs<S>) -> (Sw, Vec<u8>) {
     let mut out = [0u8; 256];
     let mut res = ResBuf::new(&mut out);
     let sw = Applet::select(app, false, fs, &mut res);
     (sw, res.as_slice().to_vec())
 }
 
-fn run(app: &mut OathApplet, fs: &mut Fs<RamStorage>, raw: &[u8]) -> (Sw, Vec<u8>) {
+fn run<S: Storage>(app: &mut OathApplet, fs: &mut Fs<S>, raw: &[u8]) -> (Sw, Vec<u8>) {
     let mut out = [0u8; 2048];
     let mut res = ResBuf::new(&mut out);
     let apdu = Apdu::parse(raw).unwrap();
@@ -138,7 +138,7 @@ fn put_data(
     d
 }
 
-fn put(app: &mut OathApplet, fs: &mut Fs<RamStorage>, data: &[u8]) -> Sw {
+fn put<S: Storage>(app: &mut OathApplet, fs: &mut Fs<S>, data: &[u8]) -> Sw {
     run(app, fs, &apdu(INS_PUT, 0, 0, data)).0
 }
 

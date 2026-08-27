@@ -218,3 +218,88 @@ fn a_successful_change_does_not_open_the_safe() {
     assert_eq!(verify(&mut app, &mut fs, b"5678"), Sw::OK);
     assert!(safe_open(&mut app, &mut fs), "the new PIN opens it");
 }
+
+/// The OTP-PIN gate is `has_data(EF_OTP_PIN)`, and `Fs::has_data` answers the same
+/// `false` for "the owner never set one" and for a probe the flash could not
+/// serve. On a code-less applet `select()` leaves `validated` true unconditionally,
+/// so that probe is the whole gate: one faulted read handed the stored password to
+/// an unauthenticated host. It is refused now.
+#[test]
+fn a_faulted_probe_does_not_open_the_otp_pin_gate() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let rng = RefCell::new(CountRng(7));
+    let touch = RefCell::new(AlwaysConfirm);
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], None, &rng, &touch);
+    select(&mut app, &mut fs);
+    let mut cred = put_data(b"bank", 0x21, 6, SECRET_SHA1, false, None);
+    cred.extend(tlv(TAG_PWS_PASSWORD, b"s3cr3t"));
+    assert_eq!(put(&mut app, &mut fs, &cred), Sw::OK);
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            &apdu(INS_SET_PIN, 0, 0, &tlv(TAG_PASSWORD, b"1234"))
+        )
+        .0,
+        Sw::OK
+    );
+
+    // A fresh connection that presents nothing, with EF_OTP_PIN's reads faulting.
+    let mut fs = Fs::new(fs.into_storage());
+    fs.scan();
+    medium.stick(Some(EF_OTP_PIN));
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], None, &rng, &touch);
+    select(&mut app, &mut fs);
+    let (sw, body) = run(
+        &mut app,
+        &mut fs,
+        &apdu(INS_GET_CREDENTIAL, 0, 0, &tlv(TAG_NAME, b"bank")),
+    );
+    assert_ne!(
+        sw,
+        Sw::OK,
+        "a faulted EF_OTP_PIN probe opened the gate the owner's PIN closed"
+    );
+    assert!(
+        !body.windows(6).any(|w| w == b"s3cr3t"),
+        "and served the stored password with it"
+    );
+
+    // The other half of the same reading: `SET OTP PIN` mints the unlock secret on
+    // `!has_data(EF_OTP_PIN)`, so a faulted probe let the operator at the port
+    // overwrite the PIN the owner set (`select` leaves `validated` true on a
+    // code-less applet, and the touch is the only other gate).
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            &apdu(INS_SET_PIN, 0, 0, &tlv(TAG_PASSWORD, b"9999"))
+        )
+        .0,
+        Sw::MEMORY_FAILURE,
+        "a faulted EF_OTP_PIN probe let SET OTP PIN replace the owner's PIN"
+    );
+
+    // The gate still lets a PIN-less store through once the medium recovers.
+    medium.stick(None);
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            &apdu(INS_VERIFY_PIN, 0, 0, &tlv(TAG_PASSWORD, b"1234"))
+        )
+        .0,
+        Sw::OK
+    );
+    assert_eq!(
+        run(
+            &mut app,
+            &mut fs,
+            &apdu(INS_GET_CREDENTIAL, 0, 0, &tlv(TAG_NAME, b"bank"))
+        )
+        .0,
+        Sw::OK
+    );
+}
