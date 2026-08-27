@@ -425,7 +425,14 @@ scattered across logs. A missing field blocks exit.
    dependency on the path.
 8. **Mutation verdicts** — per mutant: the level, the patch anchor, the
    invocation, the verdict, **the assertion that fell and its direction**, and
-   whether that describes the modelled defect or its inverse.
+   the `reading` that argues whether it describes the modelled defect or its
+   inverse. A row whose direction is `inverse` is a finding about the *mutant*
+   and not a result about the property, so it also carries a `disposition`:
+   either `superseded`, naming in `superseded_by` another row of the group that
+   corrects it — a chain that must end at a row which is not itself `inverse`,
+   because a cycle corrects nothing — or `kept-as-a-finding`. Both arms owe the
+   `reading`, and the success line counts the disposed rows apart from the
+   verdicts so one cannot be read as a kill.
 9. **Timestamp, freshness and revalidation inputs** — when each run happened, and
    the triggers that expire it: toolchain bump, Kani or TLC version, RP2350
    stepping, linker script, dependency change, a change to any named Rust owner,

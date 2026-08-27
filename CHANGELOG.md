@@ -1009,6 +1009,13 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   two keys belong to the row they are about. Refusing `reading` there as well
   was the obvious third and was **refuted** by the bundle: all ten `modelled`
   rows carry one, because it argues whichever direction the row records.
+  *And the published contract did not name any of it.* `docs/authorization-slice.md`
+  §8 — which `bundle_gate.py`'s docstring calls **the** contract — still asked for
+  *"the verdict, the assertion that fell and its direction"* and named no
+  `disposition`, `superseded_by` or `reading`, so the gate demanded three fields
+  the document it enforces had never mentioned. Item 8 now says what the code
+  does, including that both dispositions owe the `reading` and that a
+  `superseded` chain must end at a row which is not itself `inverse`.
 - **One rule about "which silicon", enforced in one of the two places it is
   asked.** `platform_gate.py` holds its own registry's `board_revision` to a
   concrete RP2350 stepping, and `evidence_gate.py` shares the *token* — it reads
