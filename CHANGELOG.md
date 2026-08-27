@@ -59,29 +59,45 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   programme had already scheduled and had nowhere to write: the BOOTSEL-return
   question about `WATCHDOG.scratch2`, a real-power PASS of
   `tests/29_reset_power_cut.py`, and `tools/emu`'s fidelity.
-- **The candidates are DERIVED — 29 of them, over four sources — and a hand list
+- **The candidates are DERIVED — 24 of them, over four sources — and a hand list
   would have found five.** The slice bundle's own `[[assumption]]` ids and the
   design pages' prose ids (10, of which **eight said `registered = "no"`** and
   now say which entry claims them); every constant of the first registry, because
   a model assumption's own discharge is always a fact about the world; the suites
   `tests/emu.py` refuses that `scripts/usbip-guest.sh` does not run either — **5,
   where the plan named 1**, adding `51_secure_reboot`, `53_ccid_pinpad`,
-  `54_sram_residue` and `90_otp_mkek_migration`; and the 12 first-party `.rs`
-  carrying `unsafe`, which is stage 10's "firmware unsafe invariant" half. An
+  `54_sram_residue` and `90_otp_mkek_migration`; and the 7 `.rs` files whose CODE
+  carries `unsafe`, which is stage 10's "firmware unsafe invariant" half. An
   unclaimed candidate reddens the row, and so does a claim on a candidate that no
   longer exists.
+- **Every one of the four derivations reads a STRUCTURE, because an adversarial
+  review drove nine legal spellings past the text-reading first versions.** The
+  `unsafe` half produced **12** files and four of them carry the word only in a
+  line saying the file has *no* `unsafe` — a fifth was a code generator emitting
+  it inside a string — so Rust is read with its comments and string literals
+  removed and the answer is 7. A comment in `scripts/usbip-guest.sh` could make a
+  board obligation vanish *or* redden a live one, so its rows go through
+  `gate_lines`. Four legal spellings of an `UNSUPPORTED` entry — single quotes,
+  an implicit concatenation, an f-string, an empty reason — were invisible, so
+  the shim is read through `ast`. And the whitelists became blacklists: a new
+  crate at the top of the tree and a design page outside a two-name list were
+  both silently uncovered.
 - **The hardware axis reads the registry now, and still prints 0 for all 59.**
   It read a bundle's DECLARATION and nothing else, so a board result recorded
   where a board result actually lands — an obligation with no model constant to
   be written as — would have left the page saying "no property was measured on a
-  board" over one. A silicon-class row that is `discharged` with its stepping
-  recorded is a second source, added rather than substituted, and both keep their
-  own rules. Nothing moves today: every silicon-class row is `pending`, which is
-  the point.
-- **30 mutations of the new gate, 30 killed, 0 survivors**, plus 4 of the axis
-  wiring. Six of the thirty also redden the real checkout. Six more did not apply
-  on the first pass and the harness said so — an unapplied patch over a green
-  suite reads exactly like a survivor.
+  board" over one. Any row that is `discharged` and records a real stepping is a
+  second source, added rather than substituted, and both keep their own rules.
+  **Keying it on the silicon CLASSES reproduced the same defect one class over**
+  and the review measured it: discharging the emulator-fidelity row, whose own
+  route reads "a board recording of the same session", printed 0 over ten
+  properties. Nothing moves today: every row is `pending`, which is the point.
+- **35 mutations of the new gate, 35 killed, 0 survivors** (the first table was
+  30/30 and the review broke four of its rules with the suite green: a floor
+  zeroed rather than deleted, a list narrowed, a regex loosened to the part
+  number, two vocabularies widened by a member). Six also redden the real
+  checkout. Six more did not apply on the first pass and the harness said so — an
+  unapplied patch over a green suite reads exactly like a survivor.
 - **The two registries are one graph.** Stage 1B п.3's link vocabulary less
   `contradicts`: `supports` names registry properties, `depends_on` and `refines`
   name entries here, and `discharges` names a constant of the first registry —

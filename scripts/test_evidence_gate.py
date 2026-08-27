@@ -774,16 +774,17 @@ def test_a_discharged_obligation_with_no_stepping_is_not_a_board_result(tree):
     assert tree.vector("SEC-T-001")["hardware"] == 0
 
 
-def test_a_discharged_non_silicon_obligation_is_not_a_board_result(tree):
-    """The spelling: a `build-configuration` row discharged by reading a manifest
-    is a fact about the tree, and a `board_revision` beside it does not make it
-    silicon. That is the one discharged row the real registry has."""
-    tree.edit("assurance/platform.toml", 'class = "flash"', 'class = "build-configuration"')
+def test_a_board_result_counts_whatever_class_it_is_filed_under(tree):
+    """The class sorts rows for a reader; it does not decide what a measurement
+    is. Keying the axis on the silicon classes was the first version, and the
+    review discharged the `tool-fidelity` row — whose own route reads "a board
+    recording of the same session" — and got 0 over ten properties."""
+    tree.edit("assurance/platform.toml", 'class = "flash"', 'class = "tool-fidelity"')
     tree.edit("assurance/platform.toml", 'status = "pending"',
               'status = "discharged"\nboard_revision = "RP2350 A2"\n'
               'evidence = ["assurance/properties.toml"]\n'
-              'revalidated_by = "a new manifest"')
-    assert tree.vector("SEC-T-001")["hardware"] == 0
+              'revalidated_by = "a new stepping"')
+    assert tree.vector("SEC-T-001")["hardware"] == 1
 
 
 def test_a_platform_registry_this_cannot_read_is_a_finding(tree):

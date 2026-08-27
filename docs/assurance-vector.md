@@ -16,13 +16,13 @@ So the axes are printed apart. Every one is derived from the tree on every gate 
 | `co` | model mutants whose code twin was patched into the tree and killed | `formal/comutants.toml` |
 | `trace` | `accepted of replaying`: configurations that replay a recorded session, and the subset that accepts it | the module's generator handshake |
 | `kani` | harnesses carrying the invariant's name — what `BOUNDED` keys on | `crates/*/src/*kani*.rs` |
-| `hardware` | board results: a bundle's declaration, and a silicon-class platform assumption discharged with its stepping | `assurance/bundle/*.toml` + `assurance/platform.toml` |
+| `hardware` | board results: a bundle's declaration, and a platform assumption discharged with the stepping it was taken on | `assurance/bundle/*.toml` + `assurance/platform.toml` |
 | `scope` | the built images the ledger disposes the property on | `assurance/configurations.toml` |
 | `freshness` | whether a bundle's commit post-dates every input it is about | `git log` |
 
 Three readings the axes are built to stop. A `kani` count does not fill in for `hardware`: a bounded proof is about execution paths and a board result is about a platform, and neither substitutes for the other. A `trace` count is DIRECT — a recorded session reaches a property only if a configuration checking that property replays it, so the refinement properties carry the session and the invariants they refine do not inherit it. And a configuration NAMING an invariant is not one ASSERTING it: most of them are mutants that exist for it to fall in, which is why `model` and `trace` are printed as two numbers each.
 
-`hardware` reads two sources and both give 0, which is the honest state of this tree. One is a bundle's DECLARATION, and the gate's job there is that a declaration cannot arrive without the board revision it was taken on. The other is `docs/platform-assumptions.md`'s registry, which is where a board result will actually land — every obligation there whose route ends at silicon is `pending`, and one moving to `discharged` with its stepping recorded is what would move this column. Read a `0` as "nothing here was measured on hardware", never as a measurement.
+`hardware` reads two sources and both give 0, which is the honest state of this tree. One is a bundle's DECLARATION, and the gate's job there is that a declaration cannot arrive without the board revision it was taken on. The other is `docs/platform-assumptions.md`'s registry, which is where a board result will actually land — every obligation there is `pending`, and one moving to `discharged` with a real stepping recorded is what would move this column, whatever class it is filed under. Read a `0` as "nothing here was measured on hardware", never as a measurement.
 
 The `freshness` axis reads committed history only, so an uncommitted edit to an owner is invisible until it lands. That is deliberate: the answer must not change between writing this page and committing it.
 
@@ -43,7 +43,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 - that a `model` count is the strength of the evidence — its denominator counts every configuration NAMING the invariant, and most of those are mutants that exist for it to fall in. `asserted` is the half a claim may rest on, and for a `clause_of` row it can be 0 while the parent invariant carrying that clause is asserted.
 - that the model-checked properties hold on *the firmware* — they hold on the images the scope axis names, and `docs/assurance-matrix.md` carries the rest of that row.
 - that the reconstructed `v1` column is an independent check on the registry's word. It reads the two derivations `assurance_gate.py` already forces that word from, so its disagreement set is empty on every input that gate accepts: it records that the scalar is a projection, and cannot discover that it is not.
-- that any property was measured on a board — **no** row carries a hardware result. A bundle claiming one without a board revision is refused rather than published, and the platform registry's silicon-class obligations are every one of them still `pending`.
+- that any property was measured on a board — **no** row carries a hardware result. A bundle claiming one without a board revision is refused rather than published, and every obligation of the platform registry is still `pending`.
 - that 58 of the rows are current — they carry no evidence date at all, so nothing here says when they were last true.
 
 ## The vector

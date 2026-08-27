@@ -23,7 +23,7 @@ record that was wrong in three of six fields before a line of code existed.
 | co | model mutants whose CODE twin was driven and killed | `formal/comutants.toml` |
 | trace | those configurations that replay a session, and the subset accepting it | the generator handshake below |
 | kani | harnesses carrying the invariant's snake name | `crates/*/src/*kani*.rs` |
-| hardware | board results DECLARED by a bundle | `assurance/bundle/*.toml` |
+| hardware | board results: a bundle's declaration, and a platform assumption discharged with its stepping | `assurance/bundle/*.toml` + `assurance/platform.toml` |
 | scope | the built images the ledger disposes this property on | `assurance/configurations.toml` |
 | freshness | whether a bundle's commit post-dates every evidence input | `git log` |
 
@@ -129,8 +129,11 @@ HARDWARE_SUBJECT = "hardware"
 MEASUREMENT_METHOD = "measurement"
 BOARD_FIELD = "board_revision"
 #: A shipped part with a stepping, not the bare `A2`: the bundle's Kani claims are
-#: named `B1`/`B2` and a looser token would read those as silicon.
-BOARD_REVISION = re.compile(r"\bRP2350[\s-]+A[0-9]\b")
+#: named `B1`/`B2` and a looser token would read those as silicon. Borrowed from
+#: the sibling row rather than copied — two definitions of "which silicon" are two
+#: answers, and the review measured that the copy here was unfalsifiable while the
+#: original was not.
+BOARD_REVISION = platform_gate.BOARD_REVISION
 
 #: A `scripts/<name>.py` reference inside a TLA+ module: the module naming the
 #: generator that rebuilds it. Half of the trace handshake.
@@ -313,12 +316,17 @@ def hardware_claims(doc):
 def board_backed(root, findings):
     """property id -> the platform assumptions whose BOARD RESULT it rests on.
 
-    A row of `assurance/platform.toml` that is `discharged`, silicon-class and
-    carries the stepping it was taken on IS a board result — that registry is
-    where one lands, because a board obligation has no model constant to be
-    written as. Reading it here is what stops the page printing "no property was
-    measured on a board" over a measurement, and it invents nothing: every
-    silicon row there is `pending`, so this returns {} today.
+    A row of `assurance/platform.toml` that is `discharged` and records the
+    stepping it was taken on IS a board result — that registry is where one
+    lands, because a board obligation has no model constant to be written as.
+    Reading it here is what stops the page printing "no property was measured on
+    a board" over a measurement, and it invents nothing: every such row is
+    `pending`, so this returns {} today.
+
+    Keyed on the STEPPING, not on the class. Keying on `HARDWARE_CLASSES` was the
+    first version and the review drove the same defect one class over: the
+    emulator-fidelity row's discharge route is "a board recording of the same
+    session", and discharging it printed 0 over ten properties.
 
     The floor is on ENTRIES READ, not on properties backed: a tree whose
     obligations are all pending has no board evidence, which is a fact; a
@@ -327,7 +335,9 @@ def board_backed(root, findings):
     path = root / platform_gate.REGISTRY
     if not path.is_file():
         return {}
-    entries = platform_gate.entries(root, [])
+    # Not discarded: `platform_gate.entries` drops a malformed id silently, and a
+    # dropped row is one this axis would read as absent rather than as broken.
+    entries = platform_gate.entries(root, findings)
     if not entries:
         findings.append(
             f"{platform_gate.REGISTRY} is there and this derivation resolved no"
@@ -339,9 +349,7 @@ def board_backed(root, findings):
     for name, entry in sorted(entries.items()):
         if entry.get("status") != "discharged":
             continue
-        if entry.get("class") not in platform_gate.HARDWARE_CLASSES:
-            continue
-        if not BOARD_REVISION.search(str(entry.get(BOARD_FIELD, ""))):
+        if not platform_gate.BOARD_REVISION.search(str(entry.get(BOARD_FIELD, ""))):
             continue
         for pid in entry.get("supports", []):
             out.setdefault(pid, []).append(name)
@@ -714,8 +722,8 @@ def claims(rows):
         must_not.append(
             "that any property was measured on a board — **no** row carries a"
             " hardware result. A bundle claiming one without a board revision is"
-            " refused rather than published, and the platform registry's"
-            " silicon-class obligations are every one of them still `pending`."
+            " refused rather than published, and every obligation of the"
+            " platform registry is still `pending`."
         )
     if len(dated) < total:
         must_not.append(
@@ -755,7 +763,7 @@ def render(root, rows=None):
         "| `co` | model mutants whose code twin was patched into the tree and killed | `formal/comutants.toml` |",
         "| `trace` | `accepted of replaying`: configurations that replay a recorded session, and the subset that accepts it | the module's generator handshake |",
         "| `kani` | harnesses carrying the invariant's name — what `BOUNDED` keys on | `crates/*/src/*kani*.rs` |",
-        "| `hardware` | board results: a bundle's declaration, and a silicon-class platform assumption discharged with its stepping | `assurance/bundle/*.toml` + `assurance/platform.toml` |",
+        "| `hardware` | board results: a bundle's declaration, and a platform assumption discharged with the stepping it was taken on | `assurance/bundle/*.toml` + `assurance/platform.toml` |",
         "| `scope` | the built images the ledger disposes the property on | `assurance/configurations.toml` |",
         "| `freshness` | whether a bundle's commit post-dates every input it is about | `git log` |",
         "",
@@ -773,10 +781,10 @@ def render(root, rows=None):
         " of this tree. One is a bundle's DECLARATION, and the gate's job there"
         " is that a declaration cannot arrive without the board revision it was"
         " taken on. The other is `docs/platform-assumptions.md`'s registry, which"
-        " is where a board result will actually land — every obligation there"
-        " whose route ends at silicon is `pending`, and one moving to"
-        " `discharged` with its stepping recorded is what would move this column."
-        " Read a `0` as \"nothing here was measured on hardware\", never as a"
+        " is where a board result will actually land — every obligation there is"
+        " `pending`, and one moving to `discharged` with a real stepping recorded"
+        " is what would move this column, whatever class it is filed under. Read"
+        " a `0` as \"nothing here was measured on hardware\", never as a"
         " measurement.",
         "",
         "The `freshness` axis reads committed history only, so an uncommitted"
