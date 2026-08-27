@@ -80,10 +80,11 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   further down could be falsified by an edit no gate reads. The worked example is
   a clause that scopes itself away from a neighbouring threat: delete that
   sentence and every verdict resting on it turns wrong while the row exits 0. A
-  whole-body hash was measured and rejected — over this page's history 39 clause
+  whole-body hash was measured and rejected — over this page's history 34 clause
   bodies changed with their first line intact against 12 first lines reworded, so
-  it would have fired on **24 of 30** commits and been suppressed like any alarm
-  that is usually noise. Instead an entry carries `rests_on`, a list of
+  it would have fired on **20 of 30** commits and been suppressed like any alarm
+  that is usually noise (corrected below; the first pass used an ad-hoc body
+  function rather than the gate's own, and only the 12 reproduced). Instead an entry carries `rests_on`, a list of
   sentences held against the body of the clause it argues from,
   whitespace-normalised so a re-wrap is not a rewrite. The completeness half is
   read off the tree, not maintained: an `[[untraced]]` whose `why` names a clause
@@ -990,6 +991,19 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   green before it — rather than only through the function.
 
 ### Fixed
+
+- **The number that justified the whole lock design did not reproduce.** The
+  choice of a per-sentence pin over a whole-body hash was argued from "39 clause
+  bodies changed with their first line intact against 12 first lines reworded, so
+  a hash would have fired on 24 of 30 commits", written into three places. Only
+  the **12** reproduces: the first pass measured with an ad-hoc body function
+  rather than `threat_gate.clause_bodies`, which strips HTML comments and fenced
+  blocks and so counts fewer changes. Re-derived with the gate's own function over
+  `git log --reverse 3d6ec61 -- docs/threat-model.md` — the page as it stood when
+  the choice was made — it is **34 / 12 / 20 of 30**. The argument is unchanged
+  (a hash still fires on two thirds of the page's commits) and the conclusion
+  stands, but the numbers are corrected and the METHOD is now recorded beside
+  each of them, which is why they moved: nothing said how to reproduce them.
 
 - **The clause lock approximated a renderer, and lost to it three ways.** The
   pin promises a sentence is on the page, so the body it matches against had

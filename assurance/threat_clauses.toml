@@ -22,11 +22,12 @@
 #          deleted clause goes red. What it does NOT see is a rewrite BELOW that
 #          first line — the same blind spot `formal/citations.lock` has, kept
 #          because this page's first line is its thesis while its body is edited
-#          constantly: 39 clause bodies changed with their first line intact over
-#          this page's history against 12 first lines reworded, so a lock over the
-#          whole body would have fired on 24 of its 30 commits and been suppressed
-#          like any other alarm that is usually noise. `rests_on` is the narrow
-#          lock for the sentences that could not afford to be under it.
+#          constantly. Measured by `threat_gate.clause_bodies` over
+#          `git log --reverse 3d6ec61 -- docs/threat-model.md`: 34 bodies changed
+#          with their first line intact against 12 first lines reworded, so a lock
+#          over the whole body would have fired on 20 of those 30 commits and been
+#          suppressed like any alarm that is usually noise. `rests_on` is the
+#          narrow lock for the sentences that could not afford to be under it.
 #   kind   `defence` — the page states a defence or a defended threat here, so a
 #          property may serve it; `context` — assets, an out-of-scope
 #          declaration, a stated residual, a third-party result, a process. A

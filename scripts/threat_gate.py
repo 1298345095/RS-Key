@@ -220,10 +220,12 @@ def clause_bodies(text: str, units: list[tuple[int, str, str]]) -> dict[str, str
     as text still on the page. A pin is a sentence, not a
     layout: re-wrapping a paragraph or re-indenting a bullet leaves the same
     sentence, while a reword, a deletion, a character swap or a move into a
-    comment or a code sample does not. Measured over this page's history,
-    39 clause bodies changed with their first line intact against 12 first lines
-    reworded, so a pin that fired on every reflow would fire on most edits to the
-    page and be suppressed like any other alarm that is usually noise.
+    comment or a code sample does not. Measured with THIS function over
+    `git log --reverse 3d6ec61 -- docs/threat-model.md`, the page as it stood
+    when the choice was made: 34 clause bodies changed with their first line
+    intact against 12 first lines reworded, so a whole-body hash would have
+    fired on 20 of those 30 commits — an alarm that is usually noise, and a
+    suppressed ratchet is worse than none.
     """
     lines = blank_comments(text).splitlines()
     bodies: dict[str, str] = {}

@@ -600,9 +600,9 @@ def test_the_pinned_sentence_moved_to_another_clause_says_where_it_went(tree):
 def test_a_pin_is_a_sentence_and_not_a_layout(tree, rewrite):
     """The other arm, and the reason the pin is normalised rather than verbatim.
 
-    Measured over this page's own history, 39 clause bodies changed with their
-    first line intact against 12 first lines reworded, so a pin that fired on
-    every re-wrap would fire on most edits to the page. `comment-spliced` is the
+    Measured by `clause_bodies` over `git log --reverse 3d6ec61 -- <the page>`,
+    34 bodies changed with their first line intact against 12 first lines
+    reworded, so a pin that fired on every re-wrap would fire on most edits. `comment-spliced` is the
     mirror of `commented-out` above and the reason both come out right: a comment
     inside a sentence renders as nothing, so the sentence on the page is the same
     one. `non-breaking-space` is the one that is a real gap rather than a choice \u2014
