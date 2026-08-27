@@ -155,7 +155,9 @@ mechanically:
 `scripts/test_run_tlc.py` keeps the runner itself falsifiable in the merge
 gate. Its four artificial corruptions are a broken jar, a Solo invariant that
 misses its mutant, a one-state VACUOUS run, and a muted Mut switch. Direct RED
-and FLOOR cases keep all three job verdict boundaries explicit.
+and FLOOR cases keep all three job verdict boundaries explicit, and four more
+hold every reader of a log that has a NUL hole in it — the state where a
+finished 48.7 M-state GREEN was reported `VACUOUS`.
 
 ## Co-refutation
 

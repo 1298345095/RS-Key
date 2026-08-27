@@ -70,6 +70,15 @@ watched" below is why both exist and how each was mutation-tested.
 `run-tlc.sh` caps TLC at 2 workers on purpose — this tree is worked on by
 several agents at once and a run that starves them is worse than a slow one.
 
+That same crowding is why each log is truncated at open and then **appended** to,
+and why `TLC_OUT` exists: two writers on one path give the second's truncation a
+stale offset to strand the first at, and the gap between them is NUL. Measured —
+1550 of them at offset 153, which read a finished 48.7 M-state GREEN as
+`VACUOUS`, the second writer being `scripts/test_run_tlc.py` driving this script
+against a fake `java`. It writes into its own `TLC_OUT` now, `O_APPEND` has no
+offset to go stale, and `grep -a` on every read of the log is the backstop under
+both. So a merge-gate run and a TLC run may share a tree.
+
 ## The six invariants → the Rust that owns each
 
 The names are load-bearing. The same property name carries each available
@@ -2447,7 +2456,12 @@ Those cases are no longer only a dated experiment. `scripts/test_run_tlc.py`
 feeds controlled TLC output through the real runner and its real floors on
 every merge gate. It keeps the four roadmap corruptions (broken jar, missed
 Solo invariant, one-state VACUOUS and a muted Mut switch), plus direct RED and
-FLOOR cases; each must produce its named non-zero verdict.
+FLOOR cases; each must produce its named non-zero verdict. Four more cases hold
+the runner against a **holed** log, because `-a` fixed at one reader while a
+sibling reads the same file the same way is the defect moved: the three fields,
+a RED row's invariant name, the `COVERAGE=1` dead-action reader, and the hole
+itself — the stand-in re-truncates its own log mid-run and the result must carry
+no NUL.
 
 `floors.txt` also carries the **per-config heap**. `Liveness.cfg` runs out of
 memory at the 4 GB default *after* its state search completes, which had left

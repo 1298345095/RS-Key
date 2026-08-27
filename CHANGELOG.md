@@ -707,6 +707,37 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **A green exhaustive TLC run was reported `VACUOUS`, and the reason was a hole
+  in its own log.** `formal/run-tlc.sh` pulled `states`/`distinct`/`depth` out
+  with plain `grep -oE`, and one NUL byte anywhere makes grep call the whole file
+  binary and print no match — so all three came back empty and the `< 2` rule
+  fired. Measured on `Shipped.log` after a real `COVERAGE=1` run: **1550 NUL
+  bytes, the first at offset 153**, over a run that had completed exhaustively at
+  699 350 223 generated, 48 679 968 distinct, depth 55. The two implementations
+  get it wrong differently — GNU 3.12 (the dev shell, and so CI) sends `binary
+  file matches` to **stderr** and the columns print `?`; BSD 2.6.0-FreeBSD sends
+  it to **stdout**, the columns print `Binary`, and `[` adds `integer expression
+  expected` — but both end at `VACUOUS: nothing was enabled  !! expected GREEN`
+  and exit 1. It fails safe, which is why it survived.
+  *The hole is not a stale file, and that matters for the fix.* `>` truncates at
+  open, so a short predecessor cannot leave a gap; reproduced byte-for-byte —
+  1550 NULs at offset 153 — only by two writers on one path, where the second's
+  `O_TRUNC` resets the size and the first's next write lands at the offset it
+  still holds. The second writer was `scripts/test_run_tlc.py`, which drives the
+  **real** runner against a fake `java` and wrote into the **real**
+  `formal/out/`. So each log is truncated at open and then **appended** to —
+  `O_APPEND` has no offset to go stale — the battery writes into its own
+  `TLC_OUT` directory instead, and `grep -a` sits under both as the backstop, on
+  all six reads of the log rather than the three that were measured. A merge-gate
+  run and a TLC run may now share a tree.
+  *`grep -a` alone would not have been enough, and the mutation table says so.*
+  Four cases were added, each killed by reverting exactly one layer: the fields
+  (`states=699350223` across the hole, not the stale `22920`), a RED row's
+  invariant name, the `COVERAGE=1` dead-action reader, and the mechanism itself —
+  the stand-in re-truncates its own log mid-run and the result must carry no NUL.
+  What no layer buys: a hole that **straddles** a line takes that line with it,
+  which is the `RED:` with no invariant name that the same defect can also print.
+
 - **Three of the eight closures above were themselves defective; the review that
   found the fourth sweep found these too.**
   *PIV counted the wrong population.* `wipe_piv` sweeps its two predicates

@@ -504,7 +504,9 @@ jobs:
   # on VACUOUS (a spec nothing enabled). `scripts/test_run_tlc.py`, collected by
   # the merge gate, keeps the roadmap's four corruptions: broken jar, a Solo
   # invariant that misses its mutant, one-state VACUOUS, and a muted Mut switch.
-  # Direct RED and FLOOR cases make all three job verdict boundaries explicit.
+  # Direct RED and FLOOR cases make all three job verdict boundaries explicit,
+  # and four more hold every reader of a log with a NUL hole in it — the state
+  # that reported a finished 48.7 M-state GREEN as VACUOUS.
   formal:
     if: github.event.schedule != '17 5 * * *'
     runs-on: ubuntu-latest

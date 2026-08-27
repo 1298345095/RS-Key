@@ -21,6 +21,10 @@ JAR=${TLA2TOOLS_JAR:-}
 JAVA=${JAVA:-$(command -v java)}
 WORKERS=${WORKERS:-2}
 HEAP=${HEAP:-4g}
+# Where the logs land, and a knob because this runner's own mutation table drives
+# the REAL script: pointing it into the real `out/` is what put a NUL run in a
+# live `Shipped.log` and reported a 48.7 M-state GREEN as VACUOUS.
+OUT=${TLC_OUT:-out}
 
 # `--tiers` is a pure query -- scripts/assurance_gate.py reads it to hold every
 # .cfg against the tier union -- so it must answer without a jar, a JVM or a
@@ -55,9 +59,9 @@ expect_for() {
 FAILED=0
 
 one() {
-  local cfg=$1 log="out/${1%.cfg}.log" SPEC
+  local cfg=$1 log="$OUT/${1%.cfg}.log" SPEC
   SPEC=$(spec_for "$cfg")
-  mkdir -p out
+  mkdir -p "$OUT"
   local want floor heap inv
   read -r want floor heap inv <<< "$(expect_for "$cfg")"
   # `-` is this file's spelling of "no value" and the heap column now has rows
@@ -71,13 +75,17 @@ one() {
   # asks TLC for the per-action firing counts and refuses on a zero.
   [ "${COVERAGE:-0}" = 1 ] && cov=(-coverage 5)
   t0=$(date +%s)
+  # `>` gives each writer its own offset, so a second one truncating under the
+  # first leaves a HOLE where the first writes on -- 1550 NUL bytes at offset
+  # 153, measured. O_APPEND has no offset to go stale: truncate here, append below.
+  : > "$log"
   "$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \
       -nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
-      > "$log" 2>&1
+      >> "$log" 2>&1
   t1=$(date +%s)
   if [ "${COVERAGE:-0}" = 1 ]; then
     local dead
-    dead=$(grep -oE '^<[A-Za-z_][A-Za-z0-9_]* line [0-9]+.*>: [0-9]+:0$' "$log" \
+    dead=$(grep -a -oE '^<[A-Za-z_][A-Za-z0-9_]* line [0-9]+.*>: [0-9]+:0$' "$log" \
              | sed -E 's/^<([A-Za-z_][A-Za-z0-9_]*) .*/\1/' | sort -u | tr '\n' ' ')
     if [ -n "$dead" ]; then
       echo "run-tlc: DEAD ACTION in $cfg -- never fired: $dead" >&2
@@ -85,11 +93,14 @@ one() {
     fi
   fi
   local states distinct depth verdict
-  states=$(grep -oE '^[0-9]+ states generated' "$log" | tail -1 | cut -d' ' -f1)
-  distinct=$(grep -oE '[0-9]+ distinct states found' "$log" | tail -1 | cut -d' ' -f1)
-  depth=$(grep -oE 'depth of the complete state graph search is [0-9]+' "$log" \
+  # `-a` on EVERY read of the log below: one NUL byte in it makes grep call the
+  # whole file binary and match nothing, so all three fields come back empty and
+  # a GREEN exhaustive run reads VACUOUS. The backstop; the fix is above.
+  states=$(grep -a -oE '^[0-9]+ states generated' "$log" | tail -1 | cut -d' ' -f1)
+  distinct=$(grep -a -oE '[0-9]+ distinct states found' "$log" | tail -1 | cut -d' ' -f1)
+  depth=$(grep -a -oE 'depth of the complete state graph search is [0-9]+' "$log" \
             | tail -1 | grep -oE '[0-9]+$')
-  if grep -q 'Model checking completed. No error has been found' "$log"; then
+  if grep -a -q 'Model checking completed. No error has been found' "$log"; then
     # A GREEN run over a state space that never took a step is not a pass, it is
     # a spec nothing enabled -- which is how `Seams.cfg` first came back GREEN
     # over ONE distinct state, on a conjunct that TLA+ precedence had turned into
@@ -125,9 +136,9 @@ one() {
     # in its name -- so the nine trace rows fell through to the generic branch
     # and their verdict column printed the raw error line. Coarsely they still
     # read RED, which is why nobody saw it until the name was compared.
-    verdict="RED: $(grep -oE 'Invariant [A-Za-z][A-Za-z0-9_]* is violated' "$log" | head -1 \
+    verdict="RED: $(grep -a -oE 'Invariant [A-Za-z][A-Za-z0-9_]* is violated' "$log" | head -1 \
                      | sed 's/Invariant //; s/ is violated//')"
-    [ "$verdict" = "RED: " ] && verdict="RED: $(grep -m1 -E '^Error' "$log")"
+    [ "$verdict" = "RED: " ] && verdict="RED: $(grep -a -m1 -E '^Error' "$log")"
   fi
   # A mutant that stops firing is the one failure this apparatus exists to
   # avoid, and it does not look like a failure: BugSetPinKeepsPpuat explored

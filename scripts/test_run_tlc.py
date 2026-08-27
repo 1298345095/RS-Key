@@ -3,8 +3,11 @@
 """Mutation table for the formal runner's verdict boundary.
 
 TLC itself is the slow system under test in the weekly job. These cases replace
-only its output stream, then drive the real runner, floors and configurations so
-each silent-pass shape is permanently reproducible in the merge gate.
+its output stream and the directory the log lands in — nothing else — then drive
+the real runner, floors and configurations so each silent-pass shape is
+permanently reproducible in the merge gate. The directory is not a detail: this
+file used to write into the real `formal/out/`, so it truncated the log of any
+real run beside it and left a NUL hole where that run kept writing.
 """
 
 import os
@@ -56,6 +59,11 @@ Model checking completed. No error has been found.
 """
 
 
+#: Where the stand-in punches the NUL run. An environment variable cannot carry a
+#: NUL byte, so the hole travels as a marker in the output plus a count beside it.
+HOLE = "@@HOLE@@"
+
+
 @pytest.fixture
 def fake_tlc(tmp_path):
     jar = tmp_path / "tla2tools.jar"
@@ -71,19 +79,44 @@ def fake_tlc(tmp_path):
         "if '-Xmx-' in sys.argv:\n"
         "    sys.stderr.write('Error: Could not create the Java Virtual Machine.')\n"
         "    raise SystemExit(1)\n"
-        "print(os.environ['FAKE_TLC_OUTPUT'])\n"
+        f"head, _, tail = os.environ['FAKE_TLC_OUTPUT'].partition({HOLE!r})\n"
+        "out = sys.stdout.buffer\n"
+        "out.write(head.encode())\n"
+        "out.write(b'\\0' * int(os.environ['FAKE_TLC_HOLE']))\n"
+        # The mechanism itself, in one line: a SECOND O_TRUNC open on the log
+        # this process still holds. Its own next write then lands at the offset
+        # it had before, and everything between is a hole — which is the NULs.
+        "if os.environ['FAKE_TLC_TRUNCATE']:\n"
+        "    out.flush()\n"
+        "    open(os.environ['FAKE_TLC_TRUNCATE'], 'w').close()\n"
+        "out.write(tail.encode() + b'\\n')\n"
     )
     java.chmod(0o755)
-    return jar, java
+    return jar, java, tmp_path / "out"
 
 
-def run(fake_tlc, cfg: str, output: str, jar: pathlib.Path | None = None):
-    real_jar, java = fake_tlc
+def run(
+    fake_tlc,
+    cfg: str,
+    output: str,
+    jar: pathlib.Path | None = None,
+    hole: int = 0,
+    truncate: pathlib.Path | None = None,
+    coverage: bool = False,
+):
+    real_jar, java, out = fake_tlc
     env = {
         **os.environ,
+        "COVERAGE": "1" if coverage else "0",
         "JAVA": str(java),
         "TLA2TOOLS_JAR": str(jar or real_jar),
         "FAKE_TLC_OUTPUT": output,
+        "FAKE_TLC_HOLE": str(hole),
+        "FAKE_TLC_TRUNCATE": str(truncate or ""),
+        # Not `formal/out/`: these cases drive the REAL runner, so writing there
+        # truncates the log of whatever real TLC run is in flight beside them —
+        # which is the hole these cases are named for, and cost a standing rule.
+        "TLC_OUT": str(out),
     }
     return subprocess.run(
         [str(RUNNER), cfg],
@@ -205,4 +238,88 @@ def test_a_placeholder_heap_does_not_reach_the_jvm(fake_tlc):
     `-`, and `-Xmx-` is not a heap."""
     result = run(fake_tlc, "TraceSecurityBadAlwaysUvArm.cfg", RED_R4C)
     assert "Could not create the Java Virtual Machine" not in result.stdout
+    assert result.returncode == 0
+
+
+#: What two writers leave on one path: the second's truncation resets the size,
+#: the first writes on at its now-stale offset, and the gap between is NUL. The
+#: shape is the measured one — the merge gate's own fixture above 1550 NULs at
+#: offset 153, one straddled line, and the real run's own output from there on.
+HOLED_GREEN = f"""\
+22920 states generated
+1000 distinct states found
+The depth of the complete state graph search is 1.
+Model checking completed. No error has been found.
+{HOLE}states left on queue.
+699350223 states generated
+48679968 distinct states found
+The depth of the complete state graph search is 55.
+Model checking completed. No error has been found.
+"""
+
+
+def test_a_hole_in_the_log_does_not_turn_a_green_run_vacuous(fake_tlc):
+    """One NUL byte makes grep call the whole log binary and match nothing, so
+    every field comes back empty and the `< 2` rule fires over 48.7 M distinct
+    states. Both implementations get it wrong and disagree on how: GNU sends
+    `binary file matches` to stderr and the columns read `?`, BSD sends it to
+    stdout and they read `Binary`. Fails safe, which is why it survived."""
+    result = run(fake_tlc, "Shipped.cfg", HOLED_GREEN, hole=1550)
+    assert result.returncode == 0
+    assert "VACUOUS" not in result.stdout
+    assert "states=699350223" in result.stdout
+    assert "distinct=48679968" in result.stdout
+    assert "depth=55" in result.stdout
+
+
+#: The same hole under the other verdict branch, and under the one reader that
+#: only `COVERAGE=1` reaches. Blinding either is a silent PASS, not a false red:
+#: an unnamed RED still reads RED, and an unreported dead action reads GREEN.
+HOLED_RED = f"""\
+22920 states generated
+1000 distinct states found
+{HOLE}states left on queue.
+37 states generated
+37 distinct states found
+The depth of the complete state graph search is 37.
+Error: Invariant R4cGateAnswers is violated.
+"""
+
+HOLED_DEAD_ACTION = HOLED_GREEN.replace(
+    "699350223 states generated",
+    "<SetPin line 214, col 3 to line 219, col 41 of module RSKeySecurityState>: 0:0\n"
+    "699350223 states generated",
+)
+
+
+def test_a_hole_does_not_cost_a_red_row_its_invariant_name(fake_tlc):
+    """`-a` on the fields alone leaves this one blind, and the row still prints
+    RED — the colour is right and the reason is gone, which is the shape that
+    let nine trace rows compare nothing for their whole life."""
+    result = run(fake_tlc, "TraceSecurityBadAlwaysUvArm.cfg", HOLED_RED, hole=1550)
+    assert result.returncode == 0
+    assert "RED: R4cGateAnswers" in result.stdout
+
+
+def test_a_hole_does_not_hide_a_dead_action(fake_tlc):
+    """The reader only `COVERAGE=1` reaches. An action that never fired makes
+    every clause guarding it free, and a blinded grep reports none."""
+    result = run(fake_tlc, "Shipped.cfg", HOLED_DEAD_ACTION, hole=1550, coverage=True)
+    assert result.returncode == 1
+    assert "DEAD ACTION in Shipped.cfg -- never fired: SetPin" in result.stderr
+
+
+def test_a_second_writer_cannot_punch_a_hole_in_a_live_log(fake_tlc):
+    """And the mechanism, not just its symptom, because `-a` is only a backstop:
+    a hole that straddles a line takes that line with it whatever grep does. The
+    log is truncated at open and APPENDED to, so a second writer's truncation
+    leaves the first with no stale offset to write at."""
+    log = fake_tlc[2] / "Shipped.log"
+    result = run(fake_tlc, "Shipped.cfg", HOLED_GREEN, truncate=log)
+    body = log.read_bytes()
+    assert b"\0" not in body
+    # Not decoration: the truncation above CREATES this path, so a runner writing
+    # its log somewhere else entirely would leave an empty file here and satisfy
+    # the line above. Measured — that mutant survived until this line was added.
+    assert b"Model checking completed" in body
     assert result.returncode == 0
