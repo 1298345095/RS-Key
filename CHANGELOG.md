@@ -53,8 +53,8 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   workflow against **77 563 872** and **1869 s**. The seventh is the worst,
   because `docs/testing.md` introduces it as *the paragraph to quote*: TLC
   checked its invariants over **48,679,968** distinct states there, against
-  **77 563 872** — sixty per cent low, in the sentence a release is meant to
-  copy. None is a typo: each is a number whose only copy of the truth was the
+  **77 563 872** — 63 % of the measured count, in the sentence a release is meant
+  to copy. None is a typo: each is a number whose only copy of the truth was the
   moment somebody typed it.
 - **`formal/runs.toml` is the record they are written from.** Produced by
   `python scripts/run_count_gate.py --record <log>` over a capture of
@@ -68,6 +68,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **A historical quotation in `formal/README.md` was corrected back to the
+  number it was taken at, and the two copies of it are compared now.** The
+  pre-fix reading that motivates `verdict_gate.py`'s switch-parsing cases —
+  ``a defect armed in a baseline configuration while the row printed `ok — N
+  configuration(s)` and exited 0`` — was transcribed into `formal/README.md`
+  and `scripts/test_verdict_gate.py` by the same commit, both saying **191**.
+  A later sweep retyped every `191` on the README page when the roster grew,
+  and five of the six lines it moved were live claims that were right to move;
+  the sixth was this one, whose whole evidentiary value is that it does not
+  move. It went to **195**, which no roster ever printed: the derivation that
+  produced the reading was fixed while `formal/` held 192 configurations, one
+  of which is exempt. The copy under `scripts/` survived intact only because
+  no sweep reaches there. Both now read 191 and a test holds the pair to one
+  number.
 - **Each `[[run]]` also keeps the same run in TLC's own words, and the gate
   re-derives the matrix from it.** The record was the hole under everything
   above: `states`, `depth` and the wall clock were held against nothing at all

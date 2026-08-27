@@ -2674,7 +2674,7 @@ spellings defeat that — a trailing `\*` comment and a value wrapped onto the n
 line. Measured end to end against real TLC, not read off the source: `Boot.cfg`
 carrying `BugMarkerBeforeScrub = TRUE  \* E-arm kept` gave `run-tlc.sh`
 `RED: MarkerNeverLies … !! expected GREEN` while this row printed
-`ok — 195 configuration(s)` and exited 0 — a defect switched on in a **baseline**
+`ok — 191 configuration(s)` and exited 0 — a defect switched on in a **baseline**
 configuration, passing the merge gate and dying six days later. Routed through
 `gen-configs.sh` instead of edited by hand, `config_gen_gate.py` stayed green
 too, so nothing else was a backstop. A switch value that is neither `TRUE` nor

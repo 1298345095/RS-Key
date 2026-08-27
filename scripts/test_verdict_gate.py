@@ -802,3 +802,26 @@ def test_the_script_takes_no_argument(checkout):
     done = gate(checkout, "--all")
     assert done.returncode == 2, (done.stdout, done.stderr)
     assert "usage:" in done.stderr
+
+
+#: The two files that quote the pre-fix reading above. It was transcribed into
+#: both by the commit that fixed the defect, and nothing has ever compared them.
+QUOTED_IN = ("formal/README.md", "scripts/test_verdict_gate.py")
+QUOTE = re.compile(r"`ok — (\d+) configuration\(s\)`")
+
+
+def test_the_pre_fix_reading_is_quoted_with_one_number_in_both_places():
+    """A historical quotation's whole evidentiary value is that it is unchanged,
+    and this one was changed — by a bulk retype of every `191` on the page when
+    the roster grew to 196. Five of the six lines it moved were live claims about
+    the tree and were right to move; the sixth was this, and it went to a number
+    that was never true of anything: the derivation that printed it was fixed
+    when `formal/` held 192 configurations, and 192 - 1 exempt is 191.
+
+    The copy in this file survived only because no sweep reaches `scripts/`. So
+    the guard is the pair, not either one: the same measurement, quoted twice,
+    has to carry the same number.
+    """
+    said = {rel: set(QUOTE.findall((ROOT / rel).read_text())) for rel in QUOTED_IN}
+    assert all(len(v) == 1 for v in said.values()), said
+    assert len(set().union(*said.values())) == 1, said

@@ -661,8 +661,8 @@ run "slice evidence bundle"    python scripts/bundle_gate.py
 run "evidence vector"          python scripts/evidence_gate.py
 # And what the pages SAY a run was. Seven were stale the day this row landed --
 # `safety` published as 190 rows against a tier of 195, the model's state space
-# 60% low in the paragraph the docs call the one to quote, and five more between
-# them -- because every one was typed. The sentences are written from `formal/runs.toml`, which
+# at 63% of the measured count in the paragraph the docs call the one to quote,
+# and five more between them -- because every one was typed. The sentences are written from `formal/runs.toml`, which
 # holds the runner's own matrix per tier, and a count typed anywhere else in
 # docs/, formal/, .github/ or the root pages is a finding.
 run "published run-counts"     python scripts/run_count_gate.py

@@ -13,8 +13,8 @@ and 71, a slice page at `57 properties … 194 tiered` against 59 and 199, and
 `Shipped.cfg` at `48.7 M distinct states — 539 s` where the run this file records
 says 77 563 872 and half an hour. The seventh is the one `docs/testing.md`
 introduces as the paragraph to quote, where the model's state space stood at
-`48,679,968` — sixty per cent low. None is a typo. They are one defect: a number
-whose only copy of the truth is the moment somebody typed it.
+`48,679,968` — 63% of the measured count. None is a typo. They are one defect: a
+number whose only copy of the truth is the moment somebody typed it.
 
 Two halves, because either alone leaves the class open.
 
@@ -214,9 +214,14 @@ SCOPED = {
     ): "how many `floors.txt` rows carry a fourth column, a property of that file",
     (
         "formal/README.md",
-        "`ok — 195 configuration(s)` and exited 0",
+        "`ok — 191 configuration(s)` and exited 0",
     ): "a verbatim gate summary inside a mutation table: the string the row printed over "
-    "a mutated tree, which is evidence only while it is quoted unchanged",
+    "a mutated tree, which is evidence only while it is quoted unchanged — 191 because "
+    "`formal/` held 192 configurations the day the derivation was fixed and one is "
+    "exempt. It was registered here reading 195, which a bulk retype of every live count "
+    "on the page had put there and no roster ever printed. The pair, not this copy, is "
+    "what holds it now: `test_verdict_gate.py` quotes the same measurement and "
+    "`test_the_pre_fix_reading_is_quoted_with_one_number_in_both_places` compares them",
 }
 
 #: The Results table, split into the half a script cannot produce and the half it
@@ -782,7 +787,7 @@ def replace(text, name, body):
     Whatever the start marker's line begins with is carried onto every line the
     region emits, so a region may sit inside a markdown blockquote — which is
     where `docs/testing.md` keeps the one paragraph this project asks to be
-    quoted, and where its state count had gone stale by sixty per cent. Only `>`
+    quoted, and where its state count stood at 63% of the measured one. Only `>`
     and whitespace, because anything else is prose the generator would swallow.
     """
     start, end = START.format(name), END.format(name)
