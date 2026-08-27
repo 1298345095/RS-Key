@@ -146,11 +146,15 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `try_has_key` and `try_meta_find` answer `Err` for a probe the backend could not
   complete and `Ok` only for one it answered, and the collapsing `read`/`has_data`
   /`meta_find` are defined in terms of them, so the collapse is one visible line
-  per method instead of a property of the type. Twelve sites across five crates
-  took the fallible probe — every one whose *absent* arm overwrites configured
-  material or opens a gate. Sites where the absent arm only reports a status
-  field, repeats an idempotent repair, or fails the command closed keep
-  `has_data`; they are named in `try_read`'s documentation rather than converted.
+  per method instead of a property of the type. **37 guards in 17 functions across
+  five crates** took the fallible probe — every one whose *absent* arm overwrites
+  configured material or opens a gate (counted as `try_*` call sites plus the calls
+  through PIV's and OpenPGP's two module-local wrappers, tests and `rsk-fs` itself
+  excluded). Guards whose absent arm only reports a status field, repeats an
+  idempotent repair, or already fails the command closed keep `has_data` — the
+  `EF_MINPINLEN` floor among them, where the weaker reading costs the OWNER a
+  shorter PIN of their own choosing and gives an attacker nothing. `try_read`'s
+  documentation names the rule rather than the sites.
 
 - **A boot scan a read fault cut short made every credential slot it never
   reached read FREE, and `makeCredential` writes a free slot without re-reading
