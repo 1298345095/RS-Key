@@ -10,7 +10,9 @@ as a range.
 """
 
 import json
+import os
 import pathlib
+import re
 import shutil
 import sys
 import tomllib
@@ -55,16 +57,29 @@ def dump(doc) -> str:
     return "\n".join(out) + "\n"
 
 
+def method_targets(doc):
+    """The files the method rows point at, resolved the way the gate resolves
+    them — derived rather than transcribed, so a new row arrives in the fixture
+    instead of quietly dangling in it."""
+    for row in doc.get("method", []):
+        for word in re.split(r"[\s+]+", str(row.get("artifact", ""))):
+            name = word.strip(bundle_gate.TRIM).partition("::")[0]
+            found = bundle_gate.resolve(ROOT, name)
+            if found is not None:
+                yield str(found.relative_to(ROOT))
+
+
 def tree(tmp_path):
-    """A checkout carrying the real bundle, the registry and every artifact."""
+    """A checkout carrying the real bundle, the registry, every artifact and
+    every file a method row's `artifact` names."""
     for relative in (bundle_gate.BUNDLE, bundle_gate.REGISTRY):
         (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, tmp_path / relative)
     doc = tomllib.loads((ROOT / bundle_gate.BUNDLE).read_text())
-    for row in doc["artifact"]:
-        target = tmp_path / row["path"]
+    for relative in [row["path"] for row in doc["artifact"]] + list(method_targets(doc)):
+        target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(ROOT / row["path"], target)
+        shutil.copy(ROOT / relative, target)
     return tmp_path
 
 
@@ -161,6 +176,68 @@ def test_an_absolute_artifact_path_escapes_the_tree(tmp_path):
     root = tree(tmp_path)
     rewrite(root, lambda doc: doc["artifact"][0].update(path="/etc/hosts"))
     assert any("is absolute" in p for p in findings(root)), findings(root)
+
+
+def test_a_method_artifact_naming_a_harness_that_is_gone(tmp_path):
+    """The measured hole: deleting one of the four harnesses left the exit at 0,
+    and the bundle's own `kani=4` line green at 3."""
+    root = tree(tmp_path)
+    harness = root / "crates/rsk-fido/src/state_kani.rs"
+    harness.write_text(
+        harness.read_text().replace("no_authorization_bypass_walk_owner", "a_harness_by_another_name")
+    )
+    assert any("appears nowhere in" in p for p in findings(root)), findings(root)
+
+
+def test_an_elided_harness_is_resolved_against_the_file_before_it(tmp_path):
+    """`…_creds_begin_at_call_site` is a second harness in the file the token
+    before it named, so it is the spelling a `::`-only reader walks past."""
+    root = tree(tmp_path)
+    edit(root, "…_creds_begin_at_call_site", "…_creds_begin_at_the_wrong_site")
+    assert any("appears nowhere in" in p for p in findings(root)), findings(root)
+
+
+def test_a_bare_configuration_that_is_not_in_formal(tmp_path):
+    """Four of the eight rows name a `.cfg` with no directory. Reading only
+    `path::harness` leaves every one of them unresolved."""
+    root = tree(tmp_path)
+    edit(root, 'artifact = "Shipped.cfg"', 'artifact = "NoSuchThing.cfg"')
+    assert any("is not in the tree" in p for p in findings(root)), findings(root)
+
+
+def test_a_rust_file_named_without_its_harness(tmp_path):
+    """A file resolves and proves nothing: the harness is what a bounded proof
+    is identified by, and the file outlives any one of them."""
+    root = tree(tmp_path)
+    edit(root, "state_kani.rs::no_authorization_bypass_walk_owner", "state_kani.rs")
+    assert any("names a Rust file and no `::harness`" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize("escape", ["absolute", "dot-dot"])
+def test_a_method_artifact_that_escapes_the_tree(tmp_path, escape):
+    """Both spellings point at a file that really is there — in the REAL tree.
+    `root / "/x"` is `/x` and `root / "../../x"` climbs out, so `is_file()`
+    answers yes to each and "in the tree" is not what that checks."""
+    root = tree(tmp_path)
+    real = ROOT / "formal/Shipped.cfg"
+    target = str(real) if escape == "absolute" else os.path.relpath(real, root)
+    assert (root / target).is_file(), target
+    edit(root, 'artifact = "Shipped.cfg"', f'artifact = "{target}"')
+    assert any("is not in the tree" in p for p in findings(root)), findings(root)
+
+
+def test_a_method_row_whose_artifact_is_only_prose(tmp_path):
+    root = tree(tmp_path)
+    edit(root, 'artifact = "Shipped.cfg"', 'artifact = "a careful reading of the code"')
+    assert any("resolves nothing in the tree" in p for p in findings(root)), findings(root)
+
+
+def test_prose_beside_a_reference_is_not_demanded_to_resolve(tmp_path):
+    """Two rows trail off into prose — `bounds table`, `over …`. A rule that
+    demanded every word resolve is one that gets switched off inside a week."""
+    root = tree(tmp_path)
+    edit(root, 'artifact = "Shipped.cfg"', 'artifact = "Shipped.cfg, read against B1/B2 and the ladder"')
+    assert findings(root) == []
 
 
 def test_a_blank_leaf_is_a_dropped_field(tmp_path):

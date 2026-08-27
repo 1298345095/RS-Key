@@ -747,6 +747,22 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **A bundle's `method.artifact` named a proof nothing resolved against the
+  tree.** The first closed slice's evidence register names, per method row, the
+  artifact that discharged the obligation — `crates/rsk-fido/src/state_kani.rs::no_authorization_bypass_walk_owner`
+  among them — and `bundle_gate.py` required the *field* and read nothing inside
+  it. Measured: renaming that one harness left `slice evidence bundle` at
+  **EXIT=0**, and the bundle's own `gate_registry = "… kani=4 …"` line green at
+  three. Every reference resolves now, and token by token rather than by pattern,
+  because the eight rows spell one **six** ways: a repo path, a bare `Name.cfg`
+  (four rows — `formal/` is never written), `path::symbol`, an elided `…suffix`
+  continuing the file the token before it named, and two rows trailing off into
+  prose. A `.rs` file named *without* its `::harness` is refused as well: the
+  file outlives any one of them, so naming it alone is the spelling that would
+  have walked past this rule. Seven table cases, each killed by neutering the new
+  rule and nothing else — every one failing with an EMPTY finding list, which is
+  the direction that says the gate stayed silent over a broken bundle rather than
+  fired over a whole one.
 - **A green exhaustive TLC run was reported `VACUOUS`, and the reason was a hole
   in its own log.** `formal/run-tlc.sh` pulled `states`/`distinct`/`depth` out
   with plain `grep -oE`, and one NUL byte anywhere makes grep call the whole file

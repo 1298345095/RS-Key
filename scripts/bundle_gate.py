@@ -16,8 +16,12 @@ bottom of the tree; an empty string, an empty list and an empty table are all
 findings, in every group, at every depth. That is the only form in which
 "unabridged" is a predicate.
 
-Three rules are about the bundle being EVIDENCE rather than prose:
+Four rules are about the bundle being EVIDENCE rather than prose:
 
+* every `[[method]]`'s `artifact` resolves against the tree. The field is the
+  row's whole claim — this obligation, discharged by that proof — and nothing
+  read it: renaming `no_authorization_bypass_walk_owner` left the exit at 0, and
+  the bundle's own `kani=4` line green at 3;
 * every `[[artifact]]` names a path that is in the tree, and it is the unedited
   output of the run beside it — a summarized log is not an artifact;
 * every cost is a NUMBER. A range (`"1.5–3×"`, `"a few hours"`) is an estimate,
@@ -37,12 +41,17 @@ still exists, and that no cost was written as a range.
 
 import hashlib
 import pathlib
+import re
 import sys
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BUNDLE = pathlib.Path("assurance/bundle/SEC-FIDO-001.toml")
 REGISTRY = pathlib.Path("assurance/properties.toml")
+#: Where a bare `Name.cfg` lives. The bundle names TLC configurations without a
+#: directory throughout — four of the eight method rows do — and `formal/` is the
+#: only place either extension is written.
+FORMAL = pathlib.Path("formal")
 
 #: Stage 1A п.3's ten groups, in its order, with the table each is spelled as.
 #: The names are the contract's; renaming one here would be renaming the
@@ -101,6 +110,23 @@ FLOORS = {
 #: estimate wearing a measurement's field.
 COST_FIELDS = ("human_minutes", "runner_seconds", "peak_memory_mb")
 
+#: What makes a word of a `[[method]] artifact` a REFERENCE and not prose. Six
+#: spellings sit in the eight rows — a repo path, a bare `Name.cfg`,
+#: `path::symbol`, an elided `…suffix`, and two rows trailing off into prose
+#: (`bounds table`, `over …`) — so the field is resolved token by token. A rule
+#: demanding every word resolve gets switched off inside a week; one reading only
+#: `::` walks past `Shipped.cfg`.
+REFERENCE_SUFFIXES = (
+    ".cfg", ".tla", ".rs", ".py", ".sh", ".md", ".toml", ".txt", ".jsonl", ".log", ".gz",
+)
+
+#: `…_creds_begin_at_call_site`: a second harness inside the file the token
+#: before it named. The bundle already writes it this way.
+ELISION = ("…", "...")
+
+#: Punctuation a reference can be wrapped in without ceasing to be one.
+TRIM = "()[]{},;:'\"`"
+
 #: An assertion that fell describes the modelled defect, or its inverse. Anything
 #: else is a word nobody has to defend.
 DIRECTIONS = ("modelled", "inverse")
@@ -134,6 +160,73 @@ def leaves(value, path="") -> tuple[int, list[str]]:
     if isinstance(value, str) and not value.strip():
         return 1, [path]
     return 1, []
+
+
+def resolve(root: pathlib.Path, name: str) -> pathlib.Path | None:
+    """The file `name` names, or None. A bare configuration is `formal/`'s.
+
+    Absolute and `..` are None rather than resolved: `root / "/etc/hosts"` is
+    `/etc/hosts`, which `is_file()` answers yes to, and "in the tree" is what
+    this is about — the same spelling the `[[artifact]]` rule already pays for.
+    """
+    parts = pathlib.PurePosixPath(name).parts
+    if pathlib.PurePosixPath(name).is_absolute() or ".." in parts:
+        return None
+    if (root / name).is_file():
+        return root / name
+    if "/" not in name and pathlib.PurePosixPath(name).suffix in (".cfg", ".tla"):
+        return root / FORMAL / name if (root / FORMAL / name).is_file() else None
+    return None
+
+
+def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> None:
+    """Every `[[method]]`'s `artifact` names something this tree still has.
+
+    A `.rs` file must carry its `::symbol`. Naming the file alone is how this
+    rule would be walked past — a bounded proof is identified by its harness, and
+    the file outlives any one of them.
+    """
+    for index, row in enumerate(doc.get("method", []), 1):
+        if not isinstance(row, dict) or "artifact" not in row:
+            continue  # a dropped field is the REQUIRED rule's, reported once
+        where = f"{BUNDLE} method #{index}"
+        resolved, last = 0, None
+        for word in re.split(r"[\s+]+", str(row["artifact"])):
+            token = word.strip(TRIM)
+            if token.startswith(ELISION):
+                symbol, target = token.lstrip("…. "), last
+                if target is None:
+                    findings.append(f"{where}: `{token}` elides a file no earlier token named")
+                    continue
+            else:
+                name, _, symbol = token.partition("::")
+                if pathlib.PurePosixPath(name).suffix not in REFERENCE_SUFFIXES:
+                    continue
+                target = resolve(root, name)
+                if target is None:
+                    findings.append(
+                        f"{where}: `{name}` is not in the tree — a method row's"
+                        " artifact is the proof it claims, and one nothing resolves"
+                        " is a claim nobody can refute"
+                    )
+                    continue
+                resolved, last = resolved + 1, target
+                if target.suffix == ".rs" and not symbol:
+                    findings.append(
+                        f"{where}: `{name}` names a Rust file and no `::harness` —"
+                        " the file is not the proof, and it outlives any one of them"
+                    )
+            if symbol and symbol not in target.read_text(encoding="utf-8", errors="replace"):
+                findings.append(
+                    f"{where}: `{symbol}` appears nowhere in"
+                    f" {target.relative_to(root)} — the harness this row rests on"
+                    " is gone or renamed"
+                )
+        if not resolved:
+            findings.append(
+                f"{where}: `artifact` resolves nothing in the tree — a method with"
+                " no artifact is the obligation restated, not discharged"
+            )
 
 
 def audit(root: pathlib.Path) -> tuple[list[str], str]:
@@ -186,6 +279,8 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
     subject = doc.get("property", {}).get("id")
     if subject not in known:
         findings.append(f"{BUNDLE}: property `{subject}` is in no row of {REGISTRY}")
+
+    method_references(root, doc, findings)
 
     for index, row in enumerate(doc.get("artifact", []), 1):
         where = f"{BUNDLE} artifact #{index}"
