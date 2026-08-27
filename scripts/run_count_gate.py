@@ -789,12 +789,18 @@ def check_tlc(where, run, findings):
     """Every published number of a row, re-derived from what TLC said about the
     same run and compared to what the runner printed.
 
-    The one field with no second source was the whole of the record's exposure:
-    `check_record` held the roster, the verdicts and the floors, so a `distinct`
-    or a wall clock could be retyped and `--write` would carry it into six
-    published sentences. Neither half is proof a run happened — both are bytes in
-    a committed file — but they are two different programs' accounts of it, and
-    an edit to one is now a contradiction rather than an opinion.
+    The fields with no second source were the whole of the record's exposure:
+    `check_record` held the roster, the verdicts and the floors, so a `distinct`,
+    a wall clock, the date, the host or the workers could be retyped and
+    `--write` would carry it into six published sentences. Neither half is proof
+    a run happened — both are bytes in a committed file — but they are two
+    different programs' accounts of it, and an edit to one is now a contradiction
+    rather than an opinion.
+
+    And what the kept line says about ITSELF is checkable without the matrix at
+    all: a GREEN row prints a state count and leaves nothing on its queue, no run
+    finds more distinct states than it generated, and the rows agree with each
+    other about the box they ran on.
     """
     kept = {}
     for line in run.get("tlc", "").splitlines():
@@ -870,7 +876,8 @@ def check_tlc(where, run, findings):
             " rewritten to tell a different story about cost"
         )
     # ONE finding for a provenance field, not one per row: 199 copies of "the
-    # date is wrong" is the report defect where the reader is told the tree is.
+    # date is wrong" is the report defect where a reader is told the tree is
+    # wrong when one field of one line is.
     if len(stamps) > 1:
         findings.append(
             f"{where}: the kept summaries disagree about date/workers/cores/arch"
