@@ -120,7 +120,7 @@ id = "SEC-FIDO-005"
 name = "NoUnmanageableCredential"
 status = "MODELLED-ONLY"
 statement = "Every live credential is reachable by the management surface: its EF_RP entry exists."
-source = ["CTAP 2.3 §6.8"]
+source = ["CTAP 2.3 §6.8", "docs/threat-model.md#TM-HOST-CRED-REVOCABLE"]
 
 [[property]]
 id = "SEC-FIDO-006"
@@ -269,7 +269,7 @@ id = "SEC-STORE-001"
 name = "NoOrphanedMetadata"
 status = "MODELLED-ONLY"
 statement = "No delete — torn or complete — leaves a metadata record for the file it removed; value-gone-while-metadata-survives is the state the write order (metadata first) forbids."
-source = ["docs/store-refinement.md"]
+source = ["docs/store-refinement.md", "docs/threat-model.md#TM-HOST-POWER-CUT"]
 
 [[property]]
 id = "SEC-STORE-002"

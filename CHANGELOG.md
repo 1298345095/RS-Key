@@ -40,6 +40,39 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The threat model states the power-cut threat and the revocation threat it
+  had been defending against without stating.** Two clauses under *1. A hostile
+  host*: a flash write can be interrupted and the host picks which one is in
+  flight — with what the device owes across a cut, the write ORDER that buys it,
+  and the fact that the silicon half underneath is `PLAT-FLASH-001`, a **pending**
+  board measurement rather than a defence this firmware implements; and that you
+  must be able to see and revoke every credential the device holds, which is what
+  `EF_RP` reachability is for. Both were `[[untraced]]` findings against the page:
+  `SEC-FIDO-005` and `SEC-STORE-001` now name a clause instead. Measured:
+  `threat_gate.py` goes from *45 clauses (32 defence, 13 context), 33 of 40
+  P0-family traced, 10 served, 7 untraced* to *47 (34 defence, 13 context), 35 of
+  40 traced, 12 served, **5** untraced*, with `FLOOR_CLAUSES` 45 → 47 and
+  `CEILING_UNTRACED` 7 → 5 in the same diff. No heading is added and no clause id
+  is a rendered anchor, so the five pages that link this page's headings are
+  untouched, and the `citation-gate` count is unchanged at 636 — the page carries
+  no line citations at all.
+- **Three of the four store rows were filed against the wrong threat, and the
+  registry said so in prose nothing had checked.** `SEC-STORE-003/-004/-005` were
+  recorded as wanting a power-interruption clause; only `SEC-STORE-001` does. Four
+  independent readings, each re-derived: `formal/RSKeyStore.tla` says of `Put` and
+  `MetaAdd` that *"neither carries a cut point; only Delete does"*; the writers
+  that violate `-003` and `-004` are `BugMetaAddDropsOnFault` and
+  `BugMetaDeleteDropsOnFault`, both **faulted EF_META reads**; `Reboot` sets
+  `metaAbsent' = FALSE`, so a power cycle structurally cannot reach the false
+  absence `-004` forbids; and `crates/rsk-store/src/lib.rs:236` states outright
+  that a read fault is *"which a NOR power cut never produces (a torn write yields
+  deterministic bytes, not a read error)"*. Their `why` now says that, names
+  `TM-HOST-POWER-CUT` as the clause it is **not**, and pins the sentence it rests
+  on — the new clause's *"Scope: the interrupted write"* — so deleting that
+  sentence reddens the row rather than silently making all three verdicts wrong.
+  The threat those three are actually against, a `Storage::read` that fails,
+  remains stated nowhere on the page and is still their open finding.
+
 - **A threat-model clause is locked below its first line now, and which
   sentences are locked is derived rather than remembered.**
   `assurance/threat_clauses.toml` pins each clause by its `where` — the first

@@ -31,6 +31,41 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   while the device is plugged in and unlocked (sign, decrypt, assert). A
   security key authenticates *presence and possession*, not the intent of
   every byte the host sends. Touch requirements bound the rate.
+- **A flash write can be interrupted, and a host picks which one is in flight.**
+  The device is bus-powered with no reserve, so the supply belongs to whoever
+  holds the cable or the hub port, and because the host drives every operation it
+  chooses which write a cut lands in. It needs no attacker — a knocked cable does
+  the same thing — but it is cheap to aim, so treat it as aimed. There is no
+  transaction underneath: one applet operation is several `Fs` writes, and a cut
+  lands between any two of them. What the device owes across a cut is that
+  nothing comes back *weaker*: an interrupted write left the old value or the new
+  one, never a third; a record committed before the cut still reads back after
+  it; a delete the cut caught halfway leaves behind no metadata describing the
+  value it removed; and no gate comes up softer on the next boot than it went
+  down — a torn `authenticatorReset` may not drop the PIN or `alwaysUv` record
+  while leaving a credential usable. Write ORDER is what buys that, chosen per
+  operation and stated where the code does it: `Fs::delete` drops the metadata
+  before the value, registration writes the `EF_RP` entry before the credential,
+  a reset deletes the seed before anything derived from it. Underneath the order
+  sits an assumption about the silicon rather than a defence this firmware
+  implements — that a torn NOR write leaves the old bytes or detectably bad ones,
+  never a plausible wrong value. It is registered as `PLAT-FLASH-001` and is
+  discharged by a board measurement, not by code
+  ([platform-assumptions.md](platform-assumptions.md)). **Scope: the interrupted
+  write.** A flash *read* that comes back an error is a different condition, and
+  a NOR power cut does not produce one.
+- **You must be able to see and revoke every credential the device holds.**
+  Resident credentials live in `EF_CRED`, but `enumerateRPs`,
+  `enumerateCredentials` and the trusted-display Passkeys view all reach them
+  through `EF_RP` — so a credential whose `EF_RP` entry is missing is one
+  `getAssertion` signs with happily and that no management surface can list or
+  delete. That is not a confidentiality break; it is the loss of *revocation*,
+  and it does not heal on its own: a later registration of the same (rp, user)
+  dedups onto the record already there instead of writing the missing entry
+  (audit run-35). So every path that creates or destroys a credential —
+  registration, credential-management delete, and each of the resets — is ordered
+  to fail the harmless way round: an RP entry with no credential (invisible, and
+  reclaimed by the next `decrement_rp`) and never a credential with no RP entry.
 - **Device config is UNGATED on the default build.** The shipped default is the
   full-ykman/YubiKey-compatible admin surface: a hostile USB host can silently
   rewrite the DeviceInfo / enabled-applications / USB identity — over CCID

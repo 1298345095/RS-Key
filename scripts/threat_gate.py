@@ -92,14 +92,14 @@ VERDICTS = ("missing-clause", "defends-nothing")
 
 #: Floors AT today's counts, in the shape the rest of `scripts/` uses them: a
 #: derivation that finds nothing satisfies every rule below over an empty roster.
-#: 45 clauses is the page as it stands and 40 the P0 family as the tranches stand;
+#: 47 clauses is the page as it stands and 40 the P0 family as the tranches stand;
 #: shrinking either for real is a deliberate edit here, in the same diff.
-FLOOR_CLAUSES = 45
+FLOOR_CLAUSES = 47
 FLOOR_P0 = 40
 #: The untraced list is a finding register, and a finding register that grows
 #: silently is a hatch. Raising this is the deliberate admission that another
 #: property has no threat behind it.
-CEILING_UNTRACED = 7
+CEILING_UNTRACED = 5
 #: A `why` shorter than this is a shrug with a verdict column. Same floor and
 #: same reason as `matrix_gate.FLOOR_WORDS`, borrowed rather than re-picked.
 FLOOR_WORDS = matrix_gate.FLOOR_WORDS
