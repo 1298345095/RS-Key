@@ -1074,6 +1074,17 @@ def test_a_second_copy_re_wrapped_across_a_line(tree, big):
     assert only(tree.problems(), "is a second copy of 4000")
 
 
+def test_a_value_the_generator_wrapped_mid_number_is_still_hunted_for():
+    """The same wrap on the OTHER side of the rule, where it is silent. `emitted`
+    carried its own retyped copy of the grouping class with the newline left out,
+    so a value `fill` broke between groups came back as `563 872` and the real
+    `77 563 872` was then hunted for by nothing at all. Read as the set, because
+    nothing fails when this happens — a number simply stops being guarded."""
+    body = run_count_gate.fill("wwww " * 12 + "the count was 77 563 872 distinct states")
+    assert "77\n563" in body, body
+    assert 77563872 in run_count_gate.emitted({("x", "y"): body})
+
+
 @pytest.mark.parametrize("around", ("0x{}", "abc{}", "{}5", "1{}"))
 def test_a_value_inside_something_that_is_not_a_number(tree, big, around):
     """A hex constant and an identifier are not this number. `0x4000` matched

@@ -1175,25 +1175,35 @@ def scoped_spans(rel, text, findings):
 #: enumerate-the-shapes mistake this rule exists in order not to make, one level
 #: down inside it. Measured over the corpus: 0 such occurrences today and 0 new
 #: false positives, so it costs nothing and closes the spelling before it lands.
-GROUPER = r"[\x20    ,_\n\r\t]"
+#:
+#: Written with explicit escapes, and as the class's CONTENTS so its second
+#: reader shares them rather than retyping them. Both were the measured defect:
+#: this held the plain space TWICE and the three invisible characters raw --
+#: which is the bug [`GROUP`]'s own comment is about, two hundred lines up -- and
+#: `emitted` carried a retyped copy of the class with the newline left out. So a
+#: value the generator wrapped mid-number was read as `563 872`, and the real
+#: `77 563 872` was then hunted for by nothing at all, silently.
+GROUPING = r"\x20\u00a0\u2009\u202f,_\n\r\t"
+GROUPER = f"[{GROUPING}]"
+
+
+def groupings(value):
+    """One number and every way this tree groups it, as a pattern fragment. The
+    groups stay three digits wide, so a spaced-out digit string cannot match."""
+    return rf"{GROUPER}?".join(re.escape(part) for part in f"{value:,}".split(","))
 
 
 def spelled(value):
-    """One number and every grouping of it, as a pattern.
+    r"""One number and every grouping of it, as a pattern, anchored on both sides
+    against a digit or a decimal point so a value cannot match inside a longer
+    one.
 
-    Anchored on both sides against a digit or a decimal point, so a value cannot
-    match inside a longer one; the groups stay three digits wide, so a spaced-out
-    digit string cannot match either.
+    A word character on either side is a hex constant or an identifier, not this
+    number: `0x77563872` matched while the guard was `[\d.,_]`. A trailing `.` is
+    only refused when a digit follows it, or a value at the end of a sentence
+    would stop being one.
     """
-    return re.compile(
-        # A word character on either side is a hex constant or an identifier, not
-        # this number: `0x77563872` matched while the guard was `[\d.,_]`. A
-        # trailing `.` is only refused when a digit follows it, or a value at the
-        # end of a sentence would stop being one.
-        r"(?<!\w)(?<![.,])"
-        + rf"{GROUPER}?".join(re.escape(part) for part in f"{value:,}".split(","))
-        + r"(?!\w)(?![.,]\d)"
-    )
+    return re.compile(r"(?<!\w)(?<![.,])" + groupings(value) + r"(?!\w)(?![.,]\d)")
 
 
 def emitted(bodies):
@@ -1202,7 +1212,7 @@ def emitted(bodies):
     a second list would be the copy this rule exists to refuse."""
     out = set()
     for body in bodies.values():
-        for text in re.findall(r"\d[\d    ,_]*\d|\d", body):
+        for text in re.findall(rf"\d[\d{GROUPING}]*\d|\d", body):
             digits = re.sub(r"[^\d]", "", text)
             if digits and int(digits) >= VALUE_FLOOR:
                 out.add(int(digits))
