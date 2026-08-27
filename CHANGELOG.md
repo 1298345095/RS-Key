@@ -991,6 +991,23 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **Two more spellings of "the sentence is gone" that the clause lock read as
+  present.** `rests_on` matches a pinned sentence against a clause's body with
+  HTML comments stripped, because commenting one out takes it off the page and
+  leaves it in the source byte for byte. Enumerating the rest of that family
+  found the rule one character short in two directions, both measured GREEN
+  against the shipped tree: an `<!--` with **no closing `-->`** hides everything
+  after it from the reader and is stripped by nothing, and a sentence moved
+  inside a fence is still matched verbatim while it renders as a code sample
+  rather than a claim the page makes. A clause body now drops fenced lines — the
+  same treatment `clause_units` already gives them, because what is in a fence is
+  a sample and not a sentence the page asserts — and everything after an
+  unterminated `<!--`. Re-driven on the real page: every defeat-spelling red
+  (reword, deletion, dropped full stop, smart quotes, weakened emphasis,
+  zero-width space, either comment form, the fence, a move to a nested bullet),
+  every deliberate one still green (reflow, re-indent, trailing space, a comment
+  spliced mid-sentence, an unrelated fenced sample added to the body).
+
 - **The threat gate's own docstring claimed a refusal it has never had, and the
   refusal cannot be built.** It read that "an `[[untraced]]` entry for a property
   that has since gained a clause is a stale exemption and is refused"; what

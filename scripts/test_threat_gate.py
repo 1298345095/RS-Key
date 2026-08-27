@@ -541,6 +541,8 @@ PIN = "**Scope: the interrupted write.** A faulted read is another condition."
      pytest.param("  **Scope: the “interrupted” write.** A faulted read is another"
                   " condition.\n", id="smart-quotes"),
      pytest.param(f"  <!-- {PIN} -->\n", id="commented-out"),
+     pytest.param(f"  <!-- {PIN}\n", id="comment-left-open"),
+     pytest.param(f"  ```\n  {PIN}\n  ```\n", id="fenced-into-a-sample"),
      pytest.param("  *Scope: the interrupted write.* A faulted read is another"
                   " condition.\n", id="emphasis-weakened")],
 )
@@ -551,10 +553,12 @@ def test_a_rewrite_below_the_locked_first_line_is_refused(tree, rewrite):
     three untraced verdicts arguing from text that is gone, and every rule above
     stays green over it. Each spelling here is a way to make that edit look like
     something else — a word, a full stop, a quote pair, the emphasis that carries
-    "Scope" as a keyword. `commented-out` is the one a substring lock reads as no
-    edit at all: it takes the sentence off the rendered page and leaves it in the
-    source byte for byte, so the body is stripped of HTML comments before
-    anything is matched against it.
+    "Scope" as a keyword. The last three are the ones a substring lock reads as
+    no edit at all — each takes the sentence off the page, or out of its prose,
+    and leaves it in the source byte for byte. `comment-left-open` and
+    `fenced-into-a-sample` were both GREEN when only closed comments were
+    stripped, which is why the body now drops fenced lines and everything after
+    an unterminated `<!--` as well.
     """
     edit(tree, "docs/threat-model.md", f"  {PIN}\n", rewrite)
     found = problems(tree)

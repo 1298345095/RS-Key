@@ -190,10 +190,11 @@ def clause_units(text: str, problems: list[str] | None = None) -> list[tuple[int
 def clause_bodies(text: str, units: list[tuple[int, str, str]]) -> dict[str, str]:
     """first line -> everything UNDER it, down to the next clause, as one run.
 
-    Whitespace is normalised and HTML comments are removed, so what is matched is
-    what the page RENDERS. A pin is a sentence, not a layout: re-wrapping a
-    paragraph or re-indenting a bullet leaves the same sentence, while a reword,
-    a deletion or a character swap does not. Measured over this page's history,
+    Whitespace is normalised, HTML comments and fenced blocks are dropped, so
+    what is matched is the PROSE a reader gets. A pin is a sentence, not a
+    layout: re-wrapping a paragraph or re-indenting a bullet leaves the same
+    sentence, while a reword, a deletion, a character swap or a move into a
+    comment or a code sample does not. Measured over this page's history,
     39 clause bodies changed with their first line intact against 12 first lines
     reworded, so a pin that fired on every reflow would fire on most edits to the
     page and be suppressed like any other alarm that is usually noise.
@@ -202,7 +203,19 @@ def clause_bodies(text: str, units: list[tuple[int, str, str]]) -> dict[str, str
     bodies: dict[str, str] = {}
     for index, (number, _section, first) in enumerate(units):
         end = units[index + 1][0] - 1 if index + 1 < len(units) else len(lines)
-        body = COMMENT.sub(" ", "\n".join(lines[number:end]))
+        # Fenced lines are dropped for the same reason `clause_units` skips them:
+        # what is inside a fence is a sample, not a sentence the page asserts.
+        kept, fenced = [], False
+        for line in lines[number:end]:
+            if FENCE.match(line):
+                fenced = not fenced
+            elif not fenced:
+                kept.append(line)
+        body = COMMENT.sub(" ", "\n".join(kept))
+        # Whatever `<!--` survives that had no `-->`, and an unterminated comment
+        # hides the rest of the block from the reader while leaving every byte in
+        # the source — the same edit as a closed one, one character shorter.
+        body = body.split("<!--", 1)[0]
         # `setdefault`: two clauses reading alike is already its own finding, and
         # a second body under the same key would only hide which one moved.
         bodies.setdefault(first, " ".join(body.split()))
