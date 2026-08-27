@@ -19,6 +19,11 @@ a *package flag* is lives here for the same reason and later: the two had
 drifted into different answers, one taking `--package` and the other not,
 neither taking `--package=x`, so the same command read as two rosters.
 
+How to read *Rust* joined for the same reason and later still. `platform_gate.py`
+grew a lexer so its unsafe inventory would not be written by a comment saying a
+file has none; `shrink_gate.py` needs the same answer about `#[cfg(kani)]`, and a
+second copy would have inherited the same gap (see [`rust_code`]).
+
 Deliberately not here: what a roster *owes*. That differs per script and is the
 reason there are two of them.
 """
@@ -150,6 +155,72 @@ def yaml_runs(text):
         else:
             run_indent, folding, executed = None, False, False
         yield body, executed
+
+
+def rust_code(text):
+    """`text` with comments, string literals and char literals blanked, spans kept.
+
+    A lexer, not a token list, because the alternative is enumerating every form
+    a token takes and the review showed that list is the thing that goes wrong:
+    `unsafe` appears in `//! no unsafe`, in `/// the unsafe direction`, and inside
+    a `"\\n    unsafe fn "` a code generator emits, and a `#[cfg(kani)]` appears in
+    prose about one. Handles `//` to end of line, nested `/* … */`, `"…"` with
+    backslash escapes, `r#"…"#` and the `b` prefixes of both.
+
+    Char and byte literals are here because leaving them out is not a smaller
+    lexer, it is a wrong one: `b'"'` in `rsk-usb`'s keyboard map opened a string
+    that ran to the end of the file, and the module walk below then read that
+    file as declaring no modules at all. Measured over the checkout: 154 `.rs`
+    files lex differently with them handled, and `platform_gate.py`'s unsafe
+    inventory is unchanged on every one — the gap was reachable, not yet reached.
+    A lifetime is left alone by construction (`'a` has no closing quote).
+    """
+    out, i, n = [], 0, len(text)
+    while i < n:
+        char = text[i]
+        if char == "/" and text.startswith("//", i):
+            end = text.find("\n", i)
+            end = n if end < 0 else end
+            out.append(" " * (end - i))
+            i = end
+        elif char == "/" and text.startswith("/*", i):
+            depth, start = 1, i
+            i += 2
+            while i < n and depth:
+                if text.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif text.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+            out.append(" " * (i - start))
+        elif (raw := RAW_STRING.match(text, i)) is not None:
+            close = '"' + raw.group(1)
+            end = text.find(close, raw.end())
+            end = n if end < 0 else end + len(close)
+            out.append(" " * (end - i))
+            i = end
+        elif (lit := CHAR_LITERAL.match(text, i)) is not None:
+            out.append(" " * (lit.end() - i))
+            i = lit.end()
+        elif char == '"' or text.startswith('b"', i):
+            start, i = i, i + (2 if char == "b" else 1)
+            while i < n and text[i] != '"':
+                i += 2 if text[i] == "\\" else 1
+            i = min(i + 1, n)
+            out.append(" " * (i - start))
+        else:
+            out.append(char)
+            i += 1
+    return "".join(out)
+
+
+#: `r"…"`, `r#"…"#` and their `b` forms. The hashes are captured because they are
+#: part of the closing delimiter.
+RAW_STRING = re.compile(r'b?r(#*)"')
+
+#: `'x'`, `'\n'`, `b'"'` — never a lifetime, which has no closing quote.
+CHAR_LITERAL = re.compile(r"b?'(?:\\.|[^\\'])'")
 
 
 def tree_files(root):

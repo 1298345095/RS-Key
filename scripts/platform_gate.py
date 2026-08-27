@@ -293,52 +293,6 @@ def board_only_candidates(root):
     }
 
 
-def rust_code(text):
-    """`text` with comments and string literals blanked out, spans preserved.
-
-    A lexer, not a token list, because the alternative is enumerating every form
-    `unsafe` takes and the review showed that list is the thing that goes wrong:
-    the word appears in `//! no unsafe`, in `/// the unsafe direction`, and
-    inside a `"\\n    unsafe fn "` a code generator emits. Handles `//` to end of
-    line, nested `/* … */`, `"…"` with backslash escapes, and `r#"…"#`.
-    """
-    out, i, n = [], 0, len(text)
-    while i < n:
-        char = text[i]
-        if char == "/" and text.startswith("//", i):
-            end = text.find("\n", i)
-            end = n if end < 0 else end
-            out.append(" " * (end - i))
-            i = end
-        elif char == "/" and text.startswith("/*", i):
-            depth, start = 1, i
-            i += 2
-            while i < n and depth:
-                if text.startswith("/*", i):
-                    depth, i = depth + 1, i + 2
-                elif text.startswith("*/", i):
-                    depth, i = depth - 1, i + 2
-                else:
-                    i += 1
-            out.append(" " * (i - start))
-        elif char == "r" and (m := re.match(r'r(#*)"', text[i:])):
-            close = '"' + m.group(1)
-            end = text.find(close, i + m.end())
-            end = n if end < 0 else end + len(close)
-            out.append(" " * (end - i))
-            i = end
-        elif char == '"':
-            start, i = i, i + 1
-            while i < n and text[i] != '"':
-                i += 2 if text[i] == "\\" else 1
-            i = min(i + 1, n)
-            out.append(" " * (i - start))
-        else:
-            out.append(char)
-            i += 1
-    return "".join(out)
-
-
 def unsafe_candidates(root):
     """Every `.rs` whose CODE carries the token, which `docs/unsafe.md` enumerates."""
     return {
@@ -346,7 +300,7 @@ def unsafe_candidates(root):
         for rel in sorted(gate_lines.tree_files(root))
         if rel.suffix == ".rs"
         and not str(rel).startswith(UNSAFE_EXCLUDED)
-        and UNSAFE.search(rust_code((root / rel).read_text(errors="replace")))
+        and UNSAFE.search(gate_lines.rust_code((root / rel).read_text(errors="replace")))
     }
 
 
