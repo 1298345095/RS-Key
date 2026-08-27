@@ -800,6 +800,11 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `nil`, `TBD`, `todo`, `unknown`, `-`, `—`, `?`, `.`, `…`, a non-string).
   Scoped to those two and **not** to every leaf for a measured reason: `cfg` and
   `features` answer `none` in four rows each, and `none` is an answer there.
+  A string-valued `bound_*` is held to it as well, and that too was the fix's own
+  hole: half the bounds are numbers and `bound_totals` is a sentence, so
+  requiring the *key* was satisfied by a row whose only bound read `"n/a"` —
+  measured green before the extension. A numeric bound is never a non-answer,
+  because `bound_reset_window = 0` is a real one.
 - **A bundle's `method.artifact` named a proof nothing resolved against the
   tree.** The first closed slice's evidence register names, per method row, the
   artifact that discharged the obligation — `crates/rsk-fido/src/state_kani.rs::no_authorization_bypass_walk_owner`
@@ -812,10 +817,18 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   continuing the file the token before it named, and two rows trailing off into
   prose. A `.rs` file named *without* its `::harness` is refused as well: the
   file outlives any one of them, so naming it alone is the spelling that would
-  have walked past this rule. Seven table cases, each killed by neutering the new
+  have walked past this rule. Nine table cases, each killed by neutering the new
   rule and nothing else — every one failing with an EMPTY finding list, which is
   the direction that says the gate stayed silent over a broken bundle rather than
   fired over a whole one.
+  *And the rule's own first version had the defect it was closing.* It asked
+  whether the harness name occurred in the file's raw text, and
+  `credmgmt_kani.rs` names `no_authorization_bypass_walk_owner` **in a doc
+  comment** — so pointing the walk row at the wrong file resolved at EXIT=0. A
+  `.rs` target is read as code now, through `gate_lines.rust_code`, and matched
+  against what the file DECLARES; the suffix match the `…` elision needs is
+  scoped to the elision, because everywhere it would make `::owner` resolve
+  against `no_authorization_bypass_walk_owner`.
 - **A green exhaustive TLC run was reported `VACUOUS`, and the reason was a hole
   in its own log.** `formal/run-tlc.sh` pulled `states`/`distinct`/`depth` out
   with plain `grep -oE`, and one NUL byte anywhere makes grep call the whole file

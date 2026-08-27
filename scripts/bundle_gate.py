@@ -53,6 +53,8 @@ import re
 import sys
 import tomllib
 
+import gate_lines
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BUNDLE = pathlib.Path("assurance/bundle/SEC-FIDO-001.toml")
 REGISTRY = pathlib.Path("assurance/properties.toml")
@@ -142,6 +144,18 @@ ELISION = ("…", "...")
 #: Punctuation a reference can be wrapped in without ceasing to be one.
 TRIM = "()[]{},;:'\"`"
 
+#: A Rust item DECLARATION, matched over `gate_lines.rust_code` — the file's
+#: source with comments and string literals blanked. Reading raw text was this
+#: rule's own first version and its own defect: `credmgmt_kani.rs` names
+#: `no_authorization_bypass_walk_owner` in a doc comment, so pointing the walk
+#: row at the wrong file resolved at exit 0. What a file MENTIONS is not what it
+#: defines, which is the same measurement `platform_gate.py`'s inventory paid for.
+DECLARED = re.compile(
+    r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?"
+    r"(?:(?:const|async|unsafe|extern[ \t]+\"[^\"]*\")[ \t]+)*"
+    r"(?:fn|const|static|struct|enum|trait|type|mod)[ \t]+([A-Za-z_][A-Za-z0-9_]*)"
+)
+
 #: The method row's two PROSE fields — what the obligation is, and how the bound
 #: relates to the shipped domain. A required field is satisfied by any string, so
 #: `shipped_relation = "n/a"` cleared the rule that exists to demand the sentence.
@@ -225,6 +239,24 @@ def resolve(root: pathlib.Path, name: str) -> pathlib.Path | None:
     return None
 
 
+def defines(target: pathlib.Path, symbol: str, elided: bool = False) -> bool:
+    """Whether `target` DECLARES `symbol`, exactly — or ends in it, if elided.
+
+    The suffix arm is the elision's alone. Allowing it everywhere would make
+    `state_kani.rs::owner` resolve against `no_authorization_bypass_walk_owner`,
+    which is the rule loosened by the shape it was written to support.
+
+    Rust is read as code; anything else falls back to the text, because a `.cfg`
+    or a `.tla` has no item grammar this could parse and the claim there is only
+    that the name occurs.
+    """
+    text = target.read_text(encoding="utf-8", errors="replace")
+    if target.suffix != ".rs":
+        return symbol in text
+    names = DECLARED.findall(gate_lines.rust_code(text))
+    return any(name.endswith(symbol) if elided else name == symbol for name in names)
+
+
 def answers(value) -> bool:
     """Whether a prose field says anything at all.
 
@@ -247,7 +279,13 @@ def method_answers(doc: dict, findings: list[str]) -> None:
     for index, row in enumerate(doc.get("method", []), 1):
         if not isinstance(row, dict):
             continue
-        for field in PROSE_FIELDS:
+        # And every `bound_*` written as PROSE, because half of them are: a
+        # cardinality is a number and `bound_totals` is a sentence, so requiring
+        # the key is satisfied by one bound reading `n/a` — which was measured.
+        fields = list(PROSE_FIELDS) + [
+            key for key in row if key.startswith("bound_") and isinstance(row[key], str)
+        ]
+        for field in fields:
             value = row.get(field)
             if field not in row or (isinstance(value, str) and not value.strip()):
                 continue  # dropped or blank: reported once, by the rules that own it
@@ -273,7 +311,8 @@ def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> Non
         resolved, last = 0, None
         for word in re.split(r"[\s+]+", str(row["artifact"])):
             token = word.strip(TRIM)
-            if token.startswith(ELISION):
+            elided = token.startswith(ELISION)
+            if elided:
                 symbol, target = token.lstrip("…. "), last
                 if target is None:
                     findings.append(f"{where}: `{token}` elides a file no earlier token named")
@@ -296,11 +335,11 @@ def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> Non
                         f"{where}: `{name}` names a Rust file and no `::harness` —"
                         " the file is not the proof, and it outlives any one of them"
                     )
-            if symbol and symbol not in target.read_text(encoding="utf-8", errors="replace"):
+            if symbol and not defines(target, symbol, elided):
                 findings.append(
-                    f"{where}: `{symbol}` appears nowhere in"
-                    f" {target.relative_to(root)} — the harness this row rests on"
-                    " is gone or renamed"
+                    f"{where}: {target.relative_to(root)} declares no `{symbol}` —"
+                    " the harness this row rests on is gone or renamed, and a file"
+                    " that MENTIONS the name is not the file that has it"
                 )
         if not resolved:
             findings.append(

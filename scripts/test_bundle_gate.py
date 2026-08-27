@@ -265,7 +265,51 @@ def test_a_method_artifact_naming_a_harness_that_is_gone(tmp_path):
     harness.write_text(
         harness.read_text().replace("no_authorization_bypass_walk_owner", "a_harness_by_another_name")
     )
-    assert any("appears nowhere in" in p for p in findings(root)), findings(root)
+    assert any("declares no `" in p for p in findings(root)), findings(root)
+
+
+def test_a_file_that_mentions_the_harness_is_not_the_file_that_has_it(tmp_path):
+    """This rule's own first version read the file's raw text, and
+    `credmgmt_kani.rs` names `no_authorization_bypass_walk_owner` in a doc
+    comment — so pointing the walk row at the wrong file resolved at exit 0."""
+    root = tree(tmp_path)
+    mentions = (root / "crates/rsk-fido/src/credmgmt_kani.rs").read_text()
+    assert "no_authorization_bypass_walk_owner" in mentions, "the fixture lost the mention"
+    edit(root, "state_kani.rs::no_authorization_bypass_walk_owner",
+         "credmgmt_kani.rs::no_authorization_bypass_walk_owner")
+    assert any("declares no `no_authorization_bypass" in p for p in findings(root)), findings(root)
+
+
+def test_a_harness_is_matched_whole_and_not_by_suffix(tmp_path):
+    """The suffix arm belongs to the elision alone. Everywhere, it would make
+    `::owner` resolve against `no_authorization_bypass_walk_owner` — the rule
+    loosened by the shape it was written to support."""
+    root = tree(tmp_path)
+    edit(root, "state_kani.rs::no_authorization_bypass_walk_owner", "state_kani.rs::owner")
+    assert any("declares no `owner`" in p for p in findings(root)), findings(root)
+
+
+def test_a_bound_written_as_prose_answers_something(tmp_path):
+    """Half the bounds are numbers and `bound_totals` is a sentence, so requiring
+    the KEY is satisfied by one bound reading `n/a` — measured green."""
+    root = tree(tmp_path)
+
+    def blank(doc):
+        row = doc["method"][2]
+        for key in [k for k in row if k.startswith("bound_")][1:]:
+            row.pop(key)
+        row[[k for k in row if k.startswith("bound_")][0]] = "n/a"
+
+    rewrite(root, blank)
+    assert any("which answers nothing" in p for p in findings(root)), findings(root)
+
+
+def test_a_numeric_bound_is_never_a_non_answer(tmp_path):
+    """`bound_reset_window = 0` is a real bound — the window exercised closed."""
+    root = tree(tmp_path)
+    doc = tomllib.loads((root / bundle_gate.BUNDLE).read_text())
+    assert 0 in [r.get("bound_reset_window") for r in doc["method"]], doc["method"]
+    assert findings(root) == []
 
 
 def test_an_elided_harness_is_resolved_against_the_file_before_it(tmp_path):
@@ -273,7 +317,7 @@ def test_an_elided_harness_is_resolved_against_the_file_before_it(tmp_path):
     before it named, so it is the spelling a `::`-only reader walks past."""
     root = tree(tmp_path)
     edit(root, "…_creds_begin_at_call_site", "…_creds_begin_at_the_wrong_site")
-    assert any("appears nowhere in" in p for p in findings(root)), findings(root)
+    assert any("declares no `" in p for p in findings(root)), findings(root)
 
 
 def test_a_bare_configuration_that_is_not_in_formal(tmp_path):
