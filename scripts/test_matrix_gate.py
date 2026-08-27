@@ -393,6 +393,74 @@ def test_an_equivalence_the_feature_closure_refutes_is_rejected(tree, capsys):
     assert "rsk-screen" in said
 
 
+def test_the_page_derives_what_each_column_compiles_unlike_the_default(tree):
+    """The measured half of a `gap`. Three never-published measurement builds
+    were parked on "is a build nobody ships in the supported set at all", and the
+    answer that settled them was a derivation, not a ruling: what does this
+    column compile that the default does not. So the page carries it per column,
+    including the two ways it can be nothing — knobs only, and the default build
+    itself."""
+    page = (tree.root / matrix_gate.ARTIFACT).read_text()
+    rows = {
+        line.split("|")[2].strip(): line.split("|")[7].strip()
+        for line in page.splitlines()
+        if line.startswith("| 0") or line.startswith("| 1")
+    }
+    assert rows["`firmware`"] == "—"
+    assert rows["`firmware-pinned`"] == "—", "a knob-only column compiles like the default"
+    assert rows["`firmware-no-touch`"] == "`firmware` +`no-touch`"
+    assert rows["`firmware-screen`"] == "`firmware` +`screen`, `rsk-screen` (added)"
+
+
+def test_the_page_and_the_refusal_are_the_same_derivation(tree, capsys):
+    """A second copy of it would rot beside this one: the page could go on
+    printing an emptiness the rule had stopped agreeing with. So the crates an
+    `equivalent` is refused on are asserted to be the crates the page names."""
+    tree.edit("assurance/configurations.toml", 'same_as = "firmware"', 'same_as = "firmware-screen"')
+    said = red(tree, capsys)
+    page = (tree.root / matrix_gate.ARTIFACT).read_text()
+    cell = next(
+        line.split("|")[7] for line in page.splitlines() if "| `firmware-screen` |" in line
+    )
+    for crate in ("firmware", "rsk-screen"):
+        assert f"`{crate}`" in cell and crate in said
+
+
+def test_the_open_gaps_table_counts_the_rows_whose_own_crate_moved(tree):
+    """What a `gap` costs, per column. A board preset sets knobs and no cargo
+    feature, so NOTHING the properties are about compiles differently there and
+    the count is zero however many rows are open — which is the distinction three
+    parked measurement builds turned on, and the one a `gap` count alone hides."""
+    page = (tree.root / matrix_gate.ARTIFACT).read_text()
+    rows = {
+        line.split("|")[1].strip(): tuple(line.split("|")[2:4])
+        for line in page.splitlines()
+        if line.startswith("| `") and line.count("|") == 5
+    }
+    assert rows["`board-a`"] == (" 2 ", " 0 "), "knobs only: no owner crate moves"
+    assert rows["`firmware-no-touch`"] == (" 1 ", " 1 ")
+    assert rows["`firmware-screen`"] == (" 2 ", " 2 ")
+
+
+def test_the_delta_column_says_so_when_no_column_derives_as_the_default_build(tree):
+    """The origin is derived (no feature, no knob) rather than named, so a
+    renamed `firmware` cannot leave the page silently measuring against nothing
+    — every delta would read `—`, which is the strongest word the column has."""
+    for attr in ("default", "firmware"):
+        tree.edit(
+            "nix/firmware.nix",
+            f'    {attr} = mkFirmware {{ name = "firmware"; }};',
+            f'    {attr} = mkFirmware {{ name = "firmware"; flashSize = "16M"; }};',
+        )
+    page = matrix_gate.render(tree.root)
+    cells = [
+        line.split("|")[7].strip()
+        for line in page.splitlines()
+        if line.startswith("| 0") or line.startswith("| 1")
+    ]
+    assert cells and set(cells) == {"n/a — no column derives as the default build"}
+
+
 def test_an_equivalent_cell_with_the_basis_removed_is_rejected(tree, capsys):
     """The roadmap's exit predicate, second half: deleting the justification
     from an `equivalent` cell reddens the row."""

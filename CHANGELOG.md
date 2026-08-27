@@ -40,6 +40,37 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **Three build-configuration columns were parked on "is a build nobody ships in
+  the supported set at all", and the answer was a derivation rather than a
+  ruling.** `keygen-bench`, `core1-stats` and `bench` are measurement-only cargo
+  features with no flake package, and between them they hold 111 of the assurance
+  matrix's 958 `gap` cells. Measured with the gate's own feature resolution: the
+  hoped-for `equivalent` is **refuted** — none of the three resolves the default
+  build's per-crate closure, and no cargo-feature column ever can, because the
+  feature naming the column is in that column's own closure by construction. What
+  the measurement does buy is the size of the delta, and it separates the three:
+  `keygen-bench` and `core1-stats` move `firmware` and nothing else (the crate set
+  is identical, and 1 of each column's 37 open rows is owned by a crate that
+  moved), while `bench` also turns on `rsk-fido/bench` and pulls `rsk-bench` into
+  the image (8 of 37). The publication argument is refuted in the ledger from
+  both ends by columns already in it: `firmware-pico` is unpublished and disposed
+  of in full, and **8** columns are told "never ship" in `firmware/Cargo.toml`'s
+  own words — four of them the `no-touch` packages the matrix exists for. So all
+  111 cells stay honest `gap`s and the questions now carry the measurement
+  instead of the parked ruling.
+- **`docs/assurance-matrix.md` derives what each column compiles unlike the
+  default build**, instead of leaving it to a sentence someone has to keep true:
+  the Columns table gains the per-crate closure delta, and Open gaps gains how
+  many of a column's open rows are owned by a crate inside it. Both come from the
+  *same* function the `equivalent` rule refuses a cell on, so the page cannot
+  print an emptiness the gate has stopped agreeing with; a fork of it is one of
+  the six mutations the four new cases in `scripts/test_matrix_gate.py` were
+  driven against. Immediately visible: the six
+  board presets and the two flash-geometry packages move **0** owner crates
+  (their whole delta is knobs), `firmware-display` pulls four workspace crates in,
+  and `ea-conformance-rpid` transitively enables `fido-conformance` **and**
+  `strict-up`.
+
 - **The threat model states the power-cut threat and the revocation threat it
   had been defending against without stating.** Two clauses under *1. A hostile
   host*: a flash write can be interrupted and the host picks which one is in

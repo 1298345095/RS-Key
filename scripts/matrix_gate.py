@@ -764,15 +764,10 @@ def check_cell(root, pid, column, entry, by_name, own):
             problems.append(f"{where}: basis `{basis}` names no column in `same_as`")
         elif other.name == column.name:
             problems.append(f"{where}: `same_as` names its own column")
-        elif other.closure != column.closure or other.present != column.present:
-            differs = sorted(
-                crate
-                for crate in other.present | column.present
-                if other.closure.get(crate) != column.closure.get(crate)
-                or (crate in other.present) != (crate in column.present)
-            )
+        elif closure_delta(column, other):
             problems.append(
-                f"{where}: claims to compile like {other.name}, and {differs} compile"
+                f"{where}: claims to compile like {other.name}, and"
+                f" {sorted(closure_delta(column, other))} compile"
                 " differently — an equivalence the tree refutes"
             )
         else:
@@ -905,6 +900,42 @@ def unpinned_knobs(column, env):
         for key, value in column.knobs.items()
         if env.get(env_name(key)) != value
     )
+
+
+def closure_delta(column, other):
+    """crate -> (its features here, its features there) where the two differ.
+
+    The cargo half of an equivalence, and ONE derivation read twice: `check_cell`
+    refuses a `same-cargo-features` cell whose delta is non-empty, and `render`
+    prints the same delta for every column. So the page shows the sameness the
+    gate checks rather than a sentence someone has to keep true — which is what
+    the three never-published measurement builds needed, their whole story being
+    that delta (`bench` moves `rsk-fido` and pulls `rsk-bench` in; `keygen-bench`
+    moves one flag on `firmware` and nothing else).
+
+    `None` on a side means the crate is not compiled into that column at all, and
+    it is not `frozenset()`: a crate present with no features of its own is not
+    an absent one, and reading both as "no features" hid `rsk-bench` entering the
+    image — the one delta of the three that reaches a crate boundary.
+    """
+    out = {}
+    for crate in sorted(column.present | other.present):
+        here = column.closure.get(crate, frozenset()) if crate in column.present else None
+        there = other.closure.get(crate, frozenset()) if crate in other.present else None
+        if here != there:
+            out[crate] = (here, there)
+    return out
+
+
+def _crate_delta(crate, here, there):
+    """One [`closure_delta`] entry, for the page. Absence is said, not implied."""
+    if there is None:
+        return f"`{crate}` (added)"
+    if here is None:
+        return f"`{crate}` (absent)"
+    marks = [f"+`{f}`" for f in sorted(here - there)]
+    marks += [f"-`{f}`" for f in sorted(there - here)]
+    return f"`{crate}` " + " ".join(marks)
 
 
 def knob_delta(column, other):
@@ -1044,16 +1075,36 @@ def render(root):
         "",
         "## Columns",
         "",
-        "| # | Configuration | Kind | Published | Cargo features | Knobs |",
-        "|---|---|---|---|---|---|",
+        "The last cell is DERIVED, not declared: the per-crate cargo-feature"
+        " closure this column resolves to, against the default build's. It is the"
+        " same derivation the `equivalent` rule refuses a cell on, so a column"
+        " reading `—` there compiles the workspace exactly as the default build"
+        " does and its whole delta is knobs — and a column that names a crate has"
+        " that crate's code moving under every row of its column, which is the"
+        " fact a `gap` there is about.",
+        "",
+        "| # | Configuration | Kind | Published | Cargo features | Knobs | Compiles unlike the default build |",
+        "|---|---|---|---|---|---|---|",
     ]
     index = {column.name: f"{n:02d}" for n, column in enumerate(cols, 1)}
+    # The default build is derived (no feature, no knob) rather than named, so a
+    # renamed `firmware` cannot leave the page measuring against nothing in
+    # silence. Without one there is no origin to measure from and the cell says so.
+    reference = next((column for column in cols if column.default), None)
     for column in cols:
         feats = ", ".join(f"`{f}`" for f in sorted(column.features)) or "—"
         knobs = ", ".join(f"`{k}={v}`" for k, v in sorted(column.knobs.items())) or "—"
         flag = "yes" if column.published else ("n/a" if column.kind != "package" else "no")
+        if reference is None:
+            delta = "n/a — no column derives as the default build"
+        else:
+            delta = ", ".join(
+                _crate_delta(crate, here, there)
+                for crate, (here, there) in closure_delta(column, reference).items()
+            ) or "—"
         out.append(
-            f"| {index[column.name]} | `{column.name}` | {column.kind} | {flag} | {feats} | {knobs} |"
+            f"| {index[column.name]} | `{column.name}` | {column.kind} | {flag}"
+            f" | {feats} | {knobs} | {delta} |"
         )
 
     out += [
@@ -1093,12 +1144,30 @@ def render(root):
             "",
         ]
 
-    out += ["## Open gaps", "", "| Configuration | `gap` rows | The question that would settle them |", "|---|---|---|"]
+    out += [
+        "## Open gaps",
+        "",
+        "The middle column is derived, and it is what a `gap` here costs: the open"
+        " rows whose OWNING crates — the ones whose production Rust carries the"
+        " property's tag — are among the crates the column compiles unlike the"
+        " default build, above. Outside it, the code the statement is about did not"
+        " move and the question is whether the rest of the image reaches it; inside"
+        " it, the statement is about a different compilation. Three P0-family rows"
+        " carry no production tag at all and count as not moving, which is the one"
+        " direction this number can be wrong in.",
+        "",
+        "| Configuration | `gap` rows | of which the owner crate moves | The question that would settle them |",
+        "|---|---|---|---|",
+    ]
+    own = owners(root)
     for column in cols:
         open_rows = [pid for pid in rows if (pid, column.name) not in placed]
         if open_rows:
+            moved = set(closure_delta(column, reference)) if reference else set()
+            reaches = sum(1 for pid in open_rows if own.get(pid, frozenset()) & moved)
             out.append(
-                f"| `{column.name}` | {len(open_rows)} | {questions.get(column.name, '')} |"
+                f"| `{column.name}` | {len(open_rows)} | {reaches}"
+                f" | {questions.get(column.name, '')} |"
             )
 
     out += [

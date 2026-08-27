@@ -26,39 +26,41 @@ These are the **committed** configurations, not the buildable ones. Every `mkFir
 
 ## Columns
 
-| # | Configuration | Kind | Published | Cargo features | Knobs |
-|---|---|---|---|---|---|
-| 01 | `firmware` | package | yes | — | — |
-| 02 | `firmware-no-touch` | package | no | `no-touch` | — |
-| 03 | `firmware-fips` | package | yes | `fips-profile` | — |
-| 04 | `firmware-pqc` | package | yes | `advertise-pqc` | — |
-| 05 | `firmware-fips-pqc` | package | yes | `advertise-pqc`, `fips-profile` | — |
-| 06 | `firmware-no-touch-pqc` | package | no | `advertise-pqc`, `no-touch` | — |
-| 07 | `firmware-no-touch-fips` | package | no | `fips-profile`, `no-touch` | — |
-| 08 | `firmware-no-touch-fips-pqc` | package | no | `advertise-pqc`, `fips-profile`, `no-touch` | — |
-| 09 | `firmware-strong-pin` | package | yes | `strong-pin` | — |
-| 10 | `firmware-strong-pin-pqc` | package | yes | `advertise-pqc`, `strong-pin` | — |
-| 11 | `firmware-always-uv` | package | yes | `always-uv` | — |
-| 12 | `firmware-always-uv-pqc` | package | yes | `advertise-pqc`, `always-uv` | — |
-| 13 | `firmware-strict-up` | package | yes | `strict-up` | — |
-| 14 | `firmware-strict-up-pqc` | package | yes | `advertise-pqc`, `strict-up` | — |
-| 15 | `firmware-pico` | package | no | — | `vidpid=Pico` |
-| 16 | `firmware-display` | package | yes | `display` | `flashSize=16M`, `ledKind=none` |
-| 17 | `firmware-2mb` | package | yes | — | `flashSize=2M`, `kvmain=896K` |
-| 18 | `firmware-16mb` | package | yes | — | `flashSize=16M` |
-| 19 | `firmware-strict-config` | package | yes | `strict-config` | — |
-| 20 | `keygen-bench` | feature | n/a | `keygen-bench` | — |
-| 21 | `core1-stats` | feature | n/a | `core1-stats` | — |
-| 22 | `bench` | feature | n/a | `bench` | — |
-| 23 | `fido-conformance` | feature | n/a | `fido-conformance` | — |
-| 24 | `ea-conformance-rpid` | feature | n/a | `ea-conformance-rpid` | — |
-| 25 | `largeblob-ext` | feature | n/a | `largeblob-ext` | — |
-| 26 | `abrobot-16m` | board | n/a | — | `flash.kvmain_kb=1408`, `flash.size_mb=16`, `led.kind=ws2812`, `led.max_leds=4`, `led.order=grb`, `led.pin=16`, `presence.active_high=False`, `presence.pin=23`, `presence.source=gpio`, `usb.vidpid=RSKey` |
-| 27 | `abrobot-4m` | board | n/a | — | `flash.kvmain_kb=1408`, `flash.size_mb=4`, `led.kind=ws2812`, `led.max_leds=4`, `led.order=grb`, `led.pin=16`, `presence.active_high=False`, `presence.pin=23`, `presence.source=gpio`, `usb.vidpid=RSKey` |
-| 28 | `seeed-xiao` | board | n/a | — | `flash.kvmain_kb=896`, `flash.size_mb=2`, `led.kind=ws2812`, `led.order=grb`, `led.pin=22`, `led.power_pin=23`, `presence.source=bootsel`, `usb.vidpid=RSKey`, `usr_led.active_high=False`, `usr_led.pin=25` |
-| 29 | `tenstar-usb` | board | n/a | — | `flash.kvmain_kb=1408`, `flash.size_mb=16`, `led.kind=ws2812`, `led.order=grb`, `led.pin=22`, `presence.active_high=False`, `presence.pin=15`, `presence.source=gpio`, `usb.vidpid=RSKey` |
-| 30 | `waveshare-one` | board | n/a | — | `flash.kvmain_kb=1408`, `flash.size_mb=4`, `led.kind=ws2812`, `led.order=rgb`, `led.pin=16`, `presence.source=bootsel`, `usb.vidpid=RSKey` |
-| 31 | `waveshare-touch-lcd` | board | n/a | — | `display.bl_pin=16`, `display.bl_pwm_channel=A`, `display.bl_pwm_slice=0`, `display.cs=13`, `display.dc=14`, `display.rst=15`, `display.spi_freq_hz=62500000`, `display.tp_rst=17`, `display.wake_active_high=False`, `display.wake_pin=25`, `flash.kvmain_kb=1408`, `flash.size_mb=16`, `led.kind=none`, `presence.source=bootsel`, `usb.vidpid=RSKey` |
+The last cell is DERIVED, not declared: the per-crate cargo-feature closure this column resolves to, against the default build's. It is the same derivation the `equivalent` rule refuses a cell on, so a column reading `—` there compiles the workspace exactly as the default build does and its whole delta is knobs — and a column that names a crate has that crate's code moving under every row of its column, which is the fact a `gap` there is about.
+
+| # | Configuration | Kind | Published | Cargo features | Knobs | Compiles unlike the default build |
+|---|---|---|---|---|---|---|
+| 01 | `firmware` | package | yes | — | — | — |
+| 02 | `firmware-no-touch` | package | no | `no-touch` | — | `firmware` +`no-touch` |
+| 03 | `firmware-fips` | package | yes | `fips-profile` | — | `firmware` +`fips-profile`, `rsk-fido` +`fips-profile`, `rsk-piv` +`fips-profile` |
+| 04 | `firmware-pqc` | package | yes | `advertise-pqc` | — | `firmware` +`advertise-pqc`, `rsk-fido` +`advertise-pqc` |
+| 05 | `firmware-fips-pqc` | package | yes | `advertise-pqc`, `fips-profile` | — | `firmware` +`advertise-pqc` +`fips-profile`, `rsk-fido` +`advertise-pqc` +`fips-profile`, `rsk-piv` +`fips-profile` |
+| 06 | `firmware-no-touch-pqc` | package | no | `advertise-pqc`, `no-touch` | — | `firmware` +`advertise-pqc` +`no-touch`, `rsk-fido` +`advertise-pqc` |
+| 07 | `firmware-no-touch-fips` | package | no | `fips-profile`, `no-touch` | — | `firmware` +`fips-profile` +`no-touch`, `rsk-fido` +`fips-profile`, `rsk-piv` +`fips-profile` |
+| 08 | `firmware-no-touch-fips-pqc` | package | no | `advertise-pqc`, `fips-profile`, `no-touch` | — | `firmware` +`advertise-pqc` +`fips-profile` +`no-touch`, `rsk-fido` +`advertise-pqc` +`fips-profile`, `rsk-piv` +`fips-profile` |
+| 09 | `firmware-strong-pin` | package | yes | `strong-pin` | — | `firmware` +`strong-pin`, `rsk-fido` +`strong-pin` |
+| 10 | `firmware-strong-pin-pqc` | package | yes | `advertise-pqc`, `strong-pin` | — | `firmware` +`advertise-pqc` +`strong-pin`, `rsk-fido` +`advertise-pqc` +`strong-pin` |
+| 11 | `firmware-always-uv` | package | yes | `always-uv` | — | `firmware` +`always-uv`, `rsk-fido` +`always-uv` |
+| 12 | `firmware-always-uv-pqc` | package | yes | `advertise-pqc`, `always-uv` | — | `firmware` +`advertise-pqc` +`always-uv`, `rsk-fido` +`advertise-pqc` +`always-uv` |
+| 13 | `firmware-strict-up` | package | yes | `strict-up` | — | `firmware` +`strict-up`, `rsk-fido` +`strict-up` |
+| 14 | `firmware-strict-up-pqc` | package | yes | `advertise-pqc`, `strict-up` | — | `firmware` +`advertise-pqc` +`strict-up`, `rsk-fido` +`advertise-pqc` +`strict-up` |
+| 15 | `firmware-pico` | package | no | — | `vidpid=Pico` | — |
+| 16 | `firmware-display` | package | yes | `display` | `flashSize=16M`, `ledKind=none` | `firmware` +`display`, `rsk-bip39` (added), `rsk-device` +`display`, `rsk-display` (added), `rsk-slip39` (added), `rsk-ui` (added) |
+| 17 | `firmware-2mb` | package | yes | — | `flashSize=2M`, `kvmain=896K` | — |
+| 18 | `firmware-16mb` | package | yes | — | `flashSize=16M` | — |
+| 19 | `firmware-strict-config` | package | yes | `strict-config` | — | `firmware` +`strict-config`, `rsk-device` +`strict-config`, `rsk-fido` +`strict-config`, `rsk-mgmt` +`strict-config`, `rsk-otp` +`strict-config`, `rsk-vendor` +`strict-config` |
+| 20 | `keygen-bench` | feature | n/a | `keygen-bench` | — | `firmware` +`keygen-bench` |
+| 21 | `core1-stats` | feature | n/a | `core1-stats` | — | `firmware` +`core1-stats` |
+| 22 | `bench` | feature | n/a | `bench` | — | `firmware` +`bench`, `rsk-bench` (added), `rsk-fido` +`bench` |
+| 23 | `fido-conformance` | feature | n/a | `fido-conformance` | — | `firmware` +`fido-conformance`, `rsk-fido` +`fido-conformance` +`strict-up` |
+| 24 | `ea-conformance-rpid` | feature | n/a | `ea-conformance-rpid` | — | `firmware` +`ea-conformance-rpid`, `rsk-fido` +`ea-conformance-rpid` +`fido-conformance` +`strict-up` |
+| 25 | `largeblob-ext` | feature | n/a | `largeblob-ext` | — | `firmware` +`largeblob-ext`, `rsk-fido` +`largeblob-ext` |
+| 26 | `abrobot-16m` | board | n/a | — | `flash.kvmain_kb=1408`, `flash.size_mb=16`, `led.kind=ws2812`, `led.max_leds=4`, `led.order=grb`, `led.pin=16`, `presence.active_high=False`, `presence.pin=23`, `presence.source=gpio`, `usb.vidpid=RSKey` | — |
+| 27 | `abrobot-4m` | board | n/a | — | `flash.kvmain_kb=1408`, `flash.size_mb=4`, `led.kind=ws2812`, `led.max_leds=4`, `led.order=grb`, `led.pin=16`, `presence.active_high=False`, `presence.pin=23`, `presence.source=gpio`, `usb.vidpid=RSKey` | — |
+| 28 | `seeed-xiao` | board | n/a | — | `flash.kvmain_kb=896`, `flash.size_mb=2`, `led.kind=ws2812`, `led.order=grb`, `led.pin=22`, `led.power_pin=23`, `presence.source=bootsel`, `usb.vidpid=RSKey`, `usr_led.active_high=False`, `usr_led.pin=25` | — |
+| 29 | `tenstar-usb` | board | n/a | — | `flash.kvmain_kb=1408`, `flash.size_mb=16`, `led.kind=ws2812`, `led.order=grb`, `led.pin=22`, `presence.active_high=False`, `presence.pin=15`, `presence.source=gpio`, `usb.vidpid=RSKey` | — |
+| 30 | `waveshare-one` | board | n/a | — | `flash.kvmain_kb=1408`, `flash.size_mb=4`, `led.kind=ws2812`, `led.order=rgb`, `led.pin=16`, `presence.source=bootsel`, `usb.vidpid=RSKey` | — |
+| 31 | `waveshare-touch-lcd` | board | n/a | — | `display.bl_pin=16`, `display.bl_pwm_channel=A`, `display.bl_pwm_slice=0`, `display.cs=13`, `display.dc=14`, `display.rst=15`, `display.spi_freq_hz=62500000`, `display.tp_rst=17`, `display.wake_active_high=False`, `display.wake_pin=25`, `flash.kvmain_kb=1408`, `flash.size_mb=16`, `led.kind=none`, `presence.source=bootsel`, `usb.vidpid=RSKey` | — |
 
 ## The matrix
 
@@ -183,36 +185,38 @@ These are the **committed** configurations, not the buildable ones. Every `mkFir
 
 ## Open gaps
 
-| Configuration | `gap` rows | The question that would settle them |
-|---|---|---|
-| `firmware-no-touch` | 33 | Beyond the four presence statements: which rows depend on a presence decision only INDIRECTLY — a reset is reached through a touch, so does `SEC-FIDO-006`'s torn-reset argument still describe an image where the touch is instant? |
-| `firmware-fips` | 37 | `fips-profile` changes `rsk-fido` and `rsk-piv` — the PIN policy and the permitted algorithm set. `check.sh` runs the `rsk-fido` and `rsk-piv` test suites under it, so the question is narrow: does any P0-family invariant's model take the PIN floor or the algorithm set as a parameter, and if so, was it re-checked at the profile's values? |
-| `firmware-pqc` | 37 | `advertise-pqc` only adds ML-DSA-44 to the `getInfo` algorithm list — is that the whole delta for every P0-family row, or does the larger credential/attestation path move with it? |
-| `firmware-fips-pqc` | 37 | As `firmware-fips`, on the combination with `advertise-pqc`; the pair is published and nothing measures the two features together. |
-| `firmware-no-touch-pqc` | 33 | As `firmware-no-touch`, plus: does advertising ML-DSA-44 in `getInfo` change any authorization path, or only the algorithm list? |
-| `firmware-no-touch-fips` | 33 | As `firmware-no-touch`, plus the `fips-profile` question: the locked algorithm policy also raises the PIN floor, so which retry/gate properties are re-measured under it? |
-| `firmware-no-touch-fips-pqc` | 33 | The union of the `firmware-no-touch`, `firmware-fips` and `firmware-pqc` questions; no evidence is measured on the three-feature combination at all. |
-| `firmware-strong-pin` | 37 | A six-code-point floor and a trivially-guessable-PIN refusal. Does any P0-family statement quantify over PIN values, or do they all treat the PIN as an opaque secret whose policy is someone else's row? |
-| `firmware-strong-pin-pqc` | 37 | As `firmware-strong-pin`, on the combination with `advertise-pqc`. |
-| `firmware-always-uv` | 37 | `always-uv` ships `alwaysUv` ON, which changes what `SEC-FIDO-001`'s gate DEMANDS rather than whether it is enforced — and `SEC-FIDO-006B` is about the alwaysUv gate surviving a reset, with a compiled-in default this column moves. Do the model's gate constants cover the alwaysUv-on arm? THE MODEL HALF IS ANSWERED: `AlwaysUvShipped` is AS-AUTH-2 in `assurance/assumptions.toml`, and `AlwaysUv.cfg` runs all six invariants with it TRUE — GREEN over 23 521 512 distinct states at depth 51. THE CODE HALF IS NOT, and its cost is now a number rather than an omission: `cargo test -p rsk-fido --features always-uv` is 446 passed and 172 FAILED, because alwaysUv with no PIN answers `PUAT_REQUIRED` and the suite is written against the default door. So no `check.sh` row exercises this column, and `covered` may rest only on the default build or on such a row — the matrix has no basis for "the model half is checked at this column's own constant", which is evidence-schema work and not a cell anybody can fill here. |
-| `firmware-always-uv-pqc` | 37 | As `firmware-always-uv`, on the combination with `advertise-pqc`. |
-| `firmware-strict-up` | 37 | `strict-up` demands a touch on EVERY assertion, dropping the silent `up:false` pre-flight. That strengthens the gate — but `SEC-FIDO-002` is about presence decisions not crossing transports, and this column produces strictly more of them. Is the model's transport arity still the right one? |
-| `firmware-strict-up-pqc` | 37 | As `firmware-strict-up`, on the combination with `advertise-pqc`. |
-| `firmware-display` | 40 | This column is NOT `default + display`: it also sets `flashSize = 16M` and `ledKind = none`, and it re-routes user presence through the panel's Approve/Deny instead of the button. Each non-display row therefore has to answer three questions, not one — and the flash-geometry half is the same 16 MB question the board axis carries. It reaches the three `SEC-DISP-*` rows too, which is why they are `gap` here and not `covered`: the ceremony's evidence — `formal/Display.cfg`, the `rsk-ui`/`rsk-display` host tests and the `check.sh` rows that compile the feature — was every bit of it produced at the DEFAULT 4 MB geometry, and no row in the tree builds `--features display` at `FLASH_SIZE=16M`. Either add that row, or say in a `conditional` what the ceremony claim is conditional on. |
-| `firmware-2mb` | 31 | 2 MB with `KVMAIN` shrunk to 896 K. Do the store properties' models take the partition size as a parameter, and were they checked at the shrunk one? The scope floors in `formal/floors.txt` are about model constants, not about the device's own capacity. |
-| `firmware-16mb` | 31 | 16 MB with the default 1408 K `KVMAIN`. This is the geometry on which a whole KV store survived a wipe the device reported as successful — so for every store and boot row the question is not "does the code differ" (it does not) but "was the evidence ever produced against this partition map". |
-| `firmware-strict-config` | 37 | The largest feature delta in the tree: five crates, and it re-imposes the presence/PIN gates on device-config writes that the DEFAULT build leaves ungated. `SEC-ADM-002` and `SEC-ADM-004` are about exactly that surface, so this column is the one where their disposition may be STRONGER than the default's — which the matrix has no way to say until someone measures it. |
-| `keygen-bench` | 37 | A debug vendor command (INS 0x13) that `firmware/Cargo.toml` says never to ship, and it exposes a timing oracle over the primality primitives. Is a never-shipped measurement build inside the supported configuration set at all? That is a maintainer ruling, not a derivation — and the four `no-touch` packages answer it the other way, so it cannot be assumed. |
-| `core1-stats` | 37 | As `keygen-bench`: INS 0x12 exposes per-core candidate/find rates, which time the RSA keygen prime search. Same unresolved question about never-shipped measurement builds. |
-| `bench` | 37 | As `keygen-bench`, and it is the one of the three that also pulls a crate (`rsk-bench`) into the image, so the answer cannot be inherited from the other two. |
-| `fido-conformance` | 37 | Built only for the FIDO Conformance Tool run: it suppresses the EdDSA advertisement. Does any P0-family row depend on the advertised algorithm list — and is a conformance-only build in the supported set? |
-| `ea-conformance-rpid` | 37 | Adds the conformance tool's RPID to the vendor-facilitated enterprise-attestation list, which is an authorization-relevant allowlist. `SEC-FIDO-001` is about gates; is an EA RPID list one of them? |
-| `largeblob-ext` | 37 | The sharpest orthogonal feature: it serves the CTAP 2.3 `largeBlob` extension INSTEAD OF the 2.1 `largeBlobKey` + `authenticatorLargeBlobs` pair (the spec forbids both), it carries four `check.sh` rows, and it has zero flake packages — so nothing in the release axis would ever have given it a cell. Does the swapped surface move any credential-management or authorization transition the P0-launch models name? |
-| `abrobot-16m` | 31 | The 16 MB geometry question of `firmware-16mb`, plus a GPIO presence source instead of BOOTSEL. |
-| `abrobot-4m` | 8 | The narrowest column with anything open, and both open groups are the same question: does a GPIO button on 23 (active-low) deliver the Confirmed/Cancelled semantics the presence model assumes of BOOTSEL — same debounce, same cancellation, same per-transport arbitration? Four rows name presence directly; the four reset clauses are reached through it. |
-| `seeed-xiao` | 31 | 2 MB with `KVMAIN` at 896 K — the `firmware-2mb` question on a board that also gates the LED behind a power pin. |
-| `tenstar-usb` | 31 | The 16 MB geometry question, plus a GPIO presence source on 15. |
-| `waveshare-touch-lcd` | 31 | The trusted-display BOARD without the `display` feature: 16 MB geometry, no addressable LED, and panel pins compiled as inert constants. The geometry question is `firmware-16mb`'s. The sharper half is now measured rather than asked: this preset IS buildable without `--features display` — `build.rs` parses the `[display]` keys with no `CARGO_FEATURE_DISPLAY` gate — and nothing in `check.sh` builds `firmware` on it at all. The board loop builds `rsk-wipe`, and both `BOARD=` firmware rows pin `waveshare-one`. So the column is real and WHOLLY UNEXERCISED, and what is left to decide is whether the tree should build it, or whether it should be a knob of `firmware-display` instead. |
+The middle column is derived, and it is what a `gap` here costs: the open rows whose OWNING crates — the ones whose production Rust carries the property's tag — are among the crates the column compiles unlike the default build, above. Outside it, the code the statement is about did not move and the question is whether the rest of the image reaches it; inside it, the statement is about a different compilation. Three P0-family rows carry no production tag at all and count as not moving, which is the one direction this number can be wrong in.
+
+| Configuration | `gap` rows | of which the owner crate moves | The question that would settle them |
+|---|---|---|---|
+| `firmware-no-touch` | 33 | 1 | Beyond the four presence statements: which rows depend on a presence decision only INDIRECTLY — a reset is reached through a touch, so does `SEC-FIDO-006`'s torn-reset argument still describe an image where the touch is instant? |
+| `firmware-fips` | 37 | 14 | `fips-profile` changes `rsk-fido` and `rsk-piv` — the PIN policy and the permitted algorithm set. `check.sh` runs the `rsk-fido` and `rsk-piv` test suites under it, so the question is narrow: does any P0-family invariant's model take the PIN floor or the algorithm set as a parameter, and if so, was it re-checked at the profile's values? |
+| `firmware-pqc` | 37 | 8 | `advertise-pqc` only adds ML-DSA-44 to the `getInfo` algorithm list — is that the whole delta for every P0-family row, or does the larger credential/attestation path move with it? |
+| `firmware-fips-pqc` | 37 | 14 | As `firmware-fips`, on the combination with `advertise-pqc`; the pair is published and nothing measures the two features together. |
+| `firmware-no-touch-pqc` | 33 | 7 | As `firmware-no-touch`, plus: does advertising ML-DSA-44 in `getInfo` change any authorization path, or only the algorithm list? |
+| `firmware-no-touch-fips` | 33 | 13 | As `firmware-no-touch`, plus the `fips-profile` question: the locked algorithm policy also raises the PIN floor, so which retry/gate properties are re-measured under it? |
+| `firmware-no-touch-fips-pqc` | 33 | 13 | The union of the `firmware-no-touch`, `firmware-fips` and `firmware-pqc` questions; no evidence is measured on the three-feature combination at all. |
+| `firmware-strong-pin` | 37 | 8 | A six-code-point floor and a trivially-guessable-PIN refusal. Does any P0-family statement quantify over PIN values, or do they all treat the PIN as an opaque secret whose policy is someone else's row? |
+| `firmware-strong-pin-pqc` | 37 | 8 | As `firmware-strong-pin`, on the combination with `advertise-pqc`. |
+| `firmware-always-uv` | 37 | 8 | `always-uv` ships `alwaysUv` ON, which changes what `SEC-FIDO-001`'s gate DEMANDS rather than whether it is enforced — and `SEC-FIDO-006B` is about the alwaysUv gate surviving a reset, with a compiled-in default this column moves. Do the model's gate constants cover the alwaysUv-on arm? THE MODEL HALF IS ANSWERED: `AlwaysUvShipped` is AS-AUTH-2 in `assurance/assumptions.toml`, and `AlwaysUv.cfg` runs all six invariants with it TRUE — GREEN over 23 521 512 distinct states at depth 51. THE CODE HALF IS NOT, and its cost is now a number rather than an omission: `cargo test -p rsk-fido --features always-uv` is 446 passed and 172 FAILED, because alwaysUv with no PIN answers `PUAT_REQUIRED` and the suite is written against the default door. So no `check.sh` row exercises this column, and `covered` may rest only on the default build or on such a row — the matrix has no basis for "the model half is checked at this column's own constant", which is evidence-schema work and not a cell anybody can fill here. |
+| `firmware-always-uv-pqc` | 37 | 8 | As `firmware-always-uv`, on the combination with `advertise-pqc`. |
+| `firmware-strict-up` | 37 | 8 | `strict-up` demands a touch on EVERY assertion, dropping the silent `up:false` pre-flight. That strengthens the gate — but `SEC-FIDO-002` is about presence decisions not crossing transports, and this column produces strictly more of them. Is the model's transport arity still the right one? |
+| `firmware-strict-up-pqc` | 37 | 8 | As `firmware-strict-up`, on the combination with `advertise-pqc`. |
+| `firmware-display` | 40 | 6 | This column is NOT `default + display`: it also sets `flashSize = 16M` and `ledKind = none`, and it re-routes user presence through the panel's Approve/Deny instead of the button. Each non-display row therefore has to answer three questions, not one — and the flash-geometry half is the same 16 MB question the board axis carries. It reaches the three `SEC-DISP-*` rows too, which is why they are `gap` here and not `covered`: the ceremony's evidence — `formal/Display.cfg`, the `rsk-ui`/`rsk-display` host tests and the `check.sh` rows that compile the feature — was every bit of it produced at the DEFAULT 4 MB geometry, and no row in the tree builds `--features display` at `FLASH_SIZE=16M`. Either add that row, or say in a `conditional` what the ceremony claim is conditional on. |
+| `firmware-2mb` | 31 | 0 | 2 MB with `KVMAIN` shrunk to 896 K. Do the store properties' models take the partition size as a parameter, and were they checked at the shrunk one? The scope floors in `formal/floors.txt` are about model constants, not about the device's own capacity. |
+| `firmware-16mb` | 31 | 0 | 16 MB with the default 1408 K `KVMAIN`. This is the geometry on which a whole KV store survived a wipe the device reported as successful — so for every store and boot row the question is not "does the code differ" (it does not) but "was the evidence ever produced against this partition map". |
+| `firmware-strict-config` | 37 | 12 | The largest feature delta in the tree: five crates, and it re-imposes the presence/PIN gates on device-config writes that the DEFAULT build leaves ungated. `SEC-ADM-002` and `SEC-ADM-004` are about exactly that surface, so this column is the one where their disposition may be STRONGER than the default's — which the matrix has no way to say until someone measures it. |
+| `keygen-bench` | 37 | 1 | A debug vendor command (INS 0x13) that `firmware/Cargo.toml` says never to ship, and it exposes a timing oracle over the primality primitives. Its never-shipped half is settled above; its sameness half is settled by measurement, and against the hoped-for answer — the closure is NOT the default build's, so `same-cargo-features` is refused here by derivation rather than by opinion. No cargo-feature column can ever earn that basis, because the feature NAMING the column is in that column's own closure by construction, which makes "is it equivalent" a question the derivation answers before it is asked. What the derivation does say is how narrow the delta is, and the page counts it: the crate set is the default build's exactly and `firmware` is the only crate whose features move, so all but one of the open rows here own code that resolves identically. What is left is not derivable — does a vendor INS answering on this image, gated by nothing, reach a statement whose own crate did not move? `SEC-BOOT-002` is the row where that is not even the question, because `firmware` is its owner. |
+| `core1-stats` | 37 | 1 | As `keygen-bench`: INS 0x12 exposes per-core candidate/find rates, which time the RSA keygen prime search. The measurement lands in the same place and for the same reason — the crate set is the default build's, `firmware` alone moves — so this column's narrowness is not inherited from that one's, it is re-derived on every run and printed beside this row. |
+| `bench` | 37 | 8 | As `keygen-bench`, and the one of the three the measurement separates rather than groups: `bench` is not a `firmware`-only delta. It turns on `rsk-fido/bench` and pulls `rsk-bench` into the image, so the `rsk-fido`-owned rows and `SEC-BOOT-002` are open on a column where the code they are ABOUT is a different compilation, and the rest are not. It is also the only one of the three with `check.sh` rows — and none of them is evidence for a P0-family statement: `clippy (bench fw)` and `clippy (bench host)` are lints, and `test (bench)` selects `rsk-fido` under the name FILTER `bench`, which `--list` answers with the harness's own four selector tests and one `#[ignore]`d timing loop — no invariant among them. So `covered` has nothing to rest on here either, and the open question is the `keygen-bench` one plus whichever `rsk-fido` statements a second timing entrypoint can reach. |
+| `fido-conformance` | 37 | 8 | Built only for the FIDO Conformance Tool run: it suppresses the EdDSA advertisement. Does any P0-family row depend on the advertised algorithm list — and is a conformance-only build in the supported set? |
+| `ea-conformance-rpid` | 37 | 8 | Adds the conformance tool's RPID to the vendor-facilitated enterprise-attestation list, which is an authorization-relevant allowlist. `SEC-FIDO-001` is about gates; is an EA RPID list one of them? |
+| `largeblob-ext` | 37 | 8 | The sharpest orthogonal feature: it serves the CTAP 2.3 `largeBlob` extension INSTEAD OF the 2.1 `largeBlobKey` + `authenticatorLargeBlobs` pair (the spec forbids both), it carries four `check.sh` rows, and it has zero flake packages — so nothing in the release axis would ever have given it a cell. Does the swapped surface move any credential-management or authorization transition the P0-launch models name? |
+| `abrobot-16m` | 31 | 0 | The 16 MB geometry question of `firmware-16mb`, plus a GPIO presence source instead of BOOTSEL. |
+| `abrobot-4m` | 8 | 0 | The narrowest column with anything open, and both open groups are the same question: does a GPIO button on 23 (active-low) deliver the Confirmed/Cancelled semantics the presence model assumes of BOOTSEL — same debounce, same cancellation, same per-transport arbitration? Four rows name presence directly; the four reset clauses are reached through it. |
+| `seeed-xiao` | 31 | 0 | 2 MB with `KVMAIN` at 896 K — the `firmware-2mb` question on a board that also gates the LED behind a power pin. |
+| `tenstar-usb` | 31 | 0 | The 16 MB geometry question, plus a GPIO presence source on 15. |
+| `waveshare-touch-lcd` | 31 | 0 | The trusted-display BOARD without the `display` feature: 16 MB geometry, no addressable LED, and panel pins compiled as inert constants. The geometry question is `firmware-16mb`'s. The sharper half is now measured rather than asked: this preset IS buildable without `--features display` — `build.rs` parses the `[display]` keys with no `CARGO_FEATURE_DISPLAY` gate — and nothing in `check.sh` builds `firmware` on it at all. The board loop builds `rsk-wipe`, and both `BOARD=` firmware rows pin `waveshare-one`. So the column is real and WHOLLY UNEXERCISED, and what is left to decide is whether the tree should build it, or whether it should be a knob of `firmware-display` instead. |
 
 ## Property names
 
