@@ -55,17 +55,25 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   write.** A flash *read* that comes back an error is a different condition, and
   a NOR power cut does not produce one.
 - **You must be able to see and revoke every credential the device holds.**
-  Resident credentials live in `EF_CRED`, but `enumerateRPs`,
-  `enumerateCredentials` and the trusted-display Passkeys view all reach them
-  through `EF_RP` — so a credential whose `EF_RP` entry is missing is one
-  `getAssertion` signs with happily and that no management surface can list or
-  delete. That is not a confidentiality break; it is the loss of *revocation*,
-  and it does not heal on its own: a later registration of the same (rp, user)
-  dedups onto the record already there instead of writing the missing entry
-  (audit run-35). So every path that creates or destroys a credential —
-  registration, credential-management delete, and each of the resets — is ordered
-  to fail the harmless way round: an RP entry with no credential (invisible, and
-  reclaimed by the next `decrement_rp`) and never a credential with no RP entry.
+  Resident credentials live in `EF_CRED`, and the two surfaces that let you
+  BROWSE them — `enumerateRPs` and the trusted-display Passkeys view — reach them
+  through `EF_RP`. So a credential whose `EF_RP` entry is missing is one
+  `getAssertion` signs with happily and neither surface will show you.
+  `enumerateCredentials` and `deleteCredential` scan `EF_CRED` directly, on an
+  rpIdHash the host supplies, so a caller who already knows the rp can still
+  reach it: what a strand costs is DISCOVERY, and revocation only so far as
+  revoking a thing means finding it first. It does not heal on its own either — a
+  later registration of the same (rp, user) dedups onto the record already there
+  instead of writing the missing entry (audit run-35). Registration and
+  credential-management delete are therefore ordered to fail the harmless way
+  round: the `EF_RP` entry is written before the credential, and the credential
+  goes before the count that names it. **The resets are not, and this page will
+  not pretend otherwise.** There the seed leads and the rest is swept in ring
+  order, which reaches `EF_RP` before `EF_CRED` — a torn wipe can still strand a
+  credential, and what the ordering buys is that the survivor is undecryptable
+  rather than that it does not exist. The harmless direction is not free either:
+  an `EF_RP` entry that outlives its credential keeps a count nothing reconciles,
+  so it goes on listing an rp with no passkeys behind it until the next reset.
 - **Device config is UNGATED on the default build.** The shipped default is the
   full-ykman/YubiKey-compatible admin surface: a hostile USB host can silently
   rewrite the DeviceInfo / enabled-applications / USB identity — over CCID

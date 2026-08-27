@@ -991,6 +991,28 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The revocation clause claimed a reset ordering the firmware does not have.**
+  As first written it said every path that creates or destroys a credential —
+  "registration, credential-management delete, and each of the resets" — is
+  ordered so an `EF_RP` entry can outlive its credential but never the reverse.
+  Registration and credential-management delete are (`bump_rp` before
+  `fs.put(EF_CRED + slot, …)`; `delete(EF_CRED + slot)` before `decrement_rp`).
+  **The resets are not**: `reset.rs` sweeps `EF_CRED` and `EF_RP` in one phase and
+  its own comment says "ring order otherwise reaches `EF_RP` before `EF_CRED`" —
+  what leads there is the SEED, so a torn wipe still strands a credential and what
+  the order buys is that the survivor is undecryptable. `reset_tests.rs` says the
+  same ("the strand itself still happens"), and so does this changelog at the
+  commit that shipped it. Two more overstatements in the same bullet:
+  `enumerateCredentials` and `deleteCredential` do **not** read `EF_RP` — they scan
+  `EF_CRED` on an rpIdHash the host supplies, so a strand is still reachable by a
+  caller who knows the rp and what is lost is *discovery*; and an `EF_RP` entry
+  outliving its credential is neither invisible nor reclaimed — both walks filter
+  on the stored count (`buf[0] > 0`), and every `decrement_rp` call is paired with
+  a credential deletion, so it lists an rp with no passkeys until the next reset.
+  The clause now says all three, including the part that is a residual rather than
+  a defence. Found by a review agent on the commit that landed it; a threat model
+  stronger than its firmware is the one direction that must not ship.
+
 - **One typo bought the exemption the new clause-lock rule exists to refuse.**
   The rule that makes a pin *owed* reads the `[[untraced]]` entry's `why` for a
   clause id — naming a clause is the dependency, so the pin arrives with it. But
