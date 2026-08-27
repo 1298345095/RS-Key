@@ -56,7 +56,11 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   verbatim strings and ONE occurrence outside a region, `docs/formal.md`'s "all
   nine shipped baseline configurations", reworded rather than registered. The
   same paragraph is seven findings now. Dropping the trigger instead was measured
-  and refused: 41 literals to 549, of which 505 want a home.
+  and refused: 41 literals to 549, of which 505 want a home. A unit matches in
+  its KIND, not only in the generator's own word — `3225 seconds` is `3225 s` and
+  `71 entries` is the `71-entry` roster, which is the sentence a commit in this
+  series had to hand-correct from 69 — widened only into the two vocabularies the
+  shape scan already enumerates, for four more occurrences of which two are real.
 
 - **Six things the record's own kept sentences said and nothing read.** `date`,
   `host` and `workers` had no second source at all and were each driven to an

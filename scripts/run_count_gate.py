@@ -193,7 +193,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 37
+SCOPE_CEILING = 41
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -444,6 +444,32 @@ SCOPED = {
         "formal/README.md",
         "names all seven rows it\nwould blind",
     ): "how many `floors.txt` rows carry a fourth column, a property of that file",
+    # Reached by widening a published unit into the vocabulary the shape scan
+    # already enumerates: `71 entries` is the `71-entry` roster, which is the
+    # sentence a commit in this series had to hand-correct from 69.
+    (
+        "formal/README.md",
+        "**30 of 30 mutants are caught",
+    ): "the phase-2 baseline said as what it counts rather than as rows, in the sentence "
+    "arguing that each mutant is caught by the invariant NAMING it — the ratio is the "
+    "claim, and the generated roster line carries the same 30",
+    (
+        "formal/README.md",
+        "`AccessCodeRemovalNeedsTheCode` | 71 states |",
+    ): "one mutant's own state count in the seam mutation table, which is a coincidence "
+    "of value with the co-mutant roster and not a copy of it — a table cell that moves "
+    "when the model does, never when the roster does",
+    (
+        "formal/README.md",
+        "`NoAuthWhenBlocked` | 30 states |",
+    ): "the same coincidence in the lattice table, against the phase-2 baseline this "
+    "time — again a state count of one configuration and no roster figure at all",
+    (
+        "formal/README.md",
+        "**71 entries: 67 executable patches killed",
+    ): "the co-mutant roster restated where its composition is broken down, which the "
+    "generated line beside it does not give — and the copy that read 69 until a commit "
+    "in this series re-measured it, which is why it is registered rather than trusted",
     (
         "formal/README.md",
         "`ok — 191 configuration(s)` and exited 0",
@@ -581,9 +607,11 @@ COUNT = re.compile(
 #: `3 hours` and `a 54-minute run` and `finished in 00:53:45` were all a run's
 #: wall clock spelled a way this did not hold. `about an hour` is not: there is
 #: no number in it, and no numeric rule reaches a sentence that gives none.
+#: How this tree spells a wall clock. Named, because [`phrase_pattern`] asks the
+#: same question of a unit: `3225 seconds` is `3225 s` said another way.
+CLOCK_UNIT = r"s|secs?|seconds?|min|minutes?|h|hrs?|hours?|m"
 CLOCK = re.compile(
-    rf"\b{NUM}\s*-?\s*(?:s|secs?|seconds?|min|minutes?|h|hrs?|hours?|m)\b"
-    r"|\b[0-9]{1,2}:[0-9]{2}:[0-9]{2}\b"
+    rf"\b{NUM}\s*-?\s*(?:{CLOCK_UNIT})\b" r"|\b[0-9]{1,2}:[0-9]{2}:[0-9]{2}\b"
 )
 #: What has to stand beside a count or a clock for it to be a claim about a run.
 #: A tally needs nothing; these two are counted in units other things share.
@@ -1534,13 +1562,27 @@ def spoken(bodies):
 def phrase_pattern(counted, unit):
     """One published `<value> <unit>`, in every grouping of the value and in
     whatever case the prose around it uses — `21 GREEN` and `21 green` are the
-    same second copy."""
+    same second copy.
+
+    And in whatever unit of the same KIND, because the generator's word is not
+    the only one a page uses: `3225 seconds` is `3225 s`, and `71 entries` is the
+    `71-entry` roster — which is the sentence a commit in this very series had to
+    hand-correct from 69. Widened only into the two vocabularies this file
+    already enumerates for the shape scan, never into a list invented here.
+    Measured: 4 more occurrences over the tree, 2 of them real second copies.
+    """
     left = (
         groupings(int(re.sub(r"[^\d]", "", counted)))
         if counted[0].isdigit()
         else re.escape(counted)
     )
-    return re.compile(rf"(?<![-\w])(?<![.,]){left}(?!\w){UNIT_JOIN}{re.escape(unit)}(?!\w)", re.I)
+    if re.fullmatch(CLOCK_UNIT, unit):
+        right = rf"(?:{CLOCK_UNIT})"
+    elif re.fullmatch(NOUN, unit, re.I):
+        right = rf"(?:{NOUN})"
+    else:
+        right = re.escape(unit)
+    return re.compile(rf"(?<![-\w])(?<![.,]){left}(?!\w){UNIT_JOIN}{right}(?!\w)", re.I)
 
 
 def check_scope(root, findings):

@@ -1012,6 +1012,26 @@ def test_a_published_value_and_its_unit_with_no_run_named(tree, sentence):
     assert second_copy(tree, sentence + "\n"), sentence
 
 
+@pytest.mark.parametrize("sentence", (
+    "The whole thing cost 607 seconds.",     # the generator writes `607 s`
+    "The roster holds 2 switches.",          # it writes `2 configurations`
+))
+def test_a_published_value_under_another_word_of_the_same_kind(tree, sentence):
+    """The generator's word is not the only one a page uses, and a correct copy
+    under a synonym is a copy that rots: `71 entries` is the `71-entry` roster,
+    the sentence a commit in this series had to hand-correct from 69. Widened
+    only into the two vocabularies this file already enumerates for the shape
+    scan — measured over the real tree, 4 more occurrences, 2 of them real."""
+    assert second_copy(tree, sentence + "\n"), sentence
+
+
+def test_a_published_value_under_a_word_of_another_kind(tree):
+    """And the boundary: 607 is a wall clock, so a roster noun beside it is not
+    the same claim. A rule that crossed the two kinds would be `COUNT` and
+    `CLOCK` merged, which is every number with a word after it."""
+    assert not second_copy(tree, "The roster holds 607 switches.\n")
+
+
 def test_a_value_beside_a_word_the_regions_do_not_put_there(tree):
     """The boundary, asserted: the unit comes from the generated sentence, so a
     value under a different noun is not this claim and is not a finding. A rule
