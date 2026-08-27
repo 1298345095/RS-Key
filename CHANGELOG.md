@@ -68,6 +68,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **Both registries added above shipped with the defect they were added to
+  close, and both are fixed here.** The carve-out list — the second exemption
+  registry on this row — had reasons nothing read and no ratchet on its size,
+  which is word for word the finding against `SCOPED`; it is held to the same
+  word floor and has a ceiling now. And the value rule enumerated **whole
+  spellings** of a number, so `77 563 872` re-wrapped by an editor to `77 563`
+  / `872` across a line break was invisible to the rule whose whole point is
+  that it does not enumerate shapes. It is a separator *class* now, newline and
+  tab included: measured over the corpus, 0 occurrences today and 0 new false
+  positives, so it costs nothing and closes the spelling before it lands. Its
+  guards were also too loose in the other direction — `0x4000` and `abc4000`
+  matched a derived `4000`, while a value ending a sentence had to keep
+  matching, so a word character on either side is refused and a trailing `.` is
+  refused only when a digit follows it.
 - **Eleven numbers on two pages that no rule reaches, corrected by hand.**
   `docs/authorization-slice.md` was measured at the commit it landed in and the
   assurance registry has grown since: **57 → 59** properties, **44 → 46**

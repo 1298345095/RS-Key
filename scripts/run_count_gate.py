@@ -1033,16 +1033,23 @@ def rendered(root, bodies):
 #: `.lock` contribute nothing at all — so the narrow list was buying no quiet.
 SCANNED_TREES = ("docs", "formal", ".github")
 
-#: Files under those trees that are not a place a run-count gets TYPED.
-#: `formal/runs.toml` is the record itself: every number in it is a run's own
-#: output and the gate already holds it, twice over. `CHANGELOG.md` is out for the
-#: reason the docstring gives — every line sits under a version heading, which is
-#: the scope label a historical figure needs. Both are checked to still be there,
-#: because a carve-out for a file nobody has is one nobody is reading.
+#: Files under those trees that are not a place a run-count gets TYPED. This is
+#: the SECOND exemption registry on this row, and it shipped with exactly the
+#: defect the first one was measured to have: two carve-outs whose reasons nothing
+#: read and whose number nothing ratcheted. It is held to [`LABEL_WORDS`] and
+#: [`CARVE_OUT_CEILING`] now, like `SCOPED`, and each file is checked to still
+#: exist — a carve-out for a file nobody has is one nobody is reading.
 NOT_TYPED_HERE = {
-    "formal/runs.toml": "the record every published run-count is counted out of",
-    "CHANGELOG.md": "a version heading is the scope label a historical figure needs",
+    "formal/runs.toml": "the record itself: every number in it is a run's own output, and the"
+    " gate holds each of them against TLC's own account of the same run",
+    "CHANGELOG.md": "every line of it sits under a version heading, which is exactly the"
+    " scope label a historical figure needs — an entry saying what a run cost at 0.4.10"
+    " does not go stale, it stays 0.4.10's",
 }
+
+#: Two. A third file that is not a place a run-count gets typed is a claim worth
+#: making in a diff, for the reason the ceiling on `SCOPED` exists.
+CARVE_OUT_CEILING = 2
 
 
 def tracked(root):
@@ -1161,17 +1168,32 @@ def scoped_spans(rel, text, findings):
     return spans
 
 
-#: Every way this tree groups a long number, plus the two spaces it does not use
-#: yet. Generated from the value, so the list is closed by construction — where
-#: `NUM` parses a grouping out of prose and its class turned out to hold the plain
-#: space TWICE and neither the NBSP nor the thin space at all.
-GROUPERS = (",", " ", " ", " ", " ", "_", "")
+#: Every way this tree can group a long number, as a CLASS and not a list of
+#: whole spellings. A newline and a tab are in it because `77 563 872` re-wrapped
+#: by an editor is `77 563` at the end of one line and `872` at the start of the
+#: next, and a list of whole spellings could not see that — the same
+#: enumerate-the-shapes mistake this rule exists in order not to make, one level
+#: down inside it. Measured over the corpus: 0 such occurrences today and 0 new
+#: false positives, so it costs nothing and closes the spelling before it lands.
+GROUPER = r"[\x20    ,_\n\r\t]"
 
 
-def spellings(value):
-    """`77563872`, `77,563,872`, `77 563 872`, … — one number, every grouping."""
-    grouped = f"{value:,}"
-    return {grouped.replace(",", sep) for sep in GROUPERS}
+def spelled(value):
+    """One number and every grouping of it, as a pattern.
+
+    Anchored on both sides against a digit or a decimal point, so a value cannot
+    match inside a longer one; the groups stay three digits wide, so a spaced-out
+    digit string cannot match either.
+    """
+    return re.compile(
+        # A word character on either side is a hex constant or an identifier, not
+        # this number: `0x77563872` matched while the guard was `[\d.,_]`. A
+        # trailing `.` is only refused when a digit follows it, or a value at the
+        # end of a sentence would stop being one.
+        r"(?<!\w)(?<![.,])"
+        + rf"{GROUPER}?".join(re.escape(part) for part in f"{value:,}".split(","))
+        + r"(?!\w)(?![.,]\d)"
+    )
 
 
 def emitted(bodies):
@@ -1241,7 +1263,7 @@ def scan(root, owned, values, findings):
     #: what it can lose is the arming, not a match of its own.
     per = dict.fromkeys(("tally", "count", "clock", "loose-tally", "names-a-run"), 0)
     per["emitted-value"] = len(values)
-    wanted = {sp: v for v in values for sp in spellings(v)}
+    wanted = {v: spelled(v) for v in sorted(values)}
     #: literals each registered fragment actually exempts, so an entry can be
     #: held to buying silence for a bounded, non-zero number of them.
     exempted = {}
@@ -1272,13 +1294,13 @@ def scan(root, owned, values, findings):
         # needs no trigger beside the literal, so a paragraph is not the unit of
         # anything here, and a number in a table cell is as much a second copy as
         # one in a sentence.
-        for spelling, value in sorted(wanted.items()):
-            for m in re.finditer(r"(?<![\d.,_])" + re.escape(spelling) + r"(?![\d.,_])", masked):
+        for value, pattern in wanted.items():
+            for m in pattern.finditer(masked):
                 if inside := [k for k, (lo, hi) in spans.items() if lo <= m.start() and m.end() <= hi]:
                     exempted[inside[0]] += 1
                     continue
                 findings.append(
-                    f"{rel}:{masked[: m.start()].count(chr(10)) + 1}: {spelling!r} is a"
+                    f"{rel}:{masked[: m.start()].count(chr(10)) + 1}: {m.group(0)!r} is a"
                     f" second copy of {value}, which the generated regions print — say it"
                     " in the region, point at the region, or register it in"
                     " scripts/run_count_gate.py SCOPED with what it is history to"
@@ -1385,9 +1407,21 @@ def audit(root):
     for rel, why in sorted(NOT_TYPED_HERE.items()):
         if not (root / rel).is_file():
             findings.append(
-                f"{rel}: carved out of the scan as {why}, and there is no such file — a"
-                " carve-out nobody has is one nobody is reading"
+                f"{rel}: carved out of the scan as {why[:48]}…, and there is no such file"
+                " — a carve-out nobody has is one nobody is reading"
             )
+        if len(str(why or "").split()) < LABEL_WORDS:
+            findings.append(
+                f"{rel}: carved out of the scan in {len(str(why or '').split())} word(s),"
+                f" under {LABEL_WORDS} — the same rule its sibling registry has, because"
+                " it is the same kind of exemption"
+            )
+    if len(NOT_TYPED_HERE) > CARVE_OUT_CEILING:
+        findings.append(
+            f"{len(NOT_TYPED_HERE)} file(s) carved out of the scan, over the ceiling of"
+            f" {CARVE_OUT_CEILING} — a page that is not a place a run-count gets typed is"
+            " a claim, and it belongs in a diff beside the reason for it"
+        )
 
     if len(bodies) < REGION_FLOOR:
         findings.append(

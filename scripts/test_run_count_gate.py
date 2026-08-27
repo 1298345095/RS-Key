@@ -1003,6 +1003,22 @@ def test_a_count_in_yaml_that_is_not_a_comment(tree, line):
     assert only(tree.problems(), f"{rel}:")
 
 
+# The carve-out list is the SECOND exemption registry on this row, and it landed
+# with the defect the first was measured to have: reasons nothing read, and no
+# ratchet on how many there are.
+
+
+@pytest.mark.parametrize("why", ("", None, "history"))
+def test_a_carve_out_whose_reason_is_not_one(tree, monkeypatch, why):
+    monkeypatch.setattr(run_count_gate, "NOT_TYPED_HERE", {"CHANGELOG.md": why})
+    assert only(tree.problems(), "the same rule its sibling registry has")
+
+
+def test_a_carve_out_list_over_its_ceiling(tree, monkeypatch):
+    monkeypatch.setattr(run_count_gate, "CARVE_OUT_CEILING", 1)
+    assert only(tree.problems(), "over the ceiling of 1")
+
+
 @pytest.mark.parametrize("rel", sorted(run_count_gate.NOT_TYPED_HERE))
 def test_a_count_typed_in_a_file_carved_out_of_the_scan(tree, rel):
     tree.write(rel, "`run-tlc.sh safety` covers 190 rows.\n")
@@ -1047,6 +1063,30 @@ def test_a_second_copy_of_a_value_the_regions_print(tree, big, spelled):
     parsed out of prose, which is the whole difference between the two rules."""
     tree.write("docs/typed.md", f"# Typed\n\nThe model reaches {spelled} of them.\n")
     assert only(tree.problems(), "docs/typed.md:3:"), spelled
+
+
+def test_a_second_copy_re_wrapped_across_a_line(tree, big):
+    """`77 563 872` re-wrapped by an editor is `77 563` at the end of one line and
+    `872` at the start of the next. A list of whole spellings could not see that —
+    the same enumerate-the-shapes mistake this rule exists in order not to make,
+    one level down inside it."""
+    tree.write("docs/typed.md", "# Typed\n\nThe model reaches 4\n000 of them.\n")
+    assert only(tree.problems(), "is a second copy of 4000")
+
+
+@pytest.mark.parametrize("around", ("0x{}", "abc{}", "{}5", "1{}"))
+def test_a_value_inside_something_that_is_not_a_number(tree, big, around):
+    """A hex constant and an identifier are not this number. `0x4000` matched
+    while the guard refused only a digit, a dot, a comma or an underscore."""
+    tree.write("docs/typed.md", f"# Typed\n\nSee {around.format(4000)} for it.\n")
+    assert not only(tree.problems(), "second copy of 4000"), around
+
+
+def test_a_value_ending_a_sentence_is_still_one(tree, big):
+    """The other direction of the same guard: a full stop after the number is a
+    sentence, and refusing every trailing `.` would lose most of the prose."""
+    tree.write("docs/typed.md", "# Typed\n\nThe model reaches 4000.\n")
+    assert only(tree.problems(), "second copy of 4000")
 
 
 def test_a_value_under_the_floor_is_nobody_second_copy(tree, big):
