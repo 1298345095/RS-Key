@@ -762,6 +762,49 @@ def test_a_wall_clock(tree):
     assert typed(tree, "`run-tlc.sh --tiers` says so; the tier took 2916 s.\n")
 
 
+# Every one of these was a measured bypass at exit 0. They are the SAME claim in
+# a spelling nobody had enumerated, which is what a shape rule always has one
+# more of — the reason the value rule beside it is generated from the number.
+@pytest.mark.parametrize("sentence", (
+    "`run-tlc.sh safety` visited 195 states.",              # what a run PRODUCED
+    "`run-tlc.sh safety` covered 195 mutants.",
+    "`run-tlc.sh --tiers` lists 190+ rows.",                # a rounded-up count
+    "`run-tlc.sh --tiers` lists _195 rows_.",               # `_` is a word char
+    "`run-tlc.sh --tiers` lists 195 \u2014 rows.",           # an em dash is not `-`
+    "The matrix came back GREEN: 20, RED: 174.",            # the tally, reversed
+    "`run-tlc.sh --tiers` finished in 00:53:45.",           # a clock with no unit
+    "`run-tlc.sh --tiers` took 3 hours.",
+    "`run-tlc.sh --tiers` is a 54-minute run.",
+    "`run-tlc.sh --tiers` is a 3225-second run.",
+    "`run-tlc.sh --tiers` lists 77\u00a0563\u00a0872 rows.",  # NBSP grouping
+    "`run-tlc.sh --tiers` lists 77\u2009563\u2009872 rows.",  # thin space
+))
+def test_a_spelling_the_shape_rules_walked_past(tree, sentence):
+    assert typed(tree, sentence + "\n"), sentence
+
+
+@pytest.mark.parametrize("sentence", (
+    "A run of the safety tier came back over 195 configurations.",
+    "`run-tlc.sh --tiers` took about an hour.",
+    "The matrix came back 21 passed, 174 failed.",
+))
+def test_a_spelling_no_shape_rule_reaches(tree, sentence):
+    """Kept as cases because they are OPEN, not because they are closed. The
+    trigger is a paragraph-local word list, "about an hour" carries no number for
+    a numeric rule to find, and `passed/failed` is not this tree's vocabulary —
+    widening any of the three costs more than it buys (measured: dropping the
+    trigger takes the scan from 30 literals to 241). The rule that does not play
+    this game is the value scan, and it only reaches a value the regions print."""
+    assert not typed(tree, sentence + "\n"), sentence
+
+
+def test_a_literal_is_reported_whole(tree):
+    """`48.7 M-state GREEN` was reported as `'7 M-state GREEN'`: `NUM` stopped at
+    the decimal point, so the finding named a number that is not in the page."""
+    tree.write("docs/typed.md", "# Typed\n\n`run-tlc.sh safety` swept 48.7 M states.\n")
+    assert only(tree.problems(), "'48.7 M states'")
+
+
 def test_inside_a_fenced_code_block(tree):
     """Where the first of these was found: a shell comment in a ```sh fence."""
     assert typed(tree, "```sh\n./run-tlc.sh safety   # floors: 190 rows, 2916 s\n```\n")

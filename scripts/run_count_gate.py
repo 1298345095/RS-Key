@@ -139,7 +139,7 @@ SCOPE_SPAN_CAP = 6
 #: in the diff beside the entry that needs it, the way every other ratchet here
 #: moves. An exemption list that grows without anyone noticing is the colander
 #: this row exists to not become.
-SCOPE_CEILING = 27
+SCOPE_CEILING = 37
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -303,6 +303,58 @@ SCOPED = {
         "GREEN over 10 720 348 distinct\nstates at the liveness constants",
     ): "`Liveness.cfg`'s distinct count beside the 5% wall-clock comparison it is the "
     "denominator of",
+    # ONE configuration's own measurement, in the narrative that is about it,
+    # reached by widening the nouns to `states` and `mutants` — what a run
+    # PRODUCED is a run-count by the same definition as what it covered.
+    (
+        "docs/testing.md",
+        "against a 120-minute cap",
+    ): "the weekly workflow's timeout, which is a cap the row is written with rather "
+    "than a duration anything measured",
+    (
+        "formal/README.md",
+        "330 of 666 states against 666",
+    ): "one action's firing count inside the dead-action narrative, where the ratio "
+    "between the two is the whole observation",
+    (
+        "formal/README.md",
+        "fewer than 2 distinct states or a depth below 2",
+    ): "the runner's own VACUOUS threshold, quoted where the rule is explained — a "
+    "constant of the rule and not a measurement of anything",
+    (
+        "formal/README.md",
+        "All three boot mutants redden",
+    ): "how many mutants the boot module has, which is a property of that family and "
+    "moves when somebody adds one",
+    (
+        "formal/README.md",
+        "replays GREEN: 13 actions",
+    ): "what the seam-trace replay covers, in the pipeline stage that is about that "
+    "trace rather than about a tier",
+    (
+        "formal/README.md",
+        "explored **40 459 667\nstates without a counterexample**",
+    ): "the mutant that stopped firing after a fix made its defect unreachable, which "
+    "is the measurement the expected-verdict column exists because of",
+    (
+        "formal/floors.txt",
+        "explored 40 459 667 states",
+    ): "the same measurement in this file's own header, where it is the argument for "
+    "the VERDICT column existing at all",
+    (
+        "formal/README.md",
+        "swept the FIDO module's 77.6 M states",
+    ): "`Shipped.cfg`'s size ROUNDED, in the `COVERAGE=1` sentence — the rounding is "
+    "why the exact-value rule cannot see it and this one has to",
+    (
+        "formal/README.md",
+        "It grew to **7 903 336 distinct states**",
+    ): "`Liveness.cfg` at the 4 GB default before the heap column existed, in the "
+    "paragraph about why it needs 12 GB",
+    (
+        "formal/README.md",
+        "GREEN** over the same 7 903 336\ndistinct states",
+    ): "the same older reading one paragraph down, which is the point of `the same`",
     # Neither: a count of something that is not a roster run at all.
     (
         "docs/authorization-slice.md",
@@ -412,7 +464,13 @@ TABLE_GROUPS = (
 # `four liveness rows` is in the tree and `4` is not. Below `two` there is no
 # roster claim to make — `one row` is a hundred sentences and no run-count.
 
-NUM = r"[0-9]+(?:[  ,_][0-9]{3})*"
+#: Written with explicit escapes because the class was `[\x20\x20,_]` — the plain
+#: space TWICE and neither the NBSP nor a thin space at all, while its comment
+#: said three characters. A trailing `.5` because `48.7 M-state GREEN` was
+#: reported as `'7 M-state GREEN'`, the literal cut at the decimal point; a
+#: trailing `+` because `190+ rows` walked past it.
+GROUP = r"[\x20\u00a0\u2009\u202f,_]"
+NUM = rf"[0-9]+(?:{GROUP}[0-9]{{3}})*(?:\.[0-9]+)?\+?"
 WORD = (
     r"two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|"
     r"fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty"
@@ -420,16 +478,40 @@ WORD = (
 COUNTED = rf"(?:{NUM}|{WORD})"
 #: What a roster is counted in. `switches` is here because a mutation family is a
 #: roster too, and its count went stale by one on the same page as the rest.
-NOUN = r"rows?|configurations?|configs?|cfgs?|switches|entr(?:y|ies)"
+#: What a roster is counted in. `switches` is here because a mutation family is a
+#: roster too, and its count went stale by one on the same page as the rest.
+#: `states` and `mutants` because what a run PRODUCED is a run-count by the same
+#: definition as what it covered — and `77.6 M states` is a rounded second copy
+#: that the value rule cannot see, so this is the only rule that reaches it.
+#: The inventory nouns are deliberately NOT here: `properties`, `invariants`,
+#: `models`, `families`, `tiers`, `harnesses`, `proofs`, `suites`, `cases` count
+#: what the tree HAS, not what a run did, and they belong to `assurance_gate`'s
+#: registry — measured, they add 9 findings and not one is about a run.
+NOUN = r"rows?|configurations?|configs?|cfgs?|switches|entr(?:y|ies)|states?|mutants?"
 
 #: A tally is a run-count wherever it stands — nothing else in this tree is
 #: counted in GREEN and RED — so this trigger needs no runner beside it.
-TALLY = re.compile(rf"\b{NUM}\s*(?:\*\*)?\s*(?:GREEN|RED)\b")
+TALLY = re.compile(rf"\b{NUM}\s*(?:\*\*)?\s*(?:GREEN|RED)\b|\b(?:GREEN|RED)\s*[:=]\s*{NUM}\b")
 #: `20 that must come back GREEN` is a tally the tight form cannot see. Bounded
 #: to one clause so a paragraph is not joined end to end.
 LOOSE_TALLY = re.compile(rf"\b{NUM}\b[^.|\n]{{0,48}}?\b(?:GREEN|RED)\b")
-COUNT = re.compile(rf"\b(?:{COUNTED})\s*(?:\*\*)?[-\s]?\s*(?:\w+[-\s])?(?:{NOUN})\b", re.I)
-CLOCK = re.compile(rf"\b{NUM}\s*(?:s|sec|secs|seconds|min|minutes|h|m)\b")
+#: `195 — rows` walked past a `[-\s]?` separator, because an em dash is not `-`;
+#: `_195 rows_` walked past the leading `\b`, because `_` is a word character and
+#: there is no boundary between two of them. So the left edge is "not a digit"
+#: rather than a word boundary. `_` stays OUT of the join: with it in, the count
+#: could reach across an identifier and `93\tfido_state` in `citations.lock` read
+#: as a run-count — measured.
+JOIN = r"[-\u2013\u2014\s]"
+COUNT = re.compile(
+    rf"(?<![0-9.])(?:{COUNTED})\s*(?:\*\*)?{JOIN}?\s*(?:\w+{JOIN})?(?:{NOUN})(?![a-z])", re.I
+)
+#: `3 hours` and `a 54-minute run` and `finished in 00:53:45` were all a run's
+#: wall clock spelled a way this did not hold. `about an hour` is not: there is
+#: no number in it, and no numeric rule reaches a sentence that gives none.
+CLOCK = re.compile(
+    rf"\b{NUM}\s*-?\s*(?:s|secs?|seconds?|min|minutes?|h|hrs?|hours?|m)\b"
+    r"|\b[0-9]{1,2}:[0-9]{2}:[0-9]{2}\b"
+)
 #: What has to stand beside a count or a clock for it to be a claim about a run.
 #: A tally needs nothing; these two are counted in units other things share.
 NAMES_A_RUN = re.compile(r"run-tlc|run_tlc|comutate|`safety`|`liveness`|--tiers")
@@ -737,6 +819,17 @@ def facts(root, runs, listed):
     )
 
 
+#: The same two…twenty this scan reads, because the page it replaced wrote `the
+#: nine shipped models` and the generator wrote `the 9`. A roster of nine is a
+#: sentence, not a table cell.
+WORDED = dict(zip(range(2, 21), WORD.split("|")))
+
+
+def worded(count):
+    """`nine`, where a page would write the word rather than the digit."""
+    return WORDED.get(count, str(count))
+
+
 def fill(text):
     """A sentence wrapped the way the pages around it are. The table below is not
     put through this: a markdown row is one line whatever its length."""
@@ -751,12 +844,15 @@ def region_bodies(f, findings=None):
     unseen = safety.get("unobserved", 0) + liveness.get("unobserved", 0)
     # A raised UNOBSERVED_FLOOR owes its reader this. Empty at the floor of 0,
     # which is why the sentence around it must read without it.
-    caveat = f" {unseen} configuration(s) of the two tiers were in no observed run." if unseen else ""
+    caveat = (
+        f" {unseen} configuration{'' if unseen == 1 else 's'} of the two tiers"
+        f" {'was' if unseen == 1 else 'were'} in no observed run." if unseen else ""
+    )
     familyless = ", ".join(f"`{n}`" for n in f["familyless"]) or "none"
     has = "have" if len(f["familyless"]) != 1 else "has"
     bodies = {
         ("docs/testing.md", "tlc-roster"): (
-            f"`safety` is the {f['models']} shipped models, the {f['families']} mutation"
+            f"`safety` is the {worded(f['models'])} shipped models, the {f['families']} mutation"
             f" switches that have a configuration family of their own ({f['switches']}"
             f" `Bug*` switches exist; {familyless} {has} none), floors and the vacuity"
             " check."

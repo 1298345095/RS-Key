@@ -68,6 +68,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **Twelve spellings the shape rules walked past.** Each measured at exit 0
+  and each now a case: `195 states` and `195 mutants` (what a run *produced* is
+  a run-count by the same definition as what it covered — and `77.6 M states`
+  is a **rounded** second copy that the value rule cannot reach, so this is the
+  only rule that gets there); `190+ rows`; `_195 rows_`, where `_` is a word
+  character so the leading `\b` never fired; `195 — rows` with an em dash;
+  `GREEN: 20, RED: 174`; `finished in 00:53:45`; `3 hours`; `a 54-minute run`;
+  `a 3225-second run`; and a number grouped with a NBSP or a thin space —
+  `NUM`'s own class held the plain space **twice** and neither of those, while
+  its comment said three characters. A literal is also reported whole now:
+  `48.7 M-state GREEN` came out as `'7 M-state GREEN'`, the finding naming a
+  number that is not on the page. Ten sites the widening reaches are registered
+  with what each is, and the exemption ceiling is raised in the same diff.
+- **Three spellings are still open, and are cases saying so.** `A run of the
+  safety tier` (the trigger is a paragraph-local word list), `about an hour`
+  (no number for a numeric rule to find) and `21 passed, 174 failed` (not this
+  tree's vocabulary). Widening any of them costs more than it buys — dropping
+  the paragraph trigger takes the scan from 30 literals to **241**, every one
+  needing a home. The rule that does not play that game is the value scan, and
+  what it reaches is bounded to what the regions print.
 - **The scope registry's labels are read now, and the silence one entry buys
   is bounded.** `SCOPED`'s values were never looked at at all, so a brand-new
   stale literal kept its exemption with the label `""`, `None`, `"history"`,
