@@ -218,9 +218,8 @@ crypto-critical helpers, where a proof genuinely beats a sample:
   never handed a body from a command it did not itself terminate, that a
   dropped chain leaves no bytes behind, that a secure-messaging class reaches
   no applet, and that a SELECT for a registered AID always arrives. Its bound is
-  a `cfg(kani)` shrink of production source — one of four in the tree, with
-  `rsk-usb`'s `CTAP_MAX_MESSAGE` and `rsk-fs`'s `FID_PRESENT_BYTES` and
-  `EF_META`; each states what it stops proving where it is written, this one in
+  a `cfg(kani)` shrink of production source — the table below is the whole set —
+  and it states what it stops proving where it is written, this one in
   `applet_kani.rs`.
 - `rsk-fs`: the `EF_META` record-walk (`rebuild_meta`) over arbitrary (corrupt)
   blobs — nothing written past the length it reports, and the old record for the
@@ -270,6 +269,35 @@ crypto-critical helpers, where a proof genuinely beats a sample:
   the reset's security-visible concrete projection: initialization and every
   begin/delete/advance/abort/finish/power-cut step preserve
   `ResetNeverWeakensSurvivingState` and its three independently named clauses.
+
+### What a proof no longer sees
+
+Some of that production source means something different under Kani than in the
+shipped build: an array cut to 16 so CBMC does not bit-blast 2 KiB, a file id
+aliased into a 24-bit map. Each such shrink narrows every proof over it, so each
+one says beside itself what it stops proving — and three `cfg(not(kani))`
+compile-time assertions carry the part of that shape a shrunk proof no longer
+can, about the width that ships.
+
+| Crate | Source | Kani-only item |
+|---|---|---|
+| `rsk-device` | `ctap.rs` | `const _` |
+| `rsk-fs` | `fs.rs` | `FID_PRESENT_BYTES` |
+| `rsk-fs` | `fs.rs` | `const _` |
+| `rsk-fs` | `lib.rs` | `EF_META` |
+| `rsk-sdk` | `applet.rs` | `CHAIN_BUF_SIZE` |
+| `rsk-sdk` | `applet.rs` | `RESP_CHAIN_CAP` |
+| `rsk-usb` | `ctaphid.rs` | `CTAP_MAX_MESSAGE` |
+| `rsk-usb` | `ctaphid.rs` | `const _` |
+
+`scripts/shrink_gate.py` derives that table from the crates and fails the merge
+gate on either direction — a shrink that arrives unrostered, and a row whose item
+has gone away — and on one that carries no reason above it. The rows are names
+only, deliberately: the values and the reason live in the code, and copying either
+here would give them a second place to rot — which is what the sentence above did
+until now. It said "one of four in the tree" and named three of them, having twice
+stayed green while a new shrink arrived, and `rsk-sdk` shrinks two constants rather
+than the one it was counted for.
 
 Kani is **not** in nixpkgs and its setup downloads a prebuilt CBMC bundle, so
 this is the one deliberately non-nix tool (install once, outside the dev

@@ -569,6 +569,12 @@ run "ci knob groups"           ./scripts/ci-knobs.sh --self-test
 # under a row named "prove every harness". Checking the roster is a grep, so it
 # belongs here, where the harness gets written; the solver stays nightly.
 run "kani roster"              python scripts/kani_gate.py
+# The other half of that roster: production source that means something different
+# under the model checker, so every proof over it says less than its name. The
+# page enumerating those shrinks was hand-kept and rotted twice — "the tree's only
+# one" while there were three, then "one of four" while there were five — so the
+# set is derived from the crates now, in both directions.
+run "kani shrink roster"       python scripts/shrink_gate.py
 # Same failure one file closer to home, and the reason the host rows above say
 # `--workspace --exclude firmware --exclude rsk-wipe` rather than naming crates:
 # the list they used to name was written out nine times over four files and had

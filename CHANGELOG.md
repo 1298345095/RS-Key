@@ -40,6 +40,31 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The `cfg(kani)` shrinks are derived now, and the hand-written count was
+  wrong.** `docs/testing.md` enumerated the production source that means
+  something different under the model checker, and rotted twice doing it: it said
+  "the tree's only one" while `rsk-usb`'s `CTAP_MAX_MESSAGE` was already there,
+  stayed green through `rsk-fs`'s `FID_PRESENT_BYTES`, and was then retyped as
+  "one of four" — which is wrong the other way, because `rsk-sdk` shrinks
+  **two** constants, `CHAIN_BUF_SIZE` and `RESP_CHAIN_CAP`, not one.
+  `scripts/shrink_gate.py` walks each crate's modules from its `lib.rs`, parses
+  the attributes rather than grepping them, and holds the page's table to the
+  result in both directions. Measured: **5** shrunk names and **3**
+  `cfg(not(kani))` compile-time assertions, 13 arms over 4 crates — where a
+  separate count of "14 sites" had included `store_assurance.rs`'s `FID_LIMIT`,
+  which is inside a module `#[cfg(any(kani, test))]` keeps out of the firmware.
+- **A shrink that carries no reason reddens the same row.** The rule is a comment
+  block above the arm Kani compiles, or above the run it belongs to, since
+  `rsk-sdk` writes one paragraph over both of its constants and says so. The
+  floor is 80 characters against a measured minimum of 203. Requiring `///` was
+  rejected — two of the five shrinks and one of the three assertions use `//`,
+  all of them are real reasons — and so was requiring the word "kani" in the
+  block, which `// kani` satisfies and `rsk-sdk`'s paragraph does not.
+- **`gate_lines.rust_code` reads Rust for both guards, and closes a gap the one
+  copy had.** `b'"'` in `rsk-usb`'s keyboard map opened a string that ran to the
+  end of the file, so the module walk read `kbd.rs` as declaring nothing. 154
+  `.rs` files lex differently with char and byte literals handled;
+  `platform_gate.py`'s unsafe inventory is unchanged on every one of them.
 - **The assumptions no model constant can carry have a registry of their own.**
   `scripts/assumption_gate.py` accepts exactly one shape — a Boolean TLA constant
   some configuration assigns both ways and a reachable definition reads — and
