@@ -737,10 +737,26 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
                 " not the one the run wrote"
             )
 
+    logged = {
+        str(row.get("path", ""))
+        for row in doc.get("artifact", []) if isinstance(row, dict)
+    }
+    costed = set()
     for index, row in enumerate(doc.get("cost", []), 1):
         if not isinstance(row, dict):
             continue
         where = f"{BUNDLE} cost #{index} ({row.get('artifact', '?')})"
+        # A foreign key nothing joins is a name. 10 of the 11 cost rows are
+        # byte-identical to an `[[artifact]].path` and the 11th is deliberate
+        # prose; re-pointing all 11 at a log that is nowhere was exit 0.
+        artifact = str(row.get("artifact", ""))
+        costed.add(artifact)
+        if FILE_SHAPED.search(artifact) and artifact not in logged:
+            findings.append(
+                f"{where}: `{artifact}` is the path of no `[[artifact]]` row — item"
+                " 10 is three numbers PER ARTIFACT, and a row naming work with no"
+                " artifact of its own says so in prose instead"
+            )
         for field in COST_FIELDS:
             value = row.get(field)
             if value is None:
@@ -750,6 +766,13 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
                     f"{where}: `{field}` is {value!r}, which is not a number — a range is"
                     " an estimate, and an estimate in any of the three voids the measurement"
                 )
+
+    for target in sorted(logged - costed):
+        findings.append(
+            f"{BUNDLE}: `{target}` is a raw artifact with no `[[cost]]` row — the"
+            " other direction of the same join, and the one that loses a run's cost"
+            " rather than inventing one"
+        )
 
     inverse = mutation_dispositions(doc, findings)
 

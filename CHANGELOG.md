@@ -1040,6 +1040,14 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   which `any(k.startswith("bound_"))` is true of. There is a floor per row (2)
   and over the group (24), both under the measured 30 across 8 rows with the
   smallest row at 2; a flag is not a bound; and the bare prefix is not a name.
+- **`[[cost]].artifact` was a foreign key nothing joined.** `[[artifact]].path`
+  carries 10 values and `[[cost]].artifact` 11 — **10 of the 11 byte-identical**
+  to a path and the eleventh deliberate prose, *"the work that produced no
+  artifact of its own"* — and nothing compared them: re-pointing all 11 at
+  `"a log that does not exist anywhere.log"` was **EXIT=0**. A cost row naming
+  something shaped like a path must name an `[[artifact]]`'s, and the other
+  direction is held too, because item 10 is three numbers **per artifact** and a
+  log nothing costs is a run whose cost was dropped.
 - **The finding for "this row is not a table" was written and never printed.**
   `bundle_gate.py` built a filtered `rows` list for the `[[mutation]]` group and
   then iterated the **unfiltered** one, and the `[[cost]]` and `[[artifact]]`

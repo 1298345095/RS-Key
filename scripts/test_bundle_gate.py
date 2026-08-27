@@ -677,6 +677,39 @@ def test_a_cost_written_as_a_range_is_refused(tmp_path, value):
     assert any("is not a number" in p for p in findings(root)), findings(root)
 
 
+def test_a_cost_naming_a_log_that_is_in_no_artifact_row(tmp_path):
+    """`[[artifact]].path` has 10 values and `[[cost]].artifact` 11, ten of them
+    byte-identical and none of them joined: re-pointing all 11 at a log that is
+    nowhere was EXIT=0."""
+    root = tree(tmp_path)
+
+    def repoint(doc):
+        for row in doc["cost"]:
+            row["artifact"] = "a log that does not exist anywhere.log"
+
+    rewrite(root, repoint)
+    assert any("the path of no `[[artifact]]` row" in p for p in findings(root)), findings(root)
+
+
+def test_a_raw_artifact_with_no_cost_row(tmp_path):
+    """The other direction. Item 10 is three numbers per artifact, so a log that
+    nothing costs is a run whose cost was dropped."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["cost"].pop(0))
+    assert any("with no `[[cost]]` row" in p for p in findings(root)), findings(root)
+
+
+def test_a_cost_row_for_work_with_no_artifact_of_its_own(tmp_path):
+    """The eleventh row is prose on purpose — the gates, the ledger axes and the
+    adversarial review produced no log of their own — so the join is asked of a
+    value shaped like a path and not of every value."""
+    root = tree(tmp_path)
+    doc = tomllib.loads((root / bundle_gate.BUNDLE).read_text())
+    prose = [r["artifact"] for r in doc["cost"] if r["artifact"].startswith("the work")]
+    assert len(prose) == 1, [r["artifact"] for r in doc["cost"]]
+    assert findings(root) == []
+
+
 def test_a_missing_cost_field_is_found(tmp_path):
     root = tree(tmp_path)
     import re
