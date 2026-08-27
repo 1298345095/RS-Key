@@ -214,6 +214,18 @@ run() { echo "== $1 =="; shift; "$@"; }
 run "published run-counts"  python scripts/run_count_gate.py
 """
 
+#: Carved out of the scan, and it has to say a run-count for the same reason the
+#: page below does: a carve-out tested on a page with nothing in it passes for
+#: free. Every line of the real one sits under a version heading, which is the
+#: scope label a historical figure needs.
+CHANGELOG_MD = """\
+# Changelog
+
+## [Unreleased]
+
+- `run-tlc.sh safety` came back over 190 rows, 18 GREEN, in 2916 s.
+"""
+
 #: The carve-out has to be load-bearing: this page states a run-count, so a rule
 #: that skipped it for any other reason would pass the case below for free.
 VECTOR_MD = """\
@@ -230,6 +242,7 @@ class Tree:
 
     def __init__(self, root):
         self.root = pathlib.Path(root)
+        self.pending = set()
         self.write("formal/run-tlc.sh", RUN_TLC)
         (self.root / "formal/run-tlc.sh").chmod(0o755)
         self.write("formal/floors.txt", FLOORS)
@@ -245,6 +258,7 @@ class Tree:
         self.write("docs/assurance-vector.md", VECTOR_MD)
         self.write(".github/workflows/deep-checks.yml", WORKFLOW)
         self.write("scripts/check.sh", CHECK_SH)
+        self.write("CHANGELOG.md", CHANGELOG_MD)
         self.git("init", "-q")
         self.commit("the tree the runs are about")
         self.write("formal/runs.toml", self.record())
@@ -256,6 +270,16 @@ class Tree:
         path = self.root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
+        # The scan reads `git ls-files`, so a page a case writes has to be one
+        # git knows about or the case measures an empty set and passes. Recorded
+        # and flushed once per audit rather than added here, because that is one
+        # `git` per assertion instead of one per file.
+        self.pending.add(rel)
+
+    def stray(self, rel, text):
+        """A file git is NOT told about — which `write` would defeat, because it
+        tells git about everything it writes."""
+        (self.root / rel).write_text(text)
 
     def read(self, rel):
         return (self.root / rel).read_text()
@@ -315,10 +339,20 @@ class Tree:
             run_count_gate.facts(self.root, runs, run_count_gate.tiers(self.root))
         )
 
+    def track(self):
+        """`--intent-to-add`, which is what puts a not-yet-committed page in
+        `git ls-files` — the fixture is a working tree, not a release."""
+        here = sorted(p for p in self.pending if (self.root / p).exists())
+        self.pending.clear()
+        if here:
+            self.git("add", "-N", "--", *here)
+
     def problems(self):
+        self.track()
         return run_count_gate.audit(self.root)[0]
 
     def summary(self):
+        self.track()
         return run_count_gate.audit(self.root)[1]
 
 
@@ -799,14 +833,80 @@ def test_a_literal_outside_the_fragment_that_resembles_it(tree, monkeypatch):
 def test_the_published_pages_at_the_root_are_scanned(tree):
     """The obvious escape from a rule scoped to three directories."""
     tree.write("README.md", "# RS-Key\n\n`run-tlc.sh safety` covers 190 rows.\n")
+    tree.commit("a published page at the root")
     assert only(tree.problems(), "README.md:3: '190 rows'")
 
 
 def test_an_untracked_working_file_at_the_root_is_not(tree):
-    """`*.md` there would read whatever is lying beside them, and this tree keeps
-    a large untracked planning document at the root on purpose."""
-    tree.write("PLANNING.md", "`run-tlc.sh safety` covers 190 rows.\n")
+    """This tree keeps a large untracked planning document at the root on purpose,
+    and a gate that reddens on a file nobody committed is one people switch off.
+
+    The reason used to be TWO NAMES on a whitelist, while this docstring said
+    untrackedness — so it claimed a property the code did not have, and every
+    other page at the root (`SECURITY.md`, `COMPLIANCE.md`, `AGENTS.md`,
+    `CODEX.md`) was out of the scan for a reason nobody had chosen. The set comes
+    from `git ls-files` now, so the sentence is the mechanism.
+    """
+    tree.stray("PLANNING.md", "`run-tlc.sh safety` covers 190 rows.\n")
     assert not only(tree.problems(), "PLANNING.md")
+
+
+@pytest.mark.parametrize("rel", (
+    "formal/observed-runs.md",     # a new page in the tree the criterion NAMES
+    "formal/floors.txt",           # the registry's own header prose
+    "formal/Mini.tla",             # a `\\*` comment in a model
+    "formal/run-tlc.sh",           # a `#` comment in the runner itself
+    "formal/comutants.toml",       # and in a registry beside it
+    ".github/summary.json",        # `.github/` was three suffixes, not a directory
+    ".github/publish.sh",
+    "SECURITY.md",                 # the root was two names, not the root
+    "docs/observed.txt",           # `docs/` was `*.md`, not `docs/`
+))
+def test_a_count_typed_anywhere_under_the_trees_the_criterion_names(tree, rel):
+    """All nine driven against the old rule at exit 0, with 13 more. The criterion
+    names `docs/`, `formal/` and `.github/` BY DIRECTORY and the scan was a suffix
+    whitelist under each, so `check.sh` stated a rule the code did not implement
+    in all four of its parts. Widening it costs 0 literals over the real tree."""
+    path = tree.root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lead = "\\* " if rel.endswith(".tla") else "# " if rel.endswith((".sh", ".toml")) else ""
+    path.write_text((path.read_text() if path.exists() else "")
+                    + f"\n\n{lead}`run-tlc.sh safety` covers 190 rows.\n")
+    tree.commit(f"a count typed in {rel}")
+    assert only(tree.problems(), f"{rel}:"), rel
+
+
+@pytest.mark.parametrize("line", (
+    "  probe:\n    name: run-tlc --tiers over 190 rows",
+    "  probe:\n    env:\n      NOTE: 'run-tlc --tiers, 190 rows'",
+    "  probe:\n    steps:\n      - run: echo '19 GREEN, 171 RED' >> $GITHUB_STEP_SUMMARY",
+))
+def test_a_count_in_yaml_that_is_not_a_comment(tree, line):
+    """Only `#` runs were read, so a count in a `name:`, an `env:` or the step
+    summary a workflow PUBLISHES was invisible — driven, exit 0. Its own block and
+    not part of a paragraph: a workflow has few blank lines and one step naming
+    the runner would otherwise arm every other."""
+    rel = ".github/workflows/deep-checks.yml"
+    tree.write(rel, tree.read(rel) + "\n" + line + "\n")
+    tree.commit("a count in a yaml value")
+    assert only(tree.problems(), f"{rel}:")
+
+
+@pytest.mark.parametrize("rel", sorted(run_count_gate.NOT_TYPED_HERE))
+def test_a_count_typed_in_a_file_carved_out_of_the_scan(tree, rel):
+    tree.write(rel, "`run-tlc.sh safety` covers 190 rows.\n")
+    assert not only(tree.problems(), f"{rel}:")
+
+
+def test_a_carve_out_for_a_file_that_has_gone(tree):
+    """`CHANGELOG.md` and not `formal/runs.toml`: the record going away is
+    reported by `load()` before anything else runs, and one cause is one message
+    — a reader told the carve-out is stale would go looking for the wrong thing."""
+    (tree.root / "CHANGELOG.md").write_text("x\n")
+    tree.git("add", "-N", "--", "CHANGELOG.md")
+    tree.commit("a changelog to take away")
+    (tree.root / "CHANGELOG.md").unlink()
+    assert only(tree.problems(), "a carve-out nobody has is one nobody is reading")
 
 
 def test_a_page_another_gate_writes_whole(tree):

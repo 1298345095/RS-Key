@@ -68,6 +68,27 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **The scan reads the directories the criterion names, instead of a suffix
+  whitelist under each.** `docs/**/*.md` + `formal/README.md` alone +
+  `.github/**/*.{yml,yaml,md}` + two named root pages left 22 measured places a
+  run-count could be typed with the row green — a new `formal/*.md` page,
+  `floors.txt`'s own header prose, a `\*` comment in a `.tla`, a `#` one in
+  `run-tlc.sh` or a registry `.toml`, a `.json` or a `.sh` under `.github/`,
+  `SECURITY.md`, `COMPLIANCE.md`, `AGENTS.md`, `CODEX.md`, a `docs/` page that
+  is not markdown — and inside a workflow only `#` comment lines were read, so
+  a count in a `name:`, an `env:` or the `$GITHUB_STEP_SUMMARY` line a workflow
+  actually publishes was invisible too. All driven, all exit 0. The set now
+  comes from `git ls-files` over `docs/`, `formal/` and `.github/` plus every
+  tracked page at the root, with `formal/runs.toml` (the record itself) and
+  `CHANGELOG.md` (whose version headings are the scope label) carved out and
+  held to still exist. Widening it cost **0** literals over this tree: `.tla`,
+  `.cfg`, `.sh`, `.txt`, `.svg` and `.lock` contribute nothing, so the narrow
+  list had been buying no quiet at all. Reading `git ls-files` also makes "not
+  the untracked planning document at the root" the MECHANISM rather than a
+  two-name whitelist whose own test gave untrackedness as the reason.
+  `scripts/check.sh` stated that rule in a form that was false in all four of
+  its parts, six lines above the row it describes; it now says what the code
+  does.
 - **Both halves of the scan gained the ratchet the other half already had.**
   The set of generated regions was floored by nothing at all, so dropping one
   entry from the generator, deleting its two markers and retyping its sentence

@@ -662,9 +662,14 @@ run "evidence vector"          python scripts/evidence_gate.py
 # And what the pages SAY a run was. Seven were stale the day this row landed --
 # `safety` published as 190 rows against a tier of 195, the model's state space
 # at 63% of the measured count in the paragraph the docs call the one to quote,
-# and five more between them -- because every one was typed. The sentences are written from `formal/runs.toml`, which
-# holds the runner's own matrix per tier, and a count typed anywhere else in
-# docs/, formal/, .github/ or the root pages is a finding.
+# and five more between them -- because every one was typed. The sentences are
+# written from `formal/runs.toml`, which holds the runner's own matrix per tier
+# and TLC's own summary of the same run beside it, so no number in either has
+# one source. A count typed in any tracked text file under docs/, formal/ or
+# .github/, or on any page at the root, is a finding: by DIRECTORY, because the
+# suffix whitelist this said before let a count into a new formal/*.md, a .tla
+# comment, a .github/*.json, SECURITY.md and eighteen more, all driven at
+# exit 0. `formal/runs.toml` itself and CHANGELOG.md are the two carve-outs.
 run "published run-counts"     python scripts/run_count_gate.py
 run "token refinement export" ./scripts/token_refinement.sh --check
 run "token refinement completeness" python scripts/token_refinement_gate.py

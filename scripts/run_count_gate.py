@@ -24,10 +24,10 @@ Two halves, because either alone leaves the class open.
   hand edit to a number inside a region is a diff, not an opinion.
 * **Refused elsewhere.** A region cannot stop the NEXT sentence being typed
   somewhere else, and the completeness half is where every guard in this tree has
-  failed. So `docs/`, `formal/README.md`, `.github/workflows/` and the two
-  published pages at the root are scanned for the vocabulary, and a run-count
-  outside a region is a finding unless [`SCOPED`] registers it with the scope it
-  is history to.
+  failed. So every tracked text file under [`SCANNED_TREES`] — `docs/`, `formal/`
+  and `.github/`, which is how the criterion names them — and every tracked page
+  at the root is scanned for the vocabulary, and a run-count outside a region is
+  a finding unless [`SCOPED`] registers it with the scope it is history to.
 
 What the record does **not** prove is that a real TLC ran: `--record` ingests
 logs, and a log can be typed. What it proves is what rot cannot fake — that the
@@ -830,26 +830,65 @@ def rendered(root, bodies):
 # --- the scan --------------------------------------------------------------
 
 
-#: The two published pages at the repository root. NAMED rather than globbed:
-#: `*.md` there also reads whatever untracked working document is lying beside
-#: them, and this tree keeps a large planning file there deliberately — a gate
-#: that reddens on a file nobody committed is a gate people switch off.
-#: `CHANGELOG.md` is out for the reason the docstring gives.
-ROOT_PAGES = ("README.md", "CONTRIBUTING.md")
+#: The published trees, BY DIRECTORY, which is how the criterion names them. It
+#: was a suffix whitelist under each — `docs/**/*.md`, `formal/README.md` alone,
+#: `.github/**/*.{yml,yaml,md}` and two named root pages — and every gap in that
+#: list was a place a count could be typed with the row green: a new `formal/*.md`
+#: page, `floors.txt`'s own header prose, a `\*` comment in a `.tla`, a `#` one in
+#: a `.sh` or a `.toml`, a `.json` or a `.sh` under `.github/`, `SECURITY.md`,
+#: `COMPLIANCE.md`, `AGENTS.md`, `CODEX.md`, a `docs/` page that is not markdown.
+#: All 22 driven, all exit 0. Widening cost 0 literals over this tree once the two
+#: carve-outs below are taken out — `.tla`, `.cfg`, `.sh`, `.txt`, `.svg` and
+#: `.lock` contribute nothing at all — so the narrow list was buying no quiet.
+SCANNED_TREES = ("docs", "formal", ".github")
+
+#: Files under those trees that are not a place a run-count gets TYPED.
+#: `formal/runs.toml` is the record itself: every number in it is a run's own
+#: output and the gate already holds it, twice over. `CHANGELOG.md` is out for the
+#: reason the docstring gives — every line sits under a version heading, which is
+#: the scope label a historical figure needs. Both are checked to still be there,
+#: because a carve-out for a file nobody has is one nobody is reading.
+NOT_TYPED_HERE = {
+    "formal/runs.toml": "the record every published run-count is counted out of",
+    "CHANGELOG.md": "a version heading is the scope label a historical figure needs",
+}
+
+
+def tracked(root):
+    """Every path git knows about under the scanned trees, plus the root's own
+    pages. `git ls-files` and not a glob, because it is what makes "not the
+    untracked planning document at the root" a MECHANISM rather than a wish: the
+    old rule named two root pages by hand and its own test said the reason was
+    untrackedness, which the two-name whitelist did not implement.
+    """
+    done = subprocess.run(
+        # `:(glob)` so `*` stops at a `/`: the plain pathspec is depth-blind and
+        # would pull in every `README.md` under `crates/` and `tools/` as well.
+        ["git", "-C", str(root), "ls-files", "-z", "--", *SCANNED_TREES, ":(glob)*.md"],
+        capture_output=True, text=True,
+    )
+    if done.returncode != 0:
+        raise RuntimeError(f"git ls-files exited {done.returncode}: {done.stderr.strip()[:200]}")
+    return sorted(q for q in done.stdout.split("\0") if q)
 
 
 def scanned(root):
-    """The published trees, in a fixed order so two findings read the same way."""
-    return (
-        sorted(root.glob("docs/**/*.md"))
-        + [root / "formal/README.md"]
-        + sorted(
-            q
-            for q in root.glob(".github/**/*")
-            if q.is_file() and q.suffix in (".yml", ".yaml", ".md")
-        )
-        + [root / name for name in ROOT_PAGES if (root / name).is_file()]
-    )
+    """The published trees, in a fixed order so two findings read the same way.
+
+    A file that does not decode as text is dropped rather than reported: an image
+    carries no prose, and `docs/images/` is most of what that skips.
+    """
+    out = []
+    for rel in tracked(root):
+        if rel in NOT_TYPED_HERE:
+            continue
+        path = root / rel
+        try:
+            path.read_text()
+        except (UnicodeDecodeError, OSError):
+            continue
+        out.append(path)
+    return out
 
 
 def mask_regions(text):
@@ -876,14 +915,24 @@ def blocks(path, text):
     A markdown table row is its own block, because a table has no blank line in
     it: `docs/authorization-slice.md`'s twelve-row table was one block, and one
     cell naming `run-tlc.sh` turned the trigger on for the other eleven.
+
+    So is a line of YAML that is not a comment. Only comment runs were read at
+    all, which made a count in a `name:`, an `env:` or a
+    `run: echo '21 GREEN, 174 RED' >> $GITHUB_STEP_SUMMARY` invisible — the
+    workflow's own PUBLISHED OUTPUT, driven, exit 0. Its own block and not part
+    of a paragraph, for the table row's reason: a whole workflow file has few
+    blank lines in it, and one step naming the runner would arm every other.
     """
-    comments = path.suffix in (".yml", ".yaml")
+    yaml = path.suffix in (".yml", ".yaml")
     out, current, start, at = [], [], None, None
     offset = 0
     for number, line in enumerate(text.splitlines(keepends=True), 1):
         body = line.rstrip("\n")
-        keep = body.strip().startswith("#") if comments else body.strip() != ""
-        alone = not comments and body.lstrip().startswith("|")
+        comment = body.strip().startswith("#")
+        keep = comment if yaml else body.strip() != ""
+        alone = body.lstrip().startswith("|") if not yaml else False
+        if yaml and body.strip() and not comment:
+            keep, alone = True, True
         if current and (not keep or alone):
             out.append((at, start, "\n".join(current)))
             current, start, at = [], None, None
@@ -1040,6 +1089,13 @@ def audit(root):
             findings.append(
                 f"{rel}: a generated region is not what the generator writes — run"
                 " `python scripts/run_count_gate.py --write` and commit the result"
+            )
+
+    for rel, why in sorted(NOT_TYPED_HERE.items()):
+        if not (root / rel).is_file():
+            findings.append(
+                f"{rel}: carved out of the scan as {why}, and there is no such file — a"
+                " carve-out nobody has is one nobody is reading"
             )
 
     if len(bodies) < REGION_FLOOR:
