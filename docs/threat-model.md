@@ -53,7 +53,10 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   discharged by a board measurement, not by code
   ([platform-assumptions.md](platform-assumptions.md)). **Scope: the interrupted
   write.** A flash *read* that comes back an error is a different condition, and
-  a NOR power cut does not produce one.
+  this page does not state it — not because a cut cannot produce one. A
+  half-programmed item header is deterministic *and* reads back as an error; what
+  keeps a store walk honest is that it skips that error on purpose rather than
+  never meeting it.
 - **You must be able to see and revoke every credential the device holds.**
   Resident credentials live in `EF_CRED`, and the two surfaces that let you
   BROWSE them — `enumerateRPs` and the trusted-display Passkeys view — reach them

@@ -56,9 +56,10 @@ impl NorFlashError for FlashFault {
 #[derive(Clone)]
 struct SharedMock {
     bytes: Rc<RefCell<Vec<u8>>>,
-    /// Every read from here on fails. A NOR power cut never produces this (a torn
-    /// write yields deterministic bytes, not a read error), so it stands for the
-    /// real thing: a chip or bus fault, which `Fs` must not memoise as absence.
+    /// Every read from here on fails, unconditionally and for every address —
+    /// which no torn write produces (a cut corrupts one item header, and the walk
+    /// skips that one). It stands for a chip or bus fault, which `Fs` must not
+    /// memoise as absence.
     fail_reads: Rc<Cell<bool>>,
     written: Rc<Cell<u64>>,
 }

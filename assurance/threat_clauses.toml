@@ -63,9 +63,15 @@
 # name. It read "the page states no power-interruption threat, though the whole
 # store tranche is against one". The page states one now, `TM-HOST-POWER-CUT`,
 # and it roots exactly ONE of the four store rows: `RSKeyStore.tla` gives `Delete`
-# the only cut point, and `crates/rsk-store/src/lib.rs:236` says a NOR power cut
-# never produces a read fault. The other three are against a FAILED READ, which is
-# a threat this page still states nowhere.
+# the only cut point. The other three are against a FAILED READ, which is a threat
+# this page still states nowhere. The reason they route away from the cut clause
+# is NOT the one `crates/rsk-store/src/lib.rs` used to give: a torn item header is
+# deterministic AND returns `Error::Corrupted`, so "a cut cannot produce a read
+# fault" was false, and the comment says so now. What still separates them is the
+# THREAT: the cut clause is about what a write leaves behind and in what order,
+# these three are about a read the medium refused, whoever caused it. The walk
+# meets that error and skips it on purpose; whether any cut-reachable page state
+# makes a per-key `fetch_item` return it is unmeasured, and is the open half.
 #
 # Every [[untraced]] row also names an `owner`, from scripts/platform_gate.py's
 # four roles — borrowed rather than re-picked, like the word floor above it, and
@@ -364,12 +370,15 @@ verdict = "missing-clause"
 why = """
 not TM-HOST-POWER-CUT, though this property's name says "torn": the writer \
 that violates it is BugMetaAddDropsOnFault, a FAULTED EF_META read rebuilt \
-from empty, and crates/rsk-store/src/lib.rs:236 says a NOR power cut never \
-produces a read fault. No clause states a failed read, which is the threat \
-this is against"""
+from empty, and the cut clause is about what a write leaves behind rather than \
+about a read the medium refused. Not because a cut cannot produce a read error \
+— it can, and crates/rsk-store/src/lib.rs says so now; the walk skips that one \
+deliberately. No clause states a failed read, which is the threat this is \
+against"""
 rests_on = ["""
 **Scope: the interrupted write.** A flash *read* that comes back an error is a \
-different condition, and a NOR power cut does not produce one."""]
+different condition, and this page does not state it — not because a cut cannot \
+produce one."""]
 
 [[untraced]]
 id = "SEC-STORE-004"
@@ -379,10 +388,12 @@ why = """
 the same absent clause as SEC-STORE-003, and not TM-HOST-POWER-CUT for the \
 same reason: BugMetaDeleteDropsOnFault is a faulted read, and RSKeyStore's \
 Reboot sets metaAbsent to FALSE, so no power cycle can reach the false \
-absence this forbids"""
+absence this forbids — which is a statement about this model's cut, not about \
+what a cut can do to a header"""
 rests_on = ["""
 **Scope: the interrupted write.** A flash *read* that comes back an error is a \
-different condition, and a NOR power cut does not produce one."""]
+different condition, and this page does not state it — not because a cut cannot \
+produce one."""]
 
 [[untraced]]
 id = "SEC-STORE-005"
@@ -391,11 +402,12 @@ verdict = "missing-clause"
 why = """
 the induction conjunct behind SEC-STORE-004 and the same missing clause, \
 again not TM-HOST-POWER-CUT: formal/RSKeyStore.tla calls the two "the same \
-defect at different moments", and that defect is a faulted read, which no \
-cut produces"""
+defect at different moments", and that defect is a faulted read — a condition \
+the cut clause does not scope itself over, rather than one a cut cannot cause"""
 rests_on = ["""
 **Scope: the interrupted write.** A flash *read* that comes back an error is a \
-different condition, and a NOR power cut does not produce one."""]
+different condition, and this page does not state it — not because a cut cannot \
+produce one."""]
 
 [[untraced]]
 id = "SEC-POL-003"

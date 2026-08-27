@@ -82,6 +82,41 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **The comment that scoped a threat-model clause was wrong about the physics,
+  and three registry verdicts argued from it.** `crates/rsk-store/src/lib.rs`
+  said the walk's early exit is a read fault *"which a NOR power cut never
+  produces (a torn write yields deterministic bytes, not a read error)"*. All
+  four legs re-derived, and the claim is refuted: `WRITE_SIZE` is **1** on this
+  target (embassy-rp `flash.rs:35`, forwarded through `BlockingAsync` and
+  `SharedFlash`, and `WORD_SIZE = max(WRITE_SIZE, READ_SIZE) = 1`); the item
+  header is **8 bytes** written in **one** `flash.write` call
+  (`third_party/sequential-storage/src/item.rs`, `LENGTH = 8`, fields `0..4` /
+  `4..6` / `6..8`, and one call at `write`); a cut that leaves the length field
+  programmed and the length-CRC erased at `0xFFFF` cannot match, because
+  **0 of 65 536** two-byte lengths produce `0xFFFF` — measured exhaustively, and
+  not by luck: **8 of them do** before `crc16`'s closing `match crc { 0xFFFF =>
+  0xFFFE }`, a clamp whose own doc line is "A crc that never returns 0xFFFF", so
+  the guard is load-bearing rather than decorative. `ItemHeader::read_new` then
+  answers `Error::Corrupted` after one retry. A torn write is deterministic **and**
+  a read error.
+
+  What actually keeps the enumeration honest is that `ItemHeaderIter::traverse`
+  advances one word past `Corrupted` on purpose instead of propagating it. The
+  comment says that now, and so does its second copy in `crates/rsk-store/src/
+  tests.rs` — which no list of consumers had, and which the same wording had been
+  retyped into. `docs/threat-model.md`'s clause A keeps its scope and drops the
+  false reason; the `rests_on` pin moves with the sentence in the same change, and
+  reddens the gate from either side (measured both ways).
+
+  The routing of `SEC-STORE-003/-004/-005` away from `TM-HOST-POWER-CUT` is
+  unchanged, but its reason is replaced. It was "a cut cannot produce a read
+  fault"; it is now the THREAT — the cut clause is about what a write leaves
+  behind and in what order, those three are about a read the medium refused,
+  whoever caused it. The open half is named rather than assumed: whether any
+  cut-reachable page state makes a per-key `fetch_item` return `Corrupted` is
+  unmeasured. Within one boot it cannot — the location cache a cut clears is the
+  only path that propagates it — and no board has been asked the rest.
+
 - **One faulted flash probe re-seeded the factory PIN, PUK and management key at
   an unauthenticated PIV `SELECT`.** `Storage::read`/`size` answer the same `None`
   for "no such record" and for "that read failed", and an absent record is how
