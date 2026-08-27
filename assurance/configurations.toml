@@ -622,7 +622,16 @@ whichever `rsk-fido` statements a second timing entrypoint can reach."""
 
 [[question]]
 column = "fido-conformance"
-text = "Built only for the FIDO Conformance Tool run: it suppresses the EdDSA advertisement. Does any P0-family row depend on the advertised algorithm list — and is a conformance-only build in the supported set?"
+text = """
+Built only for the FIDO Conformance Tool run: it suppresses the EdDSA \
+advertisement. Its "is a conformance-only build in the supported set" half was \
+the same parked ruling the three measurement columns carried and is settled \
+above with them. What is left is narrower AND wider than the sentence used to \
+say, because the closure the page derives names a second feature: \
+`fido-conformance` implies `strict-up`, so this column also demands a touch on \
+EVERY assertion. Two questions then, not one — does any P0-family row depend on \
+the advertised algorithm list, and does `firmware-strict-up`'s transport-arity \
+question apply here too?"""
 
 [[question]]
 column = "ea-conformance-rpid"

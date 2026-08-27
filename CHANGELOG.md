@@ -57,7 +57,12 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   of in full, and **8** columns are told "never ship" in `firmware/Cargo.toml`'s
   own words — four of them the `no-touch` packages the matrix exists for. So all
   111 cells stay honest `gap`s and the questions now carry the measurement
-  instead of the parked ruling.
+  instead of the parked ruling. Asking the same question of the parked ruling's
+  other spellings found a **fourth** column carrying it: `fido-conformance` also
+  asked "is a conformance-only build in the supported set". Rewriting it surfaced
+  a second thing that sentence never said — the derived closure shows
+  `fido-conformance` implies `strict-up`, so that column demands a touch on every
+  assertion and inherits `firmware-strict-up`'s transport-arity question too.
 - **`docs/assurance-matrix.md` derives what each column compiles unlike the
   default build**, instead of leaving it to a sentence someone has to keep true:
   the Columns table gains the per-crate closure delta, and Open gaps gains how
