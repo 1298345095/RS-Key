@@ -91,17 +91,25 @@ MATRIX_LIVENESS = "Liveness.cfg     GREEN                 states=900   distinct=
 
 #: What TLC said about the same three rows, in TLC's words — the second account
 #: `check_tlc` holds the matrix to. Each clock is a little under the runner's,
-#: because the runner's brackets the JVM.
-TLC_SAFETY = (
-    "Shipped.cfg 4000 states generated, 200 distinct states found, 0 states left on"
-    " queue. The depth of the complete state graph search is 6. Finished in 09min 58s\n"
-    "Mut_BugFooOpens.cfg 90 states generated, 40 distinct states found, 0 states left"
-    " on queue. The depth of the complete state graph search is 4. Finished in 06s"
-)
-TLC_LIVENESS = (
-    "Liveness.cfg 900 states generated, 44 distinct states found, 0 states left on"
-    " queue. The depth of the complete state graph search is 9. Finished in 04min 59s"
-)
+#: because the runner's brackets the JVM, and each line opens with the banner and
+#: the start time: they are the only second source the provenance fields have.
+def tlc_kept(when, workers=2, cores=1):
+    head = f"with {workers} workers on {cores} cores (Some OS {os.uname().machine})"
+    return {
+        "safety": (
+            f"Shipped.cfg {head} Starting... ({when}) 4000 states generated, 200 distinct"
+            " states found, 0 states left on queue. The depth of the complete state graph"
+            " search is 6. Finished in 09min 58s\n"
+            f"Mut_BugFooOpens.cfg {head} Starting... ({when}) 90 states generated, 40"
+            " distinct states found, 0 states left on queue. The depth of the complete"
+            " state graph search is 4. Finished in 06s"
+        ),
+        "liveness": (
+            f"Liveness.cfg {head} Starting... ({when}) 900 states generated, 44 distinct"
+            " states found, 0 states left on queue. The depth of the complete state graph"
+            " search is 9. Finished in 04min 59s"
+        ),
+    }
 
 def a_minute_from_now():
     """The fixture's runs happen just AFTER its own commit, because `--record`
@@ -243,6 +251,9 @@ class Tree:
     def __init__(self, root):
         self.root = pathlib.Path(root)
         self.pending = set()
+        #: One stamp for the whole fixture: the logs, the record's `date` and the
+        #: kept lines are three copies of it, and the gate now holds them equal.
+        self.when = a_minute_from_now()
         self.write("formal/run-tlc.sh", RUN_TLC)
         (self.root / "formal/run-tlc.sh").chmod(0o755)
         self.write("formal/floors.txt", FLOORS)
@@ -254,7 +265,7 @@ class Tree:
         # logs are the run's raw output, `--record` reads them where they lie and
         # the scan never sees them. Written with `write` they became tracked, and
         # every count in a log read as a second copy of itself.
-        for name, text in logs().items():
+        for name, text in logs(when=self.when).items():
             self.stray(f"formal/out/{name}.log", text)
         self.write("formal/README.md", README_MD)
         self.write("docs/testing.md", TESTING_MD)
@@ -319,15 +330,16 @@ class Tree:
 
     def record(self, safety=None, liveness=None, commit=None, drop="", tlc=None):
         out = run_count_gate.HEADER
+        kept = tlc_kept(self.when)
         for tier, matrix, summary in (
-            ("safety", safety or MATRIX_SAFETY, TLC_SAFETY),
-            ("liveness", liveness or MATRIX_LIVENESS, TLC_LIVENESS),
+            ("safety", safety or MATRIX_SAFETY, kept["safety"]),
+            ("liveness", liveness or MATRIX_LIVENESS, kept["liveness"]),
         ):
             out += "\n[[run]]\n"
             for key, value in (
                 ("tier", tier),
                 ("command", f"./formal/run-tlc.sh {tier}"),
-                ("date", "2026-08-27"),
+                ("date", self.when.split()[0]),
                 ("commit", commit or self.head()),
                 ("host", "a fixture (1 core)"),
                 ("workers", 2),
@@ -543,7 +555,7 @@ def test_a_wall_clock_further_over_it_than_a_jvm_starts_in(tree):
 
 
 def test_a_row_with_no_tlc_summary_at_all(tree):
-    tree.edit("formal/runs.toml", "Shipped.cfg 4000 states generated", "Other.cfg 4000 states generated")
+    tree.edit("formal/runs.toml", "Shipped.cfg with 2 workers", "Other.cfg with 2 workers")
     problems = tree.problems()
     assert only(problems, "Shipped.cfg is in the matrix and TLC's own summary of it is not")
     assert only(problems, "TLC's summary of Other.cfg is kept and the matrix has no such row")
@@ -563,7 +575,7 @@ def test_the_tlc_block_dropped_whole(tree):
 
 
 def test_a_kept_line_that_is_not_a_tlc_summary(tree):
-    tree.edit("formal/runs.toml", "Shipped.cfg 4000 states generated", "Shipped.cfg went well")
+    tree.edit("formal/runs.toml", "Shipped.cfg with 2 workers", "Shipped.cfg went well with 2 workers")
     assert only(tree.problems(), "is not a TLC summary line")
 
 
@@ -574,6 +586,92 @@ def test_a_question_mark_must_mean_tlc_printed_nothing(tree):
     field with no number is the one field nothing checks."""
     tree.edit("formal/runs.toml", "states=4000", "states=?")
     assert only(tree.problems(), "recorded states=? and TLC's own summary says 4000")
+
+
+def test_a_tier_whose_rows_all_sit_at_the_per_row_bound(tree):
+    """The bound above is per row and the published sentence ADDS THEM UP: every
+    row at its own TLC clock plus the slack put the legal safety total at
+    [3064..8914] s against a recorded 3225, and `3225 s` was republished as
+    `8914 s` with `--write` and the row both at exit 0."""
+    tree.write("formal/runs.toml", tree.record(
+        safety=MATRIX_SAFETY.replace("depth=6  600s", "depth=6  628s")
+                            .replace("depth=4  7s", "depth=4  36s")))
+    assert only(tree.problems(), "longer than TLC timed them, over the"), tree.problems()
+
+
+def test_one_cold_row_in_a_tier_is_not_over_the_summed_bound(tree):
+    """The other direction, and why `CLOCK_SLACK` is added on top of the per-row
+    budget: a single cold page cache is what the per-row slack is FOR, and a
+    two-row tier would otherwise have no room for it at all."""
+    tree.write("formal/runs.toml", tree.record(
+        safety=MATRIX_SAFETY.replace("depth=6  600s", "depth=6  620s")))
+    assert not only(tree.problems(), "longer than TLC timed them")
+
+
+@pytest.mark.parametrize("field, typed", (
+    ("date", '"1999-01-01"'),
+    ("workers", "97"),
+    ("host", '"a Cray-1 (4096 cores)"'),
+))
+def test_a_provenance_field_the_banner_contradicts(tree, field, typed):
+    """These three had no second source at all — each was driven to an absurd
+    value with `--write` and the row both at exit 0 — and TLC printed all three,
+    in the banner and the start line `--record` already parsed and threw away."""
+    kept = tree.read("formal/runs.toml")
+    tree.write("formal/runs.toml",
+               run_count_gate.re.sub(rf"^{field} = .*$", f"{field} = {typed}", kept,
+                                     count=1, flags=run_count_gate.re.M))
+    assert only(tree.problems(), f"recorded {field}="), tree.problems()
+
+
+def test_kept_summaries_from_two_different_runs(tree):
+    """One disagreement among the rows is a record assembled from two runs, and
+    it is reported once rather than once per row."""
+    tree.edit("formal/runs.toml", "Mut_BugFooOpens.cfg with 2 workers on 1 cores",
+              "Mut_BugFooOpens.cfg with 9 workers on 1 cores")
+    assert len(only(tree.problems(), "disagree about date/workers/cores")) == 1
+
+
+def test_a_green_row_that_reports_no_state_count(tree):
+    """`check_record` skips the distinct floor on a non-digit, so a GREEN row
+    whose two halves politely agree there is nothing to compare escapes
+    `floors.txt` entirely — and the published table loses the numbers to an em
+    dash. TLC prints a summary on every run that reaches a verdict."""
+    tree.write("formal/runs.toml", tree.record(
+        safety=MATRIX_SAFETY.replace("states=4000  distinct=200 depth=6",
+                                     "states=?     distinct=?   depth=?"),
+        tlc=tlc_kept(tree.when)["safety"].replace(
+            "4000 states generated, 200 distinct states found, 0 states left on queue."
+            " The depth of the complete state graph search is 6. ", "")))
+    assert only(tree.problems(), "came back GREEN and TLC printed no state count")
+
+
+def test_a_green_row_with_states_left_on_its_queue(tree):
+    """`queue` was captured by `TLC_ROW` and compared to nothing, so a record
+    could claim an exhaustive GREEN while its own next words said a billion
+    states were never explored."""
+    tree.edit("formal/runs.toml", "200 distinct states found, 0 states left",
+              "200 distinct states found, 999999999 states left")
+    assert only(tree.problems(), "states on its queue — an exhaustive run leaves none")
+
+
+def test_a_red_row_may_leave_states_on_its_queue(tree):
+    """The other direction, and the reason the rule is about GREEN: TLC stops
+    where it finds the error, so a queue is what a RED row IS. 148 of the 199
+    recorded rows carry one."""
+    tree.edit("formal/runs.toml", "40 distinct states found, 0 states left",
+              "40 distinct states found, 12 states left")
+    assert not only(tree.problems(), "states on its queue")
+
+
+def test_more_distinct_states_than_were_generated(tree):
+    """The other field of TLC's own sentence that nothing read. No run finds more
+    distinct states than it made, so the pair is checkable without a second
+    program — and `states` alone is held only to the matrix's copy of itself."""
+    tree.write("formal/runs.toml", tree.record(
+        safety=MATRIX_SAFETY.replace("states=4000 ", "states=1    "),
+        tlc=tlc_kept(tree.when)["safety"].replace("4000 states generated", "1 states generated")))
+    assert only(tree.problems(), "distinct among them — no run finds more")
 
 
 def test_write_will_not_publish_from_a_record_that_does_not_check_out(tree):

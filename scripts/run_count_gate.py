@@ -53,12 +53,23 @@ Which left the record itself typeable, and that was the hole under all of it:
 only from below, so editing `distinct=77563872` to `48679968` and `1869s` to
 `539s` and running `--write` put six published sentences back to the exact defect
 this file is named after, with every sibling row green. So each `[[run]]` now
-also keeps [`TLC_ROW`] — TLC's own closing sentences, per configuration, out of
-the per-configuration logs at `--record` time — and the gate re-derives the row
-from them. Two programs' accounts of one run, in one file. It is not a signature
-and does not pretend to be: someone writing both halves can still write them to
-agree. It is the difference between rot, which is one careless number, and a
-forgery, which is a decision.
+also keeps [`TLC_ROW`] — TLC's own banner, start line and closing sentences, per
+configuration, out of the per-configuration logs at `--record` time — and the
+gate re-derives the row from them. Two programs' accounts of one run, in one
+file. It is not a signature and does not pretend to be: someone writing both
+halves can still write them to agree. It is the difference between rot, which is
+one careless number, and a forgery, which is a decision.
+
+The kept line is TLC's, so what it says about ITSELF is checkable too, and four
+things it says were read by nothing: the banner's workers and cores and the start
+line's date, which left `date`, `host` and `workers` typeable outright; the
+`states left on queue` in the same sentence as the state count, so a GREEN row
+could claim an exhaustive run while its own next words said a billion states
+were never reached; whether `states` is even as large as `distinct`; and whether
+a row that came back GREEN printed a state count at all — `check_record` skips
+the distinct floor on a non-digit, so both halves agreeing there is nothing to
+compare took a row out of [`FLOORS`] entirely. And [`CLOCK_SLACK`] was a per-row
+bound on a quantity the published sentence adds up, which is [`TIER_SLACK`].
 
 And what it deliberately does not reach: `scripts/` and `assurance/`. Both were
 counted when this was written. `scripts/` held eight, six of them the measured
@@ -560,11 +571,18 @@ TLC_STARTED = re.compile(r"^Starting\.\.\. \((\d{4}-\d\d-\d\d)[ T]([\d:]+)\)$", 
 TLC_BANNER = re.compile(r"^Running .*? with (\d+) workers? on (\d+) cores? .*?\(([^,]+),", re.M)
 
 #: One kept line: the configuration, then TLC's own sentences joined in the order
-#: it prints them. Both optional halves are genuinely absent on a run that died
-#: on an initial state — `TokenGateDisagreement.cfg` generated nothing, so the
-#: runner recorded `?` there and TLC printed only its clock.
+#: it prints them. The two state-space halves are genuinely absent on a run that
+#: died on an initial state — `TokenGateDisagreement.cfg` generated nothing, so
+#: the runner recorded `?` there and TLC printed only its clock. The two
+#: provenance halves are not optional: TLC prints its banner and its start line
+#: on every run, and they are the ONLY second source `date`, `host` and
+#: `workers` have. Each was a field somebody typed, and each was driven to an
+#: absurd value with `--write` and the row at exit 0 — while `--record` had
+#: already parsed both lines and thrown them away.
 TLC_ROW = re.compile(
     r"^(?P<cfg>\S+\.cfg)"
+    r"\s+with (?P<workers>\d+) workers? on (?P<cores>\d+) cores? \((?P<arch>[^)]+)\)"
+    r"\s+Starting\.\.\. \((?P<date>\d{4}-\d\d-\d\d) (?P<time>[\d:]+)\)"
     r"(?:\s+(?P<states>\d+) states generated, (?P<distinct>\d+) distinct states found,"
     r" (?P<queue>\d+) states left on queue\.)?"
     r"(?:\s+The depth of the complete state graph search is (?P<depth>\d+)\.)?"
@@ -578,6 +596,18 @@ TLC_ROW = re.compile(
 #: rewritten to tell a different story about cost (539 s over a run TLC timed at
 #: 31min 08s) cannot pass either bound.
 CLOCK_SLACK = 30
+
+#: And the same gap SUMMED over a tier, per row, because the bound above is a
+#: per-row one on a quantity the published sentence adds up: 30 s each over 195
+#: rows put the legal safety total at [3064..8914] s against a recorded 3225 --
+#: +176 % of headroom under a bound that reads tight, and that total is the
+#: numerator of `docs/testing.md`'s CI-cap projection. Driven: every row moved to
+#: its own TLC clock plus 30 published `3225 s` as `8914 s`, `--write` and the
+#: row both at exit 0. Measured per row over the recorded runs: mean 0.83 s and
+#: 1.00 s, max 2 s, so three is well clear of a JVM bracket and nowhere near a
+#: rewritten cost. `CLOCK_SLACK` is added once on top, so one genuinely cold row
+#: anywhere in the tier still fits.
+TIER_SLACK = 3
 
 
 def matrix_rows(text):
@@ -605,7 +635,14 @@ def tlc_line(root, cfg):
     finished = TLC_FINISHED.search(text)
     if not finished:
         raise RuntimeError(f"{log.relative_to(root)}: TLC never said it finished")
-    parts = [cfg]
+    banner, started = TLC_BANNER.search(text), TLC_STARTED.search(text)
+    if not banner or not started:
+        raise RuntimeError(f"{log.relative_to(root)}: its log carries no TLC banner or start time")
+    parts = [
+        cfg,
+        f"with {banner[1]} workers on {banner[2]} cores ({banner[3]})",
+        f"Starting... ({started[1]} {started[2]})",
+    ]
     if summary := TLC_SUMMARY.findall(text):
         parts.append("{} states generated, {} distinct states found, {} states left on queue.".format(*summary[-1]))
     if depth := TLC_DEPTH.findall(text):
@@ -688,6 +725,7 @@ def check_tlc(where, run, findings):
             kept[found["cfg"]] = found
         elif line.strip():
             findings.append(f"{where}: {line.strip()[:60]!r} is not a TLC summary line")
+    stamps, gaps = set(), []
     for row in run["rows"]:
         found = kept.pop(row["cfg"], None)
         if found is None:
@@ -696,6 +734,35 @@ def check_tlc(where, run, findings):
                 " not — re-record the run, the row has nothing to check it against"
             )
             continue
+        stamps.add((found["date"], found["workers"], found["cores"]))
+        green = row["verdict"].startswith("GREEN")
+        # TLC prints a summary on every run that reaches a verdict, so a GREEN
+        # row without one is not the run it says it is — and `check_record`'s
+        # distinct floor is skipped on `?`, so a row could escape `floors.txt`
+        # with both halves politely agreeing that there is nothing to compare.
+        if green and found["states"] is None:
+            findings.append(
+                f"{where}: {row['cfg']} came back GREEN and TLC printed no state count"
+                " at all — a run that reaches a verdict prints a summary, and this row"
+                f" then escapes the floor {FLOORS} puts under it"
+            )
+        if found["states"] is not None:
+            # Two fields of TLC's own sentence that nothing read. `queue` was
+            # captured and never compared, so a record could claim an exhaustive
+            # GREEN while its own next word said a billion states were never
+            # explored; and no run can find more distinct states than it made.
+            if green and int(found["queue"]):
+                findings.append(
+                    f"{where}: {row['cfg']} came back GREEN and TLC left"
+                    f" {found['queue']} states on its queue — an exhaustive run leaves"
+                    " none, so the verdict and the sentence under it disagree"
+                )
+            if int(found["states"]) < int(found["distinct"]):
+                findings.append(
+                    f"{where}: {row['cfg']} generated {found['states']} states and found"
+                    f" {found['distinct']} distinct among them — no run finds more"
+                    " distinct states than it generated"
+                )
         for field in ("states", "distinct", "depth"):
             # `?` is the runner's spelling of "TLC printed none", and TLC leaves
             # both halves out on a run that died on an initial state. So the two
@@ -708,12 +775,46 @@ def check_tlc(where, run, findings):
                     " was edited by hand"
                 )
         gap = int(row["seconds"]) - elapsed(found)
+        gaps.append(gap)
         if not 0 <= gap <= CLOCK_SLACK:
             findings.append(
                 f"{where}: {row['cfg']} recorded {row['seconds']}s and TLC timed itself at"
                 f" {elapsed(found)}s — the runner's clock brackets the JVM, so the gap"
                 f" belongs in 0..{CLOCK_SLACK}s and this one is {gap}s"
             )
+    budget = CLOCK_SLACK + TIER_SLACK * len(gaps)
+    if sum(gaps) > budget:
+        findings.append(
+            f"{where}: the rows are {sum(gaps)}s longer than TLC timed them, over the"
+            f" {budget}s a {len(gaps)}-row tier gets — the per-row bound is on a"
+            " quantity the published sentence ADDS UP, and this is a wall clock"
+            " rewritten to tell a different story about cost"
+        )
+    # ONE finding for a provenance field, not one per row: 199 copies of "the
+    # date is wrong" is the report defect where the reader is told the tree is.
+    if len(stamps) > 1:
+        findings.append(
+            f"{where}: the kept summaries disagree about date/workers/cores"
+            f" ({len(stamps)} readings) — a record assembled from two runs"
+        )
+    elif stamps:
+        (date, workers, cores), = stamps
+        # `host` is the log's core count wearing the local machine's brand
+        # string, so the banner holds the half of it a JVM knows. Read as a
+        # number rather than as `host`'s own spelling of it, which is `1 cores`.
+        counted = re.search(r"\((\d+) cores?\)", str(run.get("host", "")))
+        for field, mine, theirs, agrees in (
+            ("date", str(run.get("date", "")), date, str(run.get("date", "")) == date),
+            ("workers", str(run.get("workers", "")), workers,
+             str(run.get("workers", "")) == workers),
+            ("host", str(run.get("host", "")), f"{cores} core(s)",
+             counted is not None and counted.group(1) == cores),
+        ):
+            if not agrees:
+                findings.append(
+                    f"{where}: recorded {field}={mine!r} and TLC's own banner says"
+                    f" {theirs!r} — one of the two was typed"
+                )
     for cfg in sorted(kept):
         findings.append(f"{where}: TLC's summary of {cfg} is kept and the matrix has no such row")
 
@@ -1747,11 +1848,15 @@ HEADER = """\
 # -- seven published run-counts were stale on the day it was written, one of them
 # in the paragraph the docs introduce as the one to quote.
 #
-# `tlc` is the SAME run in TLC's own words: the closing sentences of each
-# `formal/out/<cfg>.log`, kept at `--record` time because those logs are
-# gitignored and the next run overwrites them. The gate re-derives every row's
-# states, distinct states and depth from it and holds the runner's wall clock to
-# TLC's. This does NOT make a run unforgeable -- both halves are bytes in a
+# `tlc` is the SAME run in TLC's own words: the banner, the start line and the
+# closing sentences of each `formal/out/<cfg>.log`, kept at `--record` time
+# because those logs are gitignored and the next run overwrites them. The gate
+# re-derives every row's states, distinct states and depth from it, holds the
+# runner's wall clock to TLC's -- per row and summed over the tier -- and holds
+# `date`, `host` and `workers` to what the banner and the start line say. It also
+# reads what the kept line says about itself: a GREEN row prints a state count
+# and leaves nothing on its queue, and no run finds more distinct states than it
+# generated. This does NOT make a run unforgeable -- both halves are bytes in a
 # committed file -- and it is not meant to. It makes a number here unrottable BY
 # HAND: `distinct` and the clock had no second source at all, so editing one and
 # running `--write` restored six published sentences to the exact defect this
