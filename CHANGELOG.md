@@ -68,6 +68,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **The scope registry's labels are read now, and the silence one entry buys
+  is bounded.** `SCOPED`'s values were never looked at at all, so a brand-new
+  stale literal kept its exemption with the label `""`, `None`, `"history"`,
+  six nonsense words — or *a description of an entirely different run*. The
+  last of those still passes and always will: no rule tells a right scope from
+  a wrong one, and that is written where the floor is defined rather than
+  claimed away. What is checked is that a label exists (eight words, against a
+  measured minimum of ten and a median of twenty-four), was written for its own
+  entry rather than pasted from another, and names a page this gate actually
+  reads — three entries that named `CHANGELOG.md` or a page that does not exist
+  passed before. A fragment must also exempt at least one literal and at most
+  six (measured maximum today: five), because one entry had been silencing an
+  unbounded number, and the registry as a whole has a ceiling so the exemption
+  surface only widens where somebody can see it.
 - **A second rule, inverted: a value the generated regions PRINT may not be
   written anywhere else.** The four rules above hunt for run-count-*shaped*
   text — a roster noun, a `GREEN`/`RED` adjacency, a wall clock beside a tier's

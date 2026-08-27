@@ -118,6 +118,29 @@ SCAN_FLOOR = 8
 #: still matches the tree's spelling or it does not, and a fraction of 2 is 0.
 RULE_FLOOR = 1
 
+#: What a scope label has to BE. It cannot be checked for truth — no program
+#: tells a right scope from a wrong one, and `"the liveness tier in 2019, on a
+#: Raspberry Pi"` passes every rule here and always will. What was checkable and
+#: was not checked is that there is one at all: the values of [`SCOPED`] were
+#: never read, so `""`, `None`, a single word and six nonsense words each bought
+#: a brand-new stale literal an exemption. Eight words, against a measured
+#: minimum of ten and a median of twenty-four, so the floor refuses boilerplate
+#: rather than judging prose.
+LABEL_WORDS = 8
+
+#: Literals one fragment may exempt. A registry entry buys silence for its own
+#: span, and a span can be a whole paragraph: seven literals went quiet under one
+#: entry, which is an exemption nobody sized. Measured maximum today is five, in
+#: the `COVERAGE=1` sweep sentence; a sixth in one sentence means splitting the
+#: registration, not widening it.
+SCOPE_SPAN_CAP = 6
+
+#: And the registry as a whole only grows deliberately. 27 today; a bump belongs
+#: in the diff beside the entry that needs it, the way every other ratchet here
+#: moves. An exemption list that grows without anyone noticing is the colander
+#: this row exists to not become.
+SCOPE_CEILING = 27
+
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
 #: paragraph-local trigger and no guess about how a sentence is phrased, because
@@ -1068,6 +1091,45 @@ def emitted(bodies):
     return out
 
 
+def check_scope(root, findings):
+    """What is checkable about [`SCOPED`] itself, which was nothing at all.
+
+    Not the label's TRUTH — a description of an entirely different run passes
+    here and no rule can change that, which is the honest limit of a prose
+    exemption. What these hold is that a label exists, was written for its entry
+    rather than pasted, and points at a file this gate actually reads.
+    """
+    pages = {p.relative_to(root).as_posix() for p in scanned(root)}
+    seen = {}
+    for (rel, fragment), label in sorted(SCOPED.items()):
+        where = f"SCOPED[{rel}, {fragment[:36]!r}]"
+        if rel not in pages:
+            findings.append(
+                f"{where}: names a file the scan does not read — an exemption from a rule"
+                " that was never going to fire is one nobody can check"
+            )
+        words = len(str(label or "").split())
+        if words < LABEL_WORDS:
+            findings.append(
+                f"{where}: its scope is {words} word(s), under {LABEL_WORDS} — the entry"
+                " is what the figure is history TO, and a label nobody wrote is a"
+                " literal nobody scoped"
+            )
+        elif label in seen:
+            findings.append(
+                f"{where}: its scope is word for word {seen[label]}'s — one of the two"
+                " was pasted, and a pasted label describes the other entry"
+            )
+        else:
+            seen[label] = where
+    if len(SCOPED) > SCOPE_CEILING:
+        findings.append(
+            f"{len(SCOPED)} scoped entries, over the ceiling of {SCOPE_CEILING} — raise"
+            " it in the same diff as the entry that needs it, so the exemption surface"
+            " grows where somebody can see it"
+        )
+
+
 def scan(root, owned, values, findings):
     """How many run-count literals the published trees hold, and where.
 
@@ -1084,6 +1146,9 @@ def scan(root, owned, values, findings):
     per = dict.fromkeys(("tally", "count", "clock", "loose-tally", "names-a-run"), 0)
     per["emitted-value"] = len(values)
     wanted = {sp: v for v in values for sp in spellings(v)}
+    #: literals each registered fragment actually exempts, so an entry can be
+    #: held to buying silence for a bounded, non-zero number of them.
+    exempted = {}
     for path in scanned(root):
         rel = path.relative_to(root).as_posix()
         text = path.read_text()
@@ -1106,13 +1171,15 @@ def scan(root, owned, values, findings):
         # taken from the original then land beside the literals they cover.
         masked = mask_regions(text)
         spans = scoped_spans(rel, masked, findings)
+        exempted.update(dict.fromkeys(spans, 0))
         # The value rule reads the whole masked file rather than its blocks: it
         # needs no trigger beside the literal, so a paragraph is not the unit of
         # anything here, and a number in a table cell is as much a second copy as
         # one in a sentence.
         for spelling, value in sorted(wanted.items()):
             for m in re.finditer(r"(?<![\d.,_])" + re.escape(spelling) + r"(?![\d.,_])", masked):
-                if any(lo <= m.start() and m.end() <= hi for lo, hi in spans.values()):
+                if inside := [k for k, (lo, hi) in spans.items() if lo <= m.start() and m.end() <= hi]:
+                    exempted[inside[0]] += 1
                     continue
                 findings.append(
                     f"{rel}:{masked[: m.start()].count(chr(10)) + 1}: {spelling!r} is a"
@@ -1142,13 +1209,27 @@ def scan(root, owned, values, findings):
                 (at + m.start(), at + m.end(), m.group(0).strip()) for m, _ in triggers
             }):
                 found += 1
-                if any(lo <= begin and stop <= hi for lo, hi in spans.values()):
+                if inside := [k for k, (lo, hi) in spans.items() if lo <= begin and stop <= hi]:
+                    exempted[inside[0]] += 1
                     continue
                 findings.append(
                     f"{rel}:{start}: {literal!r} is a run-count outside every generated"
                     " region — put the sentence in one, or register it in"
                     " scripts/run_count_gate.py SCOPED with what it is history to"
                 )
+    for key, count in sorted(exempted.items()):
+        where = f"SCOPED[{key[0]}, {key[1][:36]!r}]"
+        if count == 0:
+            findings.append(
+                f"{where}: its fragment is in the page and exempts no literal — the rules"
+                " have moved past it, and an exemption for nothing is one nobody reads"
+            )
+        elif count > SCOPE_SPAN_CAP:
+            findings.append(
+                f"{where}: one fragment exempts {count} literals, over the cap of"
+                f" {SCOPE_SPAN_CAP} — split the registration; a span this wide is an"
+                " exemption nobody sized"
+            )
     for name, count in sorted(per.items()):
         if count < RULE_FLOOR:
             findings.append(
@@ -1219,6 +1300,7 @@ def audit(root):
             " sentence nothing writes is one somebody types"
         )
 
+    check_scope(root, findings)
     found = scan(root, owned, emitted(bodies), findings)
     if found < SCAN_FLOOR:
         findings.append(

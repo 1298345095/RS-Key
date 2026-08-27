@@ -840,6 +840,64 @@ def test_a_literal_outside_the_fragment_that_resembles_it(tree, monkeypatch):
     )
 
 
+# --- the registry itself, whose values nothing read --------------------------
+#
+# `SCOPED`'s labels were never looked at, so `""`, `None`, one word, six
+# nonsense words and a description of an ENTIRELY DIFFERENT RUN each bought a
+# brand-new stale literal an exemption. The last of those still passes and
+# always will — no rule tells a right scope from a wrong one — so what is held
+# here is that a label exists, was written for its own entry, and points at a
+# page this gate reads, and that the silence one entry buys is bounded.
+
+LONG = "a scope label with comfortably more than eight words in it"
+
+
+@pytest.mark.parametrize("label", ("", None, "history", "the liveness tier in 2019"))
+def test_a_scope_entry_whose_label_is_not_one(tree, monkeypatch, label):
+    monkeypatch.setattr(run_count_gate, "SCOPED", {("docs/testing.md", "x"): label})
+    assert only(tree.problems(), "word(s), under 8")
+
+
+def test_a_scope_label_pasted_from_another_entry(tree, monkeypatch):
+    monkeypatch.setattr(run_count_gate, "SCOPED", {
+        ("docs/testing.md", "a"): LONG, ("docs/formal.md", "b"): LONG,
+    })
+    assert only(tree.problems(), "word for word")
+
+
+def test_a_scope_entry_for_a_page_the_scan_does_not_read(tree, monkeypatch):
+    monkeypatch.setattr(run_count_gate, "SCOPED", {("CHANGELOG.md", "a"): LONG})
+    assert only(tree.problems(), "names a file the scan does not read")
+
+
+def test_a_registry_over_its_ceiling(tree, monkeypatch):
+    monkeypatch.setattr(run_count_gate, "SCOPE_CEILING", 1)
+    monkeypatch.setattr(run_count_gate, "SCOPED", {
+        ("docs/testing.md", "a"): LONG, ("docs/formal.md", "b"): LONG + " twice",
+    })
+    assert only(tree.problems(), "over the ceiling of 1")
+
+
+def test_a_fragment_that_exempts_nothing(tree, monkeypatch):
+    """Not the same as one that matches nothing: this string IS in the page, and
+    covers no literal at all — the rules have moved past it."""
+    monkeypatch.setattr(run_count_gate, "SCOPED",
+                        {("docs/testing.md", "Tier membership lives in"): LONG})
+    assert only(tree.problems(), "exempts no literal")
+
+
+def test_a_fragment_that_exempts_more_than_its_cap(tree, monkeypatch):
+    """One entry silenced seven literals in the real tree. A registry entry buys
+    its own span, and a span can be a whole paragraph."""
+    monkeypatch.setattr(run_count_gate, "SCOPE_SPAN_CAP", 1)
+    tree.write("docs/typed.md",
+               "# Typed\n\n`run-tlc.sh safety` covers 190 rows in 2916 s, 18 GREEN.\n")
+    monkeypatch.setattr(run_count_gate, "SCOPED", {
+        ("docs/typed.md", "covers 190 rows in 2916 s, 18 GREEN"): LONG,
+    })
+    assert only(tree.problems(), "over the cap of 1")
+
+
 def test_the_published_pages_at_the_root_are_scanned(tree):
     """The obvious escape from a rule scoped to three directories."""
     tree.write("README.md", "# RS-Key\n\n`run-tlc.sh safety` covers 190 rows.\n")
