@@ -84,9 +84,14 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   the criterion says "date". `[[cell]]` has refused a stray field since it
   shipped; `[[question]]` does now too, and asking the same question one level out
   found the ledger's *tables* unguarded as well, so a `[[review]]` section nobody
-  reads is refused. Ten mutations in `scripts/test_matrix_gate.py`, both
+  reads is refused. Twelve mutations in `scripts/test_matrix_gate.py`, both
   directions: inverting the `sameness` rule reddens the CLEAN fixture, which is
-  how the inverse defect is told from the real one.
+  how the inverse defect is told from the real one. Asking "what here is read by
+  nothing" of *this* diff found the answer inside it — `SETTLES` stored, for each
+  route, the `[[cell]]` bases it reaches, and only its KEYS were ever read. The
+  values are load-bearing now: the vocabulary is asserted total over `ALLOWED`,
+  so a sixth basis with no route is a red row rather than `evidence` quietly
+  becoming the answer for everything.
 - **Four candidate rules for telling a real settling question from six nonsense
   words were measured against the questions already in the tree, and the tree
   refuted all four.** Requiring a `?` — 14 of 28 carry none and read as

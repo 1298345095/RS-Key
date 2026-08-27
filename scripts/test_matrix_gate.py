@@ -929,6 +929,21 @@ def test_the_owner_vocabulary_is_the_one_platform_gate_already_chose():
     assert matrix_gate.OWNERS is platform_gate.OWNERS
 
 
+def test_every_basis_a_cell_can_rest_on_has_a_route_that_reaches_it():
+    """[`SETTLES`] is the disposition table read backwards, so it has to stay
+    TOTAL over it — and until this case existed its values were read by nothing,
+    which is the field-nothing-reads defect inside the diff that closed it. A
+    sixth basis added to `ALLOWED` with no route would leave a question unable to
+    name what settles its column, and `evidence` would silently become the answer
+    for everything. `default-build` is the one basis deliberately unreachable: a
+    column that IS the default build has no `gap` cell to settle."""
+    reachable = {b for bases in matrix_gate.SETTLES.values() for b in bases}
+    allowed = {b for bases in matrix_gate.ALLOWED.values() for b in bases}
+    assert reachable <= set(matrix_gate.BASES)
+    assert allowed - reachable == {matrix_gate.DEFAULT_BUILD}
+    assert matrix_gate.SETTLES["ruling"] == (), "a ruling rests on no basis; it makes one"
+
+
 def test_a_question_nobody_owns_is_rejected(tree, capsys):
     """Stage 0's last exit bullet. The vocabulary is `platform_gate`'s, borrowed
     rather than re-picked — a second one would be two answers to one question."""
