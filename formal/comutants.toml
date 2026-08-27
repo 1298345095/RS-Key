@@ -82,7 +82,7 @@ note = "the pre-E38 tree: a PIN mismatch leaves the outstanding token alive."
 status = "patch"
 file = "crates/rsk-fido/src/clientpin.rs"
 find = """
-    if ctx.fs.has_data(EF_PIN) {
+    if ctx.fs.try_has_data(EF_PIN).map_err(|_| CtapError::Other)? {
         return Err(CtapError::PinAuthInvalid);
     }
 """
@@ -588,16 +588,19 @@ is told, which is why its target is NoSilentOrphan and not NoOrphanedMetadata.""
 status = "patch"
 file = "crates/rsk-fs/src/fs.rs"
 find = """
-        if !self.storage.last_error() {
-            self.record(fid, present);
+        if r.is_none() && self.storage.last_error() {
+            return Err(Error::MemoryFatal);
         }
 """
 replace = """
-        self.record(fid, present);
+        if r.is_none() && self.storage.last_error() {
+            self.record(fid, false);
+            return Err(Error::MemoryFatal);
+        }
 """
 slice = ["cargo", "test", "-p", "rsk-fs"]
 expect = "killed"
-note = "audit run-36: record_unless_faulted caches unconditionally, so one transient backend fault becomes a decided absence for the rest of the boot and every gate that reads has_data opens."
+note = "audit run-36: the cache is written on a FAULT, so one transient backend error becomes a decided absence for the rest of the boot and every gate that reads has_data opens. `record_unless_faulted` is `settle` since 0x0995, which owns both halves — what may be cached and what may be returned — so the patch keeps the Err and poisons only the cache, or it would model two defects at once."
 
 [comutant.BugMetaDeleteDropsOnFault]
 status = "patch"
