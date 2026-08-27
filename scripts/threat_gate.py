@@ -23,10 +23,17 @@ Three rules, and the third is the one the file exists for:
   what this row was written to stop.
 * a property with no clause is a FINDING, not a blank, and says which of the two
   it is: `missing-clause` (the page does not state a threat this tree defends
-  against) or `defends-nothing`. Exactly one of the two lists holds each P0
-  row — an `[[untraced]]` entry for a property that has since gained a clause is
-  a stale exemption and is refused, the way `assurance_gate.py` refuses one for a
-  configuration that has gone.
+  against) or `defends-nothing`. Exactly one of the two lists holds each P0 row:
+  an entry that is untraced AND cites a clause is a stale exemption and refused,
+  and so is one for a property that has left the family. What is NOT refused is
+  an entry for a property some clause on the page would now serve. WHICH clause
+  serves which row is the judgement `why` records and nothing reads for truth, so
+  there is nothing here to derive it from — and nothing backstops it either:
+  measured, adding a clause while leaving the stale entry reddens only
+  `test_threat_gate.py`'s ratchet, on the CLAUSE count, and bumping
+  `FLOOR_CLAUSES` the way that failure asks for leaves both rows green with the
+  exemption still standing. Deleting the entry is on whoever writes the clause;
+  the report below prints the two halves side by side so it is at least legible.
 
 What it cannot say, like its siblings: whether a mapping is RIGHT. `why` is prose
 and nothing reads it for truth. What it keeps honest is that the mapping is

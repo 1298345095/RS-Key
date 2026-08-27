@@ -40,19 +40,6 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
-- **The threat gate's own docstring claimed a refusal it has never had, and the
-  refusal cannot be built.** It read that "an `[[untraced]]` entry for a property
-  that has since gained a clause is a stale exemption and is refused"; what
-  `scripts/threat_gate.py` implements is *untraced AND citing a clause*, which is
-  a different edit. Measured both ways on a scratch clone: adding a clause to
-  `docs/threat-model.md` while leaving the stale exemption in place exits **0** on
-  the `threat-model traceability` row, and reddens `pytest scripts` only on
-  `FLOOR_CLAUSES` — the CLAUSE count, not the exemption — so bumping that floor
-  the way the failure asks leaves **both rows green with the exemption still
-  standing**. Which clause serves which property is a judgement `why` records and
-  nothing reads for truth, so there is nothing to derive the refusal from. The
-  docstring now says what the code does and names the gap instead of hiding it.
-
 - **Every published run-count is written from a recorded run now, and seven
   were stale when it was.** A run-count is a number saying how much a roster
   run covered or produced, and this tree typed them: `safety` published as
@@ -941,6 +928,19 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   green before it — rather than only through the function.
 
 ### Fixed
+
+- **The threat gate's own docstring claimed a refusal it has never had, and the
+  refusal cannot be built.** It read that "an `[[untraced]]` entry for a property
+  that has since gained a clause is a stale exemption and is refused"; what
+  `scripts/threat_gate.py` implements is *untraced AND citing a clause*, which is
+  a different edit. Measured both ways on a scratch clone: adding a clause to
+  `docs/threat-model.md` while leaving the stale exemption in place exits **0** on
+  the `threat-model traceability` row, and reddens `pytest scripts` only on
+  `FLOOR_CLAUSES` — the CLAUSE count, not the exemption — so bumping that floor
+  the way the failure asks leaves **both rows green with the exemption still
+  standing**. Which clause serves which property is a judgement `why` records and
+  nothing reads for truth, so there is nothing to derive the refusal from. The
+  docstring now says what the code does and names the gap instead of hiding it.
 
 - **`direction = "inverse"` was publishable as evidence.** `bundle_gate.py`
   vocabulary-checks a mutation row's direction, and `"banana"` is refused with
