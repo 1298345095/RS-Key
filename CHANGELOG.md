@@ -343,6 +343,37 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **`scripts/check.sh` called `mktemp` seven times over five rows and removed
+  none of them on any path that mattered.** It was the one script under
+  `scripts/` with no `trap` at all: the assurance-trace row's copy of the source
+  plus its three cargo target dirs (~10 GB and growing) was never removed even on
+  success, and the two partition tables and the sealed image with its throwaway
+  EC key went the same way. The two rows that did `rm` did it on the happy path
+  only, so a `FAIL:`, an errexit abort or a Ctrl-C leaked as well. One run at a
+  time it took a volume to zero and stopped a session with `ENOSPC`.
+
+  The eight neighbouring scripts each spell their cleanup as their own
+  `trap … EXIT`, and repeating that per site here was not an option: bash keeps
+  exactly ONE EXIT trap and the second call silently replaces the first. Each
+  site registers instead, and one handler removes the lot. Two things this
+  changed on the way: the store row's temp could not be removed even by hand,
+  because `out=$(mktemp -d)/pt.elf` binds the file and drops the directory that
+  holds it; and the assurance tree is dropped as that row ends rather than
+  sitting through the ~60 rows that follow it.
+
+  Measured on every exit path, each with the leftovers counted in a private
+  `TMPDIR` and each exit code taken with no pipe: success, a `FAIL:` row, an
+  errexit abort *inside* a row after its `mktemp`, an early `return`, a skipped
+  row, `run_tests`' ran-no-test refusal, and HUP/INT/TERM to both the script and
+  its process group. Every one of the eleven runs the old preamble was driven
+  through left a temp behind, and none of the thirteen the new one was driven
+  through did. One exit code moved, and it is the one that was wrong: a SIGINT
+  delivered to the script alone used to let the interrupted run finish and report
+  **rc 0**, and reports 130 now. That the others did NOT move had to be proved on
+  its own, because a cleanup handler that fails takes the run's verdict with it —
+  measured, the obvious `rm -rf …; return 0` handler exits a **green** run 1 when
+  its `rm` fails, since errexit leaves the function before the `return`.
+
 - **Three ceilings shipped with the defect their own series had measured.**
   `SCOPE_CEILING`, `SCOPE_SPAN_CAP` and `CARVE_OUT_CEILING` were upper bounds
   with headroom, and 37 → 999, 6 → 99 and 2 → 99 were all surviving mutants —

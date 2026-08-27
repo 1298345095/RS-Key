@@ -9,6 +9,36 @@ cd "$(dirname "$0")/.."
 
 HOST="${HOST_TARGET:-aarch64-apple-darwin}"
 
+# Five rows below allocate a temp, and this was the one script in scripts/ with
+# no cleanup: ~10 GB of build trees per run, until a full volume took the machine
+# down mid-gate. Bash keeps exactly ONE EXIT trap, so the neighbours' per-site
+# `trap 'rm -rf "$tmp"' EXIT` cannot simply be repeated here — the second call
+# silently replaces the first. Register the paths instead; remove the lot once.
+#
+# The `if` is what protects the verdict, not the `return 0`. Measured on bash
+# 5.3: a handler whose `rm` fails exits a GREEN run 1 and flattens `exit 7` to 1,
+# and a trailing `return 0` does NOT save it — errexit leaves the function at the
+# failing `rm` and never reaches it. In an `if` condition `rm` is exempt, so the
+# failure is reported and the run's own status survives it.
+#
+# Register in the shell that made the temp. A `GATE_TMP+=` inside a command
+# substitution appends to a subshell's copy and is lost, so a helper returning a
+# path cannot do the registering for you — the two lines stay at the site.
+GATE_TMP=()
+gate_cleanup() {
+  if [ "${#GATE_TMP[@]}" -gt 0 ] && ! rm -rf -- "${GATE_TMP[@]}"; then
+    echo "warning: gate temporaries left behind: ${GATE_TMP[*]}" >&2
+  fi
+  return 0
+}
+trap gate_cleanup EXIT
+# The EXIT trap already runs on a fatal signal here (measured), so these are for
+# the verdict, not the cleanup: without the INT one, a SIGINT delivered to this
+# script alone lets the interrupted run report rc 0.
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 run() { echo; echo "== $1 =="; shift; "$@"; }
 
 # `cargo test` calls a selection of nothing a pass: a name filter that matches
@@ -22,6 +52,7 @@ run_tests() {
   local name=$1 log
   shift
   log=$(mktemp)
+  GATE_TMP+=("$log")
   echo; echo "== $name =="
   # `tee`, not a redirect: the output belongs on the console like every other
   # row's. `pipefail` (set above) keeps cargo's own failure the pipeline's, so a
@@ -122,6 +153,7 @@ firmware_stack_floor() {
 assurance_trace_is_image_neutral() {
   local dir src elf_before elf_poison control
   dir=$(mktemp -d)
+  GATE_TMP+=("$dir")
   src="$dir/src"
   # `formal/states` too: TLC's on-disk state queues are gitignored run output, hold
   # no Rust, no manifest and nothing any `include_*!` reaches, so they cannot move
@@ -163,6 +195,9 @@ assurance_trace_is_image_neutral() {
     echo "FAIL: assurance-only source changed the firmware's loadable bytes." >&2
     exit 1
   fi
+  # Eagerly, not only via the trap: this is the largest temp in the file (a source
+  # copy plus three target dirs) and ~60 rows still run after it.
+  rm -rf "$dir"
   echo "assurance sources are absent from firmware; poisoned/default images are byte-identical"
 }
 
@@ -213,8 +248,10 @@ debug_vendor_commands_absent() {
 # symbols — not against pt.sh's arithmetic, which is the thing under test.
 partition_table_fences_the_store() {
   local elf="target/thumbv8m.main-none-eabihf/release/firmware"
-  local out line want got
-  out=$(mktemp -d)/pt.elf
+  local dir out line want got
+  dir=$(mktemp -d)
+  GATE_TMP+=("$dir")
+  out="$dir/pt.elf"
   scripts/pt.sh "$elf" "$out"
   want="$(arm-none-eabi-nm "$elf" | awk '$3 == "__kvmain_start" { print $1 }')"
   want="$want->$(arm-none-eabi-nm "$elf" | awk '$3 == "__kvcnt_end" { print $1 }')"
@@ -250,6 +287,7 @@ release_image_retires_its_unsigned_image_def() {
   local elf dir key first
   elf="target/thumbv8m.main-none-eabihf/release/firmware"
   dir=$(mktemp -d)
+  GATE_TMP+=("$dir")
   key="$dir/throwaway.pem"
   openssl ecparam -genkey -name secp256k1 -noout -out "$key" 2>/dev/null
   scripts/pt.sh "$elf" "$dir/pt.elf" 2>/dev/null
@@ -285,6 +323,7 @@ fuzz_targets_are_alive() {
   manifest=$(mktemp)
   log=$(mktemp)
   empty=$(mktemp)
+  GATE_TMP+=("$manifest" "$log" "$empty")
   # Diagnostics still render to stderr, and `set -e` still stops the gate on a
   # compile error; only the JSON goes to the file.
   cargo build --manifest-path fuzz/Cargo.toml --bins --target "$HOST" \
