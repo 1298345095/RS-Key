@@ -280,9 +280,11 @@ site rather than for a function.
 Each is named, classed, and given a discharger. The last column is the one that
 matters for planning: `scripts/assumption_gate.py` structurally accepts only a
 **boolean TLA constant that some configuration assigns both ways and some
-reachable definition reads**. Anything else has nowhere to be written down. That
-class has no owner and no gate today; it is a separate work item and is not
-resolved here.
+reachable definition reads**. Anything else has nowhere to be written down *in
+that registry* — which was the finding, and the split below is what chose the
+answer to it. The class has a second registry now,
+[platform assumptions](platform-assumptions.md), whose gate derives these very
+ids from this page.
 
 | id | Assumption | Class | Who could discharge it | Expressible in `assumption_gate` today |
 |---|---|---|---|---|
@@ -295,14 +297,18 @@ resolved here.
 | `AS-AUTH-7` | Kani/CBMC is sound for the harness's arithmetic and the pinned solver is the one that ran | tool TCB | the pinned toolchain and a recorded tool hash | **no** |
 | `AS-AUTH-8` | `ea-conformance-rpid`'s enterprise-attestation allowlist is not an authorization gate | build configuration | the matrix's own settling question for that column, which asks exactly this | **no** |
 
-**Zero of the eight are registered against this slice.** `AS-AUTH-4` is
-registered, but in another module and reachable from none of this slice's
-configurations; `AS-AUTH-2`, and arguably `-3` and `-8`, could be encoded today
-at the cost of writing the constant and its two arms; `AS-AUTH-5` (a set, not a
-boolean), `-6` (a cardinality), `-1` and `-7` (facts about a tool, not about the
-model) have no expressible form at all. Deciding what to do with that last group
-is a separate work item and this page does not pre-empt it — what it contributes
-is the split, measured rather than asserted.
+**Zero of the eight were registered against this slice, and measuring that is
+what this page contributed.** `AS-AUTH-4` was registered, but in another module
+and reachable from none of this slice's configurations; `AS-AUTH-2`, and arguably
+`-3` and `-8`, could be encoded today at the cost of writing the constant and its
+two arms; `AS-AUTH-5` (a set, not a boolean), `-6` (a cardinality), `-1` and `-7`
+(facts about a tool, not about the model) have no expressible form at all. That
+last group is what `assurance/platform.toml` was stood up for, and all eight have
+an entry there now — `scripts/platform_gate.py` derives these ids from this page
+and from this slice's own bundle, and reddens on one no entry claims. Registered
+is not discharged: the [platform assumptions](platform-assumptions.md) page
+prints that ratio in its first sentence, and `AS-AUTH-4`'s route still ends at a
+board.
 
 ## The bounds
 
