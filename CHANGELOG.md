@@ -40,6 +40,19 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The threat gate's own docstring claimed a refusal it has never had, and the
+  refusal cannot be built.** It read that "an `[[untraced]]` entry for a property
+  that has since gained a clause is a stale exemption and is refused"; what
+  `scripts/threat_gate.py` implements is *untraced AND citing a clause*, which is
+  a different edit. Measured both ways on a scratch clone: adding a clause to
+  `docs/threat-model.md` while leaving the stale exemption in place exits **0** on
+  the `threat-model traceability` row, and reddens `pytest scripts` only on
+  `FLOOR_CLAUSES` — the CLAUSE count, not the exemption — so bumping that floor
+  the way the failure asks leaves **both rows green with the exemption still
+  standing**. Which clause serves which property is a judgement `why` records and
+  nothing reads for truth, so there is nothing to derive the refusal from. The
+  docstring now says what the code does and names the gap instead of hiding it.
+
 - **Every published run-count is written from a recorded run now, and seven
   were stale when it was.** A run-count is a number saying how much a roster
   run covered or produced, and this tree typed them: `safety` published as
@@ -482,7 +495,7 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `--features always-uv`, so `gate.alwaysUv` is a free state variable rather than
   the compiled default every reset restores — is now `AlwaysUvShipped` in
   `assurance/assumptions.toml`, read by `Init`, `GatesLive` and `ResetSweepGates`
-  and assigned **both ways**: FALSE by the 88 configurations the shipped image is
+  and assigned **both ways**: FALSE by the 89 configurations the shipped image is
   about, TRUE by the new `AlwaysUv.cfg`, which runs all six invariants with
   alwaysUv on — GREEN over 23 521 512 distinct states at depth 51. An assumption
   no run can vary is an axiom, which is the rule `assumption_gate.py` already
@@ -1050,6 +1063,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   which `any(k.startswith("bound_"))` is true of. There is a floor per row (2)
   and over the group (24), both under the measured 30 across 8 rows with the
   smallest row at 2; a flag is not a bound; and the bare prefix is not a name.
+- **The `[result]` group transcribed five gates' output and nothing compared it
+  — and one of the five counts was wrong the day it was typed.** The commit that
+  closed `method.artifact` named `gate_registry = "… kani=4 …"` as the other
+  symptom of the same hole and left it standing: editing it to `kani=99` was
+  **EXIT=0** in `bundle-gate`, in `evidence-gate` and in `assurance-gate`,
+  because `REQUIRED["result"]` named no field at all and the group was held only
+  by a leaf floor of 18. Every `name=<number>` pair in a `gate_*` line is now
+  compared against the emitting gate's own derivation, and every other integer
+  against the integers that gate produces — the pair rule for
+  `cfgs=45 mut=11 co=11 kani=4 …`, the number rule for `21 actions … over 24
+  routes` where the line carries no pairs; the prose after them stays the row's
+  to write. This belongs here and not in `run_count_gate.py` because that file
+  says in as many words that it does not reach `assurance/`, *"which is itself a
+  record of measurements and has `bundle_gate.py`"*.
+  *What it found on the first run.* `gate_assumption` said
+  `AlwaysUvShipped … FALSE=88 cfgs`, and `formal/` has held **89**
+  `AlwaysUvShipped = FALSE` configurations at every commit from `58df09d` through
+  `f52b720` to HEAD — so the figure was never right, not stale. Corrected to
+  **89** in all three places that carried it: the `[result]` line, the
+  `[[assumption]]` `AS-AUTH-2` row, and this file's own entry above.
 - **`[[cost]].artifact` was a foreign key nothing joined.** `[[artifact]].path`
   carries 10 values and `[[cost]].artifact` 11 — **10 of the 11 byte-identical**
   to a path and the eleventh deliberate prose, *"the work that produced no

@@ -16,7 +16,7 @@ bottom of the tree; an empty string, an empty list and an empty table are all
 findings, in every group, at every depth. That is the only form in which
 "unabridged" is a predicate.
 
-Five rules are about the bundle being EVIDENCE rather than prose:
+Six rules are about the bundle being EVIDENCE rather than prose:
 
 * every `[[method]]` carries its bounds as STRUCTURED data — `bound_*` keys, at
   a floor per row and over the group — and every STRING LEAF of the bundle
@@ -25,10 +25,16 @@ Five rules are about the bundle being EVIDENCE rather than prose:
   sentence was demanded and the bounds it is about were not. The non-answer rule
   scoped to two prose fields reached 18 of 348 string leaves — `mutation.fell`
   and `build.commit` among the 266 that took `"n/a"` at exit 0;
-* every `[[method]]`'s `artifact` resolves against the tree. The field is the
-  row's whole claim — this obligation, discharged by that proof — and nothing
-  read it: renaming `no_authorization_bypass_walk_owner` left the exit at 0, and
-  the bundle's own `kani=4` line green at 3;
+* every `[[method]]`'s `artifact` resolves against the tree, as something the
+  row's own `method` word calls for. The field is the row's whole claim — this
+  obligation, discharged by that proof — and nothing read it: renaming
+  `no_authorization_bypass_walk_owner` left the exit at 0, and so did pointing
+  the row at `CHANGELOG.md` or at a const;
+* every number a `[result]` gate line TRANSCRIBES is that gate's own. The
+  `kani=4` half of the line above was the other symptom of the same hole and
+  outlived the fix: `kani=99` was exit 0 here, in `evidence-gate` and in
+  `assurance-gate`. Held against the emitting gate's own derivation, which found
+  a count that was wrong the day it was typed;
 * every `[[artifact]]` names a path that is in the tree, and it is the unedited
   output of the run beside it — a summarized log is not an artifact;
 * every cost is a NUMBER. A range (`"1.5–3×"`, `"a few hours"`) is an estimate,
@@ -50,16 +56,23 @@ contract was quietly dropped, that every claim it makes about the tree resolves
 in the tree, and that no cost was written as a range.
 """
 
+import functools
 import hashlib
 import pathlib
 import re
 import sys
 import tomllib
 
+import assumption_gate
+import assurance_gate
 import gate_lines
+import ghost_gate
 #: For `HARNESS` alone — the token that says a Rust `fn` is a Kani proof. A
-#: second copy here is the defect one directory over.
+#: second copy here is the defect one directory over, and so is every derivation
+#: the five imports around it stand in for.
 import kani_gate
+import matrix_gate
+import token_refinement_gate
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BUNDLE = pathlib.Path("assurance/bundle/SEC-FIDO-001.toml")
@@ -240,6 +253,19 @@ NONE_IS_AN_ANSWER = ("method.cfg", "method.features")
 #: A row index inside a leaf path, so the exemption above is written once rather
 #: than once per row.
 ROW_INDEX = re.compile(r"\[\d+\]")
+
+#: The `[result]` keys that transcribe another gate's derived output. A number
+#: typed here is a copy of one some other program counts, and nothing compared
+#: them: editing `gate_registry`'s `kani=4` to `kani=99` left this row, the
+#: evidence vector and the assurance registry all at exit 0 — `35afe59` named
+#: that line as the second half of the hole it closed and left it standing.
+#: `run_count_gate.py` owns this class for the published pages and says in as
+#: many words that it does not reach `assurance/`, "which is itself a record of
+#: measurements and has `bundle_gate.py`", so it is this file's.
+GATE_RESULTS = ("gate_ghost", "gate_ledger", "gate_assumption", "gate_matrix", "gate_registry")
+
+#: `name=<number>`, the shape those lines carry their counts in.
+CLAIMED_PAIR = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)=(\d+)\b")
 
 #: An assertion that fell describes the modelled defect, or its inverse. Anything
 #: else is a word nobody has to defend.
@@ -558,6 +584,75 @@ def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> Non
             )
 
 
+@functools.cache
+def gate_corpus() -> dict[str, str]:
+    """What each gate of [`GATE_RESULTS`] derives, as text, from the gate itself.
+
+    Over `ROOT` and not over `audit`'s `root`: the test fixture carries a bundle
+    and not a checkout, and what these lines transcribe is a gate reading THIS
+    tree. Cached, because the five derivations cost 2.7 s and the mutation table
+    calls `audit` two hundred times in one process.
+    """
+    _, booleans, entries = assumption_gate.audit()
+    arms = " ".join(
+        f"{name} TRUE={sum(1 for arm in cfgs.values() if arm == 'TRUE')}"
+        f" FALSE={sum(1 for arm in cfgs.values() if arm == 'FALSE')}"
+        for name, cfgs in sorted(booleans.items())
+    )
+    return {
+        "gate_ghost": ghost_gate.audit(ROOT)[1],
+        "gate_ledger": token_refinement_gate.audit(ROOT)[1],
+        "gate_assumption": f"{len(entries)} standing assumption(s) {arms}",
+        "gate_matrix": matrix_gate.audit(ROOT)[1],
+        # The per-property vector rows, which is where `cfgs=45 … kani=4` is
+        # counted; `check_generated_readme` is a sibling row's rule, not this one's.
+        "gate_registry": "\n".join(assurance_gate.audit(ROOT, False)[1]),
+    }
+
+
+def gate_transcriptions(doc: dict, findings: list[str]) -> None:
+    """Every number in a transcribed `[result]` gate line is that gate's own.
+
+    A `name=<number>` pair is compared as a pair; everything else is compared as
+    an integer, which is what holds `21 actions … over 24 routes` where the line
+    carries no pairs at all. Neither reads the PROSE — `gate_matrix` ends in a
+    sentence about the slice, and that sentence is the row's to write.
+    """
+    corpus = gate_corpus()
+    result = doc.get("result", {})
+    if not isinstance(result, dict):
+        return  # `is not a table` is the roster rule's, reported once
+    for key in GATE_RESULTS:
+        if key not in result:
+            findings.append(
+                f"{BUNDLE}: `result.{key}` is gone — this file derives that line"
+                " from the gate that emits it, and a roster entry with nothing to"
+                " check is the claim deleted rather than refuted"
+            )
+    for key in sorted(k for k in result if k.startswith("gate_")):
+        if key not in corpus:
+            findings.append(
+                f"{BUNDLE}: `result.{key}` transcribes a gate this file cannot"
+                " derive — an unreadable claim that says nothing is the hole with"
+                " more code"
+            )
+            continue
+        claim, derived = str(result[key]), corpus[key]
+        for name, value in CLAIMED_PAIR.findall(claim):
+            if not re.search(rf"\b{re.escape(name)}={re.escape(value)}(?!\d)", derived):
+                findings.append(
+                    f"{BUNDLE}: `result.{key}` says `{name}={value}` and the gate"
+                    f" derives `{derived[:120]}…` — a transcribed count is a copy of"
+                    " a number some other program counts"
+                )
+        for number in re.findall(r"\d+", CLAIMED_PAIR.sub("", claim)):
+            if not re.search(rf"(?<!\d){re.escape(number)}(?!\d)", derived):
+                findings.append(
+                    f"{BUNDLE}: `result.{key}` says {number} and the gate derives no"
+                    f" such number — `{derived[:120]}…`"
+                )
+
+
 def corrected_by(rows: dict, start: str) -> str | None:
     """The row at the end of `start`'s `superseded_by` chain, or None on a cycle.
 
@@ -774,6 +869,7 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
             " rather than inventing one"
         )
 
+    gate_transcriptions(doc, findings)
     inverse = mutation_dispositions(doc, findings)
 
     summary = (

@@ -813,6 +813,53 @@ def test_a_disposed_inverse_kill_is_admitted_and_counted_apart(tmp_path, disposi
     assert "9 mutation verdict(s) and 1 disposed as inverse" in summary, summary
 
 
+@pytest.mark.parametrize(
+    "key,old,new",
+    [("gate_registry", "kani=4", "kani=99"),
+     ("gate_registry", "cfgs=45", "cfgs=46"),
+     ("gate_ledger", "walk=4", "walk=5"),
+     ("gate_assumption", "FALSE=89", "FALSE=88"),
+     ("gate_ghost", "24 routes", "25 routes"),
+     ("gate_matrix", "1240 cells", "1241 cells")],
+)
+def test_a_transcribed_gate_line_that_the_gate_does_not_derive(tmp_path, key, old, new):
+    """The second half of the hole `35afe59` named and did not close: editing
+    `kani=4` to `kani=99` left `bundle-gate`, `evidence-gate` AND
+    `assurance-gate` at EXIT=0, because `REQUIRED["result"]` names no field and
+    the group is held only by a leaf floor of 18.
+
+    `FALSE=88` is the arm that found a real one: the bundle said 88 and the tree
+    has held 89 `AlwaysUvShipped = FALSE` configurations at every commit from
+    `58df09d` to HEAD, so the number was wrong the day it was typed.
+    """
+    root = tree(tmp_path)
+
+    def retype(doc):
+        assert old in doc["result"][key], doc["result"][key]
+        doc["result"][key] = doc["result"][key].replace(old, new)
+
+    rewrite(root, retype)
+    problems = findings(root)
+    assert any(f"result.{key}" in p for p in problems), problems
+
+
+def test_a_result_line_transcribing_a_gate_this_file_cannot_derive(tmp_path):
+    """The resolver's own lesson one group over: a `gate_*` key nothing knows how
+    to check must say so rather than be skipped."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["result"].update({"gate_nobody": "nobody-gate: 7 things"}))
+    assert any("cannot" in p and "derive" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize("key", bundle_gate.GATE_RESULTS)
+def test_a_transcribed_gate_line_deleted(tmp_path, key):
+    """Deleting one leaves the group at 21 leaves against a floor of 18, so the
+    volume rule cannot see it — the roster is what does."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["result"].pop(key))
+    assert any(f"`result.{key}` is gone" in p for p in findings(root)), findings(root)
+
+
 def cycle(doc, length, reading=None):
     """The first `length` rows inverse, each superseded by the next, the last by
     the first — every row a step and none of them a result."""
