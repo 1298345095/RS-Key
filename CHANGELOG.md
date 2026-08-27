@@ -1024,6 +1024,14 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   which `any(k.startswith("bound_"))` is true of. There is a floor per row (2)
   and over the group (24), both under the measured 30 across 8 rows with the
   smallest row at 2; a flag is not a bound; and the bare prefix is not a name.
+- **The finding for "this row is not a table" was written and never printed.**
+  `bundle_gate.py` built a filtered `rows` list for the `[[mutation]]` group and
+  then iterated the **unfiltered** one, and the `[[cost]]` and `[[artifact]]`
+  loops never filtered at all — so `mutation = ["a string, not a table"]` came
+  out as `AttributeError: 'str' object has no attribute 'get'`. Nothing passed
+  silently, which is why it went unnoticed: **EXIT=1** for the wrong reason, out
+  of the file whose whole job is naming the reason. All three loops skip a
+  non-table row now and the roster rule's finding is what prints.
 - **A bundle's `method.artifact` named a proof nothing resolved against the
   tree.** The first closed slice's evidence register names, per method row, the
   artifact that discharged the obligation — `crates/rsk-fido/src/state_kani.rs::no_authorization_bypass_walk_owner`

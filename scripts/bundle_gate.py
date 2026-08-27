@@ -603,6 +603,8 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
     method_references(root, doc, findings)
 
     for index, row in enumerate(doc.get("artifact", []), 1):
+        if not isinstance(row, dict):
+            continue  # `is not a table` is the roster rule's, reported once
         where = f"{BUNDLE} artifact #{index}"
         target = row.get("path", "")
         if pathlib.PurePosixPath(target).is_absolute():
@@ -631,6 +633,8 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
             )
 
     for index, row in enumerate(doc.get("cost", []), 1):
+        if not isinstance(row, dict):
+            continue
         where = f"{BUNDLE} cost #{index} ({row.get('artifact', '?')})"
         for field in COST_FIELDS:
             value = row.get(field)
@@ -642,10 +646,14 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
                     " an estimate, and an estimate in any of the three voids the measurement"
                 )
 
-    rows = [row for row in doc.get("mutation", []) if isinstance(row, dict)]
-    named = [str(row.get("mutant", "")) for row in rows]
+    named = [
+        str(row.get("mutant", ""))
+        for row in doc.get("mutation", []) if isinstance(row, dict)
+    ]
     inverse = 0
     for index, row in enumerate(doc.get("mutation", []), 1):
+        if not isinstance(row, dict):
+            continue
         where = f"{BUNDLE} mutation #{index} ({row.get('mutant', '?')})"
         if row.get("direction") not in DIRECTIONS:
             findings.append(

@@ -162,6 +162,21 @@ def test_a_named_field_the_contract_owes_is_found_missing(tmp_path, group, field
     )
 
 
+@pytest.mark.parametrize("group", ["mutation", "cost", "artifact"])
+def test_a_row_that_is_not_a_table(tmp_path, group):
+    """`audit` has a finding for exactly this and never printed it: the filtered
+    list was built and the UNFILTERED one iterated, so `mutation = ["a string"]`
+    was an `AttributeError` traceback out of `row.get` — EXIT=1 for the wrong
+    reason, in the file that exists to name the reason."""
+    root = tree(tmp_path)
+    path = root / bundle_gate.BUNDLE
+    doc = tomllib.loads(path.read_text())
+    doc.pop(group)
+    path.write_text(f'{group} = ["a string, not a table"]\n' + dump(doc))
+    problems = findings(root)
+    assert any("is not a table" in p for p in problems), problems
+
+
 def test_the_three_rosters_name_the_same_ten_groups():
     """`GROUPS` without `FLOORS` is a KeyError; `FLOORS` without `GROUPS` is
     silently dead, and that is the direction nothing would have shown."""
