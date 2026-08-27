@@ -208,7 +208,7 @@ BOUNDED, and PROVEN is refused until that evidence class exists in the tree.
 The owner functions carry the property back into the code: a doc line of the
 form ``Refines `RSKeySecurityState!NoTokenAfterInvalidation` — SEC-FIDO-003``
 sits on each function the model's ownership table names, the gate validates
-every tag, and every invariant in all nine shipped baseline configurations must
+every tag, and every invariant in every shipped baseline configuration must
 be named in production Rust somewhere. Firmware sources count as owners for the
 boot module. The shared check runs from both `assurance_gate.py` and
 `citation_gate.py`.

@@ -22,18 +22,23 @@ Two halves, because either alone leaves the class open.
   from [`RECORD`] and the tree, and the gate diffs them — the shape
   `assurance_gate.py` and `comutate.py` already use on `formal/README.md`. A
   hand edit to a number inside a region is a diff, not an opinion.
-* **Not said twice.** A value the regions PRINT may not appear as a literal
-  anywhere else — [`VALUE_FLOOR`] and up, generated from the number rather than
-  hunted for as a shape, so it needs no noun, no trigger and no guess about
-  phrasing and its spellings are closed by construction. This is the rule the one
-  below cannot be, and the one below is the rule this cannot be: it sees a
-  correct copy about to rot and never a stale one.
+* **Not said twice.** What the regions PRINT may not appear as a literal anywhere
+  else — a value at [`VALUE_FLOOR`] and up, a value with the UNIT the region put
+  beside it at any magnitude ([`phrased`]), and the provenance a region prints
+  verbatim ([`spoken`]). All three are generated from what the region says rather
+  than hunted for as a shape, so they need no noun list, no trigger and no guess
+  about phrasing, and their spellings are closed by construction. This is the
+  rule the one below cannot be, and the one below is the rule this cannot be: it
+  sees a correct copy about to rot and never a stale one.
 * **Refused elsewhere.** A region cannot stop the NEXT sentence being typed
   somewhere else, and the completeness half is where every guard in this tree has
   failed. So every tracked text file under [`SCANNED_TREES`] — `docs/`, `formal/`
   and `.github/`, which is how the criterion names them — and every tracked page
   at the root is scanned for the vocabulary, and a run-count outside a region is
-  a finding unless [`SCOPED`] registers it with the scope it is history to.
+  a finding unless [`SCOPED`] registers it with the scope it is history to. This
+  half is armed by [`NAMES_A_RUN`] in the same PARAGRAPH, which is a one-word
+  opt-out and is why the three generated rules above exist: a paragraph
+  restating every published number and naming no run was five lines at exit 0.
 
 What the record does **not** prove is that a real TLC ran: `--record` ingests
 logs, and a log can be typed. What it proves is what rot cannot fake — that the
@@ -395,6 +400,12 @@ SCOPED = {
 #: record. Closed in both directions: a recorded configuration in no group is a
 #: row the table would not show, and a group matching nothing is a line about a
 #: family that has gone.
+#: The one region that is a table rather than a sentence: one line per
+#: configuration, cells of bare numbers in shared units. Named once, because two
+#: rules ask the question — `fill` may not touch it, and [`phrased`] may not read
+#: it, since `1 s` and `3` are the whole tree's numbers rather than a claim.
+TABLE_REGION = ("formal/README.md", "results-table")
+
 TABLE_GROUPS = (
     ("`Shipped.cfg` — the tree as it stands, `SYMMETRY` on, firmware constants",
      ("Shipped.cfg",)),
@@ -906,8 +917,7 @@ def region_bodies(f, findings=None):
             " everything else in the Results table."
         ),
     }
-    table = ("formal/README.md", "results-table")
-    return {k: (v if k == table else fill(v)) for k, v in bodies.items()}
+    return {k: (v if k == TABLE_REGION else fill(v)) for k, v in bodies.items()}
 
 
 def grouped(rows, findings):
@@ -1219,6 +1229,77 @@ def emitted(bodies):
     return out
 
 
+#: What may stand between a published value and the unit the generator wrote
+#: beside it: whitespace, an emphasis pair, one dash, or a code span the VALUE
+#: opens. A closing backtick is deliberately not in it — `WORKERS=2` followed by
+#: `` ` `` and ` and` is a value and the next word, and `2 and` is not a claim
+#: about anything. Neither is `phase-2 baseline`, which is why the value may not
+#: carry a hyphen on its left either.
+UNIT_JOIN = r"(?:\*\*)?(?:[ \t\n]+`?|[-\u2013\u2014]|)[ \t\n]*"
+PAIR = re.compile(rf"(?<![-\w.])({NUM}|{WORD}){UNIT_JOIN}([A-Za-z][A-Za-z*`]*)")
+
+
+def phrased(bodies):
+    """Every `<value> <unit>` the PROSE regions print, as the generator wrote it.
+
+    [`VALUE_FLOOR`] is floored by magnitude because a bare small number is every
+    other number in the tree — which left `8 named invariants`, `the nine shipped
+    models`, `18 cores` and `WORKERS=2` under no rule at all, in any paragraph. A
+    value WITH ITS UNIT is not every other number, so this reaches below that
+    floor; and like the value rule it is generated from what the region says, so
+    it needs no [`NOUN`] list and, above all, no [`NAMES_A_RUN`] beside it.
+
+    That trigger is why this rule is here. It is paragraph-local, so a paragraph
+    restating every number the regions publish and not spelling `safety`,
+    `liveness`, `run-tlc`, `comutate` or `--tiers` was five lines at exit 0 —
+    and dropping it is not the answer either: measured over this tree, the shape
+    scan goes from 41 literals to 549 and 505 of them want registering.
+
+    Not the Results table: its cells are `3` and `1 s`, and a rule hunting those
+    tree-wide is a rule about every number there is. Measured over the scanned
+    corpus at the time of writing: 21 pairs, ONE occurrence outside a region.
+    """
+    out = set()
+    for key, body in bodies.items():
+        if key == TABLE_REGION:
+            continue
+        for found in PAIR.finditer(body):
+            if unit := found.group(2).strip("*`"):
+                out.add((found.group(1), unit))
+    return out
+
+
+#: Provenance a region prints VERBATIM rather than as a count, and that no rule
+#: above can reach: the run's date, whose three numbers are all under
+#: [`VALUE_FLOOR`], and the `WORKERS=` it ran at, whose unit stands on the LEFT
+#: of the value so [`PAIR`] pairs it with the next word instead. Each is
+#: published on three pages and each was held by nothing. Measured: 0
+#: occurrences outside a region today, so the rule costs no registration.
+VERBATIM = re.compile(r"\d{4}-\d\d-\d\d|\b[A-Z][A-Z_]*=[\w.]+")
+
+
+def spoken(bodies):
+    """The provenance strings the prose regions print, as they print them."""
+    return {
+        found.group(0)
+        for key, body in bodies.items()
+        if key != TABLE_REGION
+        for found in VERBATIM.finditer(body)
+    }
+
+
+def phrase_pattern(counted, unit):
+    """One published `<value> <unit>`, in every grouping of the value and in
+    whatever case the prose around it uses — `21 GREEN` and `21 green` are the
+    same second copy."""
+    left = (
+        groupings(int(re.sub(r"[^\d]", "", counted)))
+        if counted[0].isdigit()
+        else re.escape(counted)
+    )
+    return re.compile(rf"(?<![-\w])(?<![.,]){left}(?!\w){UNIT_JOIN}{re.escape(unit)}(?!\w)", re.I)
+
+
 def check_scope(root, findings):
     """What is checkable about [`SCOPED`] itself, which was nothing at all.
 
@@ -1258,7 +1339,7 @@ def check_scope(root, findings):
         )
 
 
-def scan(root, owned, values, findings):
+def scan(root, owned, values, pairs, said, findings):
     """How many run-count literals the published trees hold, and where.
 
     `owned` is what the generator writes. A marker pair it does NOT own would
@@ -1273,7 +1354,11 @@ def scan(root, owned, values, findings):
     #: what it can lose is the arming, not a match of its own.
     per = dict.fromkeys(("tally", "count", "clock", "loose-tally", "names-a-run"), 0)
     per["emitted-value"] = len(values)
+    per["emitted-phrase"] = len(pairs)
+    per["emitted-verbatim"] = len(said)
     wanted = {v: spelled(v) for v in sorted(values)}
+    phrases = {pair: phrase_pattern(*pair) for pair in sorted(pairs)}
+    phrases.update({(text, ""): re.compile(rf"(?<!\w){re.escape(text)}(?!\w)") for text in sorted(said)})
     #: literals each registered fragment actually exempts, so an entry can be
     #: held to buying silence for a bounded, non-zero number of them.
     exempted = {}
@@ -1304,8 +1389,14 @@ def scan(root, owned, values, findings):
         # needs no trigger beside the literal, so a paragraph is not the unit of
         # anything here, and a number in a table cell is as much a second copy as
         # one in a sentence.
+        # ONE literal, ONE finding, across the rules as well as within them:
+        # `77 563 872 distinct` is a value the regions print AND a phrase they
+        # print, and reporting it twice would say the page holds two — and, in a
+        # registered fragment, would spend `SCOPE_SPAN_CAP` twice over.
+        claimed = []
         for value, pattern in wanted.items():
             for m in pattern.finditer(masked):
+                claimed.append((m.start(), m.end()))
                 if inside := [k for k, (lo, hi) in spans.items() if lo <= m.start() and m.end() <= hi]:
                     exempted[inside[0]] += 1
                     continue
@@ -1337,6 +1428,7 @@ def scan(root, owned, values, findings):
                 (at + m.start(), at + m.end(), m.group(0).strip()) for m, _ in triggers
             }):
                 found += 1
+                claimed.append((begin, stop))
                 if inside := [k for k, (lo, hi) in spans.items() if lo <= begin and stop <= hi]:
                     exempted[inside[0]] += 1
                     continue
@@ -1344,6 +1436,20 @@ def scan(root, owned, values, findings):
                     f"{rel}:{start}: {literal!r} is a run-count outside every generated"
                     " region — put the sentence in one, or register it in"
                     " scripts/run_count_gate.py SCOPED with what it is history to"
+                )
+        for said_as, pattern in phrases.items():
+            for m in pattern.finditer(masked):
+                if any(lo < m.end() and m.start() < hi for lo, hi in claimed):
+                    continue
+                if inside := [k for k, (lo, hi) in spans.items() if lo <= m.start() and m.end() <= hi]:
+                    exempted[inside[0]] += 1
+                    continue
+                findings.append(
+                    f"{rel}:{masked[: m.start()].count(chr(10)) + 1}: {m.group(0)!r} is a"
+                    f" second copy of `{' '.join(said_as).strip()}`, which the generated"
+                    " regions print — say it in the region, point at the region, or"
+                    " register it in scripts/run_count_gate.py SCOPED with what it is"
+                    " history to"
                 )
     for key, count in sorted(exempted.items()):
         where = f"SCOPED[{key[0]}, {key[1][:36]!r}]"
@@ -1441,7 +1547,7 @@ def audit(root):
         )
 
     check_scope(root, findings)
-    found = scan(root, owned, emitted(bodies), findings)
+    found = scan(root, owned, emitted(bodies), phrased(bodies), spoken(bodies), findings)
     if found < SCAN_FLOOR:
         findings.append(
             f"the scan matched {found} literal(s), under the floor of {SCAN_FLOOR} — the"

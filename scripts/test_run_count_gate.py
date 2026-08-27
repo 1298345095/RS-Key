@@ -420,7 +420,9 @@ def test_the_real_checkout_is_green():
     assert run_count_gate.audit(ROOT)[0] == []
 
 
-@pytest.mark.parametrize("rule", ("TALLY", "COUNT", "CLOCK", "LOOSE_TALLY", "NAMES_A_RUN"))
+@pytest.mark.parametrize(
+    "rule", ("TALLY", "COUNT", "CLOCK", "LOOSE_TALLY", "NAMES_A_RUN", "PAIR", "VERBATIM")
+)
 def test_a_scan_rule_that_has_stopped_matching_this_tree(monkeypatch, rule):
     """Each rule against the REAL checkout at the REAL floor, which is the half
     the fixture case below cannot reach: it monkeypatches `SCAN_FLOOR` down to 4
@@ -784,18 +786,82 @@ def test_a_spelling_the_shape_rules_walked_past(tree, sentence):
 
 
 @pytest.mark.parametrize("sentence", (
-    "A run of the safety tier came back over 195 configurations.",
     "`run-tlc.sh --tiers` took about an hour.",
-    "The matrix came back 21 passed, 174 failed.",
+    "The matrix came back 1 passed, 1 failed.",
 ))
 def test_a_spelling_no_shape_rule_reaches(tree, sentence):
-    """Kept as cases because they are OPEN, not because they are closed. The
-    trigger is a paragraph-local word list, "about an hour" carries no number for
-    a numeric rule to find, and `passed/failed` is not this tree's vocabulary —
-    widening any of the three costs more than it buys (measured: dropping the
-    trigger takes the scan from 30 literals to 241). The rule that does not play
-    this game is the value scan, and it only reaches a value the regions print."""
+    """Kept as cases because they are OPEN, not because they are closed: "about
+    an hour" carries no number for a numeric rule to find, and `passed/failed`
+    is not this tree's vocabulary. Widening either costs more than it buys —
+    measured over this tree, dropping the paragraph-local trigger takes the scan
+    from 41 literals to 549, of which 505 want registering. The rules that do not
+    play this game are the two generated ones below, and they only reach what the
+    regions actually print.
+
+    A third sentence stood here — "A run of the safety tier came back over 195
+    configurations", the same claim with the trigger word left out — and it is
+    the case below now. It was never a spelling: any paragraph restating every
+    published number without saying `safety`, `liveness`, `run-tlc`, `comutate`
+    or `--tiers` was five lines at exit 0.
+    """
     assert not typed(tree, sentence + "\n"), sentence
+
+
+# --- the THIRD rule: a value and the unit the regions print beside it ---------
+#
+# `VALUE_FLOOR` is floored by magnitude, so `8 named invariants`, `the nine
+# shipped models` and `18 cores` were under no rule at all in ANY paragraph, and
+# the shape rules above are armed by a word in the same paragraph, so leaving
+# that word out bought silence for the rest. A value WITH ITS UNIT needs neither:
+# it is generated from what the region says, like the value rule, and it reaches
+# below the floor because `2 configurations` is not every other number.
+
+
+def second_copy(tree, text, name="docs/typed.md"):
+    tree.write(name, text)
+    return only(tree.problems(), "is a second copy of")
+
+
+@pytest.mark.parametrize("sentence", (
+    "A run of the safety tier came back over 2 configurations.",   # no trigger
+    "TLC checks 2 named invariants over the nine shipped models.",  # not a NOUN
+    "It came back 1 green, at 607 s.",                             # and lower case
+))
+def test_a_published_value_and_its_unit_with_no_run_named(tree, sentence):
+    """The paragraph the trigger let past, and the two claims no rule reached at
+    all. Every number here is one the fixture's own regions publish."""
+    assert second_copy(tree, sentence + "\n"), sentence
+
+
+def test_a_value_beside_a_word_the_regions_do_not_put_there(tree):
+    """The boundary, asserted: the unit comes from the generated sentence, so a
+    value under a different noun is not this claim and is not a finding. A rule
+    that fired on `2 kittens` would be the aggregate scan without its floor."""
+    assert not second_copy(tree, "There were 2 kittens and 607 kittens.\n")
+
+
+def test_a_value_and_its_unit_are_one_finding_not_two(tree, big):
+    """`200 distinct` is a value the regions print AND a phrase they print. Two
+    findings would say the page holds two copies, and inside a registered
+    fragment would spend `SCOPE_SPAN_CAP` twice for one literal."""
+    tree.write("docs/typed.md", "# Typed\n\nIt reached 200 distinct states.\n")
+    assert ("200", "distinct") in run_count_gate.phrased(tree.bodies())
+    assert len(only(tree.problems(), "is a second copy of")) == 1, tree.problems()
+
+
+def test_the_results_table_is_not_a_source_of_phrases(tree):
+    """Its cells are `3` and `1 s` in units every other row shares, so a rule
+    hunting them tree-wide would be a rule about every number there is."""
+    pairs = run_count_gate.phrased(tree.bodies())
+    assert ("600", "s") not in pairs and ("7", "s") not in pairs, sorted(pairs)
+
+
+@pytest.mark.parametrize("spoken", ("2026-08-27", "WORKERS=2"))
+def test_the_provenance_a_region_prints_verbatim(tree, spoken):
+    """The date's three numbers are all under the value floor and `WORKERS=2`
+    wears its unit on the left, so `PAIR` pairs it with the next word. Each is
+    published on three pages and neither was held by anything."""
+    assert second_copy(tree, f"Recorded on {spoken} on this box.\n"), spoken
 
 
 def test_a_literal_is_reported_whole(tree):
