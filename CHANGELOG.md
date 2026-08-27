@@ -975,8 +975,13 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   **419 → 389**, cleared every floor, and left `slice evidence bundle` at
   **EXIT=0**. `REQUIRED` now carries `bound_*`, with a trailing `*` read as a
   prefix, because bounds are per method and naming one key would be requiring
-  the wrong one — so the negative arm arrives through the roster the table
-  already parametrizes over, per row rather than per group.
+  the wrong one — per row rather than per group.
+  *That last clause credited a mechanism that cannot carry it.* The table
+  parametrizes over `REQUIRED`, so it is a **drifter**: removing `bound_*` from
+  `REQUIRED["method"]` removes the case with it — 150 collected became 149, and
+  the two failures that arrived came from hand-written arms. Dropping
+  `mutation.fell` the same way was caught by **nothing**. `REQUIRED` is asserted
+  equal to a hand-written roster now, which is the pin a drifter cannot be.
   *And the same field one spelling over.* `shipped_relation` refused a dropped
   key, an empty string and a whitespace-only one — and took `"n/a"` at exit 0,
   which is the same dropped field wearing three characters. The method row's two
@@ -1006,6 +1011,13 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   incomplete — `n/a (none)` normalizes to `nanone` and passes, and refusing a
   one-character word was tried and **refuted**: `mutation.level` is `A`, `B` and
   `C`, so a bare `0` or `x` gets through. What carries the weight is the leaf.
+  *And 10 of the vocabulary's 18 members were held by nothing.* Deleting `n\a`,
+  `null`, `nothing`, `unspecified`, `undefined`, `unclear`, `tobedetermined`,
+  `xxx`, `pending` and `wip` left the suite at **EXIT=0, 150 passed**: the table
+  beside them hand-wrote 19 values that reached 8. The roster is written by hand
+  in the test and asserted **equal** to the constant, and each of its words is
+  driven from the HAND copy — parametrizing over the constant would delete the
+  case along with the member, which is the drift, not the guard.
   *And the `bound_*` roster's own ratchet was one key.* Reducing all 8 rows to a
   single `bound_nothing = 0` was **EXIT=0** over 397 leaves, as were
   `bound_x = false`, `bound_x = ["n/a"]` and a key named literally `bound_` —

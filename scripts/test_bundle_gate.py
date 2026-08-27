@@ -168,6 +168,33 @@ def test_the_three_rosters_name_the_same_ten_groups():
     assert set(bundle_gate.GROUPS) == set(bundle_gate.FLOORS) == set(bundle_gate.REQUIRED)
 
 
+#: The contract's fields, by hand. The table above parametrizes over `REQUIRED`,
+#: so it is a DRIFTER: removing `bound_*` from `REQUIRED["method"]` removes the
+#: case with it — measured, 150 collected to 149, and the two failures that
+#: arrived came from hand-written arms and not from the roster the commit
+#: credited. This is the pin the drifter cannot be.
+CONTRACT = {
+    "property": ("id", "invariant", "statement", "subjects", "requirement", "threat_clause"),
+    "build": ("commit", "tree_state", "matrix_column", "cargo_features", "host_triple"),
+    "method": ("obligation", "method", "artifact", "bound_*", "shipped_relation", "cfg",
+               "features"),
+    "tool": ("name", "version", "provenance", "invocation", "environment"),
+    "result": (),
+    "artifact": ("run", "path", "bytes", "sha256"),
+    "assumption": ("id", "statement", "kind", "discharger", "expressible", "registered"),
+    "mutation": ("level", "mutant", "invocation", "expected", "verdict", "fell", "direction"),
+    "freshness": ("measured",),
+    "cost": ("artifact", "human_minutes", "runner_seconds", "peak_memory_mb", "basis"),
+}
+
+
+def test_every_field_the_contract_names_is_still_named():
+    """A field dropped from `REQUIRED` takes its own negative arm with it, so the
+    roster needs a copy nothing derives. Removing one here is a deliberate line
+    in the diff, which is what a contract change should be."""
+    assert bundle_gate.REQUIRED == CONTRACT
+
+
 def test_a_log_of_the_same_length_is_not_the_same_log(tmp_path):
     """A byte count is satisfied by any file of that length — measured green
     before the digest, by swapping a 10-byte log for a different 10-byte one."""
@@ -346,6 +373,37 @@ def test_a_leaf_outside_the_two_prose_fields_occupied_by_a_non_answer(tmp_path, 
         rows[0][field] = "n/a"
 
     rewrite(root, occupy)
+    assert any("which answers nothing" in p for p in findings(root)), findings(root)
+
+
+#: The vocabulary, by hand. NOT parametrized over `bundle_gate.NON_ANSWERS`:
+#: a table built from the constant loses a case when the constant loses a member,
+#: which is the deletion this exists to catch. Measured — deleting 10 of the 18
+#: members left `pytest scripts/test_bundle_gate.py` at EXIT=0, 150 passed, and
+#: the table beside it had hand-written 19 values that reached 8 of them.
+VOCABULARY = frozenset(
+    {
+        "na", "notapplicable", "noanswer", "seeabove", "ditto",
+        "none", "nil", "null", "nothing",
+        "unknown", "unspecified", "undefined", "unclear",
+        "tbd", "tba", "tobedetermined", "todo", "xxx", "pending", "wip",
+    }
+)
+
+
+def test_the_vocabulary_is_the_one_this_table_drives():
+    """Equality, so a member deleted from the gate fails here rather than
+    silently deleting its own case."""
+    assert bundle_gate.NON_ANSWERS == VOCABULARY
+
+
+@pytest.mark.parametrize("word", sorted(VOCABULARY))
+def test_every_word_of_the_vocabulary_is_refused(tmp_path, word):
+    """Driven through the gate, from the HAND roster: deleting `null`,
+    `nothing`, `unspecified`, `undefined`, `unclear`, `tobedetermined`, `xxx`,
+    `pending`, `wip` and the `n\\a` spelling was green over all 150 cases."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["mutation"][0].update({"fell": word}))
     assert any("which answers nothing" in p for p in findings(root)), findings(root)
 
 
