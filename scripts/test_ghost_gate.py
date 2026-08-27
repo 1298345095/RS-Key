@@ -121,12 +121,16 @@ def test_deleting_one_route_of_an_action_is_found(tmp_path, route):
         assert any(route in p and "gone:" in p for p in problems), (route, problems[:3])
     else:
         # Its only route: the action leaves the derived set entirely, so the
-        # finding is the stale-entry one. Reported either way, and the direction
-        # is what the assertion above is for.
-        assert any("records NoAuthorizationBypass nowhere" in p for p in problems), (
-            route,
-            problems[:3],
-        )
+        # finding is the stale-entry one. Scoped to the OWNER, because
+        # `PinAttempt/literal` is inherited by four actions and an unscoped
+        # `any(...)` is satisfied by a finding about one of the other three.
+        owners = [owner] if owner in DERIVED else [
+            a for a in ACTIONS if route in DERIVED[a]["routes"]
+        ]
+        for name in owners:
+            assert any(
+                "records NoAuthorizationBypass nowhere" in p for p in about(problems, name)
+            ), (route, name, problems[:3])
 
 
 @pytest.mark.parametrize("action", TWO_ROUTE)
@@ -162,7 +166,10 @@ def test_a_guard_swapped_under_a_surviving_route_is_found(tmp_path):
     body = text[start:end].replace("TouchPolicy", "ButtonFreePolicy", 1)
     path.write_text(text[:start] + body + text[end:])
     problems = about(findings(root), "RegisterTouched")
-    assert any("policie(s)" in p and "TouchPolicy" in p for p in problems), problems
+    # `gone:` and not just the name. The INVERSE edit — dropping TouchPolicy from
+    # the LEDGER, module untouched — reports `new: TouchPolicy` and satisfies a
+    # bare `in` match, which is the 2-of-24 direction trap AGENTS.md records.
+    assert any("gone: TouchPolicy" in p for p in problems), problems
 
 
 def test_a_helper_route_reaches_every_caller(tmp_path):
@@ -237,3 +244,66 @@ def test_main_prints_a_summary_and_reports_findings(tmp_path, capsys, monkeypatc
     monkeypatch.setattr(ghost_gate, "ROOT", root)
     assert ghost_gate.main() == 1
     assert "CmNext" in capsys.readouterr().err
+
+
+#: Four TLA+ spellings of one recording action that the line-anchored `viol'`
+#: scanner does not see. Each was measured GREEN before the occurrence backstop:
+#: 21 of 22 actions still derived, so both floors cleared and the ledger equality
+#: held over a module with a recorder in it that nothing had read.
+HIDDEN = {
+    "the bullet on the conjunct before it": (
+        '\nLeakA ==\n    /\\ Idle /\\ viol\' = viol \\cup {"NoAuthorizationBypass"}\n'
+        "    /\\ UNCHANGED << pin >>\n"
+    ),
+    "the whole definition on one line": (
+        '\nLeakB == /\\ Idle /\\ viol\' = viol \\cup {"NoAuthorizationBypass"}'
+        " /\\ UNCHANGED << pin >>\n"
+    ),
+    "an assignment inside an IF branch": (
+        "\nLeakC ==\n    /\\ Idle\n    /\\ IF pin.set THEN viol' = viol \\cup"
+        ' {"NoAuthorizationBypass"} ELSE viol\' = viol\n'
+    ),
+    "a LET-bound set carrying the name": (
+        '\nLeakD ==\n    /\\ Idle\n    /\\ LET bad == {"NoAuthorizationBypass"}'
+        " IN viol' = viol \\cup bad\n"
+    ),
+}
+
+
+@pytest.mark.parametrize("spelling", sorted(HIDDEN))
+def test_a_recorder_the_scanner_cannot_see_is_still_found(tmp_path, spelling):
+    """The backstop, and the reason it exists: `VIOL` is line-anchored."""
+    root = tree(tmp_path)
+    path = root / ghost_gate.MODULE
+    name = HIDDEN[spelling].split("\n")[1].split(" ")[0]
+    path.write_text(
+        path.read_text().replace("Next ==\n", f"Next ==\n    \\/ {name}\n", 1)
+        + HIDDEN[spelling]
+    )
+    problems = about(findings(root), name)
+    assert any("it read less than the module has" in p for p in problems), findings(root)
+
+
+def test_a_route_two_calls_out_from_an_action_is_inherited(tmp_path):
+    """Helper inheritance to a fixed point. One level left a route reachable
+    only through two calls derived by nobody, and the backstop would then report
+    the intermediate rather than the actions."""
+    root = tree(tmp_path)
+    path = root / ghost_gate.MODULE
+    text = path.read_text()
+    text = text.replace(
+        "PinAttempt(correct) ==",
+        'InnerLeak ==\n    viol\' = viol \\cup {"NoAuthorizationBypass"}\n\n'
+        "OuterLeak ==\n    InnerLeak\n\nPinAttempt(correct) ==",
+        1,
+    )
+    text = text.replace("StopUsingToken ==\n", "StopUsingToken ==\n    /\\ OuterLeak\n", 1)
+    path.write_text(text)
+    assert "InnerLeak/literal" in ghost_gate.derive(root)["StopUsingToken"]["routes"]
+
+
+def test_a_module_with_no_entry_point_says_so(tmp_path):
+    root = tree(tmp_path)
+    path = root / ghost_gate.MODULE
+    path.write_text(path.read_text().replace("\nNext ==", "\nNotNext ==", 1))
+    assert any("defines no `Next`" in p for p in findings(root)), findings(root)[:3]

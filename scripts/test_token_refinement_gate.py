@@ -685,3 +685,29 @@ def test_the_soft_lock_family_scanned_over_the_applet_alone_trips_its_floor(monk
     )
     findings = token_refinement_gate.audit(token_refinement_gate.ROOT)[0]
     assert contains(findings, "softlock: 2 site(s) derived, under the floor of 8"), findings
+
+
+@pytest.mark.parametrize(
+    "old,new,text",
+    [
+        ("pub fn pin_lock(", "pub fn lock_state(", "defines no `pin_lock`"),
+        ("-> PinLock", "-> &PinLock", "returns no bare type"),
+    ],
+)
+def test_the_soft_locks_anchor_moving_is_a_finding_not_a_traceback(tree: Tree, old, new, text):
+    """Both ways `lock_vocabulary`'s anchor can move used to raise, and a
+    traceback here aborts all six axes before any of them is compared — so the
+    other five would report nothing about a tree nobody had checked."""
+    tree.replace("crates/rsk-fido/src/state.rs", old, new)
+    assert contains(tree.findings(), text), tree.findings()
+
+
+def test_a_floor_reports_beside_the_comparison_and_not_instead_of_it(tree: Tree):
+    """Measured direction failure: with the window floor at its derived count,
+    renaming the guard reported "the derivation stopped reading the tree" and
+    SUPPRESSED the accurate `stale owner` line. A row that says the reader broke
+    when a security guard was deleted is red for the wrong reason."""
+    tree.replace("crates/rsk-fido/src/reset.rs", "RESET_WINDOW_MS", "0")
+    findings = token_refinement_gate.audit(tree.root)[0]
+    assert contains(findings, "reset_window: 0 site(s) derived, under the floor of"), findings
+    assert contains(findings, "reset_window: stale owner"), findings

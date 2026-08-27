@@ -435,11 +435,14 @@ def lint(root: pathlib.Path, check_generated_readme: bool = True) -> list[str]:
 #: did not converge would score a kill wearing the right colour. Refused by name,
 #: which is the same rule `floors.txt`'s invariant column applies one tier up.
 PROOF_FAILED = "VERIFICATION:- FAILED"
-PROOF_NOT_A_KILL = (
-    "CBMC timed out",
-    "not currently supported",
-    "unwinding assertion",
-)
+#: The one line Kani prints per check that ACTUALLY fell. Everything below is
+#: read out of these and nothing else: `not currently supported` also appears in
+#: a codegen WARNING and in the description of checks that are unreachable, on a
+#: run that ends SUCCESSFUL — measured, and it made the first real run of this
+#: half report `proof-broke` over a harness that had converged and passed.
+PROOF_FELL = "Failed Checks:"
+PROOF_TIMED_OUT = "CBMC timed out"
+PROOF_NOT_A_KILL = ("not currently supported", "unwinding assertion")
 
 
 def with_target(cmd: list[str], host: str) -> list[str]:
@@ -481,13 +484,18 @@ def run_slice(cmd: list[str], wt: pathlib.Path, root: pathlib.Path, host: str):
 
 def proof_verdict(out: str, code: int, names: str) -> tuple[str, str] | None:
     """(verdict, detail) when the proof half did NOT redden for its own reason."""
-    for limit in PROOF_NOT_A_KILL:
-        if limit in out:
-            return "proof-broke", f"the harness did not converge: {limit}"
+    if PROOF_TIMED_OUT in out:
+        return "proof-broke", f"the harness did not converge: {PROOF_TIMED_OUT}"
+    fell = [line.strip() for line in out.splitlines() if line.strip().startswith(PROOF_FELL)]
+    for line in fell:
+        for limit in PROOF_NOT_A_KILL:
+            if limit in line:
+                return "proof-broke", f"a check fell on a TOOL limit: {limit}"
     if code == 0 or PROOF_FAILED not in out:
         return "proof-survived", "the harness stayed green under the patch"
-    hit = [line.strip() for line in out.splitlines() if names in line]
-    if not hit:
+    # Scoped to the failed lines for the same reason: Kani lists EVERY check with
+    # its description, so `names` appears whether or not that check fell.
+    if not any(names in line for line in fell):
         return "proof-wrong-reason", f"a check fell and none of them named {names}"
     return None
 
@@ -564,7 +572,11 @@ def run_one(root: pathlib.Path, bug: str, entry: dict, host: str) -> tuple[str, 
         refused = proof_verdict(text, proof.returncode, entry["proof_names"])
         if refused:
             return refused
-        named = [l.strip() for l in text.splitlines() if entry["proof_names"] in l]
+        named = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip().startswith(PROOF_FELL) and entry["proof_names"] in line
+        ]
         return "killed", f"{ran[-1]}; proof: {named[0]}"
     finally:
         subprocess.run(

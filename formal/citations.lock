@@ -9,10 +9,23 @@ crates/rsk-fido/src/clientpin_tests.rs	crates/rsk-fido/src/clientpin.rs	241-243	
 crates/rsk-fido/src/clientpin_tests.rs	crates/rsk-fido/src/clientpin.rs	256-256	macd[new_pin_enc.len()..new_pin_enc.len() + pin_hash_enc.len()].copy_from_slice(pin_hash_enc);	macd[new_pin_enc.len()..new_pin_enc.len() + pin_hash_enc.len()].copy_from_slice(pin_hash_enc);
 crates/rsk-fido/src/clientpin_tests.rs	crates/rsk-fido/src/clientpin.rs	392-392	let res = issue_token(ctx, proto, secret, permissions, req.rp_id, out);	let res = issue_token(ctx, proto, secret, permissions, req.rp_id, out);
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/clientpin.rs	417-423	ctx.state.reset_pin_uv_auth_token(ctx.rng);	ctx.state.paut.permissions = permissions;
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/clientpin.rs	417-431	ctx.state.reset_pin_uv_auth_token(ctx.rng);	ctx.state.paut.token
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/config.rs	243-243	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	if !ctx.state.verify_token(proto, &vp[..vp_len], param)
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	153-154	let rp_id_hash = ctx.state.cm.rp_id_hash;	return enumerate_creds(ctx, false, &rp_id_hash, out);
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	164-164	ctx.state.cm.reset();	ctx.state.cm.reset();
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	190-192	let mut pbuf = [0u8; 1 + MAX_RAW_SUBPARA];	payload_with_subpara(CM_ENUMERATE_CREDS_BEGIN, req.raw_subpara, &mut pbuf)?;
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	233-247	fn authorize_cm<S: Storage, R: Rng>(	}
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	240-242	if authorized_by_ppuat(ctx, proto, payload, param) {	}
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	243-245	verify_cm_token(ctx.state, proto, payload, param)?;	ctx.state.mark_token_used(ctx.now_ms);
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	278-288	fn verify_cm_token(	}
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	383-385	if !found {	}
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	386-393	if begin {	ctx.state.cm.last_leg_ms = ctx.now_ms;
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	398-398	let mut seed = ctx.load_keydev().ok_or(CtapError::NotAllowed)?;	let mut seed = ctx.load_keydev().ok_or(CtapError::NotAllowed)?;
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	497-499	if !found {	}
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	501-501	let mut seed = ctx.load_keydev().ok_or(CtapError::NotAllowed)?;	let mut seed = ctx.load_keydev().ok_or(CtapError::NotAllowed)?;
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	506-509	if begin {	}
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	508-508	ctx.state.cm.rp_id_hash = *rp_id_hash;	ctx.state.cm.rp_id_hash = *rp_id_hash;
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/getassertion.rs	384-384	if !ctx.state.verify_token(proto, req.client_data_hash, param)	if !ctx.state.verify_token(proto, req.client_data_hash, param)
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/makecredential.rs	513-513	if !ctx.state.verify_token(proto, req.client_data_hash, param)	if !ctx.state.verify_token(proto, req.client_data_hash, param)
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/state.rs	523-535	/// The CTAP 2.1 §6.5.5.7 post-user-presence triad — `clearUserPresentFlag()`,	}

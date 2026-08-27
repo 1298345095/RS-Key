@@ -425,10 +425,28 @@ def test_the_host_target_goes_on_a_cargo_test_and_nowhere_else():
         ("Failed Checks: something else\nVERIFICATION:- FAILED\n", 1, "proof-wrong-reason"),
         ("CBMC timed out\nVERIFICATION:- FAILED\n", 1, "proof-broke"),
         (
-            "A Rust construct that is not currently supported by Kani\n"
+            "Failed Checks: caller_location is not currently supported by Kani\n"
             "VERIFICATION:- FAILED\n",
             1,
             "proof-broke",
+        ),
+        # The one that made this guard's FIRST real run wrong: Kani prints a
+        # codegen warning and the description of every check, reachable or not,
+        # so `not currently supported` is in the output of a run that PASSED.
+        (
+            "warning: Found the following unsupported constructs:\n"
+            '\t - Description: "caller_location is not currently supported by Kani"\n'
+            "VERIFICATION:- SUCCESSFUL\n",
+            0,
+            "proof-survived",
+        ),
+        # And the same string in a check that did NOT fall, on a run that did.
+        (
+            '\t - Description: "caller_location is not currently supported by Kani"\n'
+            "Failed Checks: NoAuthorizationBypass/B1: wrong set\n"
+            "VERIFICATION:- FAILED\n",
+            1,
+            "killed-not-refused",
         ),
     ],
 )
@@ -436,7 +454,13 @@ def test_a_proof_that_did_not_redden_for_its_own_reason(out, code, verdict):
     # The two tool limits end in the SAME line a real refutation does, so a
     # harness that did not converge would score a kill wearing the right colour —
     # the direction failure AGENTS.md records two of twenty-four patches taking.
-    assert comutate.proof_verdict(out, code, "NoAuthorizationBypass/B1")[0] == verdict
+    # And the last two arms are the opposite error, measured on the first real
+    # run: refusing a kill because a string appeared somewhere it means nothing.
+    got = comutate.proof_verdict(out, code, "NoAuthorizationBypass/B1")
+    if verdict == "killed-not-refused":
+        assert got is None, got
+    else:
+        assert got[0] == verdict
 
 
 def test_a_proof_that_fell_on_its_named_check_is_not_refused():

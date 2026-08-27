@@ -40,6 +40,24 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **An adversarial review of the slice's three guards found two blocking holes,
+  and both were the family this repo has measured five times.**
+  `ghost_gate.py`'s `viol'` scanner was line-anchored, so four ordinary TLA+
+  spellings hid a recording action with the row GREEN — the bullet on the
+  previous conjunct's line, a whole definition on one line, an assignment inside
+  an `IF` branch, and a `LET`-bound set. Neither floor could see it: 21 of 22
+  actions still derived. It now counts the module's own occurrences of the name
+  per operator and compares them with what the routes account for, so reading
+  LESS than the module has is a finding rather than a shorter roster; and helper
+  inheritance runs to a fixed point, because one level left a route two calls out
+  from an action derived by nobody. `bundle_gate.py` gained named required fields
+  per group (a leaf floor counts volume, not fields: renaming one kept the count)
+  and a `sha256` beside the byte count (which any file of the same length
+  satisfied). And `token_refinement_gate.py`'s floors no longer *suppress* the
+  precise finding: at the derived count, renaming the reset-window guard reported
+  "the derivation stopped reading the tree" and hid the two accurate `stale
+  owner` lines — a security guard deleted, reported as a broken reader.
+
 - **The `credentialManagement` *Begin*'s own decision is proved at its call
   site.** `SEC-FIDO-001`'s only Kani harness ran a symbolic five-operation
   interleaving over the walk cursor and asserted an equality about

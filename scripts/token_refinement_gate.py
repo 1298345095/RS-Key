@@ -79,7 +79,12 @@ FLOORS = {
     "outcome_producer": 5,
     "walk_owner": 3,
     "softlock_owner": 8,
-    "reset_window_owner": 2,
+    # 1, not 2, and the difference is a measured direction failure: at 2 —
+    # the derived count — renaming `in_reset_window` reported "the derivation
+    # stopped reading the tree" and SUPPRESSED the two accurate `stale owner`
+    # lines. A floor set AT the measurement turns a deleted guard into a report
+    # about the guard's reader.
+    "reset_window_owner": 1,
 }
 
 FN = re.compile(
@@ -348,11 +353,18 @@ WINDOW = ("warm_boot", "RESET_WINDOW_MS")
 #: out of: its RETURN TYPE is the wire form the board carries across a reset, and
 #: its BODY names the two `FidoState` fields the lock is made of.
 LOCK_ACCESSOR = "pin_lock"
-RETURNS = re.compile(r"->\s*(\w+)")
+#: Anchored to the `fn` line: searching the whole body picks a `->` inside a
+#: nested closure as the wire type.
+RETURNS = re.compile(r"^[^\n{]*->\s*(\w+)")
 
 
 def walk_guards(root: Path) -> list[str]:
-    """The `CredMgmtState` methods that are the channel test."""
+    """Every `state.rs` method that IS the channel test.
+
+    Not scoped to `CredMgmtState` — nothing here parses impl blocks — and the
+    scan is the wider one on purpose: a second type growing the same guard is a
+    site this axis should own, not one it should miss.
+    """
     return sorted(
         name
         for name, body in functions((root / STATE).read_text(encoding="utf-8"))
@@ -369,17 +381,26 @@ def window_guards(root: Path) -> list[str]:
     )
 
 
-def lock_vocabulary(root: Path) -> tuple[str, list[str], list[str]]:
-    """(the lock's wire type, the fields it is made of, the methods that move it).
+def lock_vocabulary(root: Path):
+    """(the lock's wire type, its fields, the methods that move it, a problem).
 
     All three out of `FidoState::pin_lock`: naming the type here as well would be
-    the second spelling this whole file exists to delete.
+    the second spelling this whole file exists to delete. Both ways the anchor can
+    move — the accessor renamed, its return type no longer a bare name — are a
+    FINDING, because a traceback here aborts every one of the six axes before any
+    of them is compared.
     """
     bodies = dict(functions((root / STATE).read_text(encoding="utf-8")))
+    if LOCK_ACCESSOR not in bodies:
+        return "", [], [], f"softlock: {STATE} defines no `{LOCK_ACCESSOR}` — the whole family hangs off it"
     accessor = bodies[LOCK_ACCESSOR]
-    kind = RETURNS.search(accessor).group(1)
+    found = RETURNS.search(accessor)
+    if not found:
+        return "", [], [], f"softlock: `{LOCK_ACCESSOR}` returns no bare type — the wire form is read off its signature"
+    kind = found.group(1)
     fields = sorted(set(re.findall(r"self\.(\w+)", accessor)))
-    return kind, fields, sorted(n for n, b in bodies.items() if re.search(rf"\b{kind}\b", b))
+    methods = sorted(n for n, b in bodies.items() if re.search(rf"\b{kind}\b", b))
+    return kind, fields, methods, None
 
 
 def guard_sites(root: Path, guards: list[str], kind: str | None) -> set[tuple[str, str]]:
@@ -399,7 +420,14 @@ def guard_sites(root: Path, guards: list[str], kind: str | None) -> set[tuple[st
     found: set[tuple[str, str]] = set()
     for unit, _ in UNITS:
         for path in sorted((root / unit).rglob("*.rs")):
-            if path.name.endswith(("_tests.rs", "_kani.rs")):
+            # The SAME exclusion `production_sources` applies, so the guard scan
+            # and the writer scan agree about what production is. They differed:
+            # this one read `state_assurance.rs` and `generated_token_edges.rs`,
+            # which the writer axes deliberately do not.
+            if path.name.endswith(("_tests.rs", "_kani.rs")) or path.name in {
+                "generated_token_edges.rs",
+                "state_assurance.rs",
+            }:
                 continue
             rel = str(path.relative_to(root))
             for name, body in functions(path.read_text(encoding="utf-8")):
@@ -516,8 +544,10 @@ def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per
     outcomes, outcomes_seen = discovered_outcomes(code, perms, seen_perms)
     spellings = key_spellings(root, keys)
     persistent, generic = discovered_persistent(code, writers, spellings)
-    kind, lock_fields, lock_methods = lock_vocabulary(root)
-    if lock_fields != ["needs_power_cycle", "new_pin_mismatches"]:
+    kind, lock_fields, lock_methods, lock_problem = lock_vocabulary(root)
+    if lock_problem:
+        findings.append(lock_problem)
+    if lock_fields and lock_fields != ["needs_power_cycle", "new_pin_mismatches"]:
         findings.append(f"the soft lock's field derivation yielded {lock_fields!r}")
     found = {
         # `None` on all three guard axes: alpha reads `paut.in_use`,
@@ -540,12 +570,14 @@ def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per
         label = axis.removesuffix("_writer").removesuffix("_producer").removesuffix("_owner")
         entries = data.get(axis, [])
         if len(found[axis][0]) < FLOORS[axis]:
+            # Reported BESIDE the comparison, never instead of it. Skipping the
+            # comparison made a deleted guard read as a broken reader — the same
+            # failure one register over from a red run nobody read the reason for.
             findings.append(
                 f"{label}: {len(found[axis][0])} site(s) derived, under the floor of"
                 f" {FLOORS[axis]} — the derivation stopped reading the tree, and every"
                 " rule below passes over the empty set"
             )
-            continue
         compare_axis(label, found[axis][0], owners(entries), findings)
         for entry in entries:
             site = (entry["file"], entry["function"])

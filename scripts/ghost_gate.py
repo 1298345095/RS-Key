@@ -149,13 +149,22 @@ def assignments(body: str) -> list[str]:
     return out
 
 
-def aliases(bodies: dict[str, str]) -> set[str]:
-    """Operators that stand for a set carrying the name — `TokenBypass` today."""
+def aliases(bodies: dict[str, str], actions=frozenset()) -> set[str]:
+    """Operators that stand for a set carrying the name — `TokenBypass` today.
+
+    An ACTION is never one, whatever its shape. Without that an action whose
+    `viol'` the line-anchored scanner missed was classified as an alias, skipped
+    by the backstop, and reported one operator over — red, but naming the caller
+    instead of the recorder.
+    """
     quoted = f'"{INVARIANT}"'
     return {
         name
         for name, body in bodies.items()
-        if quoted in body and name not in NOT_A_ROUTE and not assignments(body)
+        if quoted in body
+        and name not in NOT_A_ROUTE
+        and name not in actions
+        and not assignments(body)
     }
 
 
@@ -189,12 +198,16 @@ def routes_of(bodies: dict[str, str], name: str, alias_names) -> list[str]:
 
 def derive(root: pathlib.Path) -> dict[str, dict[str, list[str]]]:
     """`action -> {routes, policies}`, everything read out of the module."""
-    text = strip_comments((root / MODULE).read_text(encoding="utf-8"))
+    return _derive(strip_comments((root / MODULE).read_text(encoding="utf-8")))[0]
+
+
+def _derive(text: str):
+    """(the roster, the direct routes per operator, the bodies) over one module."""
     bodies = definitions(text)
     if ENTRY not in bodies:
-        return {}
+        return {}, {}, bodies, set()
     actions = references(bodies[ENTRY], set(bodies) - {ENTRY})
-    alias_names = aliases(bodies)
+    alias_names = aliases(bodies, actions)
     policy_names = {name for name in bodies if POLICY.fullmatch(name)}
     direct = {
         name: (
@@ -205,6 +218,33 @@ def derive(root: pathlib.Path) -> dict[str, dict[str, list[str]]]:
         if name not in NOT_A_ROUTE and routes_of(bodies, name, alias_names)
     }
     helpers = {name: found for name, found in direct.items() if name not in actions}
+    # To a FIXED POINT, not one level: a helper that calls a helper reached
+    # nothing, so a route two calls out from an action was derived by no one.
+    # `store_writers` one file over closes the same shape the same way.
+    while True:
+        grown = {
+            name: (
+                list(helpers.get(name, ([], []))[0]),
+                list(helpers.get(name, ([], []))[1]),
+            )
+            for name, body in bodies.items()
+            if name not in actions and name not in NOT_A_ROUTE
+        }
+        added = False
+        for name, (routes, policies) in grown.items():
+            for callee in sorted(references(bodies[name], set(helpers)) - {name}):
+                for route in helpers[callee][0]:
+                    if route not in routes:
+                        routes.append(route)
+                        added = True
+                for policy in helpers[callee][1]:
+                    if policy not in policies:
+                        policies.append(policy)
+                        added = True
+            if routes:
+                helpers[name] = (routes, policies)
+        if not added:
+            break
     out: dict[str, dict[str, list[str]]] = {}
     for action in sorted(actions):
         routes, policies = (list(x) for x in direct.get(action, ([], [])))
@@ -213,15 +253,51 @@ def derive(root: pathlib.Path) -> dict[str, dict[str, list[str]]]:
             policies.extend(helpers[helper][1])
         if routes:
             out[action] = {
-                "routes": sorted(routes),
+                "routes": sorted(set(routes)),
                 "policies": sorted(set(policies)),
             }
+    return out, direct, bodies, alias_names
+
+
+def unaccounted(bodies: dict[str, str], direct: dict, alias_names) -> list[str]:
+    """Every mention of the name the route derivation did not account for.
+
+    THE BACKSTOP, and the derivation needs one: `VIOL` is line-anchored, so a
+    `viol'` sharing a line with the conjunct before it, a whole definition on one
+    line, an assignment inside an `IF … THEN … ELSE`, or a `LET`-bound set
+    carrying the name are all invisible to it — measured, four spellings, each
+    green with the action recording. The floors cannot see that: 21 of 22 actions
+    still derive. This compares the module's own occurrence count with what the
+    routes claim, per operator, so reading LESS than the module has is a finding
+    rather than a shorter roster.
+    """
+    quoted = f'"{INVARIANT}"'
+    out = []
+    for name, body in sorted(bodies.items()):
+        if name in NOT_A_ROUTE or name in alias_names:
+            continue
+        seen = body.count(quoted) + sum(
+            len(re.findall(rf"\b{re.escape(alias)}\b", body)) for alias in alias_names
+        )
+        want = len(direct.get(name, ([], []))[0])
+        if seen != want:
+            out.append(
+                f"{name}: names {INVARIANT} {seen} time(s) and the route derivation"
+                f" accounts for {want} — it read less than the module has"
+            )
     return out
 
 
 def audit(root: pathlib.Path) -> tuple[list[str], str]:
     findings: list[str] = []
-    derived = derive(root)
+    text = strip_comments((root / MODULE).read_text(encoding="utf-8"))
+    derived, direct, bodies, alias_names = _derive(text)
+    if ENTRY not in bodies:
+        findings.append(
+            f"{MODULE} defines no `{ENTRY}` — the roster starts there, so every"
+            " action below is unreached rather than absent"
+        )
+    findings.extend(unaccounted(bodies, direct, alias_names))
     entries = tomllib.loads((root / LEDGER).read_text(encoding="utf-8")).get(
         "action", []
     )

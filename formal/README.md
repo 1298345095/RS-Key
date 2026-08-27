@@ -2728,7 +2728,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-REF-004` | `R4bEventConsensus` | MODELLED-ONLY | `TraceSecurity` | — | 0 | 0 | 0 | 0 | 0 | 0 |
 | `SEC-REF-005` | `NoAuthorizationBypassA` | MODELLED-ONLY | `RSKeyTokenGate` | — | 0 | 0 | 0 | 0 | 0 | 0 |
 | `SEC-REF-006` | `RequiredGateAgreesWithRelation` | MODELLED-ONLY | `RSKeyTokenGate` | — | 0 | 0 | 0 | 0 | 0 | 0 |
-| `SEC-FIDO-001` | `NoAuthorizationBypass` | BOUNDED | `RSKeySecurityState` | — | 2 | 11 | 11 | 2 | 0 | 0 |
+| `SEC-FIDO-001` | `NoAuthorizationBypass` | BOUNDED | `RSKeySecurityState` | — | 2 | 11 | 11 | 4 | 0 | 0 |
 | `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | BOUNDED | `RSKeySecurityState` | — | 2 | 5 | 5 | 2 | 0 | 0 |
 | `SEC-FIDO-003` | `NoTokenAfterInvalidation` | BOUNDED | `RSKeySecurityState` | — | 3 | 7 | 6 | 2 | 1 | 0 |
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | MODELLED-ONLY | `RSKeySecurityState` | `RSKeyStore` | 2 | 2 | 1 | 0 | 0 | 0 |
