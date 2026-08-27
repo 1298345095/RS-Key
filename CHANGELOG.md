@@ -68,6 +68,35 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   then `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
   safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
   RED, not one row short of its floor.
+- **A second rule, inverted: a value the generated regions PRINT may not be
+  written anywhere else.** The four rules above hunt for run-count-*shaped*
+  text — a roster noun, a `GREEN`/`RED` adjacency, a wall clock beside a tier's
+  name — and the shapes are unbounded, so each new spelling is a new hole:
+  `195 states`, `195 mutants`, `190+ rows`, `_195 rows_`, `GREEN: 20, RED: 174`,
+  `about an hour`, `77,563,872 distinct` were all measured bypasses. This rule
+  is generated **from the number**, so it needs no noun list, no paragraph-local
+  trigger and no guess about phrasing, and it covers every grouping — including
+  the NBSP and the two thin spaces the shape rule's own class has never held.
+  It is floored by magnitude, and the floor was chosen by measurement rather
+  than taste: over the scanned corpus the rule finds **10 862** occurrences at
+  no floor, **2 236** over ten, **264** over a hundred, **140** over a thousand
+  (about 130 of them the copyright year), and **11** over ten thousand — every
+  one of those eleven a real second copy of a number the regions print, a
+  false-positive rate of **0**. What it cannot see is stated where it is
+  defined: a **rounded** copy (`77.6 M` is in this tree) and a **stale** number,
+  whose value matches nothing derived today. The shape scan sees those, which is
+  why both rules are kept and neither is a supplement.
+- **The eleven it found.** One was a hand-typed copy of the derived state count
+  that the run-count work itself had added to `docs/testing.md` about 75 lines
+  above the generated paragraph, where rotting both its numbers left the gate
+  green — that sentence now points at the paragraph instead of restating it. The
+  other ten are live figures restated in the narrative that argues about them
+  (the fingerprint-estimate paragraph, the before/after comparison with the
+  reduced scope, the `COVERAGE=1` sweep, `Policies.cfg`'s and `Liveness.cfg`'s
+  own rows, `floors.txt`'s justification for a floor, `gen-configs.sh`'s note on
+  why the real constants were kept) and are registered with what each is: not
+  rewritten, because the number carries the argument in each, but now a **known**
+  list of the prose that goes stale the next time the model widens.
 - **The scan reads the directories the criterion names, instead of a suffix
   whitelist under each.** `docs/**/*.md` + `formal/README.md` alone +
   `.github/**/*.{yml,yaml,md}` + two named root pages left 22 measured places a

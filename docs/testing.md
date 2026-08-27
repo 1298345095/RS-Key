@@ -580,15 +580,16 @@ paragraph and refuses a run-count typed anywhere else on this page. CI has the
 against a 120-minute cap.
 
 > **That cap is the thing to watch, and the margin shrank once already.**
-> `safety` was 2003 s here before the token-less `makeCredential` widening —
-> `Shipped.cfg` alone went 48 679 968 distinct to 77 563 872 — and what it costs
-> now is the paragraph above, which is generated. The CI figure was measured on
-> that older tree, so scaling it by the ratio between the two local readings is
-> the only projection available, and it leaves the row minutes of headroom
-> rather than the three quarters of an hour it used to have. Nothing has timed
-> out — that is a projection off one local ratio, not a measurement of the
-> runner — but the next model widening should re-measure the CI row before
-> assuming it fits. `liveness` has no CI row and is the maintainer's, and
+> `safety` was 2003 s here before the token-less `makeCredential` widening, and
+> `Shipped.cfg` alone went 48 679 968 distinct to the count the generated
+> paragraph above prints — which is why what it costs now is not typed here.
+> The CI figure was measured on that older tree, so scaling it by the ratio
+> between the two local readings is the only projection available, and it
+> leaves the row minutes of headroom rather than the three quarters of an hour
+> it used to have. Nothing has timed out — that is a projection off one local
+> ratio, not a measurement of the runner — but the next model widening should
+> re-measure the CI row before assuming it fits. `liveness` has no CI row and is
+> the maintainer's, and
 `Liveness_Full.cfg` is nobody's yet — `floors.txt` reserves it a 24 GB heap that
 no run has asked for.
 

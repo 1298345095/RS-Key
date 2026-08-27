@@ -22,6 +22,12 @@ Two halves, because either alone leaves the class open.
   from [`RECORD`] and the tree, and the gate diffs them — the shape
   `assurance_gate.py` and `comutate.py` already use on `formal/README.md`. A
   hand edit to a number inside a region is a diff, not an opinion.
+* **Not said twice.** A value the regions PRINT may not appear as a literal
+  anywhere else — [`VALUE_FLOOR`] and up, generated from the number rather than
+  hunted for as a shape, so it needs no noun, no trigger and no guess about
+  phrasing and its spellings are closed by construction. This is the rule the one
+  below cannot be, and the one below is the rule this cannot be: it sees a
+  correct copy about to rot and never a stale one.
 * **Refused elsewhere.** A region cannot stop the NEXT sentence being typed
   somewhere else, and the completeness half is where every guard in this tree has
   failed. So every tracked text file under [`SCANNED_TREES`] — `docs/`, `formal/`
@@ -112,6 +118,26 @@ SCAN_FLOOR = 8
 #: still matches the tree's spelling or it does not, and a fraction of 2 is 0.
 RULE_FLOOR = 1
 
+#: The other rule, and the one the shape scan cannot be: a value the generator
+#: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
+#: paragraph-local trigger and no guess about how a sentence is phrased, because
+#: the spellings are generated FROM the number instead of parsed out of prose —
+#: which is the hole every one of the four rules above has, unboundedly.
+#:
+#: It is floored by magnitude because a small derived value is every other number
+#: in the tree. Measured over the scanned corpus, as occurrences outside a region
+#: or a registered fragment: **10 862** at no floor, **2 236** over ten, **264**
+#: over a hundred, **140** over a thousand — of which about 130 are the copyright
+#: year — and **11** over ten thousand, EVERY ONE of them a real second copy of a
+#: number the regions print. So the false-positive rate is 0 at this floor and
+#: rises steeply just below it; five digits is where coincidence stops.
+#:
+#: What it does not reach, said plainly: a value written ROUNDED (`77.6 M` is in
+#: the tree and this rule cannot see it), and a number that is STALE — one whose
+#: value matches nothing derived today. The shape scan above is what sees those,
+#: which is why both rules are here and neither is a supplement to the other.
+VALUE_FLOOR = 10_000
+
 #: The published sentences only grow. So a set that has SHRUNK is a sentence that
 #: stopped being generated, which is the other half of the region rule and the
 #: half nothing held: deleting an entry from `region_bodies`, deleting its two
@@ -196,8 +222,9 @@ SCOPED = {
     "about their state counts being equal, not about a tier",
     (
         "formal/README.md",
-        "2804 s against the plain run's 2034 s**, GREEN",
-    ): "the `COVERAGE=1` sweep of `Shipped.cfg` against its plain run, dated in place",
+        "2804 s against the plain run's 2034 s**, GREEN over the same 986 836 197\ngenerated and 77 563 872 distinct",
+    ): "the `COVERAGE=1` sweep of `Shipped.cfg` against its plain run, dated in place — "
+    "and the two counts it swept, which are the point of `the same`",
     (
         "formal/README.md",
         "runs out of memory**\nafter 1500 s",
@@ -208,6 +235,51 @@ SCOPED = {
         "distinct states at depth 43, in **1555 s**",
     ): "the same configuration at 12 GB on the reduced constants, the other half of that "
     "one measurement",
+    # A LIVE figure the regions already print, restated in the narrative that is
+    # about it. Registered rather than rewritten: the number carries the argument
+    # in each of these sentences. What the registry buys is that they are now
+    # KNOWN second copies — the next time the model widens, this list is the list
+    # of prose that goes stale with it, where before nothing could name them.
+    (
+        "docs/assurance-matrix.md",
+        "GREEN over 23 521 512 distinct states at depth 51",
+    ): "`AlwaysUv.cfg`'s own size, in the cell arguing that the model half of that "
+    "column is answered and the code half is not",
+    (
+        "formal/floors.txt",
+        "alwaysUv. 23 521 512 distinct at depth 51",
+    ): "the same configuration, in the comment that says why its floor is where it is — "
+    "a floor's justification is the one place its measurement belongs",
+    (
+        "formal/gen-configs.sh",
+        "They cost 77 563 872 now",
+    ): "`Shipped.cfg`'s size in the generator's own note on why the real constants were "
+    "kept over the reduced ones, which is an argument about the two numbers",
+    (
+        "formal/README.md",
+        "at 77 563 872 distinct (2026-08-26)",
+    ): "the count the fingerprint estimate is a closed form IN, in the paragraph about "
+    "what `exhaustive` means — the estimate is meaningless without it",
+    (
+        "formal/README.md",
+        "same 77 563 872\ndistinct",
+    ): "and the same count again two lines down, which is the whole of that sentence: "
+    "two runs of one configuration agreed on it and disagreed on the estimate",
+    (
+        "formal/README.md",
+        "**77 563 872 at depth 58**",
+    ): "the count on the far side of a before/after comparison with the reduced scope, "
+    "where dropping it would leave the comparison with one side",
+    (
+        "formal/README.md",
+        "**45 253 generated / 2 268 distinct states at depth 14**",
+    ): "`Policies.cfg`'s own row, quoted in the sentence that argues the four applets "
+    "fit in one module — the Results table has it, and the argument needs it here",
+    (
+        "formal/README.md",
+        "GREEN over 10 720 348 distinct\nstates at the liveness constants",
+    ): "`Liveness.cfg`'s distinct count beside the 5% wall-clock comparison it is the "
+    "denominator of",
     # Neither: a count of something that is not a roster run at all.
     (
         "docs/authorization-slice.md",
@@ -970,7 +1042,33 @@ def scoped_spans(rel, text, findings):
     return spans
 
 
-def scan(root, owned, findings):
+#: Every way this tree groups a long number, plus the two spaces it does not use
+#: yet. Generated from the value, so the list is closed by construction — where
+#: `NUM` parses a grouping out of prose and its class turned out to hold the plain
+#: space TWICE and neither the NBSP nor the thin space at all.
+GROUPERS = (",", " ", " ", " ", " ", "_", "")
+
+
+def spellings(value):
+    """`77563872`, `77,563,872`, `77 563 872`, … — one number, every grouping."""
+    grouped = f"{value:,}"
+    return {grouped.replace(",", sep) for sep in GROUPERS}
+
+
+def emitted(bodies):
+    """The values the generated regions print that are big enough to be nobody
+    else's. Read back out of the rendered bodies rather than listed beside them:
+    a second list would be the copy this rule exists to refuse."""
+    out = set()
+    for body in bodies.values():
+        for text in re.findall(r"\d[\d    ,_]*\d|\d", body):
+            digits = re.sub(r"[^\d]", "", text)
+            if digits and int(digits) >= VALUE_FLOOR:
+                out.add(int(digits))
+    return out
+
+
+def scan(root, owned, values, findings):
     """How many run-count literals the published trees hold, and where.
 
     `owned` is what the generator writes. A marker pair it does NOT own would
@@ -984,6 +1082,8 @@ def scan(root, owned, findings):
     #: the tree. `names-a-run` counts BLOCKS, not literals: it is the trigger, and
     #: what it can lose is the arming, not a match of its own.
     per = dict.fromkeys(("tally", "count", "clock", "loose-tally", "names-a-run"), 0)
+    per["emitted-value"] = len(values)
+    wanted = {sp: v for v in values for sp in spellings(v)}
     for path in scanned(root):
         rel = path.relative_to(root).as_posix()
         text = path.read_text()
@@ -1006,6 +1106,20 @@ def scan(root, owned, findings):
         # taken from the original then land beside the literals they cover.
         masked = mask_regions(text)
         spans = scoped_spans(rel, masked, findings)
+        # The value rule reads the whole masked file rather than its blocks: it
+        # needs no trigger beside the literal, so a paragraph is not the unit of
+        # anything here, and a number in a table cell is as much a second copy as
+        # one in a sentence.
+        for spelling, value in sorted(wanted.items()):
+            for m in re.finditer(r"(?<![\d.,_])" + re.escape(spelling) + r"(?![\d.,_])", masked):
+                if any(lo <= m.start() and m.end() <= hi for lo, hi in spans.values()):
+                    continue
+                findings.append(
+                    f"{rel}:{masked[: m.start()].count(chr(10)) + 1}: {spelling!r} is a"
+                    f" second copy of {value}, which the generated regions print — say it"
+                    " in the region, point at the region, or register it in"
+                    " scripts/run_count_gate.py SCOPED with what it is history to"
+                )
         for at, start, block in blocks(path, masked):
             triggers = [(m, "tally") for m in TALLY.finditer(block)]
             if NAMES_A_RUN.search(block):
@@ -1105,7 +1219,7 @@ def audit(root):
             " sentence nothing writes is one somebody types"
         )
 
-    found = scan(root, owned, findings)
+    found = scan(root, owned, emitted(bodies), findings)
     if found < SCAN_FLOOR:
         findings.append(
             f"the scan matched {found} literal(s), under the floor of {SCAN_FLOOR} — the"

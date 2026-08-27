@@ -250,8 +250,12 @@ class Tree:
         self.write("formal/comutants.toml", COMUTANTS)
         for cfg in ("Shipped.cfg", "Mut_BugFooOpens.cfg", "Liveness.cfg"):
             self.write(f"formal/{cfg}", SHIPPED_CFG)
+        # `stray`, because `/formal/out/*` is gitignored in the real tree: the
+        # logs are the run's raw output, `--record` reads them where they lie and
+        # the scan never sees them. Written with `write` they became tracked, and
+        # every count in a log read as a second copy of itself.
         for name, text in logs().items():
-            self.write(f"formal/out/{name}.log", text)
+            self.stray(f"formal/out/{name}.log", text)
         self.write("formal/README.md", README_MD)
         self.write("docs/testing.md", TESTING_MD)
         self.write("docs/formal.md", FORMAL_MD)
@@ -259,6 +263,10 @@ class Tree:
         self.write(".github/workflows/deep-checks.yml", WORKFLOW)
         self.write("scripts/check.sh", CHECK_SH)
         self.write("CHANGELOG.md", CHANGELOG_MD)
+        # As the real tree ignores it. `commit()` is `git add -A`, so without
+        # this the logs are tracked whatever `stray` does, and every count in
+        # one reads as a second copy of itself.
+        self.stray(".gitignore", "/formal/out/*\n")
         self.git("init", "-q")
         self.commit("the tree the runs are about")
         self.write("formal/runs.toml", self.record())
@@ -279,7 +287,9 @@ class Tree:
     def stray(self, rel, text):
         """A file git is NOT told about — which `write` would defeat, because it
         tells git about everything it writes."""
-        (self.root / rel).write_text(text)
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
 
     def read(self, rel):
         return (self.root / rel).read_text()
@@ -909,6 +919,60 @@ def test_a_carve_out_for_a_file_that_has_gone(tree):
     assert only(tree.problems(), "a carve-out nobody has is one nobody is reading")
 
 
+# --- the OTHER rule: a value the generator prints, said a second time ---------
+#
+# The four rules above hunt for run-count-SHAPED text, and the shapes are
+# unbounded — every case below was a measured bypass of them. This one is
+# generated FROM the number instead, so it needs no noun, no trigger and no
+# guess about phrasing, and its spellings are closed by construction. What it
+# cannot see is a ROUNDED copy and a STALE one, which is why both rules are kept.
+
+
+@pytest.fixture
+def big(monkeypatch):
+    """The fixture's own counts are three digits, so the rule is floored down to
+    reach them. The REAL floor is exercised against the REAL tree below."""
+    monkeypatch.setattr(run_count_gate, "VALUE_FLOOR", 100)
+
+
+@pytest.mark.parametrize("spelled", ("4000", "4,000", "4 000", "4_000", "4\u00a0000",
+                                    "4\u2009000", "4\u202f000"))
+def test_a_second_copy_of_a_value_the_regions_print(tree, big, spelled):
+    """No runner named, no roster noun, no tally: every one of the four shape
+    rules is silent here and the number is still a second copy that will rot.
+
+    Every grouping, including the NBSP and the two thin spaces `NUM`'s own class
+    has never held — because these are generated FROM the value rather than
+    parsed out of prose, which is the whole difference between the two rules."""
+    tree.write("docs/typed.md", f"# Typed\n\nThe model reaches {spelled} of them.\n")
+    assert only(tree.problems(), "docs/typed.md:3:"), spelled
+
+
+def test_a_value_under_the_floor_is_nobody_second_copy(tree, big):
+    """The other direction, and the reason the floor exists: `6` is `Shipped.cfg`'s
+    depth in this fixture and every other small number in the tree. Measured over
+    the real corpus, the rule finds 10 862 occurrences at no floor and 11 at ten
+    thousand, of which none is a coincidence."""
+    tree.write("docs/typed.md", "# Typed\n\nThe search went 6 deep.\n")
+    assert not only(tree.problems(), "second copy of 6")
+
+
+def test_a_second_copy_inside_a_registered_fragment(tree, big, monkeypatch):
+    monkeypatch.setattr(
+        run_count_gate, "SCOPED",
+        {("docs/typed.md", "reached 200 of them back then"): "history"},
+    )
+    tree.write("docs/typed.md", "# Typed\n\nIt reached 200 of them back then.\n")
+    assert not only(tree.problems(), "second copy of 200")
+
+
+def test_the_value_rule_with_nothing_left_to_look_for(monkeypatch):
+    """Against the real checkout: raise the floor past every number the regions
+    print and the rule is inert, which is the shape audit run-34 #9 is about."""
+    monkeypatch.setattr(run_count_gate, "VALUE_FLOOR", 10 ** 12)
+    assert only(run_count_gate.audit(ROOT)[0], "the emitted-value rule matched 0")
+
+
 def test_a_page_another_gate_writes_whole(tree):
     assert not only(tree.problems(), "docs/assurance-vector.md")
 
@@ -1008,7 +1072,7 @@ def test_recording_a_new_matrix_against_a_head_younger_than_the_run(tree, tmp_pa
     the one provenance field TLC cannot corroborate — so the check is on the only
     thing that is checkable, the order of the two clocks."""
     for name, text in logs(when="2019-01-01 00:00:00").items():
-        tree.write(f"formal/out/{name}.log", text)
+        tree.stray(f"formal/out/{name}.log", text)
     tree.write("formal/runs.toml", "# nothing here\n")
     log = tmp_path / "all.log"
     log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
@@ -1020,7 +1084,7 @@ def test_recording_logs_that_disagree_with_each_other(tree, tmp_path):
     """Within one tier, because that is where a run is one run. `liveness` is a
     single row here and a single row cannot disagree with itself — the first
     version of this case put the odd log there and never raised."""
-    tree.write("formal/out/Mut_BugFooOpens.log", tlc_log(90, 40, 4, "06s", workers=8))
+    tree.stray("formal/out/Mut_BugFooOpens.log", tlc_log(90, 40, 4, "06s", workers=8))
     log = tmp_path / "all.log"
     log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
     with pytest.raises(RuntimeError, match="the logs disagree about date/workers/cores"):
@@ -1033,7 +1097,7 @@ def test_recording_a_log_from_another_machine(tree, tmp_path):
     `aarch64` where `uname` writes `arm64`, and the plain comparison refused
     every honest record on this machine."""
     for name, text in logs().items():
-        tree.write(f"formal/out/{name}.log", text.replace(os.uname().machine, "s390x"))
+        tree.stray(f"formal/out/{name}.log", text.replace(os.uname().machine, "s390x"))
     log = tmp_path / "all.log"
     log.write_text(MATRIX_SAFETY + "\n" + MATRIX_LIVENESS + "\n")
     with pytest.raises(RuntimeError, match="record where the run happened"):
