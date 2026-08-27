@@ -42,11 +42,11 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 - **More than half of the fallible-probe conversion was held by no test, and the
   count was worse than the review said.** Reverting each converted guard on its own
-  and running the owning crate's whole suite: **12 killed, 26 survived** — a diff
-  where 26 of 38 guards could be deleted with a green suite. The independent review
-  put it at 18; the extra 8 are the OpenPGP `scan_files` guards it grouped as one
-  `read_file` row, and one — PIV's `have_meta` — it listed as surviving where the
-  measurement kills it.
+  and running the owning crate's whole suite: **11 killed, 27 survived** — a diff
+  where 27 of 38 guards could be deleted with a green suite. The independent review
+  put it at 18; the extra 9 are the OpenPGP `scan_files` guards it grouped as one
+  `read_file` row, plus PIV's `have_meta` — which the review had right and this
+  measurement first got wrong (below).
 
   The mechanism is shadowing: a persistent fault on the first record a function
   probes is caught by that first guard, so every later one never runs, and a test
@@ -60,7 +60,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   scan decides the whole FID space and `try_*` then short-circuits an absent record
   before the backend — no fault can reach those guards at all on a fully scanned
   store. Re-measured after: **38 killed, 0 survived**, every mutant proven compiled
-  in.
+  in and every kill a test that RAN and FAILED.
+
+  That last clause is a correction, and the instrument was the thing that needed
+  it. The first two tables scored a mutant KILLED on `rc != 0`, and a mutation that
+  does not TYPE-CHECK exits 101 with zero tests run — so PIV's `have_meta` read as
+  killed twice while nothing had exercised it, and the review that called it a
+  survivor was right. Fixed by requiring a line matching `^test .* FAILED`, and by
+  giving that reversion a spelling that compiles: it then survives the whole crate
+  suite, so the counts above are 11/27 and not 12/26. One row of 38 was affected;
+  the other 37 all carried a real panic. The guard is held now by a test that has to
+  arm the fault **once** rather than stick it — a persistent `EF_META` fault is
+  caught further down by `meta_add`'s own guard, which answers the same
+  `MEMORY_FAILURE`, so a stuck-fault test would have passed with the guard reverted
+  and rested entirely on its neighbour.
 
   Two smaller findings fell out. `Fs::delete` skips the backend when the present bit
   is clear, and a truncated walk clears every present bit — so a test that plants and

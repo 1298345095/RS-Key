@@ -8569,3 +8569,58 @@ fn a_faulted_pivman_probe_does_not_discard_the_host_record() {
         "a rebuild that could not read the record it carries forward must refuse"
     );
 }
+
+/// `scan_files`' `have_meta` probe decides whether to REBUILD the 9B head, and the
+/// rebuild's surviving-key arm publishes `TOUCHPOLICY_NEVER` — the published default,
+/// because a touch policy is not recoverable from the sealed key. So a faulted
+/// `meta_find` there retires the gate the owner raised with `SET MGM KEY P2 = 0xFE`,
+/// at SELECT, with no authentication in front of it.
+///
+/// `stick_once`, not `stick`: a PERSISTENT EF_META fault is caught further down by
+/// `meta_add`'s own faulted-read guard, which answers the same MEMORY_FAILURE. This
+/// guard's whole force would then rest on that neighbour, and the test would pass
+/// with it reverted — which is exactly what a whole-suite run reported for it.
+#[test]
+fn a_faulted_meta_probe_at_select_does_not_retire_the_management_touch_gate() {
+    let (backend, medium) = ProbeStuck::new();
+    let rng = RefCell::new(TestRng(7));
+    let pres = RefCell::new(AlwaysConfirm);
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    auth_mgm(&mut app, &mut fs);
+    let mut body = vec![ALGO_AES192, SLOT_CARDMGM, 24];
+    body.extend_from_slice(&DEFAULT_MGM);
+    assert_eq!(
+        run(&mut app, &mut fs, INS_SET_MGMKEY, 0xFF, 0xFE, &body).0,
+        Sw::OK
+    );
+    let mut head = [0u8; 8];
+    assert_eq!(
+        fs.meta_find(key_fid(SLOT_CARDMGM).get(), &mut head)
+            .map(|n| head[..n.min(head.len())][2]),
+        Some(TOUCHPOLICY_ALWAYS),
+        "control: the gate the owner raised"
+    );
+
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    medium.stick_once(rsk_fs::EF_META);
+    let sw = crate::files::scan_files(&dev, &mut fs, &mut TestRng(3));
+    let mut head = [0u8; 8];
+    assert_eq!(
+        fs.meta_find(key_fid(SLOT_CARDMGM).get(), &mut head)
+            .map(|n| head[..n.min(head.len())][2]),
+        Some(TOUCHPOLICY_ALWAYS),
+        "a faulted EF_META probe rebuilt the head and retired the touch gate at SELECT"
+    );
+    assert_eq!(
+        sw,
+        Err(Sw::MEMORY_FAILURE),
+        "a boot that could not read the head it decides on must refuse"
+    );
+}
