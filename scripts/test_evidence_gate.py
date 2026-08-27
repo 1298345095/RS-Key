@@ -146,6 +146,22 @@ source = ["spec"]
 ruling = "the maintainer said so, dated"
 """
 
+#: The second assumption registry, as the hardware axis reads it: one
+#: silicon-class obligation on the property, `pending`, which is the state the
+#: real tree is in — a board result lands HERE, so an axis that did not read it
+#: would print "no property was measured on a board" over one.
+PLATFORM = """\
+[[assumption]]
+id = "PLAT-FLASH-001"
+class = "flash"
+statement = "The tear model is the one the store assumes."
+discharge = "A recorded PASS on a throwaway board."
+discharge_owner = "maintainer"
+status = "pending"
+failure_direction = "security: a torn write could leave a credential live"
+supports = ["SEC-T-001"]
+"""
+
 CONFIGURATIONS = """\
 [[cell]]
 properties = ["SEC-T-001", "SEC-T-002"]
@@ -203,6 +219,7 @@ class Tree:
         self.write("crates/rsk-a/src/twin.rs", "pub const DOOR: &str = \"closed\";\n")
         self.write("assurance/properties.toml", PROPERTIES)
         self.write("assurance/configurations.toml", CONFIGURATIONS)
+        self.write("assurance/platform.toml", PLATFORM)
         self.git("init", "-q")
         self.commit("the tree the evidence is about")
         self.write("assurance/bundle/SEC-T-001.toml", self.bundle())
@@ -724,3 +741,64 @@ def test_the_prohibition_does_not_invert_when_the_axis_moves(tree):
     page = evidence_gate.render(tree.root)
     assert "carry a result measured on a board" in page
     assert "row carries a hardware result" not in page
+
+
+# --- the hardware axis's other source -----------------------------------------
+
+
+def test_a_pending_platform_obligation_is_not_a_board_result(tree):
+    """The state the real tree is in: an obligation with an owner, measured by
+    nobody. Counting it would be the axis inventing the number it exists for."""
+    assert tree.vector("SEC-T-001")["hardware"] == 0
+    assert "no** row carries a hardware result" in evidence_gate.render(tree.root)
+
+
+def test_a_discharged_silicon_obligation_is_a_board_result(tree):
+    """And the axis moves — which is what stops the page printing the prohibition
+    over a measurement that landed in the registry rather than in a bundle."""
+    tree.edit("assurance/platform.toml", 'status = "pending"',
+              'status = "discharged"\nboard_revision = "RP2350 A2"\n'
+              'evidence = ["assurance/properties.toml"]\n'
+              'revalidated_by = "a new stepping"')
+    assert tree.vector("SEC-T-001")["hardware"] == 1
+    page = evidence_gate.render(tree.root)
+    assert "carry a result measured on a board" in page
+    assert "row carries a hardware result" not in page
+
+
+def test_a_discharged_obligation_with_no_stepping_is_not_a_board_result(tree):
+    """`platform_gate.py` reddens this; the axis must not count it meanwhile."""
+    tree.edit("assurance/platform.toml", 'status = "pending"',
+              'status = "discharged"\nevidence = ["assurance/properties.toml"]\n'
+              'revalidated_by = "a new stepping"')
+    assert tree.vector("SEC-T-001")["hardware"] == 0
+
+
+def test_a_discharged_non_silicon_obligation_is_not_a_board_result(tree):
+    """The spelling: a `build-configuration` row discharged by reading a manifest
+    is a fact about the tree, and a `board_revision` beside it does not make it
+    silicon. That is the one discharged row the real registry has."""
+    tree.edit("assurance/platform.toml", 'class = "flash"', 'class = "build-configuration"')
+    tree.edit("assurance/platform.toml", 'status = "pending"',
+              'status = "discharged"\nboard_revision = "RP2350 A2"\n'
+              'evidence = ["assurance/properties.toml"]\n'
+              'revalidated_by = "a new manifest"')
+    assert tree.vector("SEC-T-001")["hardware"] == 0
+
+
+def test_a_platform_registry_this_cannot_read_is_a_finding(tree):
+    """The floor is on ENTRIES READ, not on properties backed: all-pending is a
+    fact about the tree, and a registry resolving to nothing is a stopped reader."""
+    tree.write("assurance/platform.toml", "# no entries\n")
+    assert only(tree.problems(), "resolved no entry from it")
+
+
+def test_both_sources_of_the_axis_add(tree):
+    """A bundle declaration and a registry discharge are two results, not one."""
+    tree.edit("assurance/platform.toml", 'status = "pending"',
+              'status = "discharged"\nboard_revision = "RP2350 A2"\n'
+              'evidence = ["assurance/properties.toml"]\n'
+              'revalidated_by = "a new stepping"')
+    tree.write("assurance/bundle/SEC-T-001.toml",
+               tree.bundle(subjects='["hardware"]', extra_build='board_revision = "RP2350 A2"\n'))
+    assert tree.vector("SEC-T-001")["hardware"] == 2

@@ -7,11 +7,20 @@ claims to be — the message is asserted, never the count, because a red run who
 reason nobody read proves as little as one that cannot go red. Then the real
 checkout closes the other direction.
 
-Two families here are the ones the guard was measured wrong on before it shipped.
+**30 mutations of `platform_gate.py` driven, 30 killed, 0 survivors** — one per
+rule AND one per derivation clause, which is the criterion the review of the
+sibling row corrected: a table written against the rules the author had in mind
+left half of a derivation deletable with the whole suite green. Six of the
+thirty ALSO redden the real checkout, which is the set that would have published
+a wrong page. Six more did not apply on the first pass and reported so rather
+than passing — an unapplied patch over a green suite reads exactly like a
+survivor, and the tell is that the harness says which.
+
 The candidate derivations each have BOTH spellings driven: a slice assumption
 declared in a bundle and one written only in a design page; a board-only suite
 the USB/IP guest names as a glob (`tests/02_*.py`) and one it names in full
-(`tests/73_otp_keyboard.py`). And the four derivations are floored apart rather
+(`tests/73_otp_keyboard.py`); a board revision written `RP2350 A2` and the bare
+`A2` a Kani claim is named. And the four derivations are floored apart rather
 than in total, because a floor over the union cannot tell "the `unsafe` finder
 stopped finding" from "the bundle reader did".
 """

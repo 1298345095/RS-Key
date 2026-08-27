@@ -70,6 +70,18 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   carrying `unsafe`, which is stage 10's "firmware unsafe invariant" half. An
   unclaimed candidate reddens the row, and so does a claim on a candidate that no
   longer exists.
+- **The hardware axis reads the registry now, and still prints 0 for all 59.**
+  It read a bundle's DECLARATION and nothing else, so a board result recorded
+  where a board result actually lands — an obligation with no model constant to
+  be written as — would have left the page saying "no property was measured on a
+  board" over one. A silicon-class row that is `discharged` with its stepping
+  recorded is a second source, added rather than substituted, and both keep their
+  own rules. Nothing moves today: every silicon-class row is `pending`, which is
+  the point.
+- **30 mutations of the new gate, 30 killed, 0 survivors**, plus 4 of the axis
+  wiring. Six of the thirty also redden the real checkout. Six more did not apply
+  on the first pass and the harness said so — an unapplied patch over a green
+  suite reads exactly like a survivor.
 - **The two registries are one graph.** Stage 1B п.3's link vocabulary less
   `contradicts`: `supports` names registry properties, `depends_on` and `refines`
   name entries here, and `discharges` names a constant of the first registry —

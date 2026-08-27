@@ -27,10 +27,15 @@ record that was wrong in three of six fields before a line of code existed.
 | scope | the built images the ledger disposes this property on | `assurance/configurations.toml` |
 | freshness | whether a bundle's commit post-dates every evidence input | `git log` |
 
-`hardware` is the exception and says so on the page: nothing in this tree records
-a board run, so there is no source to derive one from. The axis reads a bundle's
-DECLARATION, and the rules below are about a declaration never arriving without
-the board it was taken on.
+`hardware` has two sources and both read 0, which is the honest state of this
+tree. A bundle's DECLARATION is one, and the rules below are about a declaration
+never arriving without the board it was taken on. `assurance/platform.toml` is
+the other, and it is where a board result will actually land: that registry holds
+the obligations no model constant can carry, so a silicon-class row moving to
+`discharged` with its stepping recorded is a measurement, and an axis that did
+not read it would go on printing "no property was measured on a board" over one.
+Neither source is allowed to invent a number — the registry's silicon rows are
+all `pending`, so the axis is 0 for all 59 either way.
 
 Nothing here re-derives what a sibling row owns. Which configurations exist and
 what each names is `assurance_gate.py`'s; whether the ledger's columns are the
@@ -86,6 +91,7 @@ import tomllib
 import assurance_gate
 import comutate
 import gate_lines
+import platform_gate
 import scope_gate
 import verdict_gate
 
@@ -304,6 +310,44 @@ def hardware_claims(doc):
     return reasons
 
 
+def board_backed(root, findings):
+    """property id -> the platform assumptions whose BOARD RESULT it rests on.
+
+    A row of `assurance/platform.toml` that is `discharged`, silicon-class and
+    carries the stepping it was taken on IS a board result — that registry is
+    where one lands, because a board obligation has no model constant to be
+    written as. Reading it here is what stops the page printing "no property was
+    measured on a board" over a measurement, and it invents nothing: every
+    silicon row there is `pending`, so this returns {} today.
+
+    The floor is on ENTRIES READ, not on properties backed: a tree whose
+    obligations are all pending has no board evidence, which is a fact; a
+    registry with entries this cannot resolve is a reader that stopped reading.
+    """
+    path = root / platform_gate.REGISTRY
+    if not path.is_file():
+        return {}
+    entries = platform_gate.entries(root, [])
+    if not entries:
+        findings.append(
+            f"{platform_gate.REGISTRY} is there and this derivation resolved no"
+            " entry from it — the hardware axis then reads 0 for the reason a"
+            " tree with no board result reads 0, and the two are not the same"
+        )
+        return {}
+    out = {}
+    for name, entry in sorted(entries.items()):
+        if entry.get("status") != "discharged":
+            continue
+        if entry.get("class") not in platform_gate.HARDWARE_CLASSES:
+            continue
+        if not BOARD_REVISION.search(str(entry.get(BOARD_FIELD, ""))):
+            continue
+        for pid in entry.get("supports", []):
+            out.setdefault(pid, []).append(name)
+    return out
+
+
 def board_mentions(doc):
     """Where a bundle names a concrete silicon revision, in any field.
 
@@ -447,6 +491,7 @@ def vectors(root, findings):
     asserts = expected_verdicts(root)
     placed = scope_of(root)
     bundle = bundles(root, findings)
+    measured = board_backed(root, findings)
 
     rows = []
     for entry in entries:
@@ -470,7 +515,7 @@ def vectors(root, findings):
             "trace": len(traced),
             "accepted": len([cfg for cfg in traced if asserts.get(cfg) == "GREEN"]),
             "kani": len(derived["kani"]),
-            "hardware": 0,
+            "hardware": len(measured.get(pid, ())),
             "scope": {
                 disposition: sorted(placed.get(pid, {}).get(disposition, ()))
                 for disposition in SCOPE_DISPOSITIONS
@@ -514,7 +559,7 @@ def vectors(root, findings):
                     " result on it — a board field nothing rests on is decoration,"
                     " and the axis stays 0 while the page reads as if it did not"
                 )
-            vector["hardware"] = 1 if reasons and board else 0
+            vector["hardware"] += 1 if reasons and board else 0
             vector["freshness"], vector["commit"], vector["behind"] = verdict, commit, behind
 
         written = entry.get("status", "?")
@@ -668,8 +713,9 @@ def claims(rows):
     else:
         must_not.append(
             "that any property was measured on a board — **no** row carries a"
-            " hardware result, and a bundle that claims one without a board"
-            " revision is refused rather than published."
+            " hardware result. A bundle claiming one without a board revision is"
+            " refused rather than published, and the platform registry's"
+            " silicon-class obligations are every one of them still `pending`."
         )
     if len(dated) < total:
         must_not.append(
@@ -709,7 +755,7 @@ def render(root, rows=None):
         "| `co` | model mutants whose code twin was patched into the tree and killed | `formal/comutants.toml` |",
         "| `trace` | `accepted of replaying`: configurations that replay a recorded session, and the subset that accepts it | the module's generator handshake |",
         "| `kani` | harnesses carrying the invariant's name — what `BOUNDED` keys on | `crates/*/src/*kani*.rs` |",
-        "| `hardware` | board results a bundle DECLARES, each naming its revision | `assurance/bundle/*.toml` |",
+        "| `hardware` | board results: a bundle's declaration, and a silicon-class platform assumption discharged with its stepping | `assurance/bundle/*.toml` + `assurance/platform.toml` |",
         "| `scope` | the built images the ledger disposes the property on | `assurance/configurations.toml` |",
         "| `freshness` | whether a bundle's commit post-dates every input it is about | `git log` |",
         "",
@@ -723,11 +769,15 @@ def render(root, rows=None):
         " ASSERTING it: most of them are mutants that exist for it to fall in,"
         " which is why `model` and `trace` are printed as two numbers each.",
         "",
-        "`hardware` is the one axis with no derivation behind it, because the"
-        " tree holds no board result to derive one from: it reads a bundle's"
-        " DECLARATION, and the gate's job there is that a declaration cannot"
-        " arrive without the board revision it was taken on. Read a `0` as"
-        " \"nothing here was measured on hardware\", never as a measurement.",
+        "`hardware` reads two sources and both give 0, which is the honest state"
+        " of this tree. One is a bundle's DECLARATION, and the gate's job there"
+        " is that a declaration cannot arrive without the board revision it was"
+        " taken on. The other is `docs/platform-assumptions.md`'s registry, which"
+        " is where a board result will actually land — every obligation there"
+        " whose route ends at silicon is `pending`, and one moving to"
+        " `discharged` with its stepping recorded is what would move this column."
+        " Read a `0` as \"nothing here was measured on hardware\", never as a"
+        " measurement.",
         "",
         "The `freshness` axis reads committed history only, so an uncommitted"
         " edit to an owner is invisible until it lands. That is deliberate: the"
