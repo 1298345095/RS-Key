@@ -301,15 +301,15 @@ fn write_config_over_the_fido_transport_round_trips() {
     );
 }
 
-/// The ack is all the host hears, and `.is_ok()` is all that decides it: mutating
-/// it to `true` left all 77 tests green, because both cases above refuse on FRAMING
-/// and never reach the fold. So a `persist_dev_conf` the medium refused was acked
-/// to ykman as a written config, and the host then reports a capability set the
-/// card does not have — the same laundering shape as `factory_wipe`'s bool.
+/// The ack is all the host hears and `.is_ok()` decides it, so mutating it to
+/// `true` acked a `persist_dev_conf` the medium refused and ykman then reported a
+/// capability set the card does not have — `factory_wipe`'s laundering shape.
+/// Measured here, of 78, both directions are 77 passed / 1 failed: `true` fails
+/// this test, `false` fails `write_config_over_the_fido_transport_round_trips`.
 ///
-/// The opposite direction is a SEPARATE verdict and is already owned: `.is_ok()` →
-/// `false` fails `write_config_over_the_fido_transport_round_trips` (76 passed, 1
-/// failed), so a refusal over a write that succeeded cannot ship either.
+/// The verdict is the FIRST assertion; the second is belt-and-braces, never a
+/// second one — `WriteStuck` lands no record, so `read_enabled_caps` answers
+/// `SUPPORTED_CAPS` by construction and all 78 pass with the first neutered.
 #[cfg(not(feature = "strict-config"))]
 #[test]
 fn a_refused_config_write_is_never_acked_as_a_written_one() {
