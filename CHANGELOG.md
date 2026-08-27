@@ -40,6 +40,84 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **A paragraph naming no run could restate every number the run-count regions
+  publish, and did, at exit 0.** The scan's four shape rules are armed by a word
+  in the same PARAGRAPH, so the price of a hand-typed run-count was not writing
+  `safety`, `liveness`, `run-tlc`, `comutate` or `--tiers` near it — five lines
+  restating the row count, the wall clock, the tally, the invariant count, the
+  model count, the core count and the workers, green. Four of those were under no
+  rule at all in any paragraph: `invariants` and `models` are deliberately out of
+  the noun list and 8, nine, 18 and 2 are far under the value floor, which is
+  floored by magnitude because a bare small number is every other number in the
+  tree. A value WITH THE UNIT the region put beside it is not, so two more
+  generated rules hunt `<value> <unit>` and the provenance a region prints
+  verbatim — the run's date and `WORKERS=`, which wears its unit on the left.
+  Neither needs a trigger, a noun list or a floor. Measured: 21 pairs, two
+  verbatim strings and ONE occurrence outside a region, `docs/formal.md`'s "all
+  nine shipped baseline configurations", reworded rather than registered. The
+  same paragraph is seven findings now. Dropping the trigger instead was measured
+  and refused: 41 literals to 549, of which 505 want a home.
+
+- **Six things the record's own kept sentences said and nothing read.** `date`,
+  `host` and `workers` had no second source at all and were each driven to an
+  absurd value and republished on three pages; TLC prints all three, in the
+  banner and the start line `--record` already parsed and threw away, and both
+  are kept per row now. `queue` was captured and compared to nothing, so a GREEN
+  row could claim an exhaustive run while its own next words said 999 999 999
+  states were never reached. `states` was never held to `distinct`. A GREEN row
+  could report no state count at all, which took it out of `floors.txt` and lost
+  the published table's numbers to an em dash. And the per-row wall-clock bound
+  was on a quantity the published sentence ADDS UP: every row at its own clock
+  plus the slack put the legal safety total at [3064..8914] s against a recorded
+  3225 and published `3225 s` as `8914 s`. The tier's summed gap is bounded now,
+  at three seconds a row with one cold start on top — measured mean 0.83 s.
+
+- **The gate refuses a record whose model has moved under it.** It reads model
+  CONTENT for two things only, the `Bug*` switch names and `Shipped.cfg`'s
+  `INVARIANTS`, so a `.tla` edit that changed the state space without moving the
+  roster or the floors left every published count stale and the row green. The
+  record carries the commit, and the row asks it over the modules, the
+  configurations, the floors and the two scripts. Empty over the 32 commits since
+  the recorded run.
+
+### Fixed
+
+- **Three ceilings shipped with the defect their own series had measured.**
+  `SCOPE_CEILING`, `SCOPE_SPAN_CAP` and `CARVE_OUT_CEILING` were upper bounds
+  with headroom, and 37 → 999, 6 → 99 and 2 → 99 were all surviving mutants —
+  while the FLOORS beside them are caught, because the cases that drive a floor
+  drive the real tree. Each sits on what the tree holds now. The sharpest
+  survivor was the digit-grouping class: the NBSP and two thin spaces added as
+  the fix for a measured bypass could be deleted again with the suite green,
+  because the cases asserted only that some finding fired while the rule matched
+  the truncated tail and named `'563 872 rows'` — a number that is not on the
+  page. Every grouping and every join asserts the whole literal now, which is
+  also the only thing that sees a rule NARROWED: hollowing the class moves none
+  of the five per-rule tallies.
+
+- **A value the generator wrapped mid-number was hunted for by nothing.** The
+  grouping class had a second, retyped copy inside the function that decides
+  which values the value rule looks for, one character short — no newline — so a
+  count `fill` broke between its groups was read as `563 872` and the real
+  `77 563 872` was guarded by nothing at all, silently. One class, two readers.
+
+- **A tracked page the scan cannot decode is reported rather than dropped**, told
+  from an image by a NUL byte the way git tells them apart; a second kept summary
+  for one configuration is refused; and the `?`-versus-absence agreement is driven
+  both ways.
+
+- **Four measurements this guard published about itself were wrong.** The scope
+  ceiling's own comment read 27 against a constant of 37, one commit after being
+  written and thirty lines from the value, in the guard whose subject is a
+  hand-typed number going stale. The value rule's floor table was taken with a
+  matcher later fixed. The `[Unreleased]` carve-out's stated reason — "every line
+  sits under a version heading" — is refuted by a live claim that went stale under
+  that very heading; the real reason is 74 historical literals nobody will
+  register one at a time. And `assurance/` was said to hold no second copy outside
+  `bundle/*.toml`, where the settling question `docs/assurance-matrix.md` is
+  rendered FROM carries one verbatim — the rendered copy is registered and the
+  hand-edited one is out of the scan, which is the wrong way round.
+
 - **The second register of open items gained the same owner, and both of its
   record types gained the field list neither had.** `assurance/threat_clauses.toml`
   keeps the P0-family properties that trace to no threat-model clause; its five
@@ -290,13 +368,14 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `48.7 M-state GREEN` came out as `'7 M-state GREEN'`, the finding naming a
   number that is not on the page. Ten sites the widening reaches are registered
   with what each is, and the exemption ceiling is raised in the same diff.
-- **Three spellings are still open, and are cases saying so.** `A run of the
-  safety tier` (the trigger is a paragraph-local word list), `about an hour`
+- **Two spellings are still open, and are cases saying so.** `about an hour`
   (no number for a numeric rule to find) and `21 passed, 174 failed` (not this
-  tree's vocabulary). Widening any of them costs more than it buys — dropping
-  the paragraph trigger takes the scan from 30 literals to **241**, every one
-  needing a home. The rule that does not play that game is the value scan, and
-  what it reaches is bounded to what the regions print.
+  tree's vocabulary). Widening either costs more than it buys — dropping the
+  paragraph trigger takes the scan from **41** literals to **549**, of which 505
+  want a home. `A run of the safety tier` stood here as a third and was never a
+  spelling: it is the trigger being a paragraph-local word list, which is the
+  general escape and is closed below. The rules that do not play that game are
+  the generated ones, bounded to what the regions actually print.
 - **The scope registry's labels are read now, and the silence one entry buys
   is bounded.** `SCOPED`'s values were never looked at at all, so a brand-new
   stale literal kept its exemption with the label `""`, `None`, `"history"`,

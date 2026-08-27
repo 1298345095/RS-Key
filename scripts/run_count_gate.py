@@ -76,12 +76,26 @@ counted when this was written. `scripts/` held eight, six of them the measured
 defect that motivated a guard ("33 rows cited it by the file name"), read by
 whoever edits that guard one screen from its own live summary line; the other two
 are a live claim and `scripts/test_config_gen_gate.py` pins them to the tree.
-`assurance/` held none outside `bundle/*.toml`, which is itself a record of
-measurements and has `bundle_gate.py`. Neither is published documentation, and "the documentation
-claims a run nobody watched" is what this is about. `CHANGELOG.md` is published
-and is still out, for the opposite reason: every line in it sits under a version
-heading, which is the scope label a historical figure needs — an entry saying
-what a run cost at 0.4.10 does not go stale, it stays 0.4.10's.
+`assurance/` holds `bundle/*.toml`, itself a record of measurements and held by
+`bundle_gate.py` -- and one more that this said it did not: the settling
+question in `assurance/configurations.toml` that `matrix_gate.py` renders into
+`docs/assurance-matrix.md` carries, verbatim once parsed, the sentence registered
+in [`SCOPED`] for the rendered page. It is written across TOML line
+continuations, so a grep for the rendered form does not find it. The DOCS copy is registered and the copy a
+human edits is out of the scan, which is the wrong way round. Neither directory
+is published documentation, and "the documentation claims a run nobody watched"
+is what this is about; the honest statement is that this row does not reach the
+generator's INPUT, only its output.
+
+`CHANGELOG.md` is published and is still out, and the reason first given for it
+was wrong: not "every line sits under a version heading", because
+`## [Unreleased]` is not a scope and a live claim typed there is a live claim --
+one about this very rule went stale under it. It is out because the tree holds 74
+run-count literals under that heading today, all of them entries that BECOME a
+version's when the release lands, and registering 74 historical figures one at a
+time is not a trade this row can pay. An entry saying what a run cost at 0.4.10
+does not go stale; an entry saying what it costs now does, and nothing here
+sees it.
 """
 
 import fnmatch
@@ -188,12 +202,16 @@ SCOPE_CEILING = 37
 #: which is the hole every one of the four rules above has, unboundedly.
 #:
 #: It is floored by magnitude because a small derived value is every other number
-#: in the tree. Measured over the scanned corpus, as occurrences outside a region
-#: or a registered fragment: **10 862** at no floor, **2 236** over ten, **264**
-#: over a hundred, **140** over a thousand — of which about 130 are the copyright
-#: year — and **11** over ten thousand, EVERY ONE of them a real second copy of a
-#: number the regions print. So the false-positive rate is 0 at this floor and
-#: rises steeply just below it; five digits is where coincidence stops.
+#: in the tree. Measured as occurrences of a value the regions print, outside a
+#: region, over the scanned corpus: **7 404** at no floor, **1 942** over ten,
+#: **283** over a hundred, **138** over a thousand — of which 117 are the
+#: copyright year — and **10** over ten thousand, EVERY ONE of them a real second
+#: copy and every one registered below. So the false-positive rate is 0 at this
+#: floor and rises steeply just under it; five digits is where coincidence stops.
+#:
+#: Re-measured, because the first three of those rows were taken with a matcher
+#: `0941089` then fixed and read 10 862 / 2 236 / 264. The two that carry the
+#: decision, a thousand and ten thousand, were right either way.
 #:
 #: What it does not reach, said plainly: a value written ROUNDED (`77.6 M` is in
 #: the tree and this rule cannot see it), and a number that is STALE — one whose
@@ -225,6 +243,15 @@ GENERATED_ELSEWHERE = {
 #: this row is about wearing an exemption. A literal counts as scoped only if it
 #: falls INSIDE that fragment's one occurrence, so a fragment cannot exempt a
 #: number that merely resembles one of its own.
+#:
+#: What an entry does NOT buy, and this is open: when a value the regions print
+#: MOVES, four of its five registered copies redden -- their fragment stops
+#: exempting anything, which is the rule below -- and the fifth is silent,
+#: because that fragment also covers three literals of other rules and its count
+#: stays over zero. Eight of these entries exempt more than one literal and would
+#: hide a stale value the same way. Closing it needs the registry to say which
+#: value each entry is a copy OF, and half of these entries are quoting a figure
+#: that is deliberately historical and must NOT track anything.
 SCOPED = {
     # Historical roster figures: the sentence's subject is what the tree WAS.
     (
@@ -1474,8 +1501,12 @@ def check_scope(root, findings):
 
     Not the label's TRUTH — a description of an entirely different run passes
     here and no rule can change that, which is the honest limit of a prose
-    exemption. What these hold is that a label exists, was written for its entry
-    rather than pasted, and points at a file this gate actually reads.
+    exemption. Nor "written for its entry" in any sense a program can hold:
+    driven, eight words of nonsense, a neighbour's label with ONE word changed or
+    its last word deleted, and `"the the the the the the the the"` are all
+    accepted, and only the byte-identical paste is refused. What these hold is
+    that a label exists, is not a verbatim copy of another entry's, and points at
+    a file this gate actually reads.
     """
     pages = {p.relative_to(root).as_posix() for p in scanned(root)}
     seen = {}
