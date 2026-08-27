@@ -40,6 +40,43 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The assumptions no model constant can carry have a registry of their own.**
+  `scripts/assumption_gate.py` accepts exactly one shape — a Boolean TLA constant
+  some configuration assigns both ways and a reachable definition reads — and
+  that rule is what makes a model assumption falsifiable, so it was not widened.
+  Measured, not argued: `M7-Q2` written into `assurance/assumptions.toml` answers
+  `in the registry but no configuration assigns it`, and so does a recorded board
+  PASS and so does emulator fidelity. A second FILE rather than a `class` field on
+  the first, because deleting a constant from that registry reddens it in one line
+  while a `class = "platform"` on the same entry would satisfy the orphan rule and
+  skip the both-arms rule — an axiom passing as an assumption.
+  `assurance/platform.toml` holds **18** entries and
+  `scripts/platform_gate.py` holds them against the tree.
+- **One of the eighteen is discharged, and the page says so in its first
+  sentence.** `docs/platform-assumptions.md` is generated from the registry and
+  byte-diffed, so a status cannot move without the diff that says it moved. Ten
+  routes end at a board this repository must not touch — including the three the
+  programme had already scheduled and had nowhere to write: the BOOTSEL-return
+  question about `WATCHDOG.scratch2`, a real-power PASS of
+  `tests/29_reset_power_cut.py`, and `tools/emu`'s fidelity.
+- **The candidates are DERIVED — 29 of them, over four sources — and a hand list
+  would have found five.** The slice bundle's own `[[assumption]]` ids and the
+  design pages' prose ids (10, of which **eight said `registered = "no"`** and
+  now say which entry claims them); every constant of the first registry, because
+  a model assumption's own discharge is always a fact about the world; the suites
+  `tests/emu.py` refuses that `scripts/usbip-guest.sh` does not run either — **5,
+  where the plan named 1**, adding `51_secure_reboot`, `53_ccid_pinpad`,
+  `54_sram_residue` and `90_otp_mkek_migration`; and the 12 first-party `.rs`
+  carrying `unsafe`, which is stage 10's "firmware unsafe invariant" half. An
+  unclaimed candidate reddens the row, and so does a claim on a candidate that no
+  longer exists.
+- **The two registries are one graph.** Stage 1B п.3's link vocabulary less
+  `contradicts`: `supports` names registry properties, `depends_on` and `refines`
+  name entries here, and `discharges` names a constant of the first registry —
+  with `covers`/`discharges` held to agree, so the two files cannot hold two
+  answers about the same constant. `contradicts` is left out because no pair here
+  contradicts another, and a link kind with no instance is a rule whose only
+  exercise is its own mutation.
 - **The registry's one word is a projection now, and the six questions it was
   mixing are printed apart.** The closed slice below took `SEC-FIDO-001` from one
   Kani harness to four and landed the first mutant in this tree ever to redden a

@@ -333,7 +333,7 @@ statement = "tools/emu implements the same authorization gates as the firmware, 
 kind = "tool fidelity"
 discharger = "a board recording of the same session, compared boundary by boundary"
 expressible = "no — not a model constant"
-registered = "no"
+registered = "yes — assurance/platform.toml PLAT-TOOL-002, pending, and it refines the emulator-wide PLAT-TOOL-001"
 
 [[assumption]]
 id = "AS-AUTH-2"
@@ -341,7 +341,7 @@ statement = "The shipped image is built without --features always-uv, so gate.al
 kind = "build configuration"
 discharger = "firmware/Cargo.toml's default feature set, and the firmware-always-uv matrix column"
 expressible = "yes"
-registered = "YES — assurance/assumptions.toml AlwaysUvShipped, assigned FALSE by 88 configurations and TRUE by AlwaysUv.cfg, read by Init, GatesLive and ResetSweepGates"
+registered = "yes — assurance/assumptions.toml AlwaysUvShipped, assigned FALSE by 88 configurations and TRUE by AlwaysUv.cfg, read by Init, GatesLive and ResetSweepGates; the fact underneath it is assurance/platform.toml PLAT-BUILD-001, the one discharged row of that registry"
 
 [[assumption]]
 id = "AS-AUTH-3"
@@ -349,7 +349,7 @@ statement = "A CTAPHID channel id is a routing label the sender writes, so chann
 kind = "threat model"
 discharger = "a clause of docs/threat-model.md; state.rs states it in prose today"
 expressible = "no"
-registered = "no — item 13's class"
+registered = "yes — assurance/platform.toml PLAT-THREAT-001, pending on a threat-model clause"
 
 [[assumption]]
 id = "AS-AUTH-4"
@@ -357,7 +357,7 @@ statement = "PowerOnClearsScratch2 — a real power-on clears the watchdog word 
 kind = "platform"
 discharger = "the board measurement assurance/assumptions.toml already describes"
 expressible = "yes, and registered — but in RSKeyBootHardening, and the overlap between the 13 configurations that assign it and those that check NoAuthorizationBypass is ZERO"
-registered = "not against this slice"
+registered = "yes — assurance/platform.toml PLAT-RESET-001, which discharges the constant and is itself pending on a board. The constant lives in RSKeyBootHardening and the overlap between the 13 configurations that assign it and those that check NoAuthorizationBypass is still ZERO"
 
 [[assumption]]
 id = "AS-AUTH-5"
@@ -365,7 +365,7 @@ statement = "PermSets, five of the sixteen subsets, is the set a host can actual
 kind = "model fidelity"
 discharger = "reading the two production sites that mint permissions"
 expressible = "no — a set, not a boolean"
-registered = "no — item 13's class"
+registered = "yes — assurance/platform.toml PLAT-MODEL-001, pending on stage 2 п.7"
 
 [[assumption]]
 id = "AS-AUTH-6"
@@ -373,7 +373,7 @@ statement = "One credential per relying party."
 kind = "model abstraction"
 discharger = "the store slice; MAX_RESIDENT_CREDENTIALS (256) is the shipped cardinality"
 expressible = "no — a cardinality, not a boolean"
-registered = "no — item 13's class"
+registered = "yes — assurance/platform.toml PLAT-MODEL-002, pending on the stage 5 store slice"
 
 [[assumption]]
 id = "AS-AUTH-7"
@@ -381,7 +381,7 @@ statement = "Kani/CBMC is sound for the harness's arithmetic and the pinned solv
 kind = "tool TCB"
 discharger = "the pinned toolchain and a recorded tool hash"
 expressible = "no — a fact about a tool, not about the model"
-registered = "no — and cargo-kani is the one tool here the flake does not pin at all"
+registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending; cargo-kani is still the one tool on this path the flake does not pin at all"
 
 [[assumption]]
 id = "AS-AUTH-8"
@@ -389,7 +389,7 @@ statement = "ea-conformance-rpid's enterprise-attestation allowlist is not an au
 kind = "build configuration"
 discharger = "the matrix's own settling question for that column"
 expressible = "no"
-registered = "no — item 13's class"
+registered = "yes — assurance/platform.toml PLAT-BUILD-002, pending on the matrix column’s own settling question"
 
 [[assumption]]
 id = "TCB-1"
@@ -397,7 +397,7 @@ statement = "The compiler on the path is rustc 1.96.0 and its output is what the
 kind = "compiler"
 discharger = "stage 11's source-to-binary work; nothing here"
 expressible = "no"
-registered = "no"
+registered = "yes — assurance/platform.toml PLAT-TOOLCHAIN-001, pending on stage 11"
 
 [[assumption]]
 id = "TCB-2"
@@ -405,7 +405,7 @@ statement = "The HMAC-SHA-256 under pinproto is correct; the harnesses replay on
 kind = "crypto primitive"
 discharger = "rsk-crypto's own vectors, and the soft backends the kani rows force"
 expressible = "no"
-registered = "no"
+registered = "yes — assurance/platform.toml PLAT-CRYPTO-001, pending on rsk-crypto’s own vectors"
 
 # ---- 8. Mutation verdicts ----------------------------------------------------
 

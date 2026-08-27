@@ -619,6 +619,11 @@ run "delete-caller dispositions" python scripts/deleter_gate.py
 # `PowerOnClearsScratch2` was TRUE in all seven Boot configurations and read by
 # no action: deleting its `ASSUME` left every run bit-identical.
 run "standing assumptions"     python scripts/assumption_gate.py
+# And the assumptions no constant can carry, which the row above refuses by
+# construction: a board question, a recorded PASS, emulator fidelity. Their
+# candidates are DERIVED from four sources — the slice bundle's own ids said
+# "registered: no" on eight of ten rows — and one of the eighteen is discharged.
+run "platform assumptions"     python scripts/platform_gate.py
 # `floors.txt` catches a run that got smaller; this catches one whose
 # CONSTANTS are too small to express the defect its own mutants rebuild.
 # Two of the twenty-five module mutants go GREEN one element down.

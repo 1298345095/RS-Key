@@ -53,6 +53,7 @@
 - [Formal model](formal.md)
   - [Assurance matrix](assurance-matrix.md)
   - [Assurance vector](assurance-vector.md)
+  - [Platform assumptions](platform-assumptions.md)
   - [Authorization slice design](authorization-slice.md)
   - [Token refinement pilot](token-refinement.md)
   - [Cross-reset refinement pilot](reset-refinement.md)
