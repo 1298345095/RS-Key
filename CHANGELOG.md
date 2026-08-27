@@ -991,6 +991,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The clause lock approximated a renderer, and lost to it three ways.** The
+  pin promises a sentence is on the page, so the body it matches against had
+  HTML comments and fenced blocks removed. A review agent drove the rest of that
+  surface and found three more GREEN against the shipped tree: a `<!--` opened
+  under one clause and closed under a later one (neither end is in the body being
+  stripped, so the whole hidden run still matched); `<span hidden>`,
+  `style="display:none"`, `<details>` and `<script type="text/plain">` around the
+  sentence (each renders it away and leaves it byte-for-byte in the source); and a
+  `PLAT-…` pin degraded to the bare id, which satisfies "the pin names the
+  assumption" while the sentence around it is replaced by its own opposite.
+  Comments are now blanked over the WHOLE page before any body is sliced, a pin's
+  clause may not carry raw HTML at all — refused rather than interpreted, because
+  a rule enumerating which tags hide is a renderer with a shorter list than a
+  browser's — and a `PLAT-…` pin must be a sentence rather than an id. Code spans
+  are removed before the tag test: `Fs<S>` in backticks is the page's only `<` and
+  hides nothing. The `clause_bodies` docstring no longer claims to give "the PROSE
+  a reader gets"; it gives the page's prose as far as markdown decides it, and
+  says where it stops. Also: a malformed `assurance/platform.toml` (`assumption`
+  holding strings) raised `AttributeError` instead of a finding.
+
 - **The revocation clause claimed a reset ordering the firmware does not have.**
   As first written it said every path that creates or destroys a credential —
   "registration, credential-management delete, and each of the resets" — is

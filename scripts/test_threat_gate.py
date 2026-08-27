@@ -34,6 +34,7 @@ DOC = "\n".join(
         "",
         "- **Protocol gates.** PINs/UV with retry counters, touch on FIDO.",
         "- What a hostile host **can** do: drive an operation you authorized.",
+        "  A residual, not a defence.",
         "- **A flash write can be interrupted.** Write order is what buys it,",
         "  and under the order sits `PLAT-FLASH-001`, discharged by a board run.",
         "  **Scope: the interrupted write.** A faulted read is another condition.",
@@ -610,6 +611,80 @@ def test_a_pin_is_a_sentence_and_not_a_layout(tree, rewrite):
     """
     edit(tree, "docs/threat-model.md", f"  {PIN}\n", rewrite)
     assert problems(tree) == []
+
+
+def test_a_comment_opened_under_an_earlier_clause_still_hides_the_pin(tree):
+    """The half a per-clause strip cannot see: neither end is in this body.
+
+    Opened under the bullet above and closed after the pinned sentence, a browser
+    hides everything between — including the whole clause — while every byte
+    stays in the source. Comments are blanked over the WHOLE page for this.
+    """
+    edit(tree, "docs/threat-model.md", "  A residual, not a defence.",
+         "  A residual, not a defence. <!--")
+    edit(tree, "docs/threat-model.md", f"  {PIN}\n", f"  {PIN}\n  -->\n")
+    found = problems(tree)
+    assert any("no longer in the body" in p and "SEC-STORE-001" in p for p in found), found
+
+
+@pytest.mark.parametrize(
+    "wrapper",
+    [pytest.param('<span hidden>{}</span>', id="span-hidden"),
+     pytest.param('<div style="display:none">{}</div>', id="display-none"),
+     pytest.param('<details><summary>x</summary>{}</details>', id="details"),
+     pytest.param('<script type="text/plain">{}</script>', id="script")],
+)
+def test_raw_html_in_a_pinned_body_is_refused_rather_than_interpreted(tree, wrapper):
+    """Each of these renders to nothing (or to a click) and matches as present.
+
+    A rule that enumerated the hiding tags would be a renderer with a shorter
+    list than a browser's, which is the shape this file has been bitten by. So a
+    pinned body may not carry raw HTML at all, and the row says why.
+    """
+    edit(tree, "docs/threat-model.md", f"  {PIN}\n", f"  {wrapper.format(PIN)}\n")
+    found = problems(tree)
+    assert any("raw HTML" in p for p in found), found
+
+
+def test_a_code_span_is_not_raw_html(tree):
+    """The other arm, and the false positive the page already contains once:
+    `Fs<S>` in backticks renders literally and hides nothing."""
+    edit(
+        tree,
+        "docs/threat-model.md",
+        "  and under the order sits `PLAT-FLASH-001`,",
+        "  and `Fs<S>` under the order sits `PLAT-FLASH-001`,",
+    )
+    edit(
+        tree,
+        threat_gate.CLAUSES,
+        "and under the order sits `PLAT-FLASH-001`, discharged by a board run.",
+        "and `Fs<S>` under the order sits `PLAT-FLASH-001`, discharged by a board run.",
+    )
+    assert problems(tree) == []
+
+
+def test_a_pin_that_is_only_the_assumption_id_locks_no_sentence(tree):
+    """`PLAT-FLASH-001` alone satisfies "the pin names the assumption" and leaves
+    the sentence around it free to be replaced by its own opposite."""
+    edit(
+        tree,
+        threat_gate.CLAUSES,
+        'rests_on = ["and under the order sits `PLAT-FLASH-001`, discharged by a board run."]',
+        'rests_on = ["PLAT-FLASH-001"]',
+    )
+    found = problems(tree)
+    assert any("owes a `rests_on` pin on the sentence naming it" in p for p in found), found
+
+
+def test_a_malformed_platform_registry_is_a_sentence_not_a_traceback(tree):
+    """`assumption` holding strings rather than tables — red either way, and only
+    one of the two says what to do about it."""
+    (tree / threat_gate.ASSUMPTIONS).write_text(
+        'assumption = ["PLAT-FLASH-001"]\n', encoding="utf-8"
+    )
+    found = problems(tree)
+    assert any("is no assumption of" in p for p in found), found
 
 
 def test_a_verdict_arguing_from_a_clause_owes_a_pin_inside_it(tree):

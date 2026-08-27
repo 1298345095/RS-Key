@@ -142,6 +142,14 @@ PLAT_ID = re.compile(r"PLAT-[A-Z0-9]+(?:-[A-Z0-9]+)*")
 #: as no edit at all; a comment spliced mid-sentence renders as nothing and is
 #: correctly no edit at all. Both fall out of removing them first.
 COMMENT = re.compile(r"<!--.*?-->", re.S)
+#: An inline code span, removed before the tag test below: `Fs<S>` in backticks
+#: renders literally and hides nothing, and it is the only `<` this page has.
+CODE_SPAN = re.compile(r"`[^`]*`")
+#: A raw HTML tag. Inside a clause body some verdict PINS, this is refused rather
+#: than interpreted — `<span hidden>`, `style="display:none"`, `<details>` and
+#: `<script>` each keep a sentence in the source and off the page, and a rule that
+#: enumerates which tags hide is a renderer with a shorter list than a browser's.
+RAW_HTML = re.compile(r"</?[A-Za-z]")
 
 
 def clause_units(text: str, problems: list[str] | None = None) -> list[tuple[int, str, str]]:
@@ -187,11 +195,29 @@ def clause_units(text: str, problems: list[str] | None = None) -> list[tuple[int
     return units
 
 
+def blank_comments(text: str) -> str:
+    """Every commented-out run, replaced by spaces, line count preserved.
+
+    Whole-page and not per-clause: a `<!--` opened under one clause and closed
+    under a later one hides text in BOTH, and stripping inside a body could not
+    see either end of it. An unterminated one hides to the end of the page, which
+    is what a browser does with it. Blanks rather than deletes so the line numbers
+    `clause_units` already handed out still address the same lines.
+    """
+    blank = lambda run: re.sub(r"[^\n]", " ", run)  # noqa: E731 - one expression
+    text = COMMENT.sub(lambda m: blank(m.group(0)), text)
+    opened = text.find("<!--")
+    return text if opened < 0 else text[:opened] + blank(text[opened:])
+
+
 def clause_bodies(text: str, units: list[tuple[int, str, str]]) -> dict[str, str]:
     """first line -> everything UNDER it, down to the next clause, as one run.
 
     Whitespace is normalised, HTML comments and fenced blocks are dropped, so
-    what is matched is the PROSE a reader gets. A pin is a sentence, not a
+    what is matched is the page's prose as far as MARKDOWN decides it. Past that
+    it does not guess: raw HTML in a body some verdict pins is refused in
+    `check_rests_on`, because `<span hidden>` renders to nothing and reads here
+    as text still on the page. A pin is a sentence, not a
     layout: re-wrapping a paragraph or re-indenting a bullet leaves the same
     sentence, while a reword, a deletion, a character swap or a move into a
     comment or a code sample does not. Measured over this page's history,
@@ -199,7 +225,7 @@ def clause_bodies(text: str, units: list[tuple[int, str, str]]) -> dict[str, str
     reworded, so a pin that fired on every reflow would fire on most edits to the
     page and be suppressed like any other alarm that is usually noise.
     """
-    lines = text.splitlines()
+    lines = blank_comments(text).splitlines()
     bodies: dict[str, str] = {}
     for index, (number, _section, first) in enumerate(units):
         end = units[index + 1][0] - 1 if index + 1 < len(units) else len(lines)
@@ -211,14 +237,9 @@ def clause_bodies(text: str, units: list[tuple[int, str, str]]) -> dict[str, str
                 fenced = not fenced
             elif not fenced:
                 kept.append(line)
-        body = COMMENT.sub(" ", "\n".join(kept))
-        # Whatever `<!--` survives that had no `-->`, and an unterminated comment
-        # hides the rest of the block from the reader while leaving every byte in
-        # the source — the same edit as a closed one, one character shorter.
-        body = body.split("<!--", 1)[0]
         # `setdefault`: two clauses reading alike is already its own finding, and
         # a second body under the same key would only hide which one moved.
-        bodies.setdefault(first, " ".join(body.split()))
+        bodies.setdefault(first, " ".join("\n".join(kept).split()))
     return bodies
 
 
@@ -426,7 +447,8 @@ def check_rests_on(
     a new one arrives owing a pin instead of arriving unlocked. What this does
     not reach: a sentence load-bearing for a reason no entry registers.
     """
-    assumptions = {row.get("id") for row in load(root, ASSUMPTIONS).get("assumption", [])}
+    rows = load(root, ASSUMPTIONS).get("assumption", [])
+    assumptions = {r.get("id") for r in rows if isinstance(r, dict)}
     # (label, entry, hosts, owed). HOSTS is whose body may carry this entry's
     # pins — a clause pins inside itself, an untraced verdict inside the clause
     # its `why` argues from, so a pin cannot drift onto text the verdict never
@@ -459,6 +481,15 @@ def check_rests_on(
             )
             continue
         hosts = {cid: bodies.get(clauses[cid]["where"], "") for cid in owners}
+        for cid, body in hosts.items():
+            if pins and RAW_HTML.search(CODE_SPAN.sub(" ", body)):
+                whose = "its" if cid == label else f"{cid}'s"
+                problems.append(
+                    f"{label}: {whose} body carries raw HTML, and a pin inside it"
+                    " promises a sentence is on the page. Past markdown this row"
+                    " cannot tell what renders — `<span hidden>` and `<details>`"
+                    " leave the text in the source and take it off the page"
+                )
         landed: set[str] = set()
         for pin in pins:
             want = " ".join(pin.split())
@@ -495,7 +526,8 @@ def check_rests_on(
                     f" {ASSUMPTIONS} — a clause cannot hand its claim to a row that"
                     " is not there"
                 )
-            elif not any(plat in pin for pin in pins):
+            elif not any(plat in pin and len(pin.split()) >= FLOOR_WORDS
+                         for pin in pins):
                 problems.append(
                     f"{label}: its body hands part of its claim to {plat}, so it"
                     f" owes a `rests_on` pin on the sentence naming it — without one"
