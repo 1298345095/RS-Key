@@ -21,12 +21,27 @@
 #          number: text moves down the page without rotting it, and a reworded or
 #          deleted clause goes red. What it does NOT see is a rewrite BELOW that
 #          first line — the same blind spot `formal/citations.lock` has, kept
-#          deliberately, because this page's first line is its thesis.
+#          because this page's first line is its thesis while its body is edited
+#          constantly: 39 clause bodies changed with their first line intact over
+#          this page's history against 12 first lines reworded, so a lock over the
+#          whole body would have fired on 24 of its 30 commits and been suppressed
+#          like any other alarm that is usually noise. `rests_on` is the narrow
+#          lock for the sentences that could not afford to be under it.
 #   kind   `defence` — the page states a defence or a defended threat here, so a
 #          property may serve it; `context` — assets, an out-of-scope
 #          declaration, a stated residual, a third-party result, a process. A
 #          `context` clause cannot be cited: "serving" the asset list is not a
 #          claim. Each carries the `why` in one sentence.
+#   rests_on
+#          the sentences UNDER a first line that some verdict argues FROM, held
+#          against the body of the clause they belong to. Whitespace-normalised,
+#          so a re-wrap is not a rewrite and a reword still is. Which ones are
+#          owed is READ OFF the tree rather than remembered — an `[[untraced]]`
+#          whose `why` names a clause id owes a pin inside that clause, and a
+#          clause whose body hands part of its claim to a `PLAT-…` assumption
+#          owes one on the sentence naming it — so a new dependency arrives owing
+#          a pin instead of arriving unlocked. What it cannot reach: a sentence
+#          load-bearing for a reason no entry here states.
 #
 # WHEN A PROPERTY TRACES — one rule, written down because leaving it implicit is
 # what let two entries below contradict each other in a first draft. A property

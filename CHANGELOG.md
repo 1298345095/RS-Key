@@ -40,6 +40,35 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **A threat-model clause is locked below its first line now, and which
+  sentences are locked is derived rather than remembered.**
+  `assurance/threat_clauses.toml` pins each clause by its `where` — the first
+  line, verbatim — and saw nothing under it, so a verdict argued from a sentence
+  further down could be falsified by an edit no gate reads. The worked example is
+  a clause that scopes itself away from a neighbouring threat: delete that
+  sentence and every verdict resting on it turns wrong while the row exits 0. A
+  whole-body hash was measured and rejected — over this page's history 39 clause
+  bodies changed with their first line intact against 12 first lines reworded, so
+  it would have fired on **24 of 30** commits and been suppressed like any alarm
+  that is usually noise. Instead an entry carries `rests_on`, a list of
+  sentences held against the body of the clause it argues from,
+  whitespace-normalised so a re-wrap is not a rewrite. The completeness half is
+  read off the tree, not maintained: an `[[untraced]]` whose `why` names a clause
+  id owes a pin inside that clause, and a clause body that hands part of its
+  claim to a `PLAT-…` assumption of `assurance/platform.toml` owes a pin on the
+  sentence naming it — so a new dependency arrives owing a pin instead of
+  arriving unlocked. It does not reach a sentence load-bearing for a reason no
+  entry states, and that limit is written where the field is defined. 20 cases in
+  `scripts/test_threat_gate.py`, every spelling of the edit driven both ways:
+  reword, deletion, a dropped full stop, smart quotes and a weakened emphasis go
+  red; a reflow, a re-indent and a trailing space stay green by design. Two came
+  out of writing the table — a sentence wrapped in `<!-- -->` leaves the page and
+  stays in the source byte for byte, so bodies are stripped of HTML comments
+  before anything is matched (and a comment *spliced* mid-sentence renders as
+  nothing, so it correctly stays green); and U+00A0 substituted for a space is
+  invisible to `str.split()` and therefore to this rule, which the table records
+  rather than hides.
+
 - **Every published run-count is written from a recorded run now, and seven
   were stale when it was.** A run-count is a number saying how much a roster
   run covered or produced, and this tree typed them: `safety` published as

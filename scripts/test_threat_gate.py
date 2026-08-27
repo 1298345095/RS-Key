@@ -2,12 +2,13 @@
 # Copyright (C) 2026 RS-Key contributors
 """One mutation per rule `threat_gate.py` states, both directions.
 
-The fixture is a four-file tree — a threat model, a clause roster, a property
-registry and the tranche ledger — because every rule here is about the fit
-BETWEEN them, and a mutation of one has to be seen from the others. The floors
-are monkeypatched down for the fixture and asserted at their real values against
-the real tree, so a case cannot go red for the wrong reason (a six-clause fixture
-under a floor of 44 reddens every case, and none of them for the rule it names).
+The fixture is a five-file tree — a threat model, a clause roster, a property
+registry, the tranche ledger and the platform registry — because every rule here
+is about the fit BETWEEN them, and a mutation of one has to be seen from the
+others. The floors are monkeypatched down for the fixture and asserted at their
+real values against the real tree, so a case cannot go red for the wrong reason
+(a six-clause fixture under a floor of 44 reddens every case, and none of them
+for the rule it names).
 """
 
 import pathlib
@@ -33,6 +34,9 @@ DOC = "\n".join(
         "",
         "- **Protocol gates.** PINs/UV with retry counters, touch on FIDO.",
         "- What a hostile host **can** do: drive an operation you authorized.",
+        "- **A flash write can be interrupted.** Write order is what buys it,",
+        "  and under the order sits `PLAT-FLASH-001`, discharged by a board run.",
+        "  **Scope: the interrupted write.** A faulted read is another condition.",
         "",
         "## Zeroization",
         "",
@@ -82,6 +86,12 @@ where = "- What a hostile host **can** do: drive an operation you authorized."
 why = "a stated residual: what an authorized key deliberately does not prevent"
 
 [[clause]]
+id = "TM-HOST-POWER-CUT"
+kind = "defence"
+where = "- **A flash write can be interrupted.** Write order is what buys it,"
+rests_on = ["and under the order sits `PLAT-FLASH-001`, discharged by a board run."]
+
+[[clause]]
 id = "TM-ZEROIZATION"
 kind = "defence"
 where = "## Zeroization"
@@ -89,7 +99,15 @@ where = "## Zeroization"
 [[untraced]]
 id = "SEC-STORE-001"
 verdict = "missing-clause"
-why = "the page states no power-interruption threat, and a torn delete is one"
+why = "not TM-HOST-POWER-CUT, which scopes itself to the interrupted write"
+rests_on = ["**Scope: the interrupted write.** A faulted read is another condition."]
+"""
+
+PLATFORM = """
+[[assumption]]
+id = "PLAT-FLASH-001"
+class = "flash"
+statement = "A torn write leaves the old record or a detectably bad one."
 """
 
 PROPERTIES = """
@@ -133,7 +151,7 @@ out-of-queue = []
 
 @pytest.fixture
 def tree(tmp_path, monkeypatch):
-    """A four-file checkout the gate is pointed at, with the floors scaled to it."""
+    """A five-file checkout the gate is pointed at, with the floors scaled to it."""
     (tmp_path / "docs").mkdir()
     (tmp_path / "assurance").mkdir()
     (tmp_path / "docs" / "threat-model.md").write_text(DOC, encoding="utf-8")
@@ -141,7 +159,8 @@ def tree(tmp_path, monkeypatch):
     (tmp_path / threat_gate.CLAUSES).write_text(CLAUSES, encoding="utf-8")
     (tmp_path / threat_gate.REGISTRY).write_text(PROPERTIES, encoding="utf-8")
     (tmp_path / threat_gate.LEDGER).write_text(LEDGER, encoding="utf-8")
-    monkeypatch.setattr(threat_gate, "FLOOR_CLAUSES", 7)
+    (tmp_path / threat_gate.ASSUMPTIONS).write_text(PLATFORM, encoding="utf-8")
+    monkeypatch.setattr(threat_gate, "FLOOR_CLAUSES", 8)
     monkeypatch.setattr(threat_gate, "FLOOR_P0", 3)
     return tmp_path
 
@@ -366,7 +385,7 @@ def test_an_empty_roster_does_not_pass_vacuously(tree):
     """A rule that loops over nothing holds over nothing."""
     (tree / threat_gate.CLAUSES).write_text("# nothing here\n", encoding="utf-8")
     found = problems(tree)
-    assert sum("nobody classified" in p for p in found) == 7, found
+    assert sum("nobody classified" in p for p in found) == 8, found
 
 
 def test_a_context_clause_cannot_be_served(tree):
@@ -398,7 +417,7 @@ def test_an_untraced_shrug_is_refused(tree):
     edit(
         tree,
         threat_gate.CLAUSES,
-        'why = "the page states no power-interruption threat, and a torn delete is one"',
+        'why = "not TM-HOST-POWER-CUT, which scopes itself to the interrupted write"',
         'why = "TODO"',
     )
     found = problems(tree)
@@ -507,6 +526,172 @@ def test_the_p0_floor_is_not_vacuous(tree):
     edit(tree, threat_gate.LEDGER, 'p0-launch = ["SEC-FIDO-001", "SEC-FIDO-007", ', "p0-launch = [")
     found = problems(tree)
     assert any("under the floor" in p and "P0-family" in p for p in found), found
+
+
+PIN = "**Scope: the interrupted write.** A faulted read is another condition."
+
+
+@pytest.mark.parametrize(
+    "rewrite",
+    [pytest.param("", id="deleted"),
+     pytest.param("  **Scope: the write.** A faulted read is another condition.\n",
+                  id="reworded"),
+     pytest.param("  **Scope: the interrupted write.** A faulted read is another"
+                  " condition\n", id="stop-dropped"),
+     pytest.param("  **Scope: the “interrupted” write.** A faulted read is another"
+                  " condition.\n", id="smart-quotes"),
+     pytest.param(f"  <!-- {PIN} -->\n", id="commented-out"),
+     pytest.param("  *Scope: the interrupted write.* A faulted read is another"
+                  " condition.\n", id="emphasis-weakened")],
+)
+def test_a_rewrite_below_the_locked_first_line_is_refused(tree, rewrite):
+    """The hole `rests_on` exists for: `where` locks line one and nothing under it.
+
+    Deleting the sentence that scopes this clause away from faulted reads leaves
+    three untraced verdicts arguing from text that is gone, and every rule above
+    stays green over it. Each spelling here is a way to make that edit look like
+    something else — a word, a full stop, a quote pair, the emphasis that carries
+    "Scope" as a keyword. `commented-out` is the one a substring lock reads as no
+    edit at all: it takes the sentence off the rendered page and leaves it in the
+    source byte for byte, so the body is stripped of HTML comments before
+    anything is matched against it.
+    """
+    edit(tree, "docs/threat-model.md", f"  {PIN}\n", rewrite)
+    found = problems(tree)
+    assert any("no longer in the body" in p and "SEC-STORE-001" in p for p in found), found
+
+
+def test_the_pinned_sentence_moved_to_another_clause_says_where_it_went(tree):
+    """A sentence in the wrong clause reads as a reword and is not one.
+
+    The pin is scoped to the clause the verdict argues from, so text that walked
+    to a sibling is refused — and the message names the new host, because "it was
+    reworded" would send the reader looking for an edit nobody made.
+    """
+    edit(tree, "docs/threat-model.md", f"  {PIN}\n", "")
+    edit(
+        tree,
+        "docs/threat-model.md",
+        "Key-grade material in RAM is wiped when its use ends.",
+        f"Key-grade material in RAM is wiped when its use ends. {PIN}",
+    )
+    found = problems(tree)
+    assert any("it is under TM-ZEROIZATION now" in p for p in found), found
+
+
+@pytest.mark.parametrize(
+    "rewrite",
+    [pytest.param("  **Scope: the interrupted write.** A faulted read is\n"
+                  "  another condition.\n", id="reflowed"),
+     pytest.param("      **Scope: the interrupted write.** A faulted read is another"
+                  " condition.\n", id="re-indented"),
+     pytest.param("  **Scope: the interrupted write.** A faulted read is another"
+                  " condition.   \n", id="trailing-space"),
+     pytest.param("  **Scope: the interrupted write.**\u00a0A faulted read is another"
+                  " condition.\n", id="non-breaking-space"),
+     pytest.param("  **Scope: the <!-- n -->interrupted write.** A faulted read is"
+                  " another condition.\n", id="comment-spliced")],
+)
+def test_a_pin_is_a_sentence_and_not_a_layout(tree, rewrite):
+    """The other arm, and the reason the pin is normalised rather than verbatim.
+
+    Measured over this page's own history, 39 clause bodies changed with their
+    first line intact against 12 first lines reworded, so a pin that fired on
+    every re-wrap would fire on most edits to the page. `comment-spliced` is the
+    mirror of `commented-out` above and the reason both come out right: a comment
+    inside a sentence renders as nothing, so the sentence on the page is the same
+    one. `non-breaking-space` is the one that is a real gap rather than a choice \u2014
+    `str.split()` counts U+00A0 as whitespace, so that substitution is invisible
+    here, and it is invisible to a reader too.
+    """
+    edit(tree, "docs/threat-model.md", f"  {PIN}\n", rewrite)
+    assert problems(tree) == []
+
+
+def test_a_verdict_arguing_from_a_clause_owes_a_pin_inside_it(tree):
+    """The completeness half, derived: naming a clause in `why` IS the dependency.
+
+    A `locks` list somebody has to remember to extend is the hole this repo has
+    shipped in five guards running; the `why` already names what the verdict
+    rests on, so the pin is owed the moment the argument is written.
+    """
+    edit(tree, threat_gate.CLAUSES, f'rests_on = ["{PIN}"]\n', "")
+    found = problems(tree)
+    assert any("owes a `rests_on` pin inside TM-HOST-POWER-CUT" in p for p in found), found
+
+
+def test_a_pin_from_a_clause_the_why_never_names_is_refused(tree):
+    """Ownership: a pin may only lock text of the clause it argues from."""
+    edit(
+        tree,
+        threat_gate.CLAUSES,
+        f'rests_on = ["{PIN}"]',
+        'rests_on = ["Key-grade material in RAM is wiped when its use ends."]',
+    )
+    found = problems(tree)
+    assert any(
+        "SEC-STORE-001" in p and "it is under TM-ZEROIZATION now" in p for p in found
+    ), found
+
+
+def test_a_clause_handing_its_claim_to_an_assumption_owes_a_pin(tree):
+    """The second derivation, and the second sentence of clause A it protects.
+
+    A body that writes a `PLAT-…` id is saying part of this defence is discharged
+    somewhere else and is not yet. Delete that sentence and the clause reads as a
+    defence the firmware implements, which is the claim getting stronger by an
+    edit — the one direction that must not pass.
+    """
+    edit(
+        tree,
+        threat_gate.CLAUSES,
+        'rests_on = ["and under the order sits',
+        'unused = ["and under the order sits',
+    )
+    found = problems(tree)
+    assert any("owes a `rests_on` pin on the sentence naming it" in p for p in found), found
+
+
+def test_deleting_the_assumption_sentence_rots_its_pin(tree):
+    """The other arm of the same rule: the pin is what makes the demand bite."""
+    edit(
+        tree,
+        "docs/threat-model.md",
+        "  and under the order sits `PLAT-FLASH-001`, discharged by a board run.\n",
+        "",
+    )
+    found = problems(tree)
+    assert any(
+        "TM-HOST-POWER-CUT" in p and "no longer in the body" in p for p in found
+    ), found
+
+
+def test_a_clause_naming_an_assumption_that_is_not_registered_is_refused(tree):
+    """A hand-off to a row that is not in `assurance/platform.toml` hands off to
+    nothing, and reads on the page exactly like one that does."""
+    edit(tree, "docs/threat-model.md", "`PLAT-FLASH-001`", "`PLAT-FLASH-009`")
+    edit(tree, threat_gate.CLAUSES, "`PLAT-FLASH-001`", "`PLAT-FLASH-009`")
+    found = problems(tree)
+    assert any("is no assumption of" in p for p in found), found
+
+
+def test_a_rests_on_that_is_not_a_list_of_strings_is_refused(tree):
+    edit(tree, threat_gate.CLAUSES, f'rests_on = ["{PIN}"]', f'rests_on = "{PIN}"')
+    found = problems(tree)
+    assert any("is a list of verbatim sentences" in p for p in found), found
+
+
+def test_an_empty_pin_locks_nothing(tree):
+    edit(tree, threat_gate.CLAUSES, f'rests_on = ["{PIN}"]', 'rests_on = ["   "]')
+    found = problems(tree)
+    assert any("locks nothing" in p for p in found), found
+
+
+def test_the_platform_registry_is_an_input_of_this_row(tree):
+    """It became one when a clause could hand its claim to an assumption id."""
+    (tree / threat_gate.ASSUMPTIONS).unlink()
+    found = problems(tree)
+    assert found == [f"{threat_gate.ASSUMPTIONS} is missing — the mapping is unchecked"]
 
 
 def test_check_sh_runs_this_gate():

@@ -34,10 +34,17 @@ Three rules, and the third is the one the file exists for:
   `FLOOR_CLAUSES` the way that failure asks for leaves both rows green with the
   exemption still standing. Deleting the entry is on whoever writes the clause;
   the report below prints the two halves side by side so it is at least legible.
+* a `where` locks a clause's FIRST LINE and nothing under it, so a verdict
+  elsewhere can rest on a sentence that is free to be rewritten. `rests_on` pins
+  those sentences, and WHICH ones are owed is derived rather than remembered: an
+  `[[untraced]]` whose `why` argues from a clause owes a pin inside that clause,
+  and a clause body that hands part of its claim to a `PLAT-…` assumption owes a
+  pin on the sentence that names it.
 
 What it cannot say, like its siblings: whether a mapping is RIGHT. `why` is prose
 and nothing reads it for truth. What it keeps honest is that the mapping is
-total in both directions, that a cited clause is really on the page, and that a
+total in both directions, that a cited clause is really on the page, that the
+sentence a verdict argues from is still in the clause it argues from, and that a
 row with no threat behind it says so out loud instead of reading as traced.
 
 The unserved `defence` clauses are printed rather than refused: `firmware-flavor`
@@ -55,6 +62,7 @@ import sys
 import tomllib
 
 import matrix_gate
+import platform_gate
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -65,6 +73,10 @@ CLAUSES = pathlib.Path("assurance/threat_clauses.toml")
 #: header of `assurance/properties.toml` is about.
 REGISTRY = matrix_gate.REGISTRY
 LEDGER = matrix_gate.LEDGER
+#: The platform registry, borrowed for the same reason: a clause that hands part
+#: of its claim to a `PLAT-…` assumption is held against the file that owns those
+#: ids, never against a second list of them kept here.
+ASSUMPTIONS = platform_gate.REGISTRY
 
 #: A clause reference inside a `source` entry. The fragment is a registry id, not
 #: a rendered anchor — `docs/threat-model.md` carries no HTML anchors.
@@ -120,6 +132,16 @@ UNREADABLE = re.compile(r"^\s*(?:>|\||</?(?:ul|ol|li|table|tr|dl|dt|dd)\b)")
 #: a `TM-Host-Fuzz` is refused here rather than surfacing later as a message that
 #: blames the citing row's spelling.
 CLAUSE_ID = re.compile(r"TM-[A-Z0-9]+(?:-[A-Z0-9]+)*")
+#: A platform-assumption id, in `assurance/platform.toml`'s spelling. A clause
+#: body that writes one is handing part of its claim to an obligation discharged
+#: somewhere else, which is a dependency and therefore owes a `rests_on` pin.
+PLAT_ID = re.compile(r"PLAT-[A-Z0-9]+(?:-[A-Z0-9]+)*")
+#: An HTML comment, stripped out of a clause body before anything is matched
+#: against it. Commenting a sentence OUT takes it off the rendered page and
+#: leaves it verbatim in the source, which is the one edit a substring lock reads
+#: as no edit at all; a comment spliced mid-sentence renders as nothing and is
+#: correctly no edit at all. Both fall out of removing them first.
+COMMENT = re.compile(r"<!--.*?-->", re.S)
 
 
 def clause_units(text: str, problems: list[str] | None = None) -> list[tuple[int, str, str]]:
@@ -165,6 +187,28 @@ def clause_units(text: str, problems: list[str] | None = None) -> list[tuple[int
     return units
 
 
+def clause_bodies(text: str, units: list[tuple[int, str, str]]) -> dict[str, str]:
+    """first line -> everything UNDER it, down to the next clause, as one run.
+
+    Whitespace is normalised and HTML comments are removed, so what is matched is
+    what the page RENDERS. A pin is a sentence, not a layout: re-wrapping a
+    paragraph or re-indenting a bullet leaves the same sentence, while a reword,
+    a deletion or a character swap does not. Measured over this page's history,
+    39 clause bodies changed with their first line intact against 12 first lines
+    reworded, so a pin that fired on every reflow would fire on most edits to the
+    page and be suppressed like any other alarm that is usually noise.
+    """
+    lines = text.splitlines()
+    bodies: dict[str, str] = {}
+    for index, (number, _section, first) in enumerate(units):
+        end = units[index + 1][0] - 1 if index + 1 < len(units) else len(lines)
+        body = COMMENT.sub(" ", "\n".join(lines[number:end]))
+        # `setdefault`: two clauses reading alike is already its own finding, and
+        # a second body under the same key would only hide which one moved.
+        bodies.setdefault(first, " ".join(body.split()))
+    return bodies
+
+
 def load(root: pathlib.Path, path: pathlib.Path) -> dict:
     return tomllib.loads((root / path).read_text(encoding="utf-8"))
 
@@ -177,9 +221,12 @@ def p0_family(root: pathlib.Path) -> list[str]:
     return [pid for pid in ids if tranche.get(pid) in matrix_gate.ROW_TRANCHES]
 
 
-def check_clauses(root: pathlib.Path, problems: list[str]) -> dict[str, dict]:
-    """The roster, held against the page in both directions."""
-    units = clause_units((root / DOC).read_text(encoding="utf-8"), problems)
+def check_clauses(
+    root: pathlib.Path, problems: list[str]
+) -> tuple[dict[str, dict], dict[str, str]]:
+    """The roster, held against the page in both directions, and the bodies."""
+    text = (root / DOC).read_text(encoding="utf-8")
+    units = clause_units(text, problems)
     by_line: dict[str, list[int]] = {}
     for number, _section, line in units:
         by_line.setdefault(line, []).append(number)
@@ -242,7 +289,7 @@ def check_clauses(root: pathlib.Path, problems: list[str]) -> dict[str, dict]:
                 f"{DOC}:{number}: a clause nobody classified — add it to {CLAUSES}"
                 f" as `defence` or `context` (under {section!r}): {line.strip()[:60]!r}"
             )
-    return clauses
+    return clauses, clause_bodies(text, units)
 
 
 def check_sources(
@@ -345,6 +392,95 @@ def check_untraced(
     return untraced
 
 
+def check_rests_on(
+    root: pathlib.Path,
+    clauses: dict[str, dict],
+    bodies: dict[str, str],
+    untraced: dict[str, dict],
+    problems: list[str],
+) -> None:
+    """The sentences below a locked first line that some verdict rests on.
+
+    `where` is the clause's thesis and the rest of it is free text, so a verdict
+    argued from a sentence FURTHER DOWN can be falsified by an edit this file
+    never sees. Deleting the one that scopes the power-cut clause away from
+    faulted reads is the worked example: three untraced verdicts turn wrong and
+    every rule above stays green.
+
+    The pins are not a list somebody has to remember to extend. Both halves are
+    read off the tree — an `[[untraced]]` `why` that names a clause id IS the
+    dependency, and a clause body that names a `PLAT-…` id IS the hand-off — so
+    a new one arrives owing a pin instead of arriving unlocked. What this does
+    not reach: a sentence load-bearing for a reason no entry registers.
+    """
+    assumptions = {row.get("id") for row in load(root, ASSUMPTIONS).get("assumption", [])}
+    # (label, entry, hosts, owed). HOSTS is whose body may carry this entry's
+    # pins — a clause pins inside itself, an untraced verdict inside the clause
+    # its `why` argues from, so a pin cannot drift onto text the verdict never
+    # mentioned. OWED is the narrower set a pin is DEMANDED for, and it is empty
+    # for a clause: naming itself is not a dependency, `PLAT-…` below is.
+    dependents: list[tuple[str, dict, list[str], list[str]]] = [
+        (cid, entry, [cid], []) for cid, entry in clauses.items()
+    ]
+    for pid, entry in untraced.items():
+        named = dict.fromkeys(CLAUSE_ID.findall(entry.get("why", "")))
+        argues = [cid for cid in named if cid in clauses]
+        dependents.append((pid, entry, argues, argues))
+
+    for label, entry, owners, owed in dependents:
+        pins = entry.get("rests_on", [])
+        if not isinstance(pins, list) or not all(isinstance(pin, str) for pin in pins):
+            problems.append(
+                f"{label}: `rests_on` is a list of verbatim sentences from a clause"
+                f" body of {DOC}, and this is not one"
+            )
+            continue
+        hosts = {cid: bodies.get(clauses[cid]["where"], "") for cid in owners}
+        landed: set[str] = set()
+        for pin in pins:
+            want = " ".join(pin.split())
+            if not want:
+                problems.append(f"{label}: an empty `rests_on` pin locks nothing")
+                continue
+            here = [cid for cid, body in hosts.items() if want in body]
+            landed.update(here)
+            if here:
+                continue
+            # Say WHERE it went when it went somewhere: a sentence moved to a
+            # sibling bullet reads as a reword, and the two want different fixes.
+            elsewhere = [c for c, e in clauses.items() if want in bodies.get(e["where"], "")]
+            moved = f" — it is under {', '.join(elsewhere)} now" if elsewhere else ""
+            problems.append(
+                f"{label}: `rests_on` pins text that is no longer in the body of"
+                f" {' / '.join(owners) or '(no clause)'}{moved}. It was reworded,"
+                f" deleted or split, and the verdict resting on it was not:"
+                f" {want[:60]!r}"
+            )
+        for cid in owed:
+            if cid not in landed:
+                problems.append(
+                    f"{label}: its `why` argues from {cid}, so it owes a `rests_on`"
+                    f" pin inside {cid} — {CLAUSES} locks that clause's first line"
+                    " only, and the sentence this rests on is below it"
+                )
+        if label not in clauses:
+            continue
+        for plat in dict.fromkeys(PLAT_ID.findall(bodies.get(entry["where"], ""))):
+            if plat not in assumptions:
+                problems.append(
+                    f"{label}: its body names {plat}, which is no assumption of"
+                    f" {ASSUMPTIONS} — a clause cannot hand its claim to a row that"
+                    " is not there"
+                )
+            elif not any(plat in pin for pin in pins):
+                problems.append(
+                    f"{label}: its body hands part of its claim to {plat}, so it"
+                    f" owes a `rests_on` pin on the sentence naming it — without one"
+                    " that sentence can go, and the clause reads as a defence this"
+                    " firmware implements"
+                )
+
+
 def audit(root) -> tuple[list[str], list[str], str]:
     """(problems, the report a reader needs, one-line summary) for this checkout."""
     root = pathlib.Path(root)
@@ -352,17 +488,17 @@ def audit(root) -> tuple[list[str], list[str], str]:
     # A missing or unparseable input is a finding with a sentence, not a
     # traceback: the row goes red either way, and only one of the two says what
     # to do about it.
-    for path in (DOC, CLAUSES, REGISTRY, LEDGER):
+    for path in (DOC, CLAUSES, REGISTRY, LEDGER, ASSUMPTIONS):
         if not (root / path).is_file():
             problems.append(f"{path} is missing — the mapping is unchecked")
             return problems, [], "threat-gate: nothing to check"
-    for path in (CLAUSES, REGISTRY, LEDGER):
+    for path in (CLAUSES, REGISTRY, LEDGER, ASSUMPTIONS):
         try:
             load(root, path)
         except tomllib.TOMLDecodeError as error:
             problems.append(f"{path} cannot be read: {error}")
             return problems, [], "threat-gate: nothing to check"
-    clauses = check_clauses(root, problems)
+    clauses, bodies = check_clauses(root, problems)
     family = p0_family(root)
     cited = check_sources(root, clauses, family, problems)
     if len(family) < FLOOR_P0:
@@ -372,6 +508,7 @@ def audit(root) -> tuple[list[str], list[str], str]:
             " floor was set. Shrink it here in the same diff"
         )
     untraced = check_untraced(root, cited, family, problems)
+    check_rests_on(root, clauses, bodies, untraced, problems)
     for pid in family:
         if pid not in cited and pid not in untraced:
             problems.append(
