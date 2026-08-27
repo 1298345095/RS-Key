@@ -16,8 +16,12 @@ bottom of the tree; an empty string, an empty list and an empty table are all
 findings, in every group, at every depth. That is the only form in which
 "unabridged" is a predicate.
 
-Four rules are about the bundle being EVIDENCE rather than prose:
+Five rules are about the bundle being EVIDENCE rather than prose:
 
+* every `[[method]]` carries its bound as STRUCTURED data — a `bound_*` key —
+  and answers its two prose fields with something. Stripping all 30 `bound_*`
+  keys from all 8 rows left the exit at 0, and `shipped_relation = "n/a"` still
+  does; a scope sentence was demanded and the bounds it is about were not;
 * every `[[method]]`'s `artifact` resolves against the tree. The field is the
   row's whole claim — this obligation, discharged by that proof — and nothing
   read it: renaming `no_authorization_bypass_walk_owner` left the exit at 0, and
@@ -74,10 +78,17 @@ GROUPS = (
 #: to nonsense keeps the count. Named here so a dropped field is the finding the
 #: docstring claims it is — for the array groups every row owes them, for the
 #: table groups the group does.
+#:
+#: A trailing `*` is a PREFIX and not a name, and `bound_*` is the one entry that
+#: needs it: bounds are per method — a sequence length here, a cardinality there,
+#: an unwind somewhere else — so no single key can be named and requiring one by
+#: name would be requiring the wrong one. Stripping all 30 `bound_*` keys from
+#: all 8 rows took the leaf count 419 -> 389 and left the exit at 0, while the
+#: scope SENTENCE beside them was required all along.
 REQUIRED = {
     "property": ("id", "invariant", "statement", "subjects", "requirement", "threat_clause"),
     "build": ("commit", "tree_state", "matrix_column", "cargo_features", "host_triple"),
-    "method": ("obligation", "method", "artifact", "shipped_relation", "cfg", "features"),
+    "method": ("obligation", "method", "artifact", "bound_*", "shipped_relation", "cfg", "features"),
     "tool": ("name", "version", "provenance", "invocation", "environment"),
     "result": (),  # one key per artifact, and which artifacts exist is the tree's
     "artifact": ("run", "path", "bytes", "sha256"),
@@ -126,6 +137,28 @@ ELISION = ("…", "...")
 
 #: Punctuation a reference can be wrapped in without ceasing to be one.
 TRIM = "()[]{},;:'\"`"
+
+#: The method row's two PROSE fields — what the obligation is, and how the bound
+#: relates to the shipped domain. A required field is satisfied by any string, so
+#: `shipped_relation = "n/a"` cleared the rule that exists to demand the sentence.
+PROSE_FIELDS = ("obligation", "shipped_relation")
+
+#: Words that occupy a field without answering it. Scoped to [`PROSE_FIELDS`] and
+#: not to every leaf, because `cfg = "none"` and `features = "none"` ARE answers
+#: — eight rows of them — and a global rule would redden every one. Compared with
+#: internal whitespace removed and case folded, so `N / A` is the same word.
+NON_ANSWERS = frozenset(
+    {
+        "n/a", "n\\a", "na", "notapplicable",
+        "none", "nil", "null", "nothing",
+        "unknown", "unspecified", "undefined", "unclear",
+        "tbd", "tobedetermined", "todo", "xxx", "pending", "wip",
+    }
+)
+
+#: `-`, `--`, `—`, `?`, `.`, `...`, `…`: the same non-answer with no letters in
+#: it, which is the half a vocabulary alone cannot hold.
+PUNCTUATION_ONLY = re.compile(r"[\W_]+")
 
 #: An assertion that fell describes the modelled defect, or its inverse. Anything
 #: else is a word nobody has to defend.
@@ -177,6 +210,40 @@ def resolve(root: pathlib.Path, name: str) -> pathlib.Path | None:
     if "/" not in name and pathlib.PurePosixPath(name).suffix in (".cfg", ".tla"):
         return root / FORMAL / name if (root / FORMAL / name).is_file() else None
     return None
+
+
+def answers(value) -> bool:
+    """Whether a prose field says anything at all.
+
+    Case folded with the internal whitespace removed, so `N / A` is `n/a`, and a
+    trailing full stop does not buy a second spelling of the same non-answer.
+    """
+    if not isinstance(value, str):
+        return False
+    core = "".join(value.split()).rstrip(".!?…").lower()
+    return bool(core) and core not in NON_ANSWERS and not PUNCTUATION_ONLY.fullmatch(core)
+
+
+def method_answers(doc: dict, findings: list[str]) -> None:
+    """A method row's prose fields are answered, not occupied.
+
+    `shipped_relation` was required and refused a dropped key, an empty string
+    and a whitespace-only one — and took `"n/a"` at exit 0, which is the same
+    dropped field wearing three characters.
+    """
+    for index, row in enumerate(doc.get("method", []), 1):
+        if not isinstance(row, dict):
+            continue
+        for field in PROSE_FIELDS:
+            value = row.get(field)
+            if field not in row or (isinstance(value, str) and not value.strip()):
+                continue  # dropped or blank: reported once, by the rules that own it
+            if not answers(value):
+                findings.append(
+                    f"{BUNDLE} method #{index}: `{field}` is {value!r}, which answers"
+                    " nothing — a required field occupied by a non-answer is the same"
+                    " field dropped, in a spelling the REQUIRED roster cannot see"
+                )
 
 
 def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> None:
@@ -271,7 +338,8 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
                 findings.append(f"{where}: is not a table — the contract's groups are tables")
                 continue
             for field in REQUIRED[group]:
-                if field not in row:
+                stem = field[:-1] if field.endswith("*") else None
+                if not (any(k.startswith(stem) for k in row) if stem else field in row):
                     findings.append(f"{where}: no `{field}` — the contract names it")
 
     registry = tomllib.loads((root / REGISTRY).read_text(encoding="utf-8"))
@@ -280,6 +348,7 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
     if subject not in known:
         findings.append(f"{BUNDLE}: property `{subject}` is in no row of {REGISTRY}")
 
+    method_answers(doc, findings)
     method_references(root, doc, findings)
 
     for index, row in enumerate(doc.get("artifact", []), 1):

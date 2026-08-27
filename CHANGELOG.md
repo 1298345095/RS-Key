@@ -747,6 +747,23 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The bundle demanded a scope *sentence* and not the structured bounds it is
+  about.** Roadmap §7.2 stores a proof's bound as data — sequence length,
+  symbolic bytes, cardinality, unwind, `cfg`/features, the shipped-domain
+  relation — and the eight method rows do carry it, as **30** `bound_*` keys.
+  Nothing read them: stripping all 30 from all 8 rows took the leaf count
+  **419 → 389**, cleared every floor, and left `slice evidence bundle` at
+  **EXIT=0**. `REQUIRED` now carries `bound_*`, with a trailing `*` read as a
+  prefix, because bounds are per method and naming one key would be requiring
+  the wrong one — so the negative arm arrives through the roster the table
+  already parametrizes over, per row rather than per group.
+  *And the same field one spelling over.* `shipped_relation` refused a dropped
+  key, an empty string and a whitespace-only one — and took `"n/a"` at exit 0,
+  which is the same dropped field wearing three characters. The method row's two
+  prose fields are held to a non-answer vocabulary now (`n/a`, `N / A`, `none`,
+  `nil`, `TBD`, `todo`, `unknown`, `-`, `—`, `?`, `.`, `…`, a non-string).
+  Scoped to those two and **not** to every leaf for a measured reason: `cfg` and
+  `features` answer `none` in four rows each, and `none` is an answer there.
 - **A bundle's `method.artifact` named a proof nothing resolved against the
   tree.** The first closed slice's evidence register names, per method row, the
   artifact that discharged the obligation — `crates/rsk-fido/src/state_kani.rs::no_authorization_bypass_walk_owner`

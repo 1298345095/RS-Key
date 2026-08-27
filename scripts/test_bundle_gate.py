@@ -139,12 +139,22 @@ def test_a_group_that_keeps_its_heading_and_loses_its_body(tmp_path, group):
 )
 def test_a_named_field_the_contract_owes_is_found_missing(tmp_path, group, field):
     """A leaf floor counts VOLUME. Renaming a field keeps the count, and padding
-    a group with a long list of anything clears the floor — measured green."""
+    a group with a long list of anything clears the floor — measured green.
+
+    A trailing `*` is a prefix, so the arm for it drops the whole family: popping
+    the literal key `bound_*` would raise `KeyError` and go red for the wrong
+    reason, which is the shape this repo keeps paying for.
+    """
     root = tree(tmp_path)
 
     def drop(doc):
         rows = doc[group] if isinstance(doc[group], list) else [doc[group]]
-        rows[0].pop(field)
+        gone = [field] if not field.endswith("*") else [
+            key for key in rows[0] if key.startswith(field[:-1])
+        ]
+        assert gone, f"{field} matches nothing in row 0, so this case asserts nothing"
+        for key in gone:
+            rows[0].pop(key)
 
     rewrite(root, drop)
     assert any(f"no `{field}` — the contract names it" in p for p in findings(root)), findings(
@@ -176,6 +186,75 @@ def test_an_absolute_artifact_path_escapes_the_tree(tmp_path):
     root = tree(tmp_path)
     rewrite(root, lambda doc: doc["artifact"][0].update(path="/etc/hosts"))
     assert any("is absolute" in p for p in findings(root)), findings(root)
+
+
+def test_every_bound_stripped_from_every_method_row(tmp_path):
+    """The measured hole, in the shape it was driven: all 30 `bound_*` keys out
+    of all 8 rows took the leaf count 419 -> 389 and left the exit at 0, because
+    every floor still cleared. Roadmap §7.2 wants the bound as structured data
+    and the only structured thing about it was that nothing read it."""
+    root = tree(tmp_path)
+
+    def strip(doc):
+        for row in doc["method"]:
+            for key in [k for k in row if k.startswith("bound_")]:
+                row.pop(key)
+
+    rewrite(root, strip)
+    assert any("no `bound_*`" in p for p in findings(root)), findings(root)
+
+
+def test_a_bound_is_owed_per_row_and_not_per_group(tmp_path):
+    """A group-wide rule is cleared by one row keeping its bounds, and the row
+    that lost them is the one whose scope stopped being stated."""
+    root = tree(tmp_path)
+
+    def strip(doc):
+        row = doc["method"][-1]
+        for key in [k for k in row if k.startswith("bound_")]:
+            row.pop(key)
+
+    rewrite(root, strip)
+    assert any("method #8: no `bound_*`" in p for p in findings(root)), findings(root)
+
+
+def test_one_bound_key_of_any_name_satisfies_the_row(tmp_path):
+    """Bounds are per method — a sequence length here, a cardinality there — so
+    naming one key would be requiring the wrong one."""
+    root = tree(tmp_path)
+
+    def strip(doc):
+        row = doc["method"][0]
+        for key in [k for k in row if k.startswith("bound_")][1:]:
+            row.pop(key)
+
+    rewrite(root, strip)
+    assert findings(root) == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["n/a", "N/A", "N / A", "na", "-", "--", "—", "?", ".", "...", "…",
+     "none", "None", "nil", "TBD", "todo", "unknown", "not applicable", 0],
+)
+@pytest.mark.parametrize("field", bundle_gate.PROSE_FIELDS)
+def test_a_prose_field_occupied_by_a_non_answer(tmp_path, field, value):
+    """`shipped_relation` refused a dropped key, an empty string and a
+    whitespace-only one, and took `"n/a"` at exit 0 — the same dropped field in
+    a spelling the REQUIRED roster cannot see."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["method"][0].update({field: value}))
+    assert any("which answers nothing" in p for p in findings(root)), findings(root)
+
+
+def test_none_is_an_answer_where_none_is_an_answer(tmp_path):
+    """The reason the rule is a named pair of fields and not every leaf: eight
+    method rows answer `cfg` and `features` with exactly `none`, and a global
+    non-answer vocabulary would redden every one of them."""
+    root = tree(tmp_path)
+    doc = tomllib.loads((root / bundle_gate.BUNDLE).read_text())
+    assert [r["cfg"] for r in doc["method"]].count("none") >= 4, doc["method"]
+    assert findings(root) == []
 
 
 def test_a_method_artifact_naming_a_harness_that_is_gone(tmp_path):
