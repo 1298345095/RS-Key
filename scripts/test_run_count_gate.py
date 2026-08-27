@@ -511,7 +511,7 @@ def test_a_comment_in_the_model_is_not_the_model(tree):
     commit: a name-only diff called six modules changed over an edit that
     refreshed nothing but line numbers, and the row went red."""
     tree.write("formal/Mini.tla", MINI.replace(
-        "Init == TRUE", "\\* crates/rsk-fs/src/fs.rs:521 -- the citation moved\nInit == TRUE"))
+        "Init == TRUE", "\\* the note above this line moved with the code\nInit == TRUE"))
     assert not only(tree.problems(), "has moved since"), tree.problems()
 
 
