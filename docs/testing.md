@@ -342,12 +342,21 @@ process, not the sum of them:
 > what a bounded proof pays for at this call site: measured, a harness whose only
 > content is two of them costs 233 s on its own. Solving went 546 → 1341 s and
 > the peak 9.3 → **15.3 GiB**, over what a hosted `ubuntu-latest` has. `state` is
-> a CI step (`ci.yml`, gated on `proofs_state`), so that headroom is now a
-> maintainer decision rather than a margin: raise the runner, shrink a
-> `cfg(kani)` constant across `rsk-fido` — `CredMgmtState::rp_index` alone is
-> 1 KiB of symbolic struct — or move the crate to a weekly-only tier. The other
-> six rows were NOT re-measured; their harness and cover counts moved with the
-> ratchets and their timings are the 2026-08-26 reading.
+> a CI step (`ci.yml`, gated on `proofs_state`), and **the margin is negative
+> before the OS is counted**: the measured peak is 16 418 144 256 bytes and a
+> `ubuntu-latest` runner is advertised at 16 GB — 16 000 000 000 bytes — so the
+> single largest CBMC process is already 418 MB over the machine's whole RAM,
+> with the kernel, the runner agent and cargo still to fit. Three ways out, and
+> the one that is **cheapest to reverse is the first**: a larger `runs-on:` label
+> is one line, moves no floor and re-measures nothing. Shrinking a `cfg(kani)`
+> constant across `rsk-fido` (`CredMgmtState::rp_index` alone is 1 KiB of
+> symbolic struct) changes every existing proof's domain, owes each one a "what
+> stops being proved", and cannot be undone without re-measuring the ratchets a
+> second time. Moving the crate to a weekly-only tier is one commit but takes
+> `rsk-fido` out of PR-time proof coverage, which is a gate weakening rather than
+> a scheduling change. The other six rows were NOT re-measured; their harness and
+> cover counts moved with the ratchets and their timings are the 2026-08-26
+> reading.
 
 Every tier came back at exactly its floor, and `all` is no longer the sum of the
 others: the four weekly shards ran separately in the same session and checked

@@ -1,0 +1,255 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 RS-Key contributors
+"""The mutation table for `bundle_gate.py`.
+
+One arm per rule, each breaking the real bundle in one place — the fixture IS the
+shipped bundle, because a synthetic one would prove the rules about a document
+nobody has to keep true. The two arms worth naming are the ones the contract
+turns on: a group that keeps its heading and loses its body, and a cost written
+as a range.
+"""
+
+import json
+import pathlib
+import shutil
+import sys
+import tomllib
+
+import pytest
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import bundle_gate  # noqa: E402
+
+ROOT = bundle_gate.ROOT
+
+
+def scalar(value):
+    """One TOML value. `json.dumps` because a basic string escapes the same way."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(scalar(v) for v in value) + "]"
+    return json.dumps(str(value))
+
+
+def dump(doc) -> str:
+    """The bundle, re-serialised.
+
+    The arms below delete a group and write the document back, and they cannot do
+    that by cutting HEADING lines out of the text: the orphaned body then lands in
+    whatever table precedes it and `tomllib` raises. Measured — 8 of the 20
+    parametrized cases were a `TOMLDecodeError` and asserted nothing, on exactly
+    the array-of-tables groups the contract is mostly made of.
+    """
+    out = []
+    for key, value in doc.items():
+        rows = value if isinstance(value, list) else [value]
+        head = f"[[{key}]]" if isinstance(value, list) else f"[{key}]"
+        for row in rows:
+            out.append(head)
+            for field, item in row.items():
+                out.append(f"{field} = {scalar(item)}")
+            out.append("")
+    return "\n".join(out) + "\n"
+
+
+def tree(tmp_path):
+    """A checkout carrying the real bundle, the registry and every artifact."""
+    for relative in (bundle_gate.BUNDLE, bundle_gate.REGISTRY):
+        (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / relative, tmp_path / relative)
+    doc = tomllib.loads((ROOT / bundle_gate.BUNDLE).read_text())
+    for row in doc["artifact"]:
+        target = tmp_path / row["path"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / row["path"], target)
+    return tmp_path
+
+
+def rewrite(root, change):
+    """Apply `change` to the parsed bundle and write it back."""
+    path = root / bundle_gate.BUNDLE
+    doc = tomllib.loads(path.read_text())
+    change(doc)
+    path.write_text(dump(doc))
+
+
+def edit(root, old, new, count=1):
+    path = root / bundle_gate.BUNDLE
+    text = path.read_text()
+    assert text.count(old) >= count, old
+    path.write_text(text.replace(old, new, count))
+
+
+def findings(root):
+    return bundle_gate.audit(root)[0]
+
+
+def test_the_real_bundle_is_green():
+    assert findings(ROOT) == []
+
+
+def test_the_fixture_is_the_real_bundle(tmp_path):
+    assert findings(tree(tmp_path)) == []
+
+
+@pytest.mark.parametrize("group", bundle_gate.GROUPS)
+def test_a_missing_group_blocks_the_exit(tmp_path, group):
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc.pop(group))
+    assert any(f"group `{group}` is missing" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize("group", bundle_gate.GROUPS)
+def test_a_group_that_keeps_its_heading_and_loses_its_body(tmp_path, group):
+    """Ten headings with one line each satisfy "all ten groups are present",
+    which is the whole reason this counts leaves."""
+    root = tree(tmp_path)
+
+    def strip(doc):
+        doc[group] = (
+            [{"kept": "one line"}] if isinstance(doc[group], list) else {"kept": "one line"}
+        )
+
+    rewrite(root, strip)
+    problems = findings(root)
+    assert any(f"group `{group}` carries 1 leaf" in p for p in problems), problems
+
+
+@pytest.mark.parametrize(
+    "group,field",
+    [(g, f) for g, fields in bundle_gate.REQUIRED.items() for f in fields],
+)
+def test_a_named_field_the_contract_owes_is_found_missing(tmp_path, group, field):
+    """A leaf floor counts VOLUME. Renaming a field keeps the count, and padding
+    a group with a long list of anything clears the floor — measured green."""
+    root = tree(tmp_path)
+
+    def drop(doc):
+        rows = doc[group] if isinstance(doc[group], list) else [doc[group]]
+        rows[0].pop(field)
+
+    rewrite(root, drop)
+    assert any(f"no `{field}` — the contract names it" in p for p in findings(root)), findings(
+        root
+    )
+
+
+def test_the_three_rosters_name_the_same_ten_groups():
+    """`GROUPS` without `FLOORS` is a KeyError; `FLOORS` without `GROUPS` is
+    silently dead, and that is the direction nothing would have shown."""
+    assert set(bundle_gate.GROUPS) == set(bundle_gate.FLOORS) == set(bundle_gate.REQUIRED)
+
+
+def test_a_log_of_the_same_length_is_not_the_same_log(tmp_path):
+    """A byte count is satisfied by any file of that length — measured green
+    before the digest, by swapping a 10-byte log for a different 10-byte one."""
+    root = tree(tmp_path)
+    doc = tomllib.loads((root / bundle_gate.BUNDLE).read_text())
+    target = root / doc["artifact"][0]["path"]
+    raw = target.read_bytes()
+    target.write_bytes(bytes((b ^ 0x20) if b > 0x40 else b for b in raw))
+    assert len(target.read_bytes()) == len(raw)
+    assert any("is not the one the run wrote" in p for p in findings(root)), findings(root)
+
+
+def test_an_absolute_artifact_path_escapes_the_tree(tmp_path):
+    """`root / "/etc/hosts"` is `/etc/hosts`, so `is_file()` passes and only the
+    byte count is compared. "In the tree" is not what that checks."""
+    root = tree(tmp_path)
+    rewrite(root, lambda doc: doc["artifact"][0].update(path="/etc/hosts"))
+    assert any("is absolute" in p for p in findings(root)), findings(root)
+
+
+def test_a_blank_leaf_is_a_dropped_field(tmp_path):
+    root = tree(tmp_path)
+    edit(root, 'id = "SEC-FIDO-001"', 'id = ""')
+    assert any("is empty" in p for p in findings(root)), findings(root)
+
+
+@pytest.mark.parametrize(
+    "value", ['"1.5 to 3x"', '"a few hours"', '"unknown"', '"~500 s"']
+)
+def test_a_cost_written_as_a_range_is_refused(tmp_path, value):
+    """The whole point of the first closed slice is that its cost is MEASURED.
+    An estimate in any of the three voids the measurement, and the design page
+    is where the calibration counterpart's estimate is labelled as one."""
+    root = tree(tmp_path)
+    import re
+
+    path = root / bundle_gate.BUNDLE
+    path.write_text(
+        re.sub(r"runner_seconds = [0-9.]+", f"runner_seconds = {value}", path.read_text(), count=1)
+    )
+    assert any("is not a number" in p for p in findings(root)), findings(root)
+
+
+def test_a_missing_cost_field_is_found(tmp_path):
+    root = tree(tmp_path)
+    import re
+
+    path = root / bundle_gate.BUNDLE
+    path.write_text(re.sub(r"peak_memory_mb = [0-9.]+\n", "", path.read_text(), count=1))
+    assert any("the item measures three, not one" in p for p in findings(root)), findings(root)
+
+
+def test_an_artifact_that_is_not_in_the_tree(tmp_path):
+    root = tree(tmp_path)
+    gone = tomllib.loads((root / bundle_gate.BUNDLE).read_text())["artifact"][0]["path"]
+    (root / gone).unlink()
+    assert any("is not a log" in p for p in findings(root)), findings(root)
+
+
+def test_a_summarized_log_is_not_an_artifact(tmp_path):
+    """The byte count is what tells the unedited output from a tidied one."""
+    root = tree(tmp_path)
+    target = tomllib.loads((root / bundle_gate.BUNDLE).read_text())["artifact"][0]["path"]
+    (root / target).write_text("summary only\n")
+    assert any("was edited is not the unedited output" in p for p in findings(root)), findings(root)
+
+
+def test_a_mutation_with_no_direction_is_not_a_verdict(tmp_path):
+    """Two of twenty-four co-refutation patches scored a kill for the INVERSE
+    defect, and the tell was that every failure said 'should have succeeded'."""
+    root = tree(tmp_path)
+    edit(root, 'direction = "modelled"', 'direction = "red"')
+    assert any("is not one of" in p for p in findings(root)), findings(root)
+
+
+def test_a_mutation_that_does_not_say_which_assertion_fell(tmp_path):
+    root = tree(tmp_path)
+    import re
+
+    path = root / bundle_gate.BUNDLE
+    path.write_text(re.sub(r'fell = "[^"]*"\n', 'fell = ""\n', path.read_text(), count=1))
+    assert any("is empty" in p for p in findings(root)), findings(root)
+
+
+def test_a_property_the_registry_does_not_carry(tmp_path):
+    root = tree(tmp_path)
+    edit(root, 'id = "SEC-FIDO-001"', 'id = "SEC-NOPE-999"')
+    assert any("is in no row of" in p for p in findings(root)), findings(root)
+
+
+def test_a_group_outside_the_contract_is_refused(tmp_path):
+    root = tree(tmp_path)
+    path = root / bundle_gate.BUNDLE
+    path.write_text(path.read_text() + '\n[extra]\nnote = "not a group"\n')
+    assert any("is in no group of the contract" in p for p in findings(root)), findings(root)
+
+
+def test_a_bundle_that_is_gone(tmp_path):
+    (tmp_path / "assurance").mkdir()
+    assert any("no such bundle" in p for p in findings(tmp_path)), findings(tmp_path)
+
+
+def test_main_prints_a_summary_and_reports_findings(tmp_path, capsys, monkeypatch):
+    assert bundle_gate.main() == 0
+    assert capsys.readouterr().out.startswith("bundle-gate: ok —")
+    root = tree(tmp_path)
+    edit(root, 'direction = "modelled"', 'direction = "red"')
+    monkeypatch.setattr(bundle_gate, "ROOT", root)
+    assert bundle_gate.main() == 1
+    assert "direction" in capsys.readouterr().err

@@ -40,6 +40,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The first closed slice's raw evidence bundle, held to stage 1A's ten-group
+  contract.** `assurance/bundle/SEC-FIDO-001.toml` carries all ten groups —
+  property/subject/owners, commit/build/features, method and bounds as structured
+  data, tool/version/invocation/environment, principal result, raw artifact,
+  assumptions and TCB, mutation verdicts, freshness triggers, and measured costs —
+  with **10 raw logs committed beside it** under `assurance/bundle/logs/`, byte
+  count and sha256 each. `scripts/bundle_gate.py` holds it, and the rule that
+  makes "unabridged" a predicate is that it counts **leaves** per group with a
+  floor: ten headings with one line each satisfy "all ten groups are present".
+  419 leaves. Every cost is a number — a range is an estimate wearing a
+  measurement's field — and every cost carries a `basis` saying how it was
+  obtained, because one peak is a 2-second `ps` sample rather than
+  `/usr/bin/time -l` and the bundle should say which.
+
 - **An adversarial review of the slice's three guards found two blocking holes,
   and both were the family this repo has measured five times.**
   `ghost_gate.py`'s `viol'` scanner was line-anchored, so four ordinary TLA+

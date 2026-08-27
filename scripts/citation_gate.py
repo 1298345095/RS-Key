@@ -132,6 +132,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 #: modules do — and the co-refutation ledger. A page absent here is not checked
 #: at all, which is the one failure this list can have, so it is the thing to
 #: extend when a module starts citing.
+#: `formal/RSKeyTokenGate.tla` is DELIBERATELY absent, and the exclusion is
+#: stated because a page missing from this tuple is a page nothing checks — which
+#: is how `RSKeyAppletPolicies.tla` kept a rotted citation. That module is tier
+#: A's REQUIREMENT half: `RequiredGate` is transcribed from CTAP 2.3 and must not
+#: be read off the code any more than off the relation, so it cites spec sections
+#: and no `file.rs:NNN` at all. Nothing there can rot. Give it an entry the day
+#: it names a line of Rust.
 PAGES = (
     pathlib.Path("formal/RSKeySecurityState.tla"),
     pathlib.Path("formal/RSKeyAppletSeams.tla"),

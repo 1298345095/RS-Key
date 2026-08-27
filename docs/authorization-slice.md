@@ -505,3 +505,44 @@ to a different work item:
   protects them. `scripts/citation_gate.py` does not scan `docs/`. Each is
   reproducible from a command named in the section that states it, which is the
   most a design page can offer; making them derived is a sweep this page is not.
+
+## What the implementation measured
+
+The page above is the design, written before the proof code existed, and it is
+left as it was written — with one exception, which is this section. Three of its
+present-tense claims are now false, and each was made false deliberately:
+
+- *"the retry budget, the soft lock, the reset window and the walk owner have no
+  ledger anywhere"* — they have one.
+  `assurance/token_refinement.toml` gained three **guard** axes beside its three
+  writer axes, derived rather than listed, and `scripts/token_refinement_gate.py`
+  holds 4 walk sites, 12 soft-lock sites and 2 reset-window sites both ways. The
+  soft-lock scan reaches `crates/rsk-device` and `firmware/` because
+  `FidoState::pin_lock` has **zero** callers inside `rsk-fido`;
+- *"nothing in the tree compares the sentence to the set"* — `scripts/ghost_gate.py`
+  does. 21 actions, 24 routes, and routes rather than names because three actions
+  record twice;
+- *"0 of the 67 `slice` invocations run `cargo kani`"* — one does.
+  `BugCmWalkIgnoresChannel` carries a `proof` half that must redden
+  `NoAuthorizationBypass/B1`, and a CBMC timeout or an unsupported construct is
+  refused by name rather than counted as a kill.
+
+The raw evidence is `assurance/bundle/SEC-FIDO-001.toml`, held to stage 1A's
+ten-group contract by `scripts/bundle_gate.py`, with every log it points at
+committed beside it under `assurance/bundle/logs/`. Two numbers from it are worth
+repeating here because they answer questions this page could only pose:
+
+- **the degeneracy check.** 31 disagreeing `(state, operation)` pairs over 22
+  states, in two families. Every state disagrees on `ClearPin`, where the
+  relation's `pre.pinSet` is a frame condition and §6.6's real gate is a window
+  and a touch tier A cannot see; nine also disagree on `UseCm`, where §6.8.2 lets
+  the persistent grant authorize on its own and RS-Key additionally demands
+  `EF_PIN`. The second family is the shipped tree being **stricter than the
+  requirement** — which an oracle transcribed from the code could not have shown;
+- **the matrix closed no cell, and the reason is a number.** The model half of
+  the `firmware-always-uv` settling question is answered — `AlwaysUv.cfg` runs
+  all six invariants with `alwaysUv` as the compiled default — but
+  `cargo test -p rsk-fido --features always-uv` is 446 passed and **172 failed**,
+  because alwaysUv with no PIN answers `PUAT_REQUIRED` and the suite is written
+  against the default door. No `check.sh` row exercises that column, and
+  `covered` may rest only on the default build or on such a row.

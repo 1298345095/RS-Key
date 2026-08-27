@@ -637,6 +637,11 @@ run "security trace refinement" python scripts/security_trace.py --check-data fo
 # It is 21, over 24 routes -- and three of them record TWICE, so a name-set
 # equality stays green over a half-deleted guard. This derives both.
 run "ghost completeness"       python scripts/ghost_gate.py
+# The first closed slice's raw evidence, held to stage 1A's ten-group contract.
+# Ten headings with one line each satisfy "all ten groups are present", so this
+# counts LEAVES and floors them per group — and refuses a cost written as a
+# range, which is an estimate wearing a measurement's field.
+run "slice evidence bundle"    python scripts/bundle_gate.py
 run "token refinement export" ./scripts/token_refinement.sh --check
 run "token refinement completeness" python scripts/token_refinement_gate.py
 # The two guards above decide whether the gate covers the tree, and neither had
