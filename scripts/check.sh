@@ -659,6 +659,13 @@ run "slice evidence bundle"    python scripts/bundle_gate.py
 # NAME. This derives six axes apart, rebuilds the word from two of them, and
 # writes the public page so a release sentence cannot outrun the axes.
 run "evidence vector"          python scripts/evidence_gate.py
+# And what the pages SAY a run was. Seven were stale the day this row landed --
+# `safety` published as 190 rows against a tier of 195, the model's state space
+# 60% low in the paragraph the docs call the one to quote, and five more between
+# them -- because every one was typed. The sentences are written from `formal/runs.toml`, which
+# holds the runner's own matrix per tier, and a count typed anywhere else in
+# docs/, formal/, .github/ or the root pages is a finding.
+run "published run-counts"     python scripts/run_count_gate.py
 run "token refinement export" ./scripts/token_refinement.sh --check
 run "token refinement completeness" python scripts/token_refinement_gate.py
 # The two guards above decide whether the gate covers the tree, and neither had

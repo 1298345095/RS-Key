@@ -1,0 +1,239 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 RS-Key contributors
+#
+# OBSERVED ROSTER RUNS. Written by `python scripts/run_count_gate.py --record
+# <log>` over a capture of `formal/run-tlc.sh`, and read back by that gate to
+# emit every run-count the documentation publishes.
+#
+# `matrix` is the runner's own output, unedited, one line per configuration, and
+# it is the only thing stored: the row count, the wall clock and the GREEN/RED
+# tally are COUNTED out of it on every gate run, so no total here can disagree
+# with the rows it is a total of. That disagreement is what this file exists for
+# -- seven published run-counts were stale on the day it was written, one of them
+# in the paragraph the docs introduce as the one to quote.
+#
+# A run is a run of the tier as `run-tlc.sh --tiers` lists it TODAY: the gate
+# holds every listed configuration against this matrix, every verdict against
+# `floors.txt`, and refuses a row the runner marked `!!`. A roster that grows
+# therefore reddens the row until somebody runs it again, which is the point --
+# "the whole tier, all green" is otherwise a sentence about a tree that has gone.
+
+[[run]]
+tier = "liveness"
+command = "./formal/run-tlc.sh liveness"
+date = "2026-08-27"
+commit = "beb5969086ba65c15dd0a3db1de5a9f5944c7aba"
+host = "Apple M5 Pro (18 cores)"
+workers = 2
+matrix = '''
+Liveness.cfg                                 GREEN                                    states=105147241  distinct=10720348  depth=46  2106s
+LiveMut_BugAssertWedgesOnTimeout.cfg         RED: Error: Temporal properties were violated. states=555265     distinct=85099     depth=?   4s
+LiveMut_BugWaitScopeNotCleared.cfg           RED: Error: Temporal properties were violated. states=513071     distinct=75430     depth=?   4s
+LiveMut_BugWalkNeverExpires.cfg              RED: Error: Temporal properties were violated. states=625807     distinct=94131     depth=?   4s
+'''
+
+[[run]]
+tier = "safety"
+command = "./formal/run-tlc.sh safety"
+date = "2026-08-27"
+commit = "beb5969086ba65c15dd0a3db1de5a9f5944c7aba"
+host = "Apple M5 Pro (18 cores)"
+workers = 2
+matrix = '''
+Shipped.cfg                                  GREEN                                    states=986836197  distinct=77563872  depth=58  1869s
+AlwaysUv.cfg                                 GREEN                                    states=273124081  distinct=23521512  depth=51  513s
+Historical_E76.cfg                           RED: NoUnmanageableCredential            states=1875114    distinct=219667    depth=13  5s
+Historical_E77.cfg                           RED: NoAccessibleSecretWithoutGate       states=1784803    distinct=207245    depth=13  5s
+Mut_BugBackupSealedNotAGate.cfg              RED: ResetNeverWeakensSurvivingState     states=23404      distinct=5354      depth=8   1s
+Mut_BugChangePinKeepsPpuat.cfg               RED: NoTokenAfterInvalidation            states=20124      distinct=4555      depth=8   2s
+Mut_BugCmWalkIgnoresChannel.cfg              RED: NoAuthorizationBypass               states=16679      distinct=3945      depth=8   1s
+Mut_BugConsumeKeepsMcGa.cfg                  RED: NoAuthorizationBypass               states=62463      distinct=11505     depth=9   1s
+Mut_BugCredBeforeRp.cfg                      RED: NoUnmanageableCredential            states=7031       distinct=1893      depth=7   1s
+Mut_BugDeleteRpBeforeCred.cfg                RED: NoUnmanageableCredential            states=3378394    distinct=377779    depth=14  8s
+Mut_BugHostPreemptsLocalWait.cfg             RED: NoAuthorizationBypass               states=89         distinct=40        depth=4   1s
+Mut_BugLocalPinIgnoresBudget.cfg             RED: NoAuthorizationBypass               states=2362014    distinct=264160    depth=14  6s
+Mut_BugLocalPinKeepsToken.cfg                RED: NoTokenAfterInvalidation            states=5834       distinct=1616      depth=7   1s
+Mut_BugNoConsumeAfterUp.cfg                  RED: NoAuthorizationBypass               states=54056      distinct=10188     depth=9   2s
+Mut_BugNoDropStaleCancelAtEntry.cfg          RED: NoCrossTransportTouchConsumption    states=386        distinct=169       depth=5   0s
+Mut_BugNoTouchRequired.cfg                   RED: NoAuthorizationBypass               states=797        distinct=269       depth=5   1s
+Mut_BugPanelCancelable.cfg                   RED: NoCrossTransportTouchConsumption    states=677        distinct=234       depth=5   1s
+Mut_BugPinWriteBeforeRevoke.cfg              RED: NoTokenAfterInvalidation            states=21228      distinct=4749      depth=8   1s
+Mut_BugPpuatIsAGate.cfg                      RED: NoAccessibleSecretWithoutGate       states=1798272    distinct=208803    depth=13  5s
+Mut_BugResetGatesFirst.cfg                   RED: ResetNeverWeakensSurvivingState     states=24690      distinct=5625      depth=8   2s
+Mut_BugSeedDoesNotLead.cfg                   RED: NoUnmanageableCredential            states=1875183    distinct=219676    depth=13  5s
+Mut_BugSetPinKeepsPpuat.cfg                  RED: NoAccessibleSecretWithoutGate       states=1755413    distinct=209491    depth=13  5s
+Mut_BugSetPinOverExisting.cfg                RED: NoAuthorizationBypass               states=2418       distinct=716       depth=6   1s
+Mut_BugSoftLockLostOnWarmReset.cfg           RED: NoAuthorizationBypass               states=58213      distinct=10919     depth=9   1s
+Mut_BugStateResetAfterWipe.cfg               RED: ResetNeverWeakensSurvivingState     states=476262     distinct=67670     depth=11  2s
+Mut_BugStopUsingKeepsPerms.cfg               RED: NoTokenAfterInvalidation            states=5989       distinct=1643      depth=7   1s
+Mut_BugTokenSurvivesPinChange.cfg            RED: NoTokenAfterInvalidation            states=145436     distinct=22629     depth=10  2s
+Mut_BugTokenlessIgnoresAlwaysUv.cfg          RED: NoAuthorizationBypass               states=52484      distinct=9488      depth=9   1s
+Mut_BugTouchNotSpent.cfg                     RED: NoCrossTransportTouchConsumption    states=5035       distinct=1401      depth=7   1s
+Mut_BugUnscopedCancel.cfg                    RED: NoCrossTransportTouchConsumption    states=551        distinct=191       depth=5   1s
+Mut_BugUnscopedOtpCancel.cfg                 RED: NoCrossTransportTouchConsumption    states=672        distinct=237       depth=5   1s
+Mut_BugUvNotRqdIgnoresRk.cfg                 RED: NoAuthorizationBypass               states=2761       distinct=719       depth=6   1s
+Mut_BugWarmResetReopensWindow.cfg            RED: NoAuthorizationBypass               states=483        distinct=177       depth=5   1s
+Mut_BugWrongPinKeepsToken.cfg                RED: NoTokenAfterInvalidation            states=5804       distinct=1592      depth=7   1s
+Solo_BugBackupSealedNotAGate.cfg             RED: ResetNeverWeakensSurvivingState     states=23308      distinct=5338      depth=8   1s
+Solo_BugChangePinKeepsPpuat.cfg              RED: NoTokenAfterInvalidation            states=19238      distinct=4403      depth=8   1s
+Solo_BugCmWalkIgnoresChannel.cfg             RED: NoAuthorizationBypass               states=17366      distinct=4068      depth=8   1s
+Solo_BugConsumeKeepsMcGa.cfg                 RED: NoAuthorizationBypass               states=53847      distinct=10154     depth=9   2s
+Solo_BugCredBeforeRp.cfg                     RED: NoUnmanageableCredential            states=7031       distinct=1893      depth=7   1s
+Solo_BugDeleteRpBeforeCred.cfg               RED: NoUnmanageableCredential            states=3363187    distinct=374958    depth=14  8s
+Solo_BugHostPreemptsLocalWait.cfg            RED: NoAuthorizationBypass               states=89         distinct=39        depth=4   1s
+Solo_BugLocalPinIgnoresBudget.cfg            RED: NoAuthorizationBypass               states=2398165    distinct=266032    depth=14  6s
+Solo_BugLocalPinKeepsToken.cfg               RED: NoTokenAfterInvalidation            states=5775       distinct=1592      depth=7   1s
+Solo_BugNoConsumeAfterUp.cfg                 RED: NoAuthorizationBypass               states=48908      distinct=9442      depth=9   1s
+Solo_BugNoDropStaleCancelAtEntry.cfg         RED: NoCrossTransportTouchConsumption    states=386        distinct=169       depth=5   1s
+Solo_BugNoTouchRequired.cfg                  RED: NoAuthorizationBypass               states=790        distinct=268       depth=5   1s
+Solo_BugPanelCancelable.cfg                  RED: NoCrossTransportTouchConsumption    states=693        distinct=238       depth=5   0s
+Solo_BugPinWriteBeforeRevoke.cfg             RED: NoTokenAfterInvalidation            states=21182      distinct=4757      depth=8   1s
+Solo_BugPpuatIsAGate.cfg                     RED: NoAccessibleSecretWithoutGate       states=1798369    distinct=208832    depth=13  5s
+Solo_BugResetGatesFirst.cfg                  RED: ResetNeverWeakensSurvivingState     states=23444      distinct=5350      depth=8   1s
+Solo_BugSeedDoesNotLead.cfg                  RED: NoUnmanageableCredential            states=1653609    distinct=186886    depth=13  4s
+Solo_BugSetPinKeepsPpuat.cfg                 RED: NoTokenAfterInvalidation            states=5360582    distinct=584128    depth=15  12s
+Solo_BugSetPinOverExisting.cfg               RED: NoAuthorizationBypass               states=2423       distinct=717       depth=6   1s
+Solo_BugSoftLockLostOnWarmReset.cfg          RED: NoAuthorizationBypass               states=54156      distinct=10058     depth=9   1s
+Solo_BugStateResetAfterWipe.cfg              RED: ResetNeverWeakensSurvivingState     states=481640     distinct=68898     depth=11  3s
+Solo_BugStopUsingKeepsPerms.cfg              RED: NoTokenAfterInvalidation            states=5926       distinct=1624      depth=7   1s
+Solo_BugTokenSurvivesPinChange.cfg           RED: NoTokenAfterInvalidation            states=148815     distinct=23127     depth=10  1s
+Solo_BugTokenlessIgnoresAlwaysUv.cfg         RED: NoAuthorizationBypass               states=54096      distinct=9786      depth=9   2s
+Solo_BugTouchNotSpent.cfg                    RED: NoCrossTransportTouchConsumption    states=5022       distinct=1400      depth=7   0s
+Solo_BugUnscopedCancel.cfg                   RED: NoCrossTransportTouchConsumption    states=549        distinct=189       depth=5   0s
+Solo_BugUnscopedOtpCancel.cfg                RED: NoCrossTransportTouchConsumption    states=679        distinct=240       depth=5   1s
+Solo_BugUvNotRqdIgnoresRk.cfg                RED: NoAuthorizationBypass               states=2761       distinct=719       depth=6   1s
+Solo_BugWarmResetReopensWindow.cfg           RED: NoAuthorizationBypass               states=518        distinct=171       depth=5   1s
+Solo_BugWrongPinKeepsToken.cfg               RED: NoTokenAfterInvalidation            states=5943       distinct=1635      depth=7   1s
+Solo_NoAccessibleSecretWithoutGate.cfg       RED: NoAccessibleSecretWithoutGate       states=401729     distinct=56369     depth=11  2s
+Solo_NoLiveTokenWithoutPinRecord.cfg         RED: NoLiveTokenWithoutPinRecord         states=806598     distinct=102239    depth=12  3s
+Solo_RamNeverOutlivesFlashSeed.cfg           RED: RamNeverOutlivesFlashSeed           states=9756       distinct=2592      depth=7   1s
+SoloClause_ResetKeepsTheAlwaysUvGate.cfg     RED: ResetKeepsTheAlwaysUvGate           states=20230310   distinct=2038232   depth=18  40s
+SoloClause_ResetKeepsTheBackupSeal.cfg       RED: ResetKeepsTheBackupSeal             states=24937      distinct=5668      depth=8   1s
+SoloClause_ResetKeepsThePinGate.cfg          RED: ResetKeepsThePinGate                states=8827323    distinct=928427    depth=16  19s
+Fairness.cfg                                 GREEN                                    states=105147241  distinct=10720348  depth=46  161s
+FairMut_BugFairnessFoldsLocalCeremony.cfg    RED: OpAdvancesIsOneActivity             states=72         distinct=39        depth=4   1s
+Seams.cfg                                    GREEN                                    states=6045       distinct=410       depth=11  0s
+SeamMut_BugAdminOpensKeyOps.cfg              RED: NoKeyOpOnTheAdminStatus             states=336        distinct=65        depth=5   1s
+SeamMut_BugCardResetKeepsStatus.cfg          RED: NoStatusOutsideItsSelection         states=93         distinct=29        depth=4   1s
+SeamMut_BugFailedChangeKeepsStatus.cfg       RED: NoStatusAfterARefusedAuth           states=348        distinct=68        depth=5   1s
+SeamMut_BugPinFreshNotSpent.cfg              RED: NoKeyOpOnTheAdminStatus             states=143        distinct=42        depth=4   0s
+SeamMut_BugPinFreshOutlivesPin.cfg           RED: NoKeyOpOnTheAdminStatus             states=120        distinct=37        depth=4   0s
+SeamMut_BugPivChangeResetsStatus.cfg         RED: ExemptRefusalPreservesStatus        states=142        distinct=42        depth=4   1s
+SeamMut_BugPwStatusIgnoresAdmin.cfg          RED: NoKeyOpOnTheAdminStatus             states=175        distinct=47        depth=4   1s
+SeamMut_BugRefusedValidateDropsUnlock.cfg    RED: ExemptRefusalPreservesStatus        states=80         distinct=27        depth=4   0s
+SeamMut_BugRefusedValidateGrants.cfg         RED: NoStatusAfterARefusedAuth           states=382        distinct=70        depth=5   0s
+SeamMut_BugRemoveCodeUnvalidated.cfg         RED: AccessCodeRemovalNeedsTheCode       states=396        distinct=73        depth=5   1s
+SeamMut_BugReselectResetsStatus.cfg          RED: ReselectPreservesAccessStatus       states=119        distinct=37        depth=4   1s
+SeamMut_BugSelectKeepsOtherApplet.cfg        RED: NoStatusOutsideItsSelection         states=77         distinct=27        depth=4   1s
+SeamMut_BugSigPinNotSpent.cfg                RED: NoKeyOpOnTheAdminStatus             states=1825       distinct=211       depth=7   0s
+SeamMut_BugUserStatusOpensAdmin.cfg          RED: NoKeyOpOnTheAdminStatus             states=144        distinct=43        depth=4   1s
+SeamSolo_BugAdminOpensKeyOps.cfg             RED: NoKeyOpOnTheAdminStatus             states=320        distinct=62        depth=5   1s
+SeamSolo_BugCardResetKeepsStatus.cfg         RED: NoStatusOutsideItsSelection         states=93         distinct=29        depth=4   1s
+SeamSolo_BugFailedChangeKeepsStatus.cfg      RED: NoStatusAfterARefusedAuth           states=348        distinct=68        depth=5   0s
+SeamSolo_BugPinFreshNotSpent.cfg             RED: NoKeyOpOnTheAdminStatus             states=177        distinct=45        depth=4   0s
+SeamSolo_BugPinFreshOutlivesPin.cfg          RED: NoKeyOpOnTheAdminStatus             states=120        distinct=37        depth=4   1s
+SeamSolo_BugPivChangeResetsStatus.cfg        RED: ExemptRefusalPreservesStatus        states=142        distinct=42        depth=4   1s
+SeamSolo_BugPwStatusIgnoresAdmin.cfg         RED: NoKeyOpOnTheAdminStatus             states=175        distinct=47        depth=4   1s
+SeamSolo_BugRefusedValidateDropsUnlock.cfg   RED: ExemptRefusalPreservesStatus        states=109        distinct=32        depth=4   0s
+SeamSolo_BugRefusedValidateGrants.cfg        RED: NoStatusAfterARefusedAuth           states=394        distinct=72        depth=5   1s
+SeamSolo_BugRemoveCodeUnvalidated.cfg        RED: AccessCodeRemovalNeedsTheCode       states=420        distinct=73        depth=5   1s
+SeamSolo_BugReselectResetsStatus.cfg         RED: ReselectPreservesAccessStatus       states=119        distinct=37        depth=4   1s
+SeamSolo_BugSelectKeepsOtherApplet.cfg       RED: NoStatusOutsideItsSelection         states=77         distinct=27        depth=4   0s
+SeamSolo_BugSigPinNotSpent.cfg               RED: NoKeyOpOnTheAdminStatus             states=1752       distinct=206       depth=7   1s
+SeamSolo_BugUserStatusOpensAdmin.cfg         RED: NoKeyOpOnTheAdminStatus             states=158        distinct=46        depth=4   1s
+Store.cfg                                    GREEN                                    states=4185       distinct=364       depth=7   1s
+StoreMut_BugCacheFaultAsAbsent.cfg           RED: NoFalseAbsent                       states=55         distinct=24        depth=3   0s
+StoreMut_BugDeleteHidesFaultedDrop.cfg       RED: NoSilentOrphan                      states=175        distinct=61        depth=4   0s
+StoreMut_BugDeleteMetaOnlyUnderPresent.cfg   RED: NoOrphanedMetadata                  states=174        distinct=58        depth=4   1s
+StoreMut_BugDeleteValueBeforeMeta.cfg        RED: NoOrphanedMetadata                  states=171        distinct=61        depth=4   1s
+StoreMut_BugMetaAddDropsOnFault.cfg          RED: NoRecordLostToMetaWrite             states=183        distinct=58        depth=4   0s
+StoreMut_BugMetaDeleteDropsOnFault.cfg       RED: NoFalseMetaAbsent                   states=183        distinct=57        depth=4   1s
+StoreMut_BugTruncatedScanDecidesAll.cfg      RED: NoFalseAbsent                       states=59         distinct=25        depth=3   1s
+StoreSolo_BugCacheFaultAsAbsent.cfg          RED: NoFalseAbsent                       states=55         distinct=24        depth=3   1s
+StoreSolo_BugDeleteHidesFaultedDrop.cfg      RED: NoSilentOrphan                      states=175        distinct=61        depth=4   0s
+StoreSolo_BugDeleteMetaOnlyUnderPresent.cfg  RED: NoOrphanedMetadata                  states=195        distinct=66        depth=4   1s
+StoreSolo_BugDeleteValueBeforeMeta.cfg       RED: NoOrphanedMetadata                  states=171        distinct=61        depth=4   1s
+StoreSolo_BugMetaAddDropsOnFault.cfg         RED: NoRecordLostToMetaWrite             states=183        distinct=58        depth=4   1s
+StoreSolo_BugMetaDeleteDropsOnFault.cfg      RED: NoFalseMetaAbsent                   states=183        distinct=58        depth=4   0s
+StoreSolo_BugTruncatedScanDecidesAll.cfg     RED: NoFalseAbsent                       states=59         distinct=25        depth=3   1s
+StoreInduction.cfg                           GREEN                                    states=12460      distinct=1000      depth=1   1s
+StoreInductionMut_BugMetaAddDropsOnFault.cfg RED: NoRecordLostToMetaWrite             states=1499       distinct=1002      depth=2   1s
+Lattice.cfg                                  GREEN                                    states=2431       distinct=243       depth=11  1s
+LatMut_BugRecoveryWithoutSecret.cfg          RED: BudgetRisesOnlyWithItsSecret        states=17         distinct=9         depth=3   0s
+LatMut_BugUseWhenBlocked.cfg                 RED: NoAuthWhenBlocked                   states=73         distinct=30        depth=4   1s
+LatMut_BugWrongDoesNotSpend.cfg              RED: WrongAttemptIsCharged               states=2          distinct=2         depth=2   1s
+LatSolo_BugRecoveryWithoutSecret.cfg         RED: BudgetRisesOnlyWithItsSecret        states=17         distinct=9         depth=3   0s
+LatSolo_BugUseWhenBlocked.cfg                RED: NoAuthWhenBlocked                   states=83         distinct=31        depth=4   1s
+LatSolo_BugWrongDoesNotSpend.cfg             RED: WrongAttemptIsCharged               states=2          distinct=2         depth=2   1s
+Policies.cfg                                 GREEN                                    states=45253      distinct=2268      depth=14  1s
+PolicyMut_BugOathCodeIgnored.cfg             RED: OathCredentialNeedsItsGates         states=269        distinct=63        depth=4   0s
+PolicyMut_BugOathTouchIgnored.cfg            RED: OathCredentialNeedsItsGates         states=291        distinct=65        depth=4   1s
+PolicyMut_BugOtpCodeIgnored.cfg              RED: OtpSlotMutationNeedsItsCode         states=363        distinct=71        depth=4   1s
+PolicyMut_BugOtpCounterRepeats.cfg           RED: OtpCounterNeverRepeats              states=311        distinct=69        depth=4   1s
+PolicyMut_BugPgpAttributeKeepsKey.cfg        RED: AttributeChangeInvalidatesTheKey    states=165        distinct=49        depth=4   0s
+PolicyMut_BugPivAlwaysDoesNotSpend.cfg       RED: PivAlwaysSpendsFreshness            states=636        distinct=116       depth=5   1s
+PolicyMut_BugPivPolicyIgnored.cfg            RED: PivOperationNeedsSlotPolicy         states=33         distinct=14        depth=3   1s
+PolicySolo_BugOathCodeIgnored.cfg            RED: OathCredentialNeedsItsGates         states=251        distinct=61        depth=4   1s
+PolicySolo_BugOathTouchIgnored.cfg           RED: OathCredentialNeedsItsGates         states=291        distinct=65        depth=4   0s
+PolicySolo_BugOtpCodeIgnored.cfg             RED: OtpSlotMutationNeedsItsCode         states=363        distinct=71        depth=4   1s
+PolicySolo_BugOtpCounterRepeats.cfg          RED: OtpCounterNeverRepeats              states=311        distinct=69        depth=4   1s
+PolicySolo_BugPgpAttributeKeepsKey.cfg       RED: AttributeChangeInvalidatesTheKey    states=165        distinct=49        depth=4   0s
+PolicySolo_BugPivAlwaysDoesNotSpend.cfg      RED: PivAlwaysSpendsFreshness            states=592        distinct=110       depth=4   1s
+PolicySolo_BugPivPolicyIgnored.cfg           RED: PivOperationNeedsSlotPolicy         states=33         distinct=14        depth=3   1s
+Admin.cfg                                    GREEN                                    states=101        distinct=8         depth=3   1s
+AdminMut_BugAdminGateable.cfg                RED: AdminSurfaceAlwaysReachable         states=2          distinct=2         depth=2   0s
+AdminMut_BugLockWriteResetsCaps.cfg          RED: DisableSetSurvivesLockWrite         states=86         distinct=9         depth=3   1s
+AdminMut_BugMaskIsCosmetic.cfg               RED: DisabledAppletNeverDispatches       states=40         distinct=10        depth=3   1s
+AdminMut_BugPrivilegedOpUngated.cfg          RED: PrivilegedOpNeedsPresence           states=21         distinct=10        depth=3   0s
+AdminSolo_BugAdminGateable.cfg               RED: AdminSurfaceAlwaysReachable         states=2          distinct=2         depth=2   1s
+AdminSolo_BugLockWriteResetsCaps.cfg         RED: DisableSetSurvivesLockWrite         states=99         distinct=9         depth=3   1s
+AdminSolo_BugMaskIsCosmetic.cfg              RED: DisabledAppletNeverDispatches       states=40         distinct=10        depth=3   0s
+AdminSolo_BugPrivilegedOpUngated.cfg         RED: PrivilegedOpNeedsPresence           states=21         distinct=10        depth=3   0s
+Display.cfg                                  GREEN                                    states=15         distinct=5         depth=3   1s
+DispMut_BugAnyTapApproves.cfg                RED: OnlyAllowConfirms                   states=15         distinct=6         depth=3   1s
+DispMut_BugPadSubstitutesForCard.cfg         RED: ConfirmNamesTheOperation            states=12         distinct=6         depth=3   0s
+DispMut_BugPreScreenTouchApproves.cfg        RED: StaleTouchApprovesNothing           states=15         distinct=6         depth=4   1s
+DispSolo_BugAnyTapApproves.cfg               RED: OnlyAllowConfirms                   states=15         distinct=6         depth=3   1s
+DispSolo_BugPadSubstitutesForCard.cfg        RED: ConfirmNamesTheOperation            states=12         distinct=6         depth=3   0s
+DispSolo_BugPreScreenTouchApproves.cfg       RED: StaleTouchApprovesNothing           states=15         distinct=6         depth=4   1s
+Boot.cfg                                     GREEN                                    states=77         distinct=24        depth=5   1s
+BootCarry.cfg                                GREEN                                    states=67         distinct=18        depth=5   0s
+BootMut_BugMarkerBeforeScrub.cfg             RED: MarkerNeverLies                     states=55         distinct=26        depth=5   1s
+BootMut_BugPartialLockCarry.cfg              RED: TheWholeLockRides                   states=63         distinct=26        depth=5   1s
+BootMut_BugRekeyKeepsTheMarker.cfg           RED: MarkerNeverLies                     states=2          distinct=2         depth=2   0s
+BootSolo_BugMarkerBeforeScrub.cfg            RED: MarkerNeverLies                     states=55         distinct=26        depth=5   1s
+BootSolo_BugPartialLockCarry.cfg             RED: TheWholeLockRides                   states=61         distinct=26        depth=5   1s
+BootSolo_BugRekeyKeepsTheMarker.cfg          RED: MarkerNeverLies                     states=2          distinct=2         depth=2   0s
+BootCarryMut_BugMarkerBeforeScrub.cfg        RED: MarkerNeverLies                     states=55         distinct=20        depth=5   1s
+BootCarryMut_BugPartialLockCarry.cfg         RED: TheWholeLockRides                   states=59         distinct=20        depth=5   1s
+BootCarryMut_BugRekeyKeepsTheMarker.cfg      RED: MarkerNeverLies                     states=2          distinct=2         depth=2   0s
+BootInduction.cfg                            GREEN                                    states=180        distinct=48        depth=1   1s
+BootInductionMut_BugRekeyKeepsTheMarker.cfg  RED: MarkerNeverLies                     states=101        distinct=50        depth=2   1s
+Transport.cfg                                GREEN                                    states=127        distinct=13        depth=4   0s
+TransMut_BugContIgnoresChannel.cfg           RED: NoCrossChannelSplice                states=42         distinct=11        depth=4   1s
+TransMut_BugContIgnoresSeq.cfg               RED: NoSequenceGap                       states=45         distinct=10        depth=4   1s
+TransMut_BugInitLenUnchecked.cfg             RED: NoBufferOverrun                     states=28         distinct=8         depth=3   0s
+TransSolo_BugContIgnoresChannel.cfg          RED: NoCrossChannelSplice                states=42         distinct=11        depth=4   1s
+TransSolo_BugContIgnoresSeq.cfg              RED: NoSequenceGap                       states=46         distinct=10        depth=4   1s
+TransSolo_BugInitLenUnchecked.cfg            RED: NoBufferOverrun                     states=28         distinct=8         depth=3   0s
+TraceSeams.cfg                               GREEN                                    states=15         distinct=14        depth=14  1s
+TraceSeamsBad.cfg                            RED: Error: Deadlock reached.            states=2          distinct=2         depth=2   1s
+TraceSecurity.cfg                            GREEN                                    states=77         distinct=75        depth=75  1s
+TraceSecurityBadBeta.cfg                     RED: R4aRawRefinesB                      states=21         distinct=20        depth=20  1s
+TraceSecurityBadAlpha.cfg                    RED: R4bAlphaMatchesGamma                states=22         distinct=21        depth=21  0s
+TraceSecurityBadAlphaNoR4b.cfg               GREEN                                    states=77         distinct=75        depth=75  1s
+TraceSecurityBadOutcome.cfg                  RED: R4bEventConsensus                   states=11         distinct=10        depth=10  1s
+TraceSecurityBadUvNotRqd.cfg                 RED: R4cGateAnswers                      states=45         distinct=44        depth=44  1s
+TraceSecurityBadResetWindow.cfg              RED: R4cGateAnswers                      states=76         distinct=75        depth=75  1s
+TraceSecurityBadAlwaysUvArm.cfg              RED: R4cGateAnswers                      states=52         distinct=51        depth=51  1s
+TraceSecurityBadPinSet.cfg                   RED: R4cGateAnswers                      states=13         distinct=12        depth=12  1s
+TokenGate.cfg                                GREEN                                    states=875        distinct=44        depth=3   1s
+TokenGateOracle.cfg                          GREEN                                    states=506        distinct=22        depth=1   1s
+TokenGateDisagreement.cfg                    RED: RequiredGateAgreesWithRelation      states=?          distinct=?         depth=?   1s
+TokenGateMut_BugUnauthorizedEdge.cfg         RED: NoAuthorizationBypassA              states=?          distinct=?         depth=?   1s
+TokenRefinement.cfg                          GREEN                                    states=34038747   distinct=3472034   depth=44  194s
+TokenRefinementBadMap.cfg                    RED: Error: Action property line 130, col 17 to line 130, col 30 of module RSKeyTokenAbstract is violated. states=1483       distinct=497       depth=6   1s
+TokenRefinementOutcome.cfg                   GREEN                                    states=34038747   distinct=3472034   depth=44  206s
+TokenRefinementDeadToken.cfg                 RED: Error: Action property R1oTokenOutcomes is violated. states=2          distinct=2         depth=2   1s
+
+'''

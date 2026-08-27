@@ -40,6 +40,46 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **Every published run-count is written from a recorded run now, and seven
+  were stale when it was.** A run-count is a number saying how much a roster
+  run covered or produced, and this tree typed them: `safety` published as
+  **190 rows** where `run-tlc.sh --tiers` lists **195**; **78** mutation
+  switches with a configuration family of their own where **79** have one, of
+  **80** that exist; `194 configurations — 20 that must come back GREEN and 174
+  that must go RED` in the weekly workflow against **195 / 21 / 174**; a
+  phase-2 baseline of **28 rows** and a **69**-entry live roster against **30**
+  and **71**; a slice page at **57 properties … 194 tiered** against **59** and
+  **199**; and `Shipped.cfg` at `48.7 M distinct states — 539 s` in that same
+  workflow against **77 563 872** and **1869 s**. The seventh is the worst,
+  because `docs/testing.md` introduces it as *the paragraph to quote*: TLC
+  checked its invariants over **48,679,968** distinct states there, against
+  **77 563 872** — sixty per cent low, in the sentence a release is meant to
+  copy. None is a typo: each is a number whose only copy of the truth was the
+  moment somebody typed it.
+- **`formal/runs.toml` is the record they are written from.** Produced by
+  `python scripts/run_count_gate.py --record <log>` over a capture of
+  `formal/run-tlc.sh`, it holds the runner's own matrix per tier and nothing
+  else: the row count, the wall clock and the GREEN/RED tally are counted out
+  of it on every gate run, so no total in it can disagree with the rows it
+  totals. A run is a run of the tier as `--tiers` lists it TODAY — every listed
+  configuration must be in the matrix, every verdict must be the one
+  `floors.txt` requires, no row may sit under its floor, and a row the runner
+  marked `!!` is refused. The first record is `./run-tlc.sh safety` and then
+  `./run-tlc.sh liveness`, which is what `all` does, on 2026-08-27: **195
+  safety rows in 3225 s** and **4 liveness rows in 2118 s**, 22 GREEN and 177
+  RED, not one row short of its floor.
+- **A run-count typed anywhere else reddens the row.** A generated region
+  cannot stop the next sentence being typed somewhere else, which is the half
+  every guard in this tree has failed on, so `docs/`, `formal/README.md`,
+  `.github/` and the two published pages at the root are scanned for the
+  vocabulary: a tally, digits or words against a roster noun, a clause the
+  tight tally cannot see, and a wall clock beside a tier's name — in prose,
+  inside a fenced code block, or inside a YAML comment run. **28** literals
+  match today and **19** are registered with the scope they are history to,
+  each held to occur exactly once and to actually contain the number it
+  excuses. `formal/README.md`'s Results table is generated too: which
+  configurations share a line is a judgement and stays written down, every
+  number beside them is counted out of the record.
 - **The `cfg(kani)` shrinks are derived now, and the hand-written count was
   wrong.** `docs/testing.md` enumerated the production source that means
   something different under the model checker, and rotted twice doing it: it said

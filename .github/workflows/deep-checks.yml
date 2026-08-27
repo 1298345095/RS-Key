@@ -47,10 +47,12 @@
 #   comutants — the semantic model mutants re-injected into production Rust
 #          (`scripts/comutate.py run`). Gating: every recorded code-level kill
 #          must still go red, and a new GAP is an abstraction-fidelity finding.
-#   formal — TLC over formal/: the 194 configurations `run-tlc.sh safety` lists,
-#          their floors and the vacuity check — 20 that must come back GREEN and
-#          174 that must go RED, on the invariant `floors.txt` names wherever it
-#          names one. Gating. It also runs on
+#   formal — TLC over formal/: every configuration `run-tlc.sh safety` lists,
+#          its floor and the vacuity check, each row GREEN or RED as
+#          `floors.txt` says and on the invariant it names wherever it names
+#          one. How many of each is that file's to say: the copy that stood here
+#          said 194 rows, 20 GREEN and 174 RED, and the tier had moved past all
+#          three. Gating. It also runs on
 #          any push touching formal/, so an edit to the model is checked at once
 #          rather than up to a week later. The `liveness` tier is deliberately
 #          not here — it needs a 12g heap, and the kani `heavy` runner has
@@ -521,10 +523,12 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
 
-      # Shipped.cfg alone is 48.7 M distinct states — 539 s on the author's
-      # machine, 21 min re-measured with a gate run beside it; the rest of the
-      # matrix is seconds apiece. Two workers is what run-tlc.sh caps at, and
-      # the runner has four cores.
+      # Shipped.cfg alone dominates the tier and the rest of the matrix is
+      # seconds apiece; its states and its wall clock are a row of
+      # formal/runs.toml, which is where the last observed run of this tier is
+      # kept. A copy here said 48.7 M and 539 s until that file existed, against
+      # 77.6 M and half an hour. Two workers is what run-tlc.sh caps at, and the
+      # runner has four cores.
       # `set -o pipefail` is load-bearing: a `run:` block is `bash -e` WITHOUT it,
       # so the pipe below would report tee's exit code and a RED matrix would pass
       # as green — the exact hole this row exists to close, in the row itself.
