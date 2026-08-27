@@ -40,6 +40,32 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The `credentialManagement` *Begin*'s own decision is proved at its call
+  site.** `SEC-FIDO-001`'s only Kani harness ran a symbolic five-operation
+  interleaving over the walk cursor and asserted an equality about
+  `may_walk_rps` — but it called neither production caller: `begin_rps` and
+  `begin_creds` reproduced the cursor writes, so the Begin's own gate, the
+  `pinUvAuthParam` MAC and the `cm` permission bit and the rpId binding, was
+  never evaluated. The harness proved what follows an authorization it assumed;
+  the property is about the authorization. Three new harnesses in
+  `crates/rsk-fido/src/credmgmt_kani.rs` drive the real `verify_cm_token` and
+  `check_rp_binding` in `authorize_cm`'s own order, behind the `cm.reset()` the
+  subcommand demux performs first, and then the cursor writes verbatim from
+  `enumerate_rps` / `enumerate_creds`. Five claims, all equalities. Two of them
+  close divergences the design page had only "checked by hand": the two call
+  sites write their totals on **opposite sides of `load_keydev()`**, so a seed
+  failure after an authorized Begin leaves the RP walk live and the credential
+  walk dead; and `cm.rp_id_hash` — a cursor field the demux reads back to serve
+  a *Next*, which `begin_creds` never wrote — is the rp the Begin was authorized
+  against.
+  **Its own first run refuted its own D5**: the claim was written as "the rp the
+  TOKEN is bound to" and an unscoped token is authorized for any rp, so the
+  cursor legitimately held one the token was never bound to — 305 s to find, and
+  the wording is "the rp the request named" now. And the `state` Kani tier's cost
+  more than doubled with them: 546 → 1341 s of solving, 9.3 → **15.3 GiB** peak,
+  which is over what a hosted runner has and is recorded in `docs/testing.md` as
+  a decision rather than a margin.
+
 - **The first of the authorization slice's eight assumptions is registered, and
   both its arms run.** `AS-AUTH-2` — the shipped image is built without
   `--features always-uv`, so `gate.alwaysUv` is a free state variable rather than
