@@ -115,6 +115,25 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe at an unauthenticated SELECT handed a host every OATH secret
+  on the card.** `select` derives the session's lock state from a single probe —
+  `validated = !fs.has_key(EF_OATH_CODE)` — and `validated` is the access-code gate
+  on PUT, DELETE, SET CODE, RESET, RENAME, LIST, CALCULATE and CALCULATE ALL. SELECT
+  takes no authentication and the host drives it, so a probe read as "no code set"
+  unlocked the whole credential store for the session with nothing presented.
+  Measured on a code-locked applet: control `LIST` → `6982`, one faulted
+  `EF_OATH_CODE` probe → `9000` and the credential list on the wire. It resolves to
+  CODE SET now, the direction `lock_engaged` and `pin_is_set` already take.
+
+  Found by re-deriving the class mechanically rather than by reading the diff again
+  — the file's OTP-PIN gate 180 lines above had been converted while the applet's
+  primary gate had not.
+
+  Its sibling at `cmd_validate` was left collapsing **on purpose**: `select` now
+  reads an unprobeable code as set, so `validated` is already false in every state
+  that arm can be reached in, and the fallible twin there is bit-identical. A guard
+  nothing can falsify is a comment with a type; the reason is recorded at the site.
+
 - **A card whose boot walk hit one transient fault reported every credential slot
   FULL for the rest of the power cycle — a factory reset included.** `Fs::scan`
   latches `scan_truncated`, and `present_slots` answers "occupied" over the whole

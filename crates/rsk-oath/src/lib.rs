@@ -504,6 +504,11 @@ impl<'a> OathApplet<'a> {
         // A present-but-unreadable code (over-long or corrupt) must keep the applet
         // LOCKED — a fail-open here unlocked it without the access code. A truly
         // absent code leaves the applet as select() set it (unlocked, no code).
+        //
+        // The collapsing probe stands: `select` reads a code it could not probe as
+        // SET and starts the session locked, so `validated` is already false in every
+        // state this arm can be reached in. Measured — a `try_has_key` twin here is
+        // bit-identical, and a guard nothing can falsify is a comment with a type.
         let Some(n) = seal::seal_read(&dev, fs, EF_OATH_CODE, &mut code) else {
             if fs.has_key(EF_OATH_CODE) {
                 self.validated = false;
@@ -1211,7 +1216,11 @@ impl<S: Storage> Applet<Fs<S>> for OathApplet<'_> {
         res.push(TAG_NAME);
         res.push(8);
         res.extend(&self.serial_name());
-        let code_set = fs.has_key(EF_OATH_CODE);
+        // A probe the medium could not serve reads as CODE SET. `validated` below is
+        // the access-code gate on every protected command, SELECT is unauthenticated
+        // and host-driven, and the collapsed `false` opened the whole store for the
+        // session — so the failed probe must lock it, not unlock it.
+        let code_set = fs.try_has_key(EF_OATH_CODE).unwrap_or(true);
         if code_set {
             self.rng.borrow_mut().fill(&mut self.challenge);
             res.push(TAG_CHALLENGE);

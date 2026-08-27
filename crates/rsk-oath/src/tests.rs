@@ -1148,7 +1148,7 @@ fn otp_pin_set_before_burn_still_verifies_after_burn() {
 }
 
 /// Lock the applet behind an access code, so a fresh SELECT starts unvalidated.
-fn lock_with_code(app: &mut OathApplet, fs: &mut Fs<RamStorage>) {
+fn lock_with_code<S: Storage>(app: &mut OathApplet, fs: &mut Fs<S>) {
     let mut code_key = vec![ALG_HMAC_SHA1];
     code_key.extend_from_slice(&[0xAB; 16]);
     let chal = [1u8, 2, 3, 4, 5, 6, 7, 8];
