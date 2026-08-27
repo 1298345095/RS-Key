@@ -40,6 +40,63 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The registry's one word is a projection now, and the six questions it was
+  mixing are printed apart.** The closed slice below took `SEC-FIDO-001` from one
+  Kani harness to four and landed the first mutant in this tree ever to redden a
+  proof — **and its `status` would have read `BOUNDED` with one harness or
+  four**, because `assurance_gate.py` derives that word from a harness *name*.
+  `scripts/evidence_gate.py` derives seven axes instead — model, co-refutation,
+  trace, Kani, hardware, scope and freshness — and writes
+  `docs/assurance-vector.md` from them, so a release sentence cannot outrun the
+  axes it is about. What the vector says about the best-evidenced row in the
+  registry and one word could not: `NoAuthorizationBypass` is asserted by **2**
+  of the 45 configurations that name it — the other 43 are mutants and historical
+  runs recorded RED — carries **no** trace evidence of its own, **no** board result, and is
+  claimed on **3** of the ledger's built images.
+- **Two of the six axes could not be derived as the roadmap words them, and the
+  page says so rather than printing a column.** `hardware` has no source: nothing
+  in the tree records a board run, so the axis reads a bundle's DECLARATION and
+  the rules are about a declaration never arriving without the revision it was
+  taken on. `trace` is DIRECT — a recorded session reaches a property only
+  through a configuration that checks *that* property, so the refinement rows
+  carry the session and the invariants they refine do not inherit it.
+- **The migration is lossless because the word holds nothing of its own.** No
+  configuration names it → `ACCEPTED-RISK`; a Kani harness names it → `BOUNDED`;
+  anything else → `MODELLED-ONLY`. All **59** rows rebuild exactly. §4.3
+  condition 11 asks on which inputs such an oracle *disagrees* with what it
+  checks, and this one's answer is measured and recorded on the page: **none** —
+  it reads the two derivations `assurance_gate.py` already forces the word from.
+  That is the result, not a weakness: the scalar was never information.
+- **Three rules the tree had only as prose.** The hand-written field set is
+  closed (the registry header has said "HAND-WRITTEN FIELDS ONLY" since it was
+  written, and a hand-written `kani = 4` column was free until now); a bundle
+  claiming a board result — as a subject, as a `measurement` method, or by naming
+  an RP2350 stepping anywhere in its text — must record `build.board_revision`,
+  and a board field nothing rests on is refused the other way; and every
+  derivation is floored **per session, per source** where its input exists and it
+  found none of it.
+- **The independent review of this row found eight defects, and every one was the
+  same family: a rule closed in one spelling of the thing it is about.** The
+  freshness axis reached the 2 tagged owners of `SEC-FIDO-001` and not the 5
+  untagged ones its own co-refutation patches target; the hardware rule read 2
+  spellings of 3, walking past a stepping written into `expires_on_stepping` —
+  the bundle schema's *designated* board-dependency field; the `trace` and
+  `model` axes counted configurations that are RED **by design** as evidence
+  *for* the property; a "may not say" bullet templated with its own count
+  inverted into "the hardware axis is **1 of 59**" the moment the axis moved; and
+  a total floor stayed silent while one row's session moved into a shell variable
+  and four properties quietly lost their trace evidence. All eight are closed and
+  each is a case in the table.
+- **30 mutations of the gate, 30 killed, 0 survivors** — one per rule *and one
+  per derivation clause*, which is the criterion the review corrected: the first
+  nine tested the rules the author had in mind and left the Kani-harness half of
+  the freshness axis deletable with the whole suite green. The table is 52 cases;
+  the seven mutations that also redden the real checkout are the seven that would
+  have published a wrong number. Falsified through the row as well as the
+  function: a hand-written `hardware` column in `assurance/properties.toml` was
+  driven through `nix develop -c ./scripts/check.sh`, which reached
+  `== evidence vector ==` after 100 other rows and exited **1**.
+
 - **The first closed slice's raw evidence bundle, held to stage 1A's ten-group
   contract.** `assurance/bundle/SEC-FIDO-001.toml` carries all ten groups —
   property/subject/owners, commit/build/features, method and bounds as structured

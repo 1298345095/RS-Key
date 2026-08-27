@@ -8,7 +8,8 @@
 # and device tests carry its name — is DERIVED by scripts/assurance_gate.py and
 # printed, never stored. A hand-written copy of derivable evidence rotted in
 # three of six fields before a line of code existed; that experiment is not
-# repeated here.
+# repeated here. That sentence was prose until `scripts/evidence_gate.py`:
+# an eighth key on a row, or a table beside [[property]], is refused there now.
 #
 # One derived column is worth naming because it changes how a status reads.
 # `Co-refuted` counts this property's model mutants whose CODE twin was patched
@@ -24,6 +25,11 @@
 # harness on the property forces BOUNDED, none allows only MODELLED-ONLY.
 # PROVEN and OBSERVED are rejected until the tree grows evidence of those
 # classes — a status rule nothing can trip is a check that cannot fail.
+#
+# `status` is therefore not information: it is `docs/assurance-vector.md`'s
+# model and kani axes projected onto one word, and `scripts/evidence_gate.py`
+# rebuilds it here on every run rather than reading it. Six axes move under it
+# independently, and the word moves with two of them.
 #
 # `source` is the root of the evidence chain, so a threat-model source names the
 # CLAUSE — `docs/threat-model.md#TM-…`, an id of `assurance/threat_clauses.toml`

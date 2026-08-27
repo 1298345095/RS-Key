@@ -642,6 +642,12 @@ run "ghost completeness"       python scripts/ghost_gate.py
 # counts LEAVES and floors them per group — and refuses a cost written as a
 # range, which is an estimate wearing a measurement's field.
 run "slice evidence bundle"    python scripts/bundle_gate.py
+# And the registry's one word, split into the six questions it was mixing. The
+# slice above moved SEC-FIDO-001 from one Kani harness to four and its `status`
+# would have read the same with either, because the word derives from a harness
+# NAME. This derives six axes apart, rebuilds the word from two of them, and
+# writes the public page so a release sentence cannot outrun the axes.
+run "evidence vector"          python scripts/evidence_gate.py
 run "token refinement export" ./scripts/token_refinement.sh --check
 run "token refinement completeness" python scripts/token_refinement_gate.py
 # The two guards above decide whether the gate covers the tree, and neither had
