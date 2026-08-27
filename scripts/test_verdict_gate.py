@@ -59,7 +59,24 @@ FAMILIES = [row["pattern"] for row in ROWS if verdict_gate.GLOB.search(row["patt
 FLOORED = [row["pattern"] for row in ROWS if row["floor"] is not None]
 #: Subjects of a floor: the configurations a floored row decides, plus the
 #: coverage ratchets, which are the same ratchet written `@Name value`.
-SUBJECTS = FLOORED + sorted(RATCHETS)
+#:
+#: SCOPED TO ROWS THE PREVIOUS REGISTRY ALSO HAS, and the reason is measured
+#: rather than tidy. `previous_registry` walks back to the newest COMMITTED
+#: `floors.txt` whose bytes differ from the working tree's, so a row introduced
+#: by that very commit has no earlier version — and "a floor may fall, but not
+#: quietly" has nothing to compare for it. Asserting the rule there asserts a
+#: check that cannot run: `AlwaysUv.cfg` failed both arms for exactly that
+#: reason, one commit after it was added, while `TokenGate.cfg` (added one
+#: commit earlier) passed them.
+SUBJECTS = [
+    subject
+    for subject in FLOORED + sorted(RATCHETS)
+    if any(
+        line.split()[:1] == [subject.lstrip("@").split()[0]] or subject in line
+        for line in (PREVIOUS or "").splitlines()
+    )
+]
+assert SUBJECTS, "no floored row survives into the previous registry — the arms below run over nothing"
 #: The rows that name ONE configuration and expect RED — ten of them, and the
 #: four family arms ran over none, so a new exact RED did not "arrive here
 #: parametrized" the way a new family does. Derived for the same reason.
