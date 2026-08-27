@@ -297,7 +297,13 @@ def tree(tmp_path):
 
 
 def only(problems, needle):
-    """The problems mentioning `needle`, so a message is asserted, not a count."""
+    """The problems mentioning `needle`, so a message is asserted, not a count.
+
+    On a failure this prints `assert []`, and the UNFILTERED list is on the
+    `+ where … = problems()` line under it. Read that line: a neutered rule was
+    reported as "the gate stayed silent" over seven cases where a NEIGHBOUR's
+    rule had fired and `problems()` was never empty.
+    """
     return [p for p in problems if needle in p]
 
 

@@ -130,10 +130,9 @@ FLOORS = {
     "build": 6,
     "method": 20,
     "tool": 20,
-    # 18 and not 30: 30 was written before the group existed and was never a
-    # measurement of anything — the group carries 22 keys, one per artifact plus
-    # one per gate this slice moved. Calibrated UNDER the measurement, like every
-    # other ratchet here; it has never been green at 30, so this lowers nothing.
+    # 18 and not 30: the group carries 22 keys, and 30 was written before it
+    # existed and was never a measurement. Under the measurement like every
+    # ratchet here — it has never been green at 30, so this lowers nothing.
     "result": 18,
     "artifact": 8,
     "assumption": 30,
