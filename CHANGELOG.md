@@ -97,6 +97,16 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   driven through `nix develop -c ./scripts/check.sh`, which reached
   `== evidence vector ==` after 100 other rows and exited **1**.
 
+- **The co-refutation count had four hand-written copies and every one had
+  rotted.** `assurance/properties.toml`'s header said "28 of the 44",
+  `formal/README.md` said "42 modelled-only" and "27 of those 42",
+  `assurance_gate.py`'s own docstring said "twenty-eight of the forty-four", and
+  `test_assurance_gate.py` said "28 of 44" — while the tree has **46**
+  MODELLED-ONLY rows, 28 of which carry a driven, killed code twin. The number is
+  generated into `docs/assurance-vector.md` now and the four copies point at it,
+  which is 1A п.2's open class closed the way §7.1 asks rather than refreshed for
+  the next reader to find stale again.
+
 - **The first closed slice's raw evidence bundle, held to stage 1A's ten-group
   contract.** `assurance/bundle/SEC-FIDO-001.toml` carries all ten groups —
   property/subject/owners, commit/build/features, method and bounds as structured

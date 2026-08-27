@@ -15,8 +15,10 @@
 # `Co-refuted` counts this property's model mutants whose CODE twin was patched
 # into the real tree and caught by the real suite (`formal/comutants.toml`). That
 # is evidence about the code, and the status ladder cannot see it — BOUNDED keys
-# on a Kani harness name. 28 of the 44 MODELLED-ONLY rows carry one, so
-# MODELLED-ONLY means "no Kani harness", never "untested".
+# on a Kani harness name. MODELLED-ONLY means "no Kani harness", never
+# "untested"; how many of those rows carry a twin is generated into
+# docs/assurance-vector.md, because this sentence carried "28 of the 44" while
+# the tree had 46 of them.
 #
 # The gate holds this file against the tree in both directions: every invariant
 # any formal/*.cfg checks must have exactly one entry, and every entry must name

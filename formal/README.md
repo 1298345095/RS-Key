@@ -3139,11 +3139,13 @@ its existence is not a recorded hardware PASS.
 The status ladder has three rungs and only one of them looks at code:
 `BOUNDED` is set by a Kani harness carrying the property's name. So a property
 whose concrete face is covered by an exhaustive unit suite reads identically to
-one covered by nothing — and the summary line "42 modelled-only" invites exactly
-the wrong conclusion.
+one covered by nothing — and the summary line's modelled-only count invites
+exactly the wrong conclusion.
 
-Measured, going the other way: **27 of those 42 have a model mutant whose CODE
-twin was patched into the real tree and caught by the real suite.** The whole
+Measured, going the other way: **most of those rows have a model mutant whose
+CODE twin was patched into the real tree and caught by the real suite** — how
+many is generated into [`docs/assurance-vector.md`](../docs/assurance-vector.md),
+because the two numbers this paragraph used to carry had both gone stale. The whole
 retry lattice is one example — `NoAuthWhenBlocked`, `WrongAttemptIsCharged` and
 `BudgetRisesOnlyWithItsSecret` each carry a driven, killed co-mutant, and driving
 five further mutations of `check_ref`'s counter arithmetic by hand killed five of
