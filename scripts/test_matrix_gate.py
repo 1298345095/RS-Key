@@ -31,6 +31,7 @@ import pytest
 
 import gate_lines
 import matrix_gate
+import platform_gate
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -213,18 +214,26 @@ why = "no-touch replaces the press with an auto-confirm."
 
 [[question]]
 column = "firmware-no-touch"
+owner = "contributor"
+settled_by = "absence"
 text = "does SEC-A-002 depend on the press indirectly?"
 
 [[question]]
 column = "firmware-screen"
+owner = "maintainer"
+settled_by = "ruling"
 text = "the screen build is not default plus screen."
 
 [[question]]
 column = "loud"
+owner = "contributor"
+settled_by = "evidence"
 text = "is a never-shipped build in the supported set?"
 
 [[question]]
 column = "board-a"
+owner = "contributor"
+settled_by = "sameness"
 text = "the board moves the presence pin."
 """
 
@@ -426,20 +435,31 @@ def test_the_page_and_the_refusal_are_the_same_derivation(tree, capsys):
         assert f"`{crate}`" in cell and crate in said
 
 
+def open_gaps(tree):
+    """The Open gaps table as {column: [cells]}, sliced by its own heading.
+
+    By heading rather than by counting pipes: the first version keyed on a row
+    having five of them, and gaining the owner and the route made every row
+    invisible to it — which is a probe that stops probing without going red.
+    """
+    page = (tree.root / matrix_gate.ARTIFACT).read_text()
+    body = page.split("## Open gaps", 1)[1].split("\n## ", 1)[0]
+    return {
+        line.split("|")[1].strip(): [cell.strip() for cell in line.split("|")[2:-1]]
+        for line in body.splitlines()
+        if line.startswith("| `")
+    }
+
+
 def test_the_open_gaps_table_counts_the_rows_whose_own_crate_moved(tree):
     """What a `gap` costs, per column. A board preset sets knobs and no cargo
     feature, so NOTHING the properties are about compiles differently there and
     the count is zero however many rows are open — which is the distinction three
     parked measurement builds turned on, and the one a `gap` count alone hides."""
-    page = (tree.root / matrix_gate.ARTIFACT).read_text()
-    rows = {
-        line.split("|")[1].strip(): tuple(line.split("|")[2:4])
-        for line in page.splitlines()
-        if line.startswith("| `") and line.count("|") == 5
-    }
-    assert rows["`board-a`"] == (" 2 ", " 0 "), "knobs only: no owner crate moves"
-    assert rows["`firmware-no-touch`"] == (" 1 ", " 1 ")
-    assert rows["`firmware-screen`"] == (" 2 ", " 2 ")
+    rows = open_gaps(tree)
+    assert rows["`board-a`"][:2] == ["2", "0"], "knobs only: no owner crate moves"
+    assert rows["`firmware-no-touch`"][:2] == ["1", "1"]
+    assert rows["`firmware-screen`"][:2] == ["2", "2"]
 
 
 def test_the_delta_column_says_so_when_no_column_derives_as_the_default_build(tree):
@@ -590,7 +610,8 @@ why = "identical feature closure; the delta is a USB identity pair."
     tree.edit(
         "assurance/configurations.toml",
         '[[question]]\ncolumn = "firmware-no-touch"',
-        '[[question]]\ncolumn = "firmware-pinned"\ntext = "is a pinned USB identity a'
+        '[[question]]\ncolumn = "firmware-pinned"\nowner = "contributor"\n'
+        'settled_by = "evidence"\ntext = "is a pinned USB identity a'
         ' security control at all?"\n\n[[question]]\ncolumn = "firmware-no-touch"',
     )
     said = red(tree, capsys)
@@ -864,7 +885,8 @@ def test_a_declared_gap_cell_is_rejected(tree, capsys):
 def test_a_column_with_gaps_and_no_question_is_rejected(tree, capsys):
     tree.edit(
         "assurance/configurations.toml",
-        '[[question]]\ncolumn = "firmware-no-touch"\ntext = "does SEC-A-002 depend on the press indirectly?"\n\n',
+        '[[question]]\ncolumn = "firmware-no-touch"\nowner = "contributor"\n'
+        'settled_by = "absence"\ntext = "does SEC-A-002 depend on the press indirectly?"\n\n',
         "",
     )
     said = red(tree, capsys)
@@ -876,7 +898,8 @@ def test_a_question_for_a_column_with_nothing_left_to_settle_is_rejected(tree, c
     tree.edit(
         "assurance/configurations.toml",
         '[[question]]\ncolumn = "loud"',
-        '[[question]]\ncolumn = "firmware-pinned"\ntext = "nothing is open here."\n\n[[question]]\ncolumn = "loud"',
+        '[[question]]\ncolumn = "firmware-pinned"\nowner = "contributor"\n'
+        'settled_by = "evidence"\ntext = "nothing is open here."\n\n[[question]]\ncolumn = "loud"',
     )
     assert "no `gap` cell left to settle" in red(tree, capsys)
 
@@ -892,6 +915,109 @@ def test_a_settling_question_that_is_a_placeholder_is_rejected(tree, capsys):
     said = red(tree, capsys)
     assert "no settling question" in said
     assert "is the same shrug" in said
+
+
+# --- who owes the answer, and what would end the deferral --------------------
+
+
+def test_the_owner_vocabulary_is_the_one_platform_gate_already_chose():
+    """Borrowed, not re-picked — the identity is the assertion. A copy satisfies
+    every rule below on the day it is written and is a second answer to one
+    question the first time either register gains a role, which is the shape this
+    repo has already been bitten by: a shared constant imported, then not used at
+    the site it was imported for."""
+    assert matrix_gate.OWNERS is platform_gate.OWNERS
+
+
+def test_a_question_nobody_owns_is_rejected(tree, capsys):
+    """Stage 0's last exit bullet. The vocabulary is `platform_gate`'s, borrowed
+    rather than re-picked — a second one would be two answers to one question."""
+    tree.edit("assurance/configurations.toml", 'owner = "contributor"\nsettled_by = "absence"', 'settled_by = "absence"')
+    said = red(tree, capsys)
+    assert "is owed by None" in said
+    assert "a wish with a column number" in said
+
+
+def test_a_question_owed_to_a_role_that_does_not_exist_is_rejected(tree, capsys):
+    tree.edit("assurance/configurations.toml", 'owner = "maintainer"', 'owner = "someone"')
+    assert "is owed by 'someone', which is not one of" in red(tree, capsys)
+
+
+def test_a_question_that_cannot_say_what_would_end_it_is_rejected(tree, capsys):
+    """A deferral with no route is not a deferral; it is the same shrug the word
+    floor catches one field over."""
+    tree.edit("assurance/configurations.toml", 'settled_by = "evidence"', "")
+    said = red(tree, capsys)
+    assert "settled_by = None" in said
+    assert "is not deferred" in said
+
+
+def test_a_question_waiting_on_a_ruling_that_nobody_can_rule_is_rejected(tree, capsys):
+    """`ruling` means a decision no derivation can produce, and in this repo that
+    is the maintainer's — AGENTS.md's maintainer-only list. Any other owner on it
+    is a deferral pointed at somebody who cannot end it."""
+    tree.edit("assurance/configurations.toml", 'owner = "maintainer"', 'owner = "contributor"')
+    said = red(tree, capsys)
+    assert "waits on a ruling and is owed by 'contributor'" in said
+    assert "per AGENTS.md" in said
+
+
+def test_a_question_waiting_on_an_equivalence_the_tree_refutes_is_rejected(tree, capsys):
+    """The sharpest of the four, and the one this register was built out of:
+    three columns sat parked on "maybe it is equivalent" while the derivation
+    already said it is not. `loud` enables a cargo feature, so its closure is not
+    the default build's and `same-cargo-features` can never be reached there."""
+    tree.edit("assurance/configurations.toml", 'settled_by = "evidence"', 'settled_by = "sameness"')
+    said = red(tree, capsys)
+    assert "waits on an equivalence" in said
+    assert "['firmware']" in said and "the tree already refuses it here" in said
+
+
+def test_a_question_waiting_on_an_absence_that_cannot_happen_is_rejected(tree, capsys):
+    """The other refusable route. A board preset sets knobs and no cargo feature,
+    so nothing is compiled out and every open row's owner is compiled in —
+    `out-of-scope` has neither of its bases to reach for."""
+    tree.edit("assurance/configurations.toml", 'settled_by = "sameness"', 'settled_by = "absence"')
+    said = red(tree, capsys)
+    assert "waits on the code being absent" in said
+    assert "neither basis `out-of-scope` takes can reach a cell here" in said
+
+
+def test_a_field_a_question_does_not_read_is_rejected(tree, capsys):
+    """`[[cell]]` has refused a stray field since it shipped and `[[question]]`
+    had no list at all, so a key added here was read by nothing and printed by
+    nothing — including a `review_by` somebody adds because the criterion says
+    "date"."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'settled_by = "sameness"',
+        'settled_by = "sameness"\nreview_by = "2027-01-01"',
+    )
+    said = red(tree, capsys)
+    assert "carries ['review_by'], which nothing reads" in said
+    assert "checked by nothing and printed by nothing" in said
+
+
+def test_a_ledger_table_nothing_reads_is_rejected(tree, capsys):
+    """The same question one level out, asked because the field one was. A
+    mistyped `[[cell]]` is caught by the cells going missing; a table under a NEW
+    name is a section of the file written for no reader, and nothing saw it."""
+    tree.edit(
+        "assurance/configurations.toml",
+        '[[question]]\ncolumn = "board-a"',
+        '[[review]]\nwhen = "2027-01-01"\n\n[[question]]\ncolumn = "board-a"',
+    )
+    said = red(tree, capsys)
+    assert "carries a `review` table" in said
+    assert "a section of this file no reader reads" in said
+
+
+def test_the_page_prints_who_owes_each_question_and_what_would_end_it(tree):
+    """A field the page does not show is the field-nothing-reads one step out:
+    the gate would hold it and no reader would ever see it."""
+    rows = open_gaps(tree)
+    assert rows["`firmware-screen`"][2:4] == ["maintainer", "`ruling`"]
+    assert rows["`board-a`"][2:4] == ["contributor", "`sameness`"]
 
 
 def test_a_reason_that_is_a_placeholder_is_rejected(tree, capsys):

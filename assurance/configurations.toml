@@ -461,9 +461,53 @@ build", and `release-build.yml` refuses to create a release carrying one. \
 # all. What disposes of a cell is what the tree COMPILES, which the generated
 # page derives per column: the crates this configuration resolves unlike the
 # default build, and how many of the column's open rows are owned by one of them.
+#
+# EVERY QUESTION NAMES AN OWNER AND A ROUTE OUT — roadmap §6 stage 0's last exit
+# bullet, which asks for an owner and a decision, or a deferral with a review
+# point. `owner` is scripts/platform_gate.py's four-role vocabulary, borrowed
+# rather than re-picked: that file chose it because "someone should look at this"
+# names nobody, which is the same reason it is wanted here, and a second
+# vocabulary would be two answers to one question. `maintainer` is the role that
+# means a decision no derivation can produce, per AGENTS.md's maintainer-only
+# list.
+#
+# `settled_by` is the review point, and it is an EVENT and not a DATE. The
+# calendar half is already argued down for the sibling register — platform_gate:
+# "a trigger for a measurement nobody has made is a placeholder, and 17
+# placeholders are what a required field would produce today" — and that
+# argument is adopted, though not by analogy, because the two registers face
+# opposite ways: `revalidated_by` asks what would UNSETTLE a settled result,
+# which a pending row cannot answer, and this asks what would SETTLE an open
+# one, which is answerable exactly when the question is well posed. What rules a
+# date out here is narrower. Enforced, a `review_by` reddens scripts/check.sh on
+# a day nobody touched the tree and the repair is to move the date — a red that
+# names no defect and teaches the reader to reset the timer. Unenforced, it is
+# the field-nothing-reads a [[cell]] is refused for carrying. Neither is a check.
+# What prompts the review instead is the row itself: the page is regenerated and
+# byte-diffed on every run, so a new package, feature, board or property
+# reprints every question below in the same diff that adds the column.
+#
+# The four values are this file's own disposition table read backwards, so each
+# names the [[cell]] the question would become:
+#   evidence   a check.sh row (or a proof) built at THIS column, which does not
+#              exist yet -> `covered`/`conditional` on `check-sh-rows`
+#   absence    the property's code or the gate it is about is not in this image
+#              -> `out-of-scope` on `crate-absent`/`gate-compiled-out`
+#   sameness   this column compiles the property's code as another does ->
+#              `equivalent` on `same-cargo-features`
+#   ruling     a decision no derivation can produce; `owner` is then maintainer
+# Two of the four are ones the tree can refuse: `sameness` where the derived
+# closure delta is non-empty — the answer the three measurement columns were
+# parked on — and `absence` on a column that enables no feature production Rust
+# gates on and compiles every open row's owner, which is every board preset.
+# What none of it can do is tell six real words from six nonsense ones; four
+# candidate rules for that were measured against the questions below and all
+# four were refuted by them (the list is in matrix_gate.check_question).
 
 [[question]]
 column = "firmware-no-touch"
+owner = "contributor"
+settled_by = "absence"
 text = """
 Beyond the four presence statements: which rows depend on a presence decision \
 only INDIRECTLY — a reset is reached through a touch, so does `SEC-FIDO-006`'s \
@@ -471,18 +515,26 @@ torn-reset argument still describe an image where the touch is instant?"""
 
 [[question]]
 column = "firmware-no-touch-pqc"
+owner = "contributor"
+settled_by = "absence"
 text = "As `firmware-no-touch`, plus: does advertising ML-DSA-44 in `getInfo` change any authorization path, or only the algorithm list?"
 
 [[question]]
 column = "firmware-no-touch-fips"
+owner = "contributor"
+settled_by = "absence"
 text = "As `firmware-no-touch`, plus the `fips-profile` question: the locked algorithm policy also raises the PIN floor, so which retry/gate properties are re-measured under it?"
 
 [[question]]
 column = "firmware-no-touch-fips-pqc"
+owner = "contributor"
+settled_by = "absence"
 text = "The union of the `firmware-no-touch`, `firmware-fips` and `firmware-pqc` questions; no evidence is measured on the three-feature combination at all."
 
 [[question]]
 column = "firmware-fips"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 `fips-profile` changes `rsk-fido` and `rsk-piv` — the PIN policy and the \
 permitted algorithm set. `check.sh` runs the `rsk-fido` and `rsk-piv` test \
@@ -492,22 +544,32 @@ it re-checked at the profile's values?"""
 
 [[question]]
 column = "firmware-fips-pqc"
+owner = "contributor"
+settled_by = "evidence"
 text = "As `firmware-fips`, on the combination with `advertise-pqc`; the pair is published and nothing measures the two features together."
 
 [[question]]
 column = "firmware-pqc"
+owner = "contributor"
+settled_by = "evidence"
 text = "`advertise-pqc` only adds ML-DSA-44 to the `getInfo` algorithm list — is that the whole delta for every P0-family row, or does the larger credential/attestation path move with it?"
 
 [[question]]
 column = "firmware-strong-pin"
+owner = "contributor"
+settled_by = "evidence"
 text = "A six-code-point floor and a trivially-guessable-PIN refusal. Does any P0-family statement quantify over PIN values, or do they all treat the PIN as an opaque secret whose policy is someone else's row?"
 
 [[question]]
 column = "firmware-strong-pin-pqc"
+owner = "contributor"
+settled_by = "evidence"
 text = "As `firmware-strong-pin`, on the combination with `advertise-pqc`."
 
 [[question]]
 column = "firmware-always-uv"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 `always-uv` ships `alwaysUv` ON, which changes what `SEC-FIDO-001`'s gate \
 DEMANDS rather than whether it is enforced — and `SEC-FIDO-006B` is about the \
@@ -526,18 +588,26 @@ here."""
 
 [[question]]
 column = "firmware-always-uv-pqc"
+owner = "contributor"
+settled_by = "evidence"
 text = "As `firmware-always-uv`, on the combination with `advertise-pqc`."
 
 [[question]]
 column = "firmware-strict-up"
+owner = "contributor"
+settled_by = "evidence"
 text = "`strict-up` demands a touch on EVERY assertion, dropping the silent `up:false` pre-flight. That strengthens the gate — but `SEC-FIDO-002` is about presence decisions not crossing transports, and this column produces strictly more of them. Is the model's transport arity still the right one?"
 
 [[question]]
 column = "firmware-strict-up-pqc"
+owner = "contributor"
+settled_by = "evidence"
 text = "As `firmware-strict-up`, on the combination with `advertise-pqc`."
 
 [[question]]
 column = "firmware-display"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 This column is NOT `default + display`: it also sets `flashSize = 16M` and \
 `ledKind = none`, and it re-routes user presence through the panel's \
@@ -553,6 +623,8 @@ ceremony claim is conditional on."""
 
 [[question]]
 column = "firmware-2mb"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 2 MB with `KVMAIN` shrunk to 896 K. Do the store properties' models take the \
 partition size as a parameter, and were they checked at the shrunk one? The \
@@ -561,6 +633,8 @@ device's own capacity."""
 
 [[question]]
 column = "firmware-16mb"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 16 MB with the default 1408 K `KVMAIN`. This is the geometry on which a whole \
 KV store survived a wipe the device reported as successful — so for every store \
@@ -569,6 +643,8 @@ the evidence ever produced against this partition map"."""
 
 [[question]]
 column = "firmware-strict-config"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 The largest feature delta in the tree: five crates, and it re-imposes the \
 presence/PIN gates on device-config writes that the DEFAULT build leaves \
@@ -578,6 +654,8 @@ default's — which the matrix has no way to say until someone measures it."""
 
 [[question]]
 column = "keygen-bench"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 A debug vendor command (INS 0x13) that `firmware/Cargo.toml` says never to \
 ship, and it exposes a timing oracle over the primality primitives. Its \
@@ -597,6 +675,8 @@ this image, gated by nothing, reach a statement whose own crate did not move? \
 
 [[question]]
 column = "core1-stats"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 As `keygen-bench`: INS 0x12 exposes per-core candidate/find rates, which time \
 the RSA keygen prime search. The measurement lands in the same place and for \
@@ -606,6 +686,8 @@ re-derived on every run and printed beside this row."""
 
 [[question]]
 column = "bench"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 As `keygen-bench`, and the one of the three the measurement separates rather \
 than groups: `bench` is not a `firmware`-only delta. It turns on \
@@ -622,6 +704,8 @@ whichever `rsk-fido` statements a second timing entrypoint can reach."""
 
 [[question]]
 column = "fido-conformance"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 Built only for the FIDO Conformance Tool run: it suppresses the EdDSA \
 advertisement. Its "is a conformance-only build in the supported set" half was \
@@ -635,10 +719,14 @@ question apply here too?"""
 
 [[question]]
 column = "ea-conformance-rpid"
+owner = "contributor"
+settled_by = "evidence"
 text = "Adds the conformance tool's RPID to the vendor-facilitated enterprise-attestation list, which is an authorization-relevant allowlist. `SEC-FIDO-001` is about gates; is an EA RPID list one of them?"
 
 [[question]]
 column = "largeblob-ext"
+owner = "contributor"
+settled_by = "evidence"
 text = """
 The sharpest orthogonal feature: it serves the CTAP 2.3 `largeBlob` extension \
 INSTEAD OF the 2.1 `largeBlobKey` + `authenticatorLargeBlobs` pair (the spec \
@@ -649,10 +737,14 @@ P0-launch models name?"""
 
 [[question]]
 column = "abrobot-16m"
+owner = "contributor"
+settled_by = "evidence"
 text = "The 16 MB geometry question of `firmware-16mb`, plus a GPIO presence source instead of BOOTSEL."
 
 [[question]]
 column = "abrobot-4m"
+owner = "maintainer"
+settled_by = "evidence"
 text = """
 The narrowest column with anything open, and both open groups are the same \
 question: does a GPIO button on 23 (active-low) deliver the Confirmed/Cancelled \
@@ -662,14 +754,20 @@ the four reset clauses are reached through it."""
 
 [[question]]
 column = "seeed-xiao"
+owner = "contributor"
+settled_by = "evidence"
 text = "2 MB with `KVMAIN` at 896 K — the `firmware-2mb` question on a board that also gates the LED behind a power pin."
 
 [[question]]
 column = "tenstar-usb"
+owner = "contributor"
+settled_by = "evidence"
 text = "The 16 MB geometry question, plus a GPIO presence source on 15."
 
 [[question]]
 column = "waveshare-touch-lcd"
+owner = "maintainer"
+settled_by = "ruling"
 text = """
 The trusted-display BOARD without the `display` feature: 16 MB geometry, no \
 addressable LED, and panel pins compiled as inert constants. The geometry \

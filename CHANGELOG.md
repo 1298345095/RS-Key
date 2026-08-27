@@ -40,6 +40,52 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **Every open question in the build-configuration ledger names who owes the
+  answer and what would end the deferral, and neither is a date.** Stage 0's last
+  exit bullet asked for an owner and a decision, or a deferral with a review date;
+  all 28 `[[question]]` records had `column` and `text` and nothing else.
+  `owner` is now required and is `scripts/platform_gate.py`'s four-role
+  vocabulary **borrowed rather than re-picked** — the identity is asserted, so a
+  copy that would drift is a red row. `settled_by` is the review point and it is
+  typed, not dated: `evidence`, `absence`, `sameness` or `ruling`, which is this
+  file's own disposition table read backwards, each naming the `[[cell]]` the
+  question would become. The calendar half is refused with `platform_gate`'s own
+  argument plus one narrower: enforced, a `review_by` reddens `check.sh` on a day
+  nobody touched the tree and the repair is to move the date; unenforced, it is
+  the field-nothing-reads a `[[cell]]` is already refused for carrying. Two of the
+  four routes are ones the tree can disagree with — `sameness` where the derived
+  closure delta is non-empty (the exact answer three columns had been parked on),
+  and `absence` on a column that enables no gating feature and compiles every open
+  row's owner, which is every board preset. Populated: 26 `contributor`, **2
+  `maintainer`** — `abrobot-4m`, whose 8 open rows all ask whether a GPIO button
+  on 23 has BOOTSEL's Confirmed/Cancelled semantics (a board measurement, and no
+  `PLAT-*` entry covers it), and `waveshare-touch-lcd`, whose ask is whether the
+  tree should build the preset at all or fold it into `firmware-display`.
+  Routes: 23 `evidence`, 4 `absence`, 1 `ruling`, **0 `sameness`** — the
+  vocabulary is the exits from the disposition table and has to be total, so a
+  column whose honest route is an equivalence is not made to write a wrong
+  answer; what earns the value's place is its refusal, which fires either way.
+- **A `[[question]]` had no field allowlist, so a key added to one was read by
+  nothing and printed by nothing** — including a `review_by` somebody adds because
+  the criterion says "date". `[[cell]]` has refused a stray field since it
+  shipped; `[[question]]` does now too, and asking the same question one level out
+  found the ledger's *tables* unguarded as well, so a `[[review]]` section nobody
+  reads is refused. Ten mutations in `scripts/test_matrix_gate.py`, both
+  directions: inverting the `sameness` rule reddens the CLEAN fixture, which is
+  how the inverse defect is told from the real one.
+- **Four candidate rules for telling a real settling question from six nonsense
+  words were measured against the questions already in the tree, and the tree
+  refuted all four.** Requiring a `?` — 14 of 28 carry none and read as
+  statements. Requiring no two alike — the `-pqc` siblings honestly share a route,
+  and six `[[cell]]` `why` bodies are already word for word. Requiring a token the
+  derivation knows (a column, a property id, a feature, a crate, a `check.sh` row
+  label) — 7 of 28 are about flash geometry and GPIO pins and name none of the
+  228. And capping a maintainer-owed question so it is answerable in a sentence,
+  which is backwards: what saves the maintainer from re-deriving is the
+  measurement, and the one question that needs a ruling carries 105 words of it.
+  Recorded rather than quietly dropped; the word floor still catches `TODO` and
+  nothing catches a bad question.
+
 - **Three build-configuration columns were parked on "is a build nobody ships in
   the supported set at all", and the answer was a derivation rather than a
   ruling.** `keygen-bench`, `core1-stats` and `bench` are measurement-only cargo

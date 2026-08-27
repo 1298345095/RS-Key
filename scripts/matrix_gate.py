@@ -46,6 +46,18 @@ compile like, that an `out-of-scope` claiming an absent crate is claiming one
 that is really absent, and that a column carrying `gap` cells also carries the
 question that would settle them — a `gap` with no question is a shrug with a
 verdict column.
+
+And that the question names an OWNER and a ROUTE OUT, which is stage 0's last
+exit bullet: an owner and a decision, or a deferral with a review point. The
+owner is `platform_gate`'s four-role vocabulary, borrowed rather than re-picked.
+The review point is [`SETTLES`] — an event, not a date, and the argument for that
+is where the field is defined. Two of its four values are ones the tree can
+already refuse: `sameness` where the derived closure delta is non-empty, which is
+what three never-published measurement columns had been parked on, and `absence`
+where neither basis `out-of-scope` takes can reach a row, which is every board
+preset. The rest of a question is prose and stays unjudged — four candidate rules
+for telling a real one from six nonsense words were measured against the
+questions in the tree and all four were refuted by them ([`check_question`]).
 """
 
 import functools
@@ -55,6 +67,7 @@ import sys
 import tomllib
 
 import gate_lines
+import platform_gate
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -155,6 +168,51 @@ FLOOR_ROWS = 40
 #: seven words and its shortest `why` is forty-five. It catches a placeholder;
 #: no script can catch a bad question.
 FLOOR_WORDS = 6
+
+#: Who owes each open question an answer. Borrowed from `platform_gate` rather
+#: than re-picked, the way `threat_gate` borrows [`FLOOR_WORDS`] from here: that
+#: file chose these four roles for the reason this register needs them — "someone
+#: should look at this" names nobody — and a second vocabulary would be two
+#: answers to one question. `maintainer` is the role that means a decision no
+#: derivation can produce; it is AGENTS.md's maintainer-only list.
+OWNERS = platform_gate.OWNERS
+
+#: What would settle a column's `gap` cells, TYPED — and it is deliberately not a
+#: date. `platform_gate` already argued the calendar half down for its own
+#: register ("a trigger for a measurement nobody has made is a placeholder") and
+#: that argument is adopted, but not by analogy: the two registers face opposite
+#: ways. `revalidated_by` asks what would UNSETTLE a settled result, which a
+#: pending row cannot answer; this asks what would SETTLE an open one, which is
+#: answerable exactly when the question is well posed. A calendar `review_by`
+#: is the thing that cannot be built here: enforced it reddens `check.sh` on a
+#: day nobody touched the tree, and the repair is to move the date; unenforced it
+#: is the field-nothing-reads this file refuses on `[[cell]]`. What prompts the
+#: review instead is the row itself — the artifact is regenerated and diffed on
+#: every run, so a new package, feature, board or property reprints the question.
+#:
+#: The four values are this file's own [`ALLOWED`] table read backwards: each
+#: names the `[[cell]]` the question would become, and the last names the one no
+#: derivation can produce. All four stay even where nothing claims one — today no
+#: question says `sameness`, and it is the exits from the disposition table that
+#: have to be TOTAL, or a column whose honest route is an equivalence is made to
+#: write a wrong answer. What earns its place is the REFUSAL, not the value.
+SETTLES = {
+    "evidence": (CHECK_SH_ROWS,),
+    "absence": (CRATE_ABSENT, GATE_COMPILED_OUT),
+    "sameness": (SAME_FEATURES,),
+    "ruling": (),
+}
+#: What a `[[question]]` may say. `[[cell]]` has had this since it shipped and
+#: `[[question]]` had none, so a key added to one was read by nothing and printed
+#: by nothing — the field-that-does-not-exist half of the field-nothing-checks
+#: hole one record type over.
+QUESTION_FIELDS = ("column", "text", "owner", "settled_by")
+#: And the same question one level out, asked because the one above was: the
+#: ledger's own tables. A mistyped `[[cell]]` is caught today only by the cells
+#: going missing and the artifact then not matching, but a table nobody reads
+#: under a NEW name — `[[note]]`, `[[review]]` — is a section of this file that
+#: exists for no reader at all, which is the shape both rules above are about.
+LEDGER_TABLES = ("tranche", "cell", "question")
 
 #: A property tag in production Rust. Same two spellings `assurance_gate.py`
 #: validates; read here only for WHICH CRATE owns each property, which is what
@@ -505,6 +563,17 @@ def columns(root, manifests):
     return out
 
 
+def reference_column(cols):
+    """The default build: the column every closure delta is measured against.
+
+    Derived (no cargo feature, no build knob) rather than named, so a renamed
+    `firmware` cannot leave the page silently measuring against nothing. Picking
+    the first of several is not a choice: two columns with no feature and no knob
+    resolve the same workspace, so they are one image under two names.
+    """
+    return next((column for column in cols if column.default), None)
+
+
 def owners(root):
     """property id -> the crates whose production Rust carries its tag."""
     found = {}
@@ -598,6 +667,11 @@ def audit(root):
     except (OSError, tomllib.TOMLDecodeError) as error:
         return [f"{LEDGER} cannot be read as a disposition ledger: {error}"], "matrix-gate: no ledger"
 
+    for table in sorted(set(doc) - set(LEDGER_TABLES)):
+        problems.append(
+            f"{LEDGER} carries a `{table}` table, which is not one of"
+            f" {list(LEDGER_TABLES)} — a section of this file no reader reads"
+        )
     ids = [pid for pid, _name in registry(root)]
     tranche, seen = {}, []
     for name in TRANCHES:
@@ -668,6 +742,10 @@ def audit(root):
             problems.append(
                 f"{column} carries a settling question and has no `gap` cell left to settle"
             )
+    for entry in doc.get("question", []):
+        problems.extend(
+            check_question(root, entry, by_name, reference_column(cols), gaps, own)
+        )
 
     counts = {value: 0 for value in DISPOSITIONS}
     counts["gap"] = sum(len(open_rows) for open_rows in gaps.values())
@@ -680,6 +758,93 @@ def audit(root):
         f" ({', '.join(f'{counts[v]} {v}' for v in DISPOSITIONS)})"
     )
     return problems, summary
+
+
+def check_question(root, entry, by_name, reference, gaps, own):
+    """Who owes a column's open rows an answer, and what would settle them.
+
+    Stage 0's last exit bullet, and its two halves are unequal. The owner is a
+    closed vocabulary and simply checked. The deferral is the part that had to be
+    designed: `settled_by` names the `[[cell]]` the question would become, and
+    two of its four values are ones the tree can already REFUSE — `sameness` on a
+    column whose closure delta is non-empty (the answer this file's three
+    measurement columns were parked on, now derived), and `absence` on a column
+    that enables no gating feature and compiles the default crate set, which is
+    every board preset.
+
+    What it still cannot do is tell six real words from six nonsense ones. FOUR
+    candidate rules were measured against the questions already in the tree and
+    every one of them was refuted by those questions: requiring a `?` (14 of 28
+    carry none and read as statements), requiring no two alike (the `-pqc`
+    siblings honestly share a route, and six `[[cell]]` `why` bodies are already
+    word for word), requiring a token the derivation knows (7 of 28 are about
+    flash geometry and GPIO pins and name no identifier at all), and capping a
+    maintainer-owed question so it stays answerable in a sentence — which is
+    exactly backwards, because what saves the maintainer from re-deriving is the
+    measurement, and the only question here that needs a ruling carries 105 words
+    of it. So the stub is made to satisfy four claims the tree can disagree with
+    instead of one it cannot, and the rest is what `run_count_gate.check_scope`
+    says of its own labels: no program tells a right one from a wrong one.
+    """
+    column = entry.get("column")
+    where = f"{LEDGER}: the settling question for `{column}`"
+    stray = sorted(set(entry) - set(QUESTION_FIELDS))
+    problems = [] if not stray else [
+        f"{where} carries {stray}, which nothing reads — `[[cell]]` has refused a"
+        f" field outside its own list since it shipped and this record had no list,"
+        f" so a key added here was checked by nothing and printed by nothing"
+    ]
+    owner, settles = entry.get("owner"), entry.get("settled_by")
+    if owner not in OWNERS:
+        problems.append(
+            f"{where} is owed by {owner!r}, which is not one of {sorted(OWNERS)}"
+            " — an open question nobody owns is a wish with a column number"
+        )
+    if settles not in SETTLES:
+        problems.append(
+            f"{where} says `settled_by = {settles!r}`, which is not one of"
+            f" {sorted(SETTLES)} — a deferral that cannot name what would end it"
+            " is not deferred"
+        )
+        return problems
+    if settles == "ruling" and owner != "maintainer":
+        problems.append(
+            f"{where} waits on a ruling and is owed by {owner!r} — a decision no"
+            " derivation can produce is the maintainer's, per AGENTS.md"
+        )
+    open_rows, here = gaps.get(column, []), by_name.get(column)
+    if here is None or reference is None:
+        return problems
+    if settles == "sameness" and closure_delta(here, reference):
+        problems.append(
+            f"{where} waits on an equivalence, and {sorted(closure_delta(here, reference))}"
+            " compile unlike the default build — `same-cargo-features` is the only"
+            " basis `equivalent` takes and the tree already refuses it here"
+        )
+    if settles == "absence" and not absence_reachable(root, here, open_rows, own):
+        problems.append(
+            f"{where} waits on the code being absent, and this column enables no"
+            " feature production Rust gates on and compiles every open row's owner"
+            " — neither basis `out-of-scope` takes can reach a cell here"
+        )
+    return problems
+
+
+def absence_reachable(root, column, open_rows, own):
+    """Whether `out-of-scope` could reach ANY open row of this column.
+
+    Both of its bases, because either would do: an owner crate this column does
+    not compile, or a cargo feature it enables that production Rust really gates
+    on. A board preset has neither — it sets knobs and no feature, and compiles
+    the default crate set — so the route is one the tree has already closed
+    there. It says the route is OPEN, never that it is right: `check_gate` proves
+    a switch exists in the property's blast radius, not that throwing it removed
+    the property's gate, which is how a feature that only ADDS surface could
+    still take the word.
+    """
+    if any(feature for feature in column.features if cfg_sites(root, feature)):
+        return True
+    return any(own.get(pid) and not (own[pid] & column.present) for pid in open_rows)
 
 
 def check_chains(placed):
@@ -1022,7 +1187,7 @@ def render(root):
     }
     rows = [pid for pid in ids if tranche.get(pid) in ROW_TRANCHES]
     placed = dict(expand(doc, []))
-    questions = {q["column"]: q["text"] for q in doc.get("question", [])}
+    questions = {q["column"]: q for q in doc.get("question", [])}
 
     out = [
         "<!-- SPDX-License-Identifier: AGPL-3.0-only -->",
@@ -1090,7 +1255,7 @@ def render(root):
     # The default build is derived (no feature, no knob) rather than named, so a
     # renamed `firmware` cannot leave the page measuring against nothing in
     # silence. Without one there is no origin to measure from and the cell says so.
-    reference = next((column for column in cols if column.default), None)
+    reference = reference_column(cols)
     for column in cols:
         feats = ", ".join(f"`{f}`" for f in sorted(column.features)) or "—"
         knobs = ", ".join(f"`{k}={v}`" for k, v in sorted(column.knobs.items())) or "—"
@@ -1156,8 +1321,18 @@ def render(root):
         " carry no production tag at all and count as not moving, which is the one"
         " direction this number can be wrong in.",
         "",
-        "| Configuration | `gap` rows | of which the owner crate moves | The question that would settle them |",
-        "|---|---|---|---|",
+        "",
+        "The two after it are the ledger's, and they are Stage 0's last exit"
+        " bullet: who owes the answer, and what would end the deferral. `Settled"
+        " by` is typed rather than dated — `evidence` is a `check.sh` row built at"
+        " this column, `absence` an `out-of-scope` argument, `sameness` an"
+        " `equivalent` one, and `ruling` a decision no derivation can produce,"
+        " which is the maintainer's. The gate refuses `sameness` where the closure"
+        " delta is non-empty and `absence` where neither of its bases can reach a"
+        " row, so two of the four are claims the tree can already disagree with.",
+        "",
+        "| Configuration | `gap` rows | of which the owner crate moves | Owed by | Settled by | The question that would settle them |",
+        "|---|---|---|---|---|---|",
     ]
     own = owners(root)
     for column in cols:
@@ -1165,9 +1340,11 @@ def render(root):
         if open_rows:
             moved = set(closure_delta(column, reference)) if reference else set()
             reaches = sum(1 for pid in open_rows if own.get(pid, frozenset()) & moved)
+            asked = questions.get(column.name, {})
             out.append(
                 f"| `{column.name}` | {len(open_rows)} | {reaches}"
-                f" | {questions.get(column.name, '')} |"
+                f" | {asked.get('owner', '')} | `{asked.get('settled_by', '')}`"
+                f" | {asked.get('text', '')} |"
             )
 
     out += [
