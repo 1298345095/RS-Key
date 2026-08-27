@@ -27,3 +27,12 @@ discharged_by = "A board measurement: write a known value to WATCHDOG.scratch2, 
 # case is a third possibility and is already handled — the tag makes garbage read
 # as clear (firmware/src/pin_lock.rs:36-37) — so it is not this assumption's.
 risk = "usability"
+
+[[assumption]]
+constant = "AlwaysUvShipped"
+statement = "The shipped image is built without `--features always-uv`, so `gate.alwaysUv` is a free state variable a platform toggles rather than the compiled default every reset restores."
+discharged_by = "The build itself: `firmware/Cargo.toml`'s default feature set, and the `firmware-always-uv` column of docs/assurance-matrix.md, whose settling question already names SEC-FIDO-001. Both arms run: every configuration the shipped image is about pins it FALSE, and AlwaysUv.cfg runs the whole invariant set with it TRUE."
+# Which way it fails: TOWARDS more gating. A build that ships alwaysUv demands a
+# token for every makeCredential and getAssertion, so the arm the shipped tree
+# does not take is the stricter one — a coverage question, not a security one.
+risk = "coverage"

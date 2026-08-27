@@ -119,6 +119,10 @@ extra_mutant() {
   esac
 }
 
+# `ship_auv` and not `auv`: `emit_security_trace` already has a local `auv` for
+# the alwaysUv-ARM mutant, and a bare name here handed AS-AUTH-2's TRUE arm to
+# TraceSecurityBadAlwaysUvArm.cfg -- caught by `assumption_gate.py`, which prints
+# which configurations take each arm, and by nothing else.
 emit() { # $1 = cfg, $2 = bug switch (""), $3 = sweep fix, $4 = ppuat fix
   local out=$1 on=${2:-} fix=${3:-TRUE} fix2=${4:-${3:-TRUE}}
   {
@@ -135,10 +139,14 @@ emit() { # $1 = cfg, $2 = bug switch (""), $3 = sweep fix, $4 = ppuat fix
     # mechanism is the measurement; the margin was, and is not.
     echo "    RPs = {r1, r2}"
     echo "    Channels = {c1, c2}"
-    echo "    MaxRetries = 8"
-    echo "    MismatchLimit = 3"
+    # The retry pair is reduced ONLY on the assumption's other arm, and that is
+    # the trade the arm makes: it buys the alwaysUv reachability question and
+    # leaves the retry ladder to Shipped.cfg, which is the row that is about it.
+    echo "    MaxRetries = ${retries:-8}"
+    echo "    MismatchLimit = ${mism:-3}"
     echo "    MaxClock = 1"
     echo "    ResetWindow = 0"
+    echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     for b in "${BUGS[@]}"; do
       if [ "$b" = "$on" ] || { [ -n "$on" ] && [ "$b" = "$(companion_bug "$on")" ]; }
       then echo "    $b = TRUE"; else echo "    $b = FALSE"; fi
@@ -170,6 +178,12 @@ emit() { # $1 = cfg, $2 = bug switch (""), $3 = sweep fix, $4 = ppuat fix
 # counterfactual the tree did NOT take -- 0x08BF made the seed lead the wipe
 # instead, which is the default (`BugSeedDoesNotLead = FALSE`), so it is OFF.
 emit Shipped.cfg "" FALSE TRUE
+# AS-AUTH-2's OTHER ARM. `--features always-uv` is a build fact the shipped image
+# does not carry, and an assumption no run can vary is an axiom -- so the whole
+# invariant set runs once with alwaysUv as the compiled default. Reduced retry
+# ladder, because the question is reachability under a stricter gate and not the
+# 77-million-state ladder Shipped.cfg already walks.
+ship_auv=TRUE retries=2 mism=1 emit AlwaysUv.cfg "" FALSE TRUE
 # The two findings this model produced, kept as regression configurations rather
 # than deleted: each is the tree with exactly the shipped fix taken back out.
 emit Historical_E76.cfg BugSeedDoesNotLead FALSE TRUE
@@ -232,6 +246,7 @@ emit_live() { # $1 = cfg, $2 = liveness bug switch (""), $3 = "full" for the
     echo "    MismatchLimit = $mism"
     echo "    MaxClock = 1"
     echo "    ResetWindow = 0"
+    echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     for b in "${BUGS[@]}"; do echo "    $b = FALSE"; done
     for b in "${LIVE_BUGS[@]}" "${SHAPE_BUGS[@]}"; do
       if [ "$b" = "$on" ]; then echo "    $b = TRUE"; else echo "    $b = FALSE"; fi
@@ -261,6 +276,7 @@ emit_shape() { # $1 = cfg, $2 = switch ("")
     echo "    MismatchLimit = 1"
     echo "    MaxClock = 1"
     echo "    ResetWindow = 0"
+    echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     for b in "${BUGS[@]}" "${LIVE_BUGS[@]}"; do echo "    $b = FALSE"; done
     for b in "${SHAPE_BUGS[@]}"; do
       if [ "$b" = "$on" ]; then echo "    $b = TRUE"; else echo "    $b = FALSE"; fi
@@ -725,6 +741,7 @@ emit_security_trace() { # cfg, beta, alpha, outcome, R4b, uvNotRqd, resetWindow,
     echo "    MismatchLimit = 3"
     echo "    MaxClock = 1"
     echo "    ResetWindow = 0"
+    echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     for b in "${BUGS[@]}" "${LIVE_BUGS[@]}" "${SHAPE_BUGS[@]}"; do
       echo "    $b = FALSE"
     done
@@ -783,6 +800,7 @@ emit_token_refinement() { # $1 cfg, $2 gamma mutant, $3 outcome mutant, $4 state
     echo "    MismatchLimit = 1"
     echo "    MaxClock = 0"
     echo "    ResetWindow = 0"
+    echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     for b in "${BUGS[@]}" "${LIVE_BUGS[@]}" "${SHAPE_BUGS[@]}"; do
       echo "    $b = FALSE"
     done

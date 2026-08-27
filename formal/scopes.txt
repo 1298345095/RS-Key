@@ -82,6 +82,9 @@ RSKeyBootHardening     MaxWeak                1   MarkerNeverLies
 \* scripts/assumption_gate.py holds it against the tree. It stays listed here so
 \* a reader of the scope record is not left thinking it is one.
 RSKeyBootHardening     PowerOnClearsScratch2  -   -
+RSKeySecurityState     AlwaysUvShipped        -   -
+RSKeyTokenRefinement   AlwaysUvShipped        -   -
+TraceSecurity          AlwaysUvShipped        -   -
 
 \* --- tiers whose properties these minima were not measured against ----------
 \* The refinement tier runs the smallest scope that still has a token; the trace

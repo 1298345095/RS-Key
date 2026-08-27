@@ -34,7 +34,12 @@ CONSTANTS
     MaxRetries,         \* models MAX_PIN_RETRIES = 8   (consts.rs:364)
     MismatchLimit,      \* models PIN_MISMATCH_LIMIT = 3 (consts.rs:368)
     MaxClock,           \* coarse tick ceiling
-    ResetWindow         \* models RESET_WINDOW_MS = 10_000 (consts.rs:397)
+    ResetWindow,        \* models RESET_WINDOW_MS = 10_000 (consts.rs:397)
+    \* A BUILD FACT, not a defect switch and not a scope: `--features always-uv`
+    \* decides what the device comes up on and what a reset restores. Registered
+    \* in assurance/assumptions.toml as AS-AUTH-2, and assigned both ways -- FALSE
+    \* by every configuration the shipped image is about, TRUE by AlwaysUv.cfg.
+    AlwaysUvShipped
 
 (* Mutation switches. All FALSE is the shipped tree. Each rebuilds one real  *)
 (* defect; `formal/README.md` maps every switch to its commit or audit id.   *)
@@ -233,8 +238,10 @@ TypeOK ==
 
 Init ==
     /\ pin   = [set |-> FALSE, retries |-> MaxRetries, everSet |-> FALSE]
-    /\ gate  = [ppuat |-> FALSE, ppuatStale |-> FALSE, alwaysUv |-> FALSE,
-                backupSealed |-> FALSE]
+    \* alwaysUv's COMPILED default, not a state choice: `--features always-uv`
+    \* is what the device comes up on and what a reset restores it to.
+    /\ gate  = [ppuat |-> FALSE, ppuatStale |-> FALSE,
+                alwaysUv |-> AlwaysUvShipped, backupSealed |-> FALSE]
     /\ store = [cred |-> {}, rpent |-> {}, seed |-> TRUE]
     /\ lock  = [soft |-> FALSE, mism |-> 0, policyMism |-> 0]
     /\ tok   = [live |-> FALSE, perms |-> {}, rp |-> NoRp]
@@ -1268,7 +1275,13 @@ PpuatIsASecret == ~BugPpuatIsAGate /\ gate.ppuat
 
 SecretsLive == store.seed \/ store.cred # {} \/ store.rpent # {} \/ SealedIsASecret
                \/ PpuatIsASecret
-GatesLive   == pin.set \/ gate.alwaysUv \/ PpuatIsAGate \/ SealedIsAGate
+\* `gate.alwaysUv # AlwaysUvShipped` and not `gate.alwaysUv`, because EF_ALWAYS_UV
+\* exists only as an OVERRIDE of the compiled default (config.rs: toggleAlwaysUv
+\* writes [1]/[0]) -- there is a record for the sweep to delete exactly when the
+\* two differ. Identical where the build does not ship it, which is every
+\* configuration but AlwaysUv.cfg.
+GatesLive   == pin.set \/ gate.alwaysUv # AlwaysUvShipped
+                       \/ PpuatIsAGate \/ SealedIsAGate
 
 \* reset.rs:67-79 -- the seed goes in its own force_delete AHEAD of the batch, so
 \* nothing the sweep leaves behind still opens. Modelled as an ordering rule over
@@ -1337,8 +1350,9 @@ ResetSweepGates ==
     /\ IF GatesLive
          THEN /\ \/ (pin.set /\ pin' = PinRecordDeleted
                               /\ UNCHANGED gate)
-                 \/ (gate.alwaysUv /\ gate' = [gate EXCEPT !.alwaysUv = FALSE]
-                                    /\ UNCHANGED pin)
+                 \/ (gate.alwaysUv # AlwaysUvShipped
+                       /\ gate' = [gate EXCEPT !.alwaysUv = AlwaysUvShipped]
+                       /\ UNCHANGED pin)
                  \/ (PpuatIsAGate /\ gate' = [gate EXCEPT !.ppuat = FALSE,
                                                          !.ppuatStale = FALSE]
                                   /\ UNCHANGED pin)

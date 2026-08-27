@@ -169,6 +169,7 @@ one() {
 
 list_safety() {
   echo Shipped.cfg              # the tree as it stands -- expected GREEN
+  echo AlwaysUv.cfg             # AS-AUTH-2's other arm: the build that ships it
   echo Historical_E76.cfg       # each shipped fix taken back out, so the
   echo Historical_E77.cfg       # counterexample it closed stays reproducible
   ls Mut_*.cfg                  # mutant vs the whole invariant set

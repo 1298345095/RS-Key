@@ -40,6 +40,28 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Added
 
+- **The first of the authorization slice's eight assumptions is registered, and
+  both its arms run.** `AS-AUTH-2` — the shipped image is built without
+  `--features always-uv`, so `gate.alwaysUv` is a free state variable rather than
+  the compiled default every reset restores — is now `AlwaysUvShipped` in
+  `assurance/assumptions.toml`, read by `Init`, `GatesLive` and `ResetSweepGates`
+  and assigned **both ways**: FALSE by the 88 configurations the shipped image is
+  about, TRUE by the new `AlwaysUv.cfg`, which runs all six invariants with
+  alwaysUv on — GREEN over 23 521 512 distinct states at depth 51. An assumption
+  no run can vary is an axiom, which is the rule `assumption_gate.py` already
+  carried and nothing this slice needed had met. `GatesLive` reads
+  `gate.alwaysUv # AlwaysUvShipped` rather than `gate.alwaysUv`, and that is
+  closer to the tree, not further: `EF_ALWAYS_UV` exists only as an OVERRIDE, so
+  there is a record for the reset sweep to delete exactly when the two differ.
+  **`Shipped.cfg` was re-run and came back at 77 563 872 distinct — bit-identical
+  to its count before the constant existed**, which is the measurement rather
+  than the argument that the arm the image ships did not move. The
+  `firmware-always-uv` settling question records the other half: its model arm is
+  answered and its code arm is not, and the cost of the second is now a number —
+  `cargo test -p rsk-fido --features always-uv` is 446 passed and **172 failed**,
+  because alwaysUv with no PIN answers `PUAT_REQUIRED` and the suite is written
+  against the default door.
+
 - **A recorded mutant reddens a Kani harness, for the first time.** All 67
   co-refutation slices ran `cargo test -p …`, so no proof in this tree was
   falsified by any recorded defect — the property's single harness was the same
