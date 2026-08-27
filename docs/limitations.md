@@ -135,7 +135,7 @@ covers the security boundary. This page covers feature and hardware gaps.
   record is how the firmware spells *not provisioned* and *no gate configured*.
   Every place where that reading would overwrite configured material or open a
   gate now uses a probe that keeps the two apart and refuses the command instead
-  — 37 guards in 17 functions across PIV, OpenPGP, FIDO and OATH. The rest still
+  — 50 guards in 25 functions across PIV, OpenPGP, FIDO and OATH. The rest still
   collapse them on purpose: their absent arm reports a status field, repeats an
   idempotent repair, or already fails closed. What is not settled is who can produce such a
   fault on this hardware. A chip or bus fault does; whether a NOR power cut can is

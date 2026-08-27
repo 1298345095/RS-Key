@@ -297,11 +297,18 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `try_has_key` and `try_meta_find` answer `Err` for a probe the backend could not
   complete and `Ok` only for one it answered, and the collapsing `read`/`has_data`
   /`meta_find` are defined in terms of them, so the collapse is one visible line
-  per method instead of a property of the type. **37 guards in 17 functions across
-  five crates** took the fallible probe — every one whose *absent* arm overwrites
-  configured material or opens a gate (counted as `try_*` call sites plus the calls
-  through PIV's and OpenPGP's two module-local wrappers, tests and `rsk-fs` itself
-  excluded). Guards whose absent arm only reports a status field, repeats an
+  per method instead of a property of the type. **50 guards in 25 functions across
+  four crates** take the fallible probe — every one whose *absent* arm overwrites
+  configured material or opens a gate. The recipe, because two of those three
+  numbers shipped wrong the first time: a guard is a `try_*` call **site** (one per
+  line, tests, Kani, assurance shims and `rsk-fs` itself excluded), minus the three
+  module-local wrapper bodies (`piv::files::provisioned`,
+  `openpgp::init::provisioned` and `read_file`), plus every call of those wrappers —
+  32 − 3 + 21. A function counts once if it holds any guard, which is the reading
+  that makes the sentence say what it looks like it says; the wrapper bodies are not
+  among them. `17` matched no reading of the tree it described, and `five` counted
+  `rsk-fs` — which publishes the probes and holds no guard. `docs/limitations.md`
+  named four crates all along, so the two copies disagreed. Guards whose absent arm only reports a status field, repeats an
   idempotent repair, or already fails the command closed keep `has_data` — the
   `EF_MINPINLEN` floor among them, where the weaker reading costs the OWNER a
   shorter PIN of their own choosing and gives an attacker nothing. `try_read`'s
