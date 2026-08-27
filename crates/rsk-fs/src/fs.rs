@@ -278,6 +278,22 @@ impl<S: Storage> Fs<S> {
     /// and management key over the owner's. Use these `try_*` probes wherever the
     /// absent arm overwrites configured material or opens a gate; the collapsing
     /// ones stay right where an absence costs a status field or a repeated repair.
+    ///
+    /// **Do not derive the sites by asking "does the absent arm write?"** That
+    /// question found 37 guards and missed six live regressions, because in each of
+    /// the six the collapsed answer is not acted on where it is read. It becomes an
+    /// **unwritten branch** — `if probe { return Err(..) }`, where the harm is a
+    /// `return` that does not happen (`vendor::pin_gate`, `backup_export`); a
+    /// **consumed value** — `None` resolving to a default a later statement persists
+    /// or signs (`journal::load_meta`'s genesis, PIV `MOVE KEY`'s "no certificate");
+    /// or a **latched flag** — stored and read by a later command, so the fault and
+    /// the harm sit in different call frames (`oath::select`'s `validated`,
+    /// [`scan_truncated`](Self#structfield.scan_truncated), PIV `scan_files`'
+    /// `have_meta`).
+    ///
+    /// The question that finds all of them: **if this probe answered `false`/`None`
+    /// where the truth is `true`/`Some`, what becomes reachable?** — then follow that
+    /// answer to whoever consumes it, the empty `else` included.
     pub fn try_read(&mut self, fid: u16, buf: &mut [u8]) -> Result<Option<usize>> {
         if self.known_absent(fid) {
             return Ok(None); // confirmed absent — skip the backend's full scan
