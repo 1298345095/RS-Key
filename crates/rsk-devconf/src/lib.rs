@@ -233,7 +233,7 @@ pub enum DevConfError {
     /// store a blob that makes the DeviceInfo response unparseable.
     BadTlv,
     /// The flash access failed — the write, or the read of the record it merges
-    /// onto ([`overlay_dev_conf`]).
+    /// onto (see `overlay_dev_conf`).
     Store,
 }
 
@@ -600,8 +600,12 @@ pub fn enabled_from_conf(conf: &[u8]) -> u16 {
 /// The firmware caches this and re-reads it when [`take_dev_conf_dirty`] fires.
 ///
 /// No record, or an empty one, is the factory default: everything supported is
-/// enabled. A probe the backend could not answer is [`NO_CAPS`] instead — see there
-/// for why the two absences must not share an arm.
+/// enabled. A probe the backend could not answer is NOT that absence: it enables
+/// nothing gated, because resolving it permissively re-enabled every application
+/// the owner had disabled. Failing closed is recoverable in the direction that
+/// matters — [`cap_enabled`] keeps management, vendor and rescue selectable at
+/// `cap == 0`, so the owner can still rewrite the record, and the next boot or
+/// config write re-reads flash.
 pub fn read_enabled_caps<S: Storage>(fs: &mut Fs<S>) -> u16 {
     // The read width, not the write cap: a pre-cap build's larger record must still
     // be scanned whole, or a disabled applet silently comes back after the upgrade.
@@ -619,15 +623,7 @@ pub fn read_enabled_caps<S: Storage>(fs: &mut Fs<S>) -> u16 {
 }
 
 /// What a `EF_DEV_CONF` probe the backend could not answer enables: nothing gated.
-///
-/// The permissive default belongs to a *confirmed* absence — a device nobody has
-/// configured. A read fault is not that, and resolving it the same way performed
-/// the harm the note in [`read_enabled_caps`] says the walk exists to prevent: one
-/// faulted probe re-enabled every application the owner had disabled, for as long
-/// as the cached mask lived. Failing closed is recoverable in the direction that
-/// matters — [`cap_enabled`] keeps management, vendor and rescue selectable at
-/// `cap == 0`, so the owner can still rewrite the record, and the next boot or
-/// config write re-reads flash.
+/// The argument for the direction is on [`read_enabled_caps`], its one caller.
 const NO_CAPS: u16 = 0;
 
 /// Whether an applet guarded by capability bit `cap` is enabled under `mask`.
