@@ -69,7 +69,7 @@ pub const USB_ITF_SUPPORTED: u8 = USB_ITF_CCID | USB_ITF_HID | USB_ITF_KB;
 /// no software path can undo it, so the device would be permanently bricked
 /// (BOOTSEL reflash only) — even when a "supported" but management-incapable
 /// interface like the OTP keyboard survives.
-const USB_ITF_MANAGEABLE: u8 = USB_ITF_CCID | USB_ITF_HID;
+pub const USB_ITF_MANAGEABLE: u8 = USB_ITF_CCID | USB_ITF_HID;
 
 /// The boot-effective interface mask. A stored mask that leaves no
 /// management-capable interface (CCID or HID) would strand the device with no way
@@ -365,6 +365,62 @@ pub fn try_load<S: Storage>(fs: &mut Fs<S>) -> rsk_sdk::error::Result<Option<Phy
     Ok(fs
         .try_read(EF_PHY, &mut buf)?
         .map(|n| PhyData::parse(&buf[..n.min(PHY_MAX_SIZE)])))
+}
+
+/// What a boot probe of `EF_PHY` found, with the two answers `load` folds kept
+/// apart. `NeverWritten` is a device nobody has configured; `Unreadable` is a
+/// medium that would not say — and handing the second one the build defaults gives
+/// the boot an interface mask the owner may have narrowed away.
+pub enum PhyBoot {
+    Loaded(PhyData),
+    NeverWritten,
+    Unreadable,
+}
+
+/// How many times the boot re-probes before calling the record unreadable. `Fs`
+/// does not memoise a failed read, so a transient fault clears on the next probe
+/// and only a standing one reaches `Unreadable`. Three is the whole budget: this
+/// runs before USB attach, and a medium refusing three times is not answering on
+/// the fourth.
+const BOOT_LOAD_TRIES: usize = 3;
+
+/// [`try_load`] with that retry, for the one caller that cannot report an error to
+/// anybody — the boot.
+pub fn boot_load<S: Storage>(fs: &mut Fs<S>) -> PhyBoot {
+    for _ in 0..BOOT_LOAD_TRIES {
+        match try_load(fs) {
+            Ok(Some(phy)) => return PhyBoot::Loaded(phy),
+            Ok(None) => return PhyBoot::NeverWritten,
+            Err(_) => continue,
+        }
+    }
+    PhyBoot::Unreadable
+}
+
+impl PhyBoot {
+    /// The record, for the identity fields a fault may safely default.
+    pub fn record(&self) -> Option<&PhyData> {
+        match self {
+            Self::Loaded(phy) => Some(phy),
+            _ => None,
+        }
+    }
+
+    /// The boot-effective interface mask.
+    ///
+    /// `Unreadable` opens the manageable pair and nothing else. Not ALL: that
+    /// re-opens an interface the owner disabled, for a whole boot, off a flash
+    /// fault. Not narrower either — one management-capable interface has to
+    /// survive or the record can never be rewritten, and WHICH one the owner kept
+    /// is exactly what could not be read. The price is the keyboard: an OTP slot
+    /// does not type on a boot whose `EF_PHY` would not read.
+    pub fn usb_itf(&self) -> u8 {
+        match self {
+            Self::Loaded(phy) => effective_usb_itf(phy),
+            Self::NeverWritten => USB_ITF_ALL,
+            Self::Unreadable => USB_ITF_MANAGEABLE,
+        }
+    }
 }
 
 /// Persist the phy record.

@@ -543,7 +543,6 @@ async fn main(spawner: Spawner) {
 
     let mut usb_vid = USB_VID;
     let mut usb_pid = USB_PID;
-    let mut usb_itf = rsk_phy::USB_ITF_ALL;
     // Explicit phy string overrides; `None` ⇒ the VID-derived default, then the
     // build const, are chosen at the identity assembly below. The product is
     // normalized against the ykman YK4_ crash; the manufacturer is copied verbatim
@@ -552,8 +551,13 @@ async fn main(spawner: Spawner) {
     // drives the LED hardware, applied at the spawn site below.
     let mut phy_product: Option<&str> = None;
     let mut phy_manufacturer: Option<&str> = None;
-    let phy = rsk_phy::load(&mut fs);
-    if let Some(phy) = &phy {
+    // Not `rsk_phy::load`: it folds "never written" into "the flash would not say",
+    // and the second one then takes the build defaults -- including the interface
+    // mask, which is the one field here that is a gate rather than an identity.
+    let phy_boot = rsk_phy::boot_load(&mut fs);
+    let usb_itf = phy_boot.usb_itf();
+    let phy = phy_boot.record();
+    if let Some(phy) = phy {
         if let Some((vid, pid)) = phy.vid_pid {
             (usb_vid, usb_pid) = (vid, pid);
         }
@@ -569,7 +573,6 @@ async fn main(spawner: Spawner) {
             let n = rsk_phy::clamp_usb_string(s.as_bytes(), buf);
             phy_manufacturer = core::str::from_utf8(&buf[..n]).ok();
         }
-        usb_itf = rsk_phy::effective_usb_itf(phy);
         // Touch-wait timeout (phy tag 0x08, seconds; 0/absent = default).
         presence::set_timeout_secs(phy.presence_timeout.unwrap_or(0));
     }
@@ -694,7 +697,7 @@ async fn main(spawner: Spawner) {
     config.max_power = 100;
     config.max_packet_size_0 = 64;
     // bcdDevice build counter; also surfaced on the trusted-display Firmware screen.
-    let device_release: u16 = 0x09AF;
+    let device_release: u16 = 0x09B0;
     config.device_release = device_release;
 
     let mut builder = Builder::new(

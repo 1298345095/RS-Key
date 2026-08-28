@@ -1874,7 +1874,7 @@ superseded weak copy readable in a raw flash dump until a compaction lap pushes
 it off the medium. `EF_HARDENED` says the lap has run
 (`crates/rsk-fs/src/lib.rs:26-46`); the boot runs it iff the marker is absent
 and writes the marker only after `compact()` returns Ok
-(`firmware/src/main.rs:615-626`) — marker AFTER scrub, the same write-order
+(`firmware/src/main.rs:618-629`) — marker AFTER scrub, the same write-order
 family as the store's delete and the PIN flows' revoke. Every *lazy* re-key
 after the lap must re-arm it: **audit run-35 found four of five sites skipping
 exactly that**, and the swept sites are the module's citations.
@@ -2873,7 +2873,7 @@ it does not promote MODELLED-ONLY to a proof or turn bounded Kani into PROVEN.
 behaviour than the firmware, "which is sound for safety". That was false**, and
 the one that broke it was holding the green run up: `PowerCut` left the seed as
 the cut found it, while the firmware regenerates a missing seed on **every**
-boot (`firmware/src/main.rs:613`, `tools/emu/src/device.rs:264`). A cut device
+boot (`firmware/src/main.rs:616`, `tools/emu/src/device.rs:264`). A cut device
 was permanently seedless in the model and could never hold a usable credential
 again — the model was *narrower* than the code, which is the one direction a
 safety argument cannot absorb. It is fixed (`BootEnsuresSeed`), and every

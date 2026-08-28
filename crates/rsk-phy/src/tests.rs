@@ -363,3 +363,78 @@ fn a_faulted_phy_probe_does_not_wipe_the_record_it_merges_onto() {
         "a merge that could not read the record it merges onto must refuse"
     );
 }
+
+/// The boot probe, and the widening it stops.
+///
+/// `rsk_phy::load` folds "never written" into "the flash would not say", so a
+/// refused read handed the boot `PhyData::default()` — build VID/PID, build
+/// strings, and `USB_ITF_ALL`. The first three are identity and a wrong one costs
+/// a host tool a lookup; the mask is a GATE, and defaulting it re-opens an
+/// interface the owner disabled for the length of that boot.
+#[test]
+fn a_boot_that_cannot_read_the_phy_record_does_not_open_what_the_owner_closed() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut owner = owner_record();
+    owner.enabled_usb_itf = Some(USB_ITF_HID); // no keyboard, no CCID
+    save(&mut fs, &owner).unwrap();
+
+    assert_eq!(
+        boot_load(&mut fs).usb_itf(),
+        USB_ITF_HID,
+        "control: a record that reads is obeyed"
+    );
+
+    medium.stick(Some(EF_PHY));
+    let boot = boot_load(&mut fs);
+    medium.stick(None);
+    assert!(
+        matches!(boot, PhyBoot::Unreadable),
+        "a standing fault is not `never written`"
+    );
+    assert_eq!(
+        boot.usb_itf() & USB_ITF_KB,
+        0,
+        "a boot that could not read the mask typed on a keyboard the owner disabled"
+    );
+    assert_eq!(
+        boot.usb_itf(),
+        USB_ITF_MANAGEABLE,
+        "and it must still open the pair that can rewrite the record, or the \
+         device is unmanageable until the medium recovers"
+    );
+}
+
+/// The retry is the difference between a transient fault and a degraded boot, and
+/// it is cheap because `Fs` does not memoise a failed read: the next probe of the
+/// same fid goes to the medium again.
+#[test]
+fn a_transient_fault_costs_the_boot_nothing() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut owner = owner_record();
+    owner.enabled_usb_itf = Some(USB_ITF_HID);
+    save(&mut fs, &owner).unwrap();
+
+    medium.stick_once(EF_PHY); // one probe refused, the retry sees the record
+    let boot = boot_load(&mut fs);
+    assert!(
+        matches!(boot, PhyBoot::Loaded(_)),
+        "the retry must reach it"
+    );
+    assert_eq!(boot.usb_itf(), USB_ITF_HID);
+}
+
+/// And a device nobody has configured still gets everything — the arm that must
+/// NOT be narrowed, because a factory-fresh key with two interfaces looks broken.
+#[test]
+fn a_never_written_record_opens_every_interface() {
+    let mut fs = Fs::new(rsk_fs::storage::ram::RamStorage::new());
+    fs.scan();
+    let boot = boot_load(&mut fs);
+    assert!(matches!(boot, PhyBoot::NeverWritten));
+    assert_eq!(boot.usb_itf(), USB_ITF_ALL);
+    assert!(boot.record().is_none());
+}

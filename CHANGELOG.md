@@ -2213,6 +2213,21 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   the medium. Found while verifying the new read-fault threat-model clause against
   the code. **bcdDevice → 0x09AE.**
 
+- **A boot that could not read `EF_PHY` opened every USB interface, including ones
+  the owner had disabled.** `rsk_phy::load` folds "no record was ever written" into
+  "the flash would not answer", so one refused probe handed the boot the build
+  defaults — build VID/PID, build strings and `USB_ITF_ALL`. The identity fields
+  cost a host tool a lookup; the interface mask is a gate. The boot takes a typed
+  answer now: a record that reads is obeyed, a record that was never written still
+  opens everything (a factory-fresh key with two interfaces looks broken), and a
+  record the medium refuses opens the management-capable pair — CCID and HID — and
+  nothing else. Not `ALL`, because that is the widening; not narrower, because one
+  management-capable interface must survive or the record can never be rewritten,
+  and which one the owner kept is exactly what could not be read. **The cost of the
+  new state:** on such a boot the OTP keyboard is absent, so a slot configured to
+  type does not, until the record reads again. Three re-probes come first — `Fs`
+  does not memoise a failed read — so a transient fault costs the boot nothing.
+  **bcdDevice → 0x09B0.**
 
 ### Security
 
