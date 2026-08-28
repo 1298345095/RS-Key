@@ -237,7 +237,7 @@ why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all fo
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
-line = 425
+line = 433
 call = ".force_delete(EF_ATT_KEY.get())"
 verb = "force_delete"
 answer = "read"
@@ -248,7 +248,7 @@ why = "ATT_CLEAR, measured: discarding these two reported 'org attestation remov
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
-line = 428
+line = 436
 call = ".force_delete(EF_ATT_CHAIN)"
 verb = "force_delete"
 answer = "read"
@@ -259,7 +259,7 @@ why = "the chain half of the same erase, ordered after the key so the surviving 
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
-line = 887
+line = 895
 call = "if ctx.fs.delete(EF_EE_DEV).is_err() {"
 verb = "delete"
 answer = "read"

@@ -1090,7 +1090,7 @@ separately:
 
 - **The RAM copy.** `ram` is `state.keydev_dec` (`state.rs:338-340`);
   `SeedReachable == store.seed \/ ram` is what "the owner's seed is still
-  reachable" means; `DeviceUnlock` is the vendor `UNLOCK` (`vendor.rs:549-572`)
+  reachable" means; `DeviceUnlock` is the vendor `UNLOCK` (`vendor.rs:557-580`)
   that is its only door. `KeepOpen` / `KeepSurv` move the wipe's own claim — that
   what a tear leaves behind is undecryptable — from the flash delete to the
   moment the **last** copy dies.
@@ -2893,7 +2893,7 @@ abstractions producing traces the firmware cannot follow.
   not permit; `PowerCut` reaches the same flash states and is the realistic
   interrupter.
 - **`BackupFinalize` is ungated.** The real `BACKUP_FINALIZE` carries the PIN
-  half of the gate and a deliberate hold (`vendor.rs:900-912`). Widening where
+  half of the gate and a deliberate hold (`vendor.rs:908-920`). Widening where
   the marker can be **set** never widens where it can be **lost**, and the loss
   is what the invariant is about.
 - **A regenerated seed still opens the credentials made under the old one.**
@@ -2906,7 +2906,7 @@ abstractions producing traces the firmware cannot follow.
   not a free choice. Both findings below need only that some reachable ring
   order puts one delete before another.
 - **`DeviceUnlock` is ungated and needs no device lock.** The real vendor
-  `UNLOCK` (`vendor.rs:549-572`) requires the seed to be stored *wrapped* — only
+  `UNLOCK` (`vendor.rs:557-580`) requires the seed to be stored *wrapped* — only
   a soft-locked device has an `EF_KEY_DEV_ENC` to open — and the host to present
   the 32-byte lock key. The model requires only a live flash seed. It also omits
   `AUT_DISABLE` (`config.rs:427-428`), which only ever *clears* the RAM copy.
