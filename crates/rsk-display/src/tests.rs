@@ -21,6 +21,7 @@ use std::vec;
 use std::vec::Vec;
 
 use embedded_graphics::geometry::OriginDimensions;
+use rsk_fs::Storage;
 use rsk_fs::storage::ram::RamStorage;
 
 use super::*;
@@ -355,8 +356,8 @@ static GLOBALS: Mutex<()> = Mutex::new(());
 /// **One at a time.** The lock is not re-entrant, so a case that builds a second
 /// `Env` while the first is alive hangs rather than fails — split it into two
 /// cases instead, which is the shape they wanted anyway.
-pub struct Env {
-    pub fs: RefCell<Fs<RamStorage>>,
+pub struct Env<S: Storage = RamStorage> {
+    pub fs: RefCell<Fs<S>>,
     pub rng: RefCell<TestRng>,
     // A failed assertion unwinds while this is held, which poisons the mutex; the
     // guard is taken with the poison ignored, so one failing case reports its own
@@ -372,6 +373,14 @@ impl Default for Env {
 
 impl Env {
     pub fn new() -> Self {
+        Self::over(RamStorage::new())
+    }
+}
+
+impl<S: Storage> Env<S> {
+    /// [`Env::new`] over a chosen backend — the fault media a flash-fault case
+    /// drives, which the RAM one cannot express.
+    pub fn over(storage: S) -> Self {
         let guard = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
         SLEEP_TIMEOUT_MS.store(DEFAULT_SLEEP_MS, Ordering::Relaxed);
         AMBIENT_QUIET_UNTIL_MS.store(0, Ordering::Relaxed);
@@ -379,7 +388,7 @@ impl Env {
         // start where it does, so a deadline test measures from a known zero.
         note_local_activity();
         Self {
-            fs: RefCell::new(Fs::new(RamStorage::new())),
+            fs: RefCell::new(Fs::new(storage)),
             rng: RefCell::new(TestRng(0x0DDB_A11C_0FFE_E1E5)),
             _globals: guard,
         }
@@ -393,7 +402,7 @@ impl Env {
     }
 
     /// The flow, wired to `pad` — panel, board and store as a fresh boot sees them.
-    pub fn ui(&self, pad: Pad) -> TestUi<'_> {
+    pub fn ui(&self, pad: Pad) -> Ui<'_, Panel, Pad, Board, S, TestRng> {
         Ui::new(
             Panel::new(),
             pad,

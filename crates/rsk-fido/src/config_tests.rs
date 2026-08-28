@@ -107,7 +107,7 @@ fn run(state: &mut FidoState, req: &[u8]) -> CtapResult {
     authenticator_config(&mut ctx, req, &mut out)
 }
 
-fn run_fs(fs: &mut Fs<RamStorage>, state: &mut FidoState, req: &[u8]) -> CtapResult {
+fn run_fs<S: Storage>(fs: &mut Fs<S>, state: &mut FidoState, req: &[u8]) -> CtapResult {
     let mut rng = SeqRng(1);
     let mut out = [0u8; 64];
     let mut presence = crate::AlwaysConfirm;
@@ -603,5 +603,52 @@ fn a_faulted_always_uv_read_resolves_to_on() {
     assert!(
         crate::config::always_uv_enabled(&mut fs),
         "a faulted EF_ALWAYS_UV read dropped the UV gate to the compile default"
+    );
+}
+
+/// `set_phy` is the FIDO half of the phy read-modify-write, and it carried its own
+/// copy of the merge rather than going through `rsk_phy`'s: a `load(..)
+/// .unwrap_or_default()` that read a failed probe as "nothing was ever written",
+/// so one PicoForge field write saved the DEFAULT record with that field on top
+/// and took the owner's USB identity, product string and LED wiring with it.
+#[test]
+fn a_faulted_phy_probe_does_not_wipe_the_record_a_config_write_edits() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let owner = rsk_phy::PhyData {
+        vid_pid: Some((0x1234, 0x5678)),
+        usb_product: rsk_phy::Product::new(b"RSK Custom"),
+        led_gpio: Some(21),
+        led_num: Some(4),
+        ..Default::default()
+    };
+    rsk_phy::save(&mut fs, &owner).unwrap();
+    let before = medium.value(rsk_phy::EF_PHY).expect("record written");
+
+    let mut st = armed(PERM_ACFG);
+    let sub = subpara_vendor_int(CONFIG_PHY_LED_BRIGHTNESS, 64);
+    medium.stick_once(rsk_phy::EF_PHY);
+    let r = run_fs(&mut fs, &mut st, &vendor_req(&sub, &TOKEN));
+    let after = medium.value(rsk_phy::EF_PHY).expect("record present");
+    let kept = rsk_phy::PhyData::parse(&after);
+    assert_eq!(
+        (kept.vid_pid, kept.usb_product, kept.led_gpio, kept.led_num),
+        (
+            owner.vid_pid,
+            owner.usb_product,
+            owner.led_gpio,
+            owner.led_num
+        ),
+        "a faulted probe wiped the fields the config write did not carry \
+         ({} bytes stored, was {})",
+        after.len(),
+        before.len()
+    );
+    assert_eq!(after, before, "a refused write must leave the record alone");
+    assert_eq!(
+        r,
+        Err(CtapError::Other),
+        "a config write that could not read the record it edits must refuse"
     );
 }

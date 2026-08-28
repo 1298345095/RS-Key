@@ -346,13 +346,25 @@ impl Writer<'_> {
     }
 }
 
-/// Load the phy record; `None` when none was ever written.
+/// Load the phy record; `None` when none was ever written — **or when the backend
+/// could not answer**. Use [`try_load`] wherever the two must not share an arm.
 pub fn load<S: Storage>(fs: &mut Fs<S>) -> Option<PhyData> {
+    try_load(fs).ok().flatten()
+}
+
+/// [`load`] with the failed probe kept apart from the absence: `Ok(None)` is a
+/// confirmed "never written", `Err` is "the backend could not answer".
+///
+/// The distinction is the whole of [`update`]: this record holds the USB identity
+/// and the LED wiring, and a caller that reads a fault as "never written" edits the
+/// defaults and stores *those* — see there.
+pub fn try_load<S: Storage>(fs: &mut Fs<S>) -> rsk_sdk::error::Result<Option<PhyData>> {
     let mut buf = [0u8; PHY_MAX_SIZE];
-    // Fs::read returns the value's full stored length; clamp before slicing so an
-    // over-long EF_PHY record can never push the slice past the fixed buffer.
-    let n = fs.read(EF_PHY, &mut buf)?.min(buf.len());
-    Some(PhyData::parse(&buf[..n]))
+    // Fs::try_read returns the value's full stored length; clamp before slicing so
+    // an over-long EF_PHY record can never push the slice past the fixed buffer.
+    Ok(fs
+        .try_read(EF_PHY, &mut buf)?
+        .map(|n| PhyData::parse(&buf[..n.min(PHY_MAX_SIZE)])))
 }
 
 /// Persist the phy record.
@@ -374,8 +386,25 @@ pub fn save<S: Storage>(fs: &mut Fs<S>, phy: &PhyData) -> rsk_sdk::error::Result
 /// full records, so nothing regresses. (This closes picoforge#102 / RS-Key#33 on
 /// the firmware side.)
 pub fn merge_save<S: Storage>(fs: &mut Fs<S>, data: &[u8]) -> rsk_sdk::error::Result<()> {
-    let merged = load(fs).unwrap_or_default().overlay(data);
-    save(fs, &merged)
+    update(fs, |phy| *phy = phy.overlay(data))
+}
+
+/// Read-modify-write the phy record: apply `f` to the stored record — or to the
+/// defaults on a device that never wrote one — and save the result.
+///
+/// The one definition of that sequence, because three callers each had their own
+/// copy and each read a probe the backend could not answer as "never written". That
+/// turns an edit of one field into a blind write of the DEFAULT record, wiping the
+/// VID/PID, product and LED wiring the caller never meant to touch — the same loss
+/// [`merge_save`] exists to prevent, arriving through the flash instead of the host.
+/// `Err` is a refusal: nothing is stored.
+pub fn update<S: Storage>(
+    fs: &mut Fs<S>,
+    f: impl FnOnce(&mut PhyData),
+) -> rsk_sdk::error::Result<()> {
+    let mut phy = try_load(fs)?.unwrap_or_default();
+    f(&mut phy);
+    save(fs, &phy)
 }
 
 /// The smartcard interface-token suffix a real YubiKey carries in its USB product

@@ -399,6 +399,31 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **The phy read-modify-write existed in three copies, and each one read a failed
+  flash probe as "no record was ever written".** `rsk_phy::merge_save` is what closes
+  picoforge#102 / RS-Key#33 — a host tool that sends only the fields it changed can
+  no longer wipe the VID/PID, product string or LED wiring it omitted. The FIDO
+  `set_phy` and the trusted display's touch-timeout save did not call it; each
+  inlined the same `load(..).unwrap_or_default()` sequence. On a `ProbeStuck` medium
+  one faulted `EF_PHY` probe took the stored record from **41 bytes to 7** through
+  `merge_save`, and from **29 to 7** through each of the two inlined copies — VID/PID,
+  product, manufacturer, LED GPIO, LED count and wire order all replaced by the
+  defaults with the one edited field on top. On the default build FIDO `CONFIG_WRITE`
+  is ungated, so that path is reachable unauthenticated.
+
+  There is one copy now: `rsk_phy::update` takes the edit as a closure and refuses
+  on a failed probe — nothing is stored, which is the only safe answer for a
+  read-modify-write. `merge_save` is one call to it. `load` keeps its `Option` for
+  the readers that only report, and `try_load` is the fallible probe underneath.
+
+  A fourth spelling turned up in the enumeration and is fixed with them: the rescue
+  applet's READ phy is the baseline `rsk hw` read-modify-writes **on the host**, so
+  reporting a synthesised default record for a probe the flash could not answer
+  hands the host a phantom baseline to edit and write back, and shows the owner a
+  configuration that is not theirs. It answers `MEMORY_FAILURE` now. A genuine
+  absence still serializes the zeroed OPTS TLV, which is what a first run of the
+  tool needs.
+
 - **A `ykman` one-field write turned into a whole-record replacement when the
   merge could not read what it was merging onto.** A DeviceConfig write is a delta —
   every `ykman config` command sends the field it is changing and nothing else — so

@@ -114,7 +114,7 @@ fn apdu(cla: u8, ins: u8, p1: u8, p2: u8, data: &[u8]) -> Vec<u8> {
     a
 }
 
-fn run(app: &mut RescueApplet, fs: &mut Fs<RamStorage>, raw: &[u8]) -> (Sw, Vec<u8>) {
+fn run<S: Storage>(app: &mut RescueApplet, fs: &mut Fs<S>, raw: &[u8]) -> (Sw, Vec<u8>) {
     let mut buf = [0u8; 512];
     let parsed = Apdu::parse(raw).unwrap();
     let mut res = ResBuf::new(&mut buf);
@@ -936,4 +936,59 @@ fn days_from_civil_matches_the_calendar_across_era_and_leap_boundaries() {
     ] {
         assert_eq!(days_from_civil(y, m, d), want, "{y:04}-{m:02}-{d:02}");
     }
+}
+
+/// READ phy (P1 = 0x01) is the baseline `rsk hw` read-modify-writes on the HOST:
+/// it reads the record, applies the flags the user asked for and sends the result
+/// back. Answering a probe the flash could not complete with a synthesised default
+/// therefore does not merely misreport the device — it hands the host a phantom
+/// baseline to edit and write back, and `--get` shows the owner a config that is
+/// not theirs. An absence still serializes the zeroed OPTS TLV, as a first use of
+/// the tool needs — `phy_write_read_roundtrip` covers the healthy arms.
+#[test]
+fn a_faulted_phy_probe_is_refused_rather_than_reported_as_a_default_record() {
+    let rng = RefCell::new(LcgRng(7));
+    let platform = RefCell::new(FakePlatform::default());
+    let presence = RefCell::new(AlwaysConfirm);
+    let mut app = RescueApplet::new(
+        SERIAL_ID,
+        SERIAL_HASH,
+        None,
+        None,
+        &rng,
+        &platform,
+        &presence,
+        KV_TOTAL,
+        FLASH_SIZE,
+    );
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let owner = rsk_phy::PhyData {
+        vid_pid: Some((0x1234, 0x5678)),
+        led_gpio: Some(21),
+        ..Default::default()
+    };
+    rsk_phy::save(&mut fs, &owner).unwrap();
+
+    // The healthy read, so the faulted one below is compared against a baseline
+    // this command is known to report.
+    let (sw, body) = run(&mut app, &mut fs, &apdu(0x80, INS_READ, 0x01, 0, &[]));
+    assert_eq!(
+        (sw, rsk_phy::PhyData::parse(&body).vid_pid),
+        (Sw::OK, owner.vid_pid)
+    );
+
+    medium.stick_once(rsk_phy::EF_PHY);
+    let (sw, body) = run(&mut app, &mut fs, &apdu(0x80, INS_READ, 0x01, 0, &[]));
+    assert_eq!(
+        rsk_phy::PhyData::parse(&body).vid_pid,
+        None,
+        "fixture check: a faulted probe cannot be reporting the owner's record"
+    );
+    assert_eq!(
+        (sw, body.len()),
+        (Sw::MEMORY_FAILURE, 0),
+        "a READ that could not reach the record reported a default one instead"
+    );
 }

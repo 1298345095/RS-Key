@@ -302,9 +302,7 @@ fn set_phy<S: Storage, R: Rng>(
     ctx: &mut Ctx<S, R>,
     f: impl FnOnce(&mut rsk_phy::PhyData),
 ) -> CtapResult {
-    let mut p = rsk_phy::load(ctx.fs).unwrap_or_default();
-    f(&mut p);
-    rsk_phy::save(ctx.fs, &p).map_err(|_| CtapError::Other)?;
+    rsk_phy::update(ctx.fs, f).map_err(|_| CtapError::Other)?;
     journal::append_config_write(ctx, CONFIG_TARGET_PHY as u8);
     Ok(0)
 }
