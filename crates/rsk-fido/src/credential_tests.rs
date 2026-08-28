@@ -786,3 +786,130 @@ fn a_faulted_cred_state_probe_does_not_replay_the_store_tag() {
         "a bump that could not read the tag it advances must refuse"
     );
 }
+
+/// `bump_rp` finds the rp's existing EF_RP record with the collapsing `Fs::read`,
+/// whose `None` covers "this slot is a different rp" and "the flash could not serve
+/// this slot" alike — and the absent arm falls through to the free-slot path. So one
+/// faulted probe of the record that DOES hold this rpIdHash files a SECOND record
+/// for the same rp. Nothing merges them again: `decrement_rp` `break`s at its first
+/// match, so it only ever drains one of the pair, and while both stand
+/// `enumerateRPs` counts the rp twice. Worse, when the first record reaches zero it
+/// deletes EF_RPNICK at ITS slot — destroying the rp's nickname while the rp is
+/// still live under the duplicate.
+#[test]
+fn a_faulted_rp_probe_does_not_file_a_second_record_for_the_same_rp() {
+    let d = dev();
+    let rp_hash = sha256(b"example.com");
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut out = [0u8; 512];
+    let store = |fs: &mut Fs<_>, out: &[u8], user: &[u8]| {
+        credential_store(&SEED, &d, fs, out, &rp_hash, "example.com", user, &[])
+    };
+    let records_for_rp = |medium: &rsk_fs::storage::faults::ProbeMedium| {
+        (0..MAX_RESIDENT_CREDENTIALS)
+            .filter(|i| {
+                medium
+                    .value(EF_RP + i)
+                    .is_some_and(|v| v.len() >= RP_PREFIX && v[1..RP_PREFIX] == rp_hash[..])
+            })
+            .collect::<Vec<u16>>()
+    };
+
+    let mut first = input();
+    first.user_id = &[0x01];
+    let len = credential_create(&SEED, &d, &first, &rp_hash, &IV, &mut out).unwrap();
+    store(&mut fs, &out[..len], first.user_id).unwrap();
+    assert_eq!(
+        records_for_rp(&medium),
+        vec![0],
+        "control: one registration, one EF_RP record"
+    );
+
+    // A second user at the same rp: `bump_rp` must land on EF_RP+0, whose read faults.
+    let mut second = input();
+    second.user_id = &[0x02];
+    let len2 = credential_create(&SEED, &d, &second, &rp_hash, &IV, &mut out).unwrap();
+    medium.stick(Some(EF_RP));
+    let stored = store(&mut fs, &out[..len2], second.user_id);
+    medium.stick(None);
+
+    assert_eq!(
+        records_for_rp(&medium),
+        vec![0],
+        "a faulted probe filed a SECOND EF_RP record for one rpIdHash — enumerateRPs \
+         lists the rp twice and no decrement_rp ever merges the pair"
+    );
+    assert_eq!(
+        stored,
+        Err(Error::MemoryFatal),
+        "a registration that could not read the rp index must refuse, not duplicate it"
+    );
+}
+
+/// …and the refusal reaches no further than the slot that could have been this rp.
+///
+/// The first shape of the fix returned on the faulted probe where it happened, which
+/// made ONE unreadable EF_RP record deny every resident registration on the device —
+/// for every relying party, including ones whose own record reads perfectly. Measured
+/// that way before it was narrowed: registering at `other.example` with `example.com`'s
+/// slot stuck answered `Err(MemoryFatal)`, and `makeCredential` reported that to the
+/// platform as `KeyStoreFull` — "delete some passkeys", which cannot help a flash
+/// fault and destroys data to no end.
+#[test]
+fn a_faulted_probe_of_another_rps_slot_does_not_deny_this_registration() {
+    let d = dev();
+    let mine = sha256(b"example.com");
+    let other = sha256(b"other.example");
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut out = [0u8; 512];
+
+    // Slot 0 goes to `other.example`, slot 1 to `example.com`: the fault lands on a
+    // record that belongs to somebody else.
+    for (hash, id, user) in [
+        (&other, "other.example", 0x01u8),
+        (&mine, "example.com", 0x02),
+    ] {
+        let mut req = input();
+        req.user_id = core::slice::from_ref(&user);
+        let len = credential_create(&SEED, &d, &req, hash, &IV, &mut out).unwrap();
+        credential_store(&SEED, &d, &mut fs, &out[..len], hash, id, &[user], &[]).unwrap();
+    }
+    let before = medium
+        .value(EF_RP + 1)
+        .expect("example.com's record is on the medium");
+    assert_eq!(
+        before[0], 1,
+        "control: one credential for example.com so far"
+    );
+
+    let mut third = input();
+    third.user_id = &[0x03];
+    let len = credential_create(&SEED, &d, &third, &mine, &IV, &mut out).unwrap();
+    medium.stick(Some(EF_RP)); // other.example's slot, not this rp's
+    let stored = credential_store(
+        &SEED,
+        &d,
+        &mut fs,
+        &out[..len],
+        &mine,
+        "example.com",
+        &[0x03],
+        &[],
+    );
+    medium.stick(None);
+
+    assert_eq!(
+        stored,
+        Ok(()),
+        "a slot belonging to another rp cannot hide this one, so it must not refuse"
+    );
+    assert_eq!(
+        medium.value(EF_RP + 1).map(|v| v[0]),
+        Some(2),
+        "the second credential for example.com must be counted on its own record"
+    );
+}

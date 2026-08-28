@@ -2162,6 +2162,25 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   remove one nominated fid, each driven red against the unfixed code with the
   whole suite watched. **bcdDevice → 0x0988.**
 
+- **A faulted `EF_RP` probe filed a SECOND resident-credential record for one
+  relying party, and nothing merges the pair.** `bump_rp` located the rp's index
+  entry with a collapsing `Fs::read`, whose `None` covers "a different rp" and
+  "the flash could not serve this slot" alike — so a refused probe of the slot
+  that *does* hold this rpIdHash fell through to the free-slot path and wrote a
+  duplicate. `decrement_rp` breaks at its first match and touches one record per
+  call, so the pair stands: `enumerateRPs` counts the rp twice, and when the
+  first record drains to zero its deletion takes `EF_RPNICK` at that slot with it
+  — the device-local nickname destroyed while the rp is still live under the
+  duplicate. Driven on a medium that refuses one nominated fid: two records for
+  one rpIdHash, then `rp0=None rp1=Some(1) nick0=None` after a single decrement.
+  The probe is fallible now, and the refusal is narrowed to where it is earned:
+  a slot belonging to some OTHER rp cannot hide this one, so the unread slot is
+  carried and only refuses on reaching the free-slot path — the first shape of
+  the fix denied every resident registration on the device, for every rp, until
+  one unreadable record came back. `makeCredential` also stops reporting a flash
+  fault as `KeyStoreFull`, which tells the platform to delete passkeys: that
+  cannot help a refused read and destroys data to no end. **bcdDevice → 0x09AD.**
+
 ### Security
 
 - **One faulted probe replayed the credential-store tag, and a platform holding the

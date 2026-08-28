@@ -1262,6 +1262,64 @@ fn legacy_plaintext_rp_migrates_and_stays_usable() {
     );
 }
 
+/// The collapsing probe in [`crate::credential::migrate_rp_seal`], priced. A faulted
+/// EF_RP read drops that rp out of THIS boot's pass and nothing else: the arm writes
+/// no record, latches no flag and consumes no defaulted value, and the pass runs
+/// again unconditionally on the next boot (`firmware/src/main.rs`), which seals it.
+/// The cost is one more boot of a domain that was already in cleartext — a repeated
+/// repair, which is where `Fs::try_read`'s policy leaves the collapsing probe. A
+/// `try_*` twin would be inert: a pass that cannot read the record cannot re-box it
+/// either, and turning the skip into an early return would strand every rp BEHIND
+/// the faulted one in cleartext too — which is what the middle assertion pins.
+#[test]
+fn a_faulted_migration_probe_costs_one_boot_not_the_seal() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    // Two pre-migration records: count(1) ‖ rpIdHash(32) ‖ cleartext domain.
+    let legacy = |domain: &str| {
+        let mut rec = std::vec::Vec::new();
+        rec.push(1u8);
+        rec.extend_from_slice(&sha256(domain.as_bytes()));
+        rec.extend_from_slice(domain.as_bytes());
+        rec
+    };
+    fs.put(EF_RP, &legacy("example.com")).unwrap();
+    fs.put(EF_RP + 1, &legacy("other.example")).unwrap();
+    // Read the MEDIUM, not the cache: what a flash dump would still show.
+    let in_cleartext = |fid: u16, domain: &str| {
+        medium
+            .value(fid)
+            .is_some_and(|v| v.windows(domain.len()).any(|w| w == domain.as_bytes()))
+    };
+    assert!(
+        in_cleartext(EF_RP, "example.com") && in_cleartext(EF_RP + 1, "other.example"),
+        "control: both domains start in cleartext"
+    );
+
+    // The faulted boot.
+    medium.stick(Some(EF_RP));
+    crate::credential::migrate_rp_seal(&dev(), &mut fs);
+    medium.stick(None);
+    assert!(
+        in_cleartext(EF_RP, "example.com"),
+        "control: the record the pass could not read is the one left unsealed"
+    );
+    assert!(
+        !in_cleartext(EF_RP + 1, "other.example"),
+        "the pass stopped on the fault, leaving every rp behind it in cleartext"
+    );
+
+    // The next boot runs the same pass with no fault.
+    crate::credential::migrate_rp_seal(&dev(), &mut fs);
+    assert!(
+        !in_cleartext(EF_RP, "example.com"),
+        "a faulted probe left the rpId domain in cleartext PERMANENTLY — the boot \
+         pass never came back for it"
+    );
+}
+
 // updateUserInformation must reseal a ceiling-sized box. The registered box
 // (195-byte rpId, 64-byte uid, max credBlob — sized so the UPDATED box stays
 // inside CRED_BOX_MAX) plus 64-byte updated names crosses the OLD 512-byte

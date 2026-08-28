@@ -883,6 +883,7 @@ fn bump_rp<S: Storage>(
 ) -> Result<()> {
     let mut rec = [0u8; RP_REC_MAX];
     let mut free: Option<u16> = None;
+    let mut unread = false;
     let mut occupied = [false; MAX_RESIDENT_CREDENTIALS as usize];
     slot_map(fs, EF_RP, &mut occupied);
     for i in 0..MAX_RESIDENT_CREDENTIALS {
@@ -893,7 +894,20 @@ fn bump_rp<S: Storage>(
             continue;
         }
         let fid = EF_RP + i;
-        if let Some(n) = fs.read(fid, &mut rec)
+        // Fallible: `read`'s `None` covers "a different rp" and "the flash could not
+        // serve this slot" alike, and the second falls through to the free-slot path
+        // — a SECOND record for an rpIdHash that `decrement_rp` never merges back.
+        // Carried, not returned here: a slot holding some OTHER rp cannot hide this
+        // one, and refusing on it would deny every resident registration on the
+        // device, for every rp, until that one record reads again.
+        let found = match fs.try_read(fid, &mut rec) {
+            Ok(found) => found,
+            Err(_) => {
+                unread = true;
+                continue;
+            }
+        };
+        if let Some(n) = found
             && n >= RP_PREFIX
             && rec[1..RP_PREFIX] == *rp_id_hash
         {
@@ -908,6 +922,11 @@ fn bump_rp<S: Storage>(
             rec[0] = bumped;
             return fs.put(fid, &rec[..n]);
         }
+    }
+    // Only here does an unread slot matter: it could have held this rpIdHash, and
+    // the record about to be filed would be its duplicate.
+    if unread {
+        return Err(Error::MemoryFatal);
     }
     let slot = free.ok_or(Error::NoMemory)?;
     rec[0] = 1;
@@ -1079,6 +1098,16 @@ pub fn migrate_rp_seal<S: Storage>(dev: &Device, fs: &mut Fs<S>) {
             continue;
         }
         let fid = EF_RP + i;
+        // The collapsing probe stands: this arm writes nothing, latches nothing and
+        // defaults nothing, and the boot pass reruns unconditionally — so a
+        // TRANSIENT fault costs one more boot of a domain that is already in
+        // cleartext. A permanent one leaves that rpId in cleartext for good, and on
+        // the provisioning boot it also spends the one-shot `EF_HARDENED` compact
+        // lap that runs after this pass.
+        //
+        // A `try_read` twin would be inert either way: this pass cannot re-box a
+        // record it cannot read, and returning on the error strands every rp behind
+        // it too.
         let Some(n) = fs.read(fid, &mut buf) else {
             continue;
         };

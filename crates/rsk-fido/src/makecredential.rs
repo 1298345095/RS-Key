@@ -777,7 +777,7 @@ fn make_credential_inner<S: Storage, R: Rng>(
     )?;
 
     if req.rk
-        && credential_store(
+        && let Err(err) = credential_store(
             seed,
             &ctx.dev,
             ctx.fs,
@@ -787,9 +787,14 @@ fn make_credential_inner<S: Storage, R: Rng>(
             req.user_id,
             &cached_pubkey[..cached_pubkey_len],
         )
-        .is_err()
     {
-        return Err(CtapError::KeyStoreFull);
+        // A full store and a medium that would not answer are different answers to
+        // the platform: `KeyStoreFull` tells it to delete passkeys, which cannot
+        // help a flash fault and destroys data to no end.
+        return Err(match err {
+            rsk_sdk::error::Error::MemoryFatal => CtapError::Other,
+            _ => CtapError::KeyStoreFull,
+        });
     }
     journal::append(ctx, journal::EV_MAKE_CRED, 0, &rp_id_hash[..8]);
     Ok(resp_len)
