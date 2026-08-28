@@ -92,13 +92,6 @@ pub struct Fs<S: Storage> {
     /// cache stale. In-RAM only (resets to 0 each boot); `u32` never realistically
     /// wraps between two reads of a mutation-free session.
     write_gen: u32,
-    /// Set by [`scan`](Self::scan) when the backend held more dynamic-eligible keys
-    /// than [`MAX_DYNAMIC_FILES`], so at least one live key lost its registration and
-    /// every later `put` to it will answer [`Error::NoMemory`]. Only reachable via a
-    /// key written outside `Fs` (`put` refuses a new file past the cap), which is why
-    /// it was a `debug_assert!` — compiled out of the release image, where the drop
-    /// then went entirely unrecorded (audit run-36).
-    over_cap: bool,
     /// Set by [`scan`](Self::scan) when the boot enumeration was cut short, so the
     /// FIDs it never reached are unknown rather than absent. Only
     /// [`present_slots`](Self::present_slots) reads it: the per-key probes fall
@@ -118,7 +111,6 @@ impl<S: Storage> Fs<S> {
     pub fn new(storage: S) -> Self {
         Fs {
             storage,
-            over_cap: false,
             dynamic: Vec::new(),
             present: [0u8; FID_PRESENT_BYTES],
             decided: [0u8; FID_PRESENT_BYTES],
@@ -224,7 +216,6 @@ impl<S: Storage> Fs<S> {
         dynamic.clear();
         present.fill(0);
         decided.fill(0);
-        let mut over_cap = false;
         let complete = self.storage.for_each_key(&mut |fid| {
             // Every enumerated key — dynamic or EF_META — is confirmed present.
             let (i, m) = ((fid >> 3) as usize, 1u8 << (fid & 7));
@@ -237,16 +228,13 @@ impl<S: Storage> Fs<S> {
             if fid == EF_META || fid == EF_SCRUB_FILLER {
                 return;
             }
-            if !dynamic.contains(&fid) && dynamic.push(fid).is_err() {
-                // `put` refuses a NEW dynamic file past the cap, so the only way to
-                // get here is a key the backend holds that never went through `put`.
-                // Record it rather than discarding it silently — the drop costs the
-                // key every future write, and a `debug_assert!` is compiled out of
-                // the release image where that matters.
-                over_cap = true;
+            if !dynamic.contains(&fid) {
+                // Only a key written outside `Fs` can be here past the cap — `put`
+                // refuses a new file at it. Its value stays readable; what the
+                // dropped registration costs it is every future `put` (`NoMemory`).
+                let _ = dynamic.push(fid);
             }
         });
-        self.over_cap = over_cap;
         // A COMPLETE enumeration yielded every live key: the backend's forward ring
         // walk is a page-superset of `fetch_item`'s, and page reclaim erases a source
         // only after forwarding its items, so no torn power cut can hide a committed

@@ -864,9 +864,8 @@ fn a_failed_read_is_never_memoised_as_an_absence() {
 
 /// Audit run-36: `Storage::compact` writes its scrub filler straight through the
 /// backend, never through `Fs`, so `Fs::scan` counted it as a dynamic file — and the
-/// dynamic set is sized at exactly `MAX_DYNAMIC_FILES`, with the over-cap push
-/// discarded by a `let _ =` whose `debug_assert!` is compiled out of the release
-/// image. At the cap plus a leftover filler one live key silently lost its
+/// dynamic set is sized at exactly `MAX_DYNAMIC_FILES`, so the over-cap push is
+/// discarded. At the cap plus a leftover filler one live key silently lost its
 /// registration and every later `put` to it returned `NoMemory`.
 #[test]
 fn the_scrub_filler_never_costs_a_dynamic_slot() {
@@ -1274,5 +1273,92 @@ fn a_factory_wipe_clears_the_truncated_scan_flag() {
     assert_eq!(
         slots, [false; 4],
         "a just-wiped store reported every slot occupied"
+    );
+}
+
+/// A RAM medium whose `for_each_key` yields in ASCENDING fid order. `RamStorage`
+/// walks a `HashMap`, so WHICH key falls off the end of a full dynamic set is
+/// whatever that run's hasher decided — which would make the test below flaky about
+/// the one fid it is entirely about.
+struct OrderedKeys(RamStorage);
+impl Storage for OrderedKeys {
+    fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+        self.0.read(fid, buf)
+    }
+    fn write(&mut self, fid: u16, data: &[u8]) -> Result<()> {
+        self.0.write(fid, data)
+    }
+    fn remove(&mut self, fid: u16) -> Result<()> {
+        self.0.remove(fid)
+    }
+    fn size(&mut self, fid: u16) -> Option<usize> {
+        self.0.size(fid)
+    }
+    fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+        let mut fids = std::vec::Vec::new();
+        let complete = self.0.for_each_key(&mut |fid| fids.push(fid));
+        fids.sort_unstable();
+        for fid in fids {
+            f(fid);
+        }
+        complete
+    }
+}
+
+/// What a boot scan over MORE dynamic-eligible keys than [`MAX_DYNAMIC_FILES`]
+/// actually costs the key whose registration is dropped. `Fs` carried an `over_cap`
+/// flag for this, set here and read by nothing — so it recorded no more than the
+/// `debug_assert!` it replaced. These four answers are the record: the key still
+/// reads, the budget reports zero, a `put` to it is refused while a REGISTERED key
+/// still writes, and a factory wipe still takes it. Only a key written outside `Fs`
+/// can be in this state — `put` refuses a new file at the cap (see
+/// `the_scrub_filler_never_costs_a_dynamic_slot` for the one historical way in).
+#[test]
+fn a_key_past_the_dynamic_cap_reads_refuses_writes_and_still_wipes() {
+    const BASE: u16 = 0x2000;
+    // The ascending walk's last key, so it is the push that finds the set full.
+    const OVER: u16 = BASE + MAX_DYNAMIC_FILES as u16;
+
+    let mut ram = RamStorage::new();
+    for i in 0..=MAX_DYNAMIC_FILES as u16 {
+        ram.write(BASE + i, &[0xAA]).unwrap();
+    }
+    let mut fs = Fs::new(OrderedKeys(ram));
+    fs.scan();
+
+    // `scan` sets present/decided for every enumerated key BEFORE it reaches the
+    // push, so losing the registration must not cost the value: an unregistered key
+    // marked absent instead would read `None` here without touching the backend.
+    let mut buf = [0u8; 4];
+    assert_eq!(
+        fs.read(OVER, &mut buf),
+        Some(1),
+        "the key that lost its registration stopped reading"
+    );
+    assert_eq!(buf[0], 0xAA, "and it must read back its own value");
+
+    assert_eq!(
+        fs.free_dynamic(),
+        0,
+        "an over-subscribed budget must report no headroom"
+    );
+
+    // The refusal is about REGISTRATION, not a store-wide stop: without the
+    // `register &&` half of `put`'s guard the second half of this pair goes too, and
+    // the cap would refuse writes to keys it had already accepted.
+    assert_eq!(
+        fs.put(OVER, &[0xBB]),
+        Err(Error::NoMemory),
+        "an unregistered key's put should have been refused"
+    );
+    fs.put(BASE, &[0xBB])
+        .expect("a registered key must still write at the cap");
+
+    // The wipe takes its key set from the backend, not from the registry the key is
+    // missing from — a reset that walked `dynamic` would leave it on the medium.
+    fs.factory_wipe(|_| false, |_| false, |_| false).unwrap();
+    assert!(
+        !fs.has_data(OVER),
+        "an unregistered key survived the factory wipe"
     );
 }

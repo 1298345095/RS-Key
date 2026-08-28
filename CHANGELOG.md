@@ -126,6 +126,22 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   configurations, the floors and the two scripts. Empty over the 32 commits since
   the recorded run.
 
+### Changed
+
+- **`Fs` carried a boot-scan flag that nothing read, so it recorded nothing.**
+  `over_cap` was set by `scan` when the backend held more dynamic-eligible keys
+  than `MAX_DYNAMIC_FILES`, and it replaced a `debug_assert!` for the stated
+  reason that the assert is compiled out of the release image — but no reader was
+  ever added, in `Fs` or out of it, and `factory_wipe` reset every other cache
+  field and not this one, because nobody maintaining that reset had a reason to
+  think about a field with no readers. Removed, and the knowledge it stood for is
+  a test instead: with `MAX_DYNAMIC_FILES + 1` keys on the medium, the key that
+  loses its registration still reads, `free_dynamic()` reports 0, a `put` to it
+  answers `NoMemory` while a registered key still writes, and `factory_wipe`
+  still takes it. Each of the four was driven red on its own. Refactor, no
+  behaviour change: nothing branched on the field, so no image behaviour moves —
+  the counter moves because the counter counts builds.
+
 ### Security
 
 - **One faulted probe at an unauthenticated SELECT handed a host every OATH secret
