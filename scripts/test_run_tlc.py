@@ -291,6 +291,37 @@ def test_a_deadlock_row_with_no_switch_armed_is_not_held_to_a_name(fake_tlc):
     assert "RED: Error: Deadlock reached." in result.stdout
 
 
+#: A configuration arming TWO defects: `Mut_BugSetPinKeepsPpuat.cfg` needs its
+#: companion switch on, because the shipped seed-lead makes its own defect
+#: unreachable alone. `NoAccessibleSecretWithoutGate` is the companion's target and
+#: is what a real run of it reports — measured, at depth 13 against its own
+#: invariant's 15, so TLC halts on the shallower one.
+RED_COMPANION = RED.replace("NoAuthorizationBypass", "NoAccessibleSecretWithoutGate")
+
+
+def test_a_two_armed_mutant_may_redden_on_either_switch(fake_tlc):
+    """Its first-listed name is the generator's intent, not a prediction: with a
+    second defect on, the state TLC finds first can violate the other one."""
+    result = run(fake_tlc, "Mut_BugSetPinKeepsPpuat.cfg", RED_COMPANION)
+    assert result.returncode == 0
+    assert "RED: NoAccessibleSecretWithoutGate" in result.stdout
+
+
+def test_a_two_armed_mutant_reddening_on_typeok_is_still_rejected(fake_tlc):
+    """What it may NOT do. `TypeOK` is checked by every configuration and targeted
+    by neither switch, so a RED there attributes the failure to nothing."""
+    result = run(fake_tlc, "Mut_BugSetPinKeepsPpuat.cfg", RED_TYPEOK)
+    assert result.returncode == 1
+    assert "expected RED on an invariant this configuration checks" in result.stdout
+
+
+def test_a_two_armed_mutant_refused_without_an_invariant_is_rejected(fake_tlc):
+    """…nor may it deadlock instead of breaking something it checks."""
+    result = run(fake_tlc, "Mut_BugSetPinKeepsPpuat.cfg", RED_DEADLOCK)
+    assert result.returncode == 1
+    assert "expected RED on an invariant this configuration checks" in result.stdout
+
+
 def test_a_properties_only_row_is_not_held_to_an_invariant(fake_tlc):
     """`LiveMut_*` check temporal properties and no invariant beyond `TypeOK`;
     the runner reads `Invariant … is violated` and nothing else, so there is no

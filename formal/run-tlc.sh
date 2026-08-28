@@ -45,35 +45,44 @@ fi
 # module's, and TLC takes the module name rather than reading it from the cfg.
 spec_for() { case "$1" in TokenGate*) echo RSKeyTokenGate ;; TokenRefinement*) echo RSKeyTokenRefinement ;; TraceSecurity*) echo TraceSecurity ;; TraceSeamsBad*) echo TraceSeamsBad ;; TraceSeams*) echo TraceSeams ;; Seam*) echo RSKeyAppletSeams ;; Store*) echo RSKeyStore ;; Lat*) echo RSKeyRetryLattice ;; Polic*) echo RSKeyAppletPolicies ;; Admin*) echo RSKeyAdminSurface ;; Disp*) echo RSKeyTrustedDisplay ;; Boot*) echo RSKeyBootHardening ;; Trans*) echo RSKeyTransport ;; *) echo RSKeySecurityState ;; esac; }
 
+# The invariants a configuration checks, in order.
+invariants_of() {
+  awk '
+    /^INVARIANTS?[[:space:]]*$/ { block = 1; next }
+    /^INVARIANTS?[[:space:]]+[A-Za-z][A-Za-z0-9_]*[[:space:]]*$/ {
+      print $2; block = 0; next
+    }
+    block && /^[[:space:]]+[A-Za-z][A-Za-z0-9_]*[[:space:]]*$/ { print $1; next }
+    block { block = 0 }
+  ' "$1"
+}
+
 # The invariant a MUTATION configuration says it targets, for the rows where
 # floors.txt says nothing: `gen-configs.sh` writes that one first under
 # INVARIANTS because TLC reports the first violated invariant and stops, and
 # scripts/verdict_gate.py reads the same block to decide solo attribution. So
 # this is the generated relation being read, not a second column written by hand.
-derived_inv() {
-  awk '
-    /^INVARIANTS?[[:space:]]*$/ { block = 1; next }
-    /^INVARIANTS?[[:space:]]+[A-Za-z][A-Za-z0-9_]*[[:space:]]*$/ {
-      block = 0
-      if ($2 != "TypeOK") { print $2; exit }
-      next
-    }
-    block && /^[[:space:]]+[A-Za-z][A-Za-z0-9_]*[[:space:]]*$/ {
-      if ($1 != "TypeOK") { print $1; exit }
-      next
-    }
-    block { block = 0 }
-  ' "$1"
-}
+derived_inv() { invariants_of "$1" | grep -v '^TypeOK$' | head -1; }
 
-# Whether a defect switch is ARMED, which is what makes the derived name the
-# right question: `TraceSeamsBad.cfg` also lists invariants and is refused by a
-# deadlock instead, so deriving one there would demand a name no run can print.
-# Both prefixes and both operators, because `scripts/verdict_gate.py` reads
-# `(?:Bug|Mutate)[A-Z]` and `=|<-`, and a spelling one file calls a defect and
-# the other does not is how a rule gets walked around here.
-armed() {
-  grep -qE '^[[:space:]]*(Bug|Mutate)[A-Z][A-Za-z0-9_]*[[:space:]]*(=|<-)[[:space:]]*TRUE([[:space:]]|$)' "$1"
+# How many defect switches a configuration ARMS. One is what makes the derived
+# name the right question. Zero is `TraceSeamsBad.cfg`, which lists invariants and
+# is refused by a deadlock, so a derived name there would demand one no run can
+# print. TWO is a mutant whose own defect the shipped tree makes unreachable
+# alone, and there the first-listed name is the generator's INTENT rather than a
+# prediction: measured on `Mut_BugSetPinKeepsPpuat.cfg`, the companion's
+# counterexample is the shallower one (`NoAccessibleSecretWithoutGate` at depth
+# 13 against `NoTokenAfterInvalidation` at 15), so TLC halts on the companion's.
+# Those rows are still held to naming SOME invariant they check, which is what
+# refuses a `TypeOK` RED and a deadlock alike; the mutant's own attribution lives
+# in its `Solo_` twin, which checks one invariant and gets the exact comparison.
+#
+# Registering the exception in `floors.txt` instead was tried and is REFUSED by
+# `scripts/verdict_gate.py`: an exact row in front of its class glob is the very
+# shape it rejects, because nothing in the tree can tell first-match from
+# last-match. The header of `floors.txt` advertises that mechanism and its own
+# gate forbids it -- the gate wins.
+armed_count() {
+  grep -cE '^[[:space:]]*(Bug|Mutate)[A-Z][A-Za-z0-9_]*[[:space:]]*(=|<-)[[:space:]]*TRUE([[:space:]]|$)' "$1"
 }
 
 # floors.txt: what each configuration must produce. First match wins.
@@ -103,8 +112,11 @@ one() {
   # 168 of the 177 RED rows named no invariant, so the reason went uncompared on
   # 95% of them and a mutant reddening on `TypeOK` -- which every configuration
   # checks and none targets -- exited 0. The configuration itself names one.
+  local armed_n
+  armed_n=$(armed_count "$cfg")
   if [ -z "${inv:-}" ] || [ "$inv" = "-" ]; then
-    if armed "$cfg"; then inv=$(derived_inv "$cfg"); fi
+    inv=""
+    [ "$armed_n" = 1 ] && inv=$(derived_inv "$cfg")
   fi
   local t0 t1 cov=()
   # THE VACUITY QUESTION, and it is the same one `kani::cover!` answers: an
@@ -192,6 +204,13 @@ one() {
   elif [ "$got" = RED ] && [ -n "${inv:-}" ] && [ "${inv:-}" != "-" ] \
        && [ "$verdict" != "RED: $inv" ]; then
     mark="  !! expected RED: $inv"
+    FAILED=$((FAILED + 1))
+  # A configuration arming two defects predicts no single name, but it still may
+  # not pass on `TypeOK` -- which it checks and neither switch targets -- nor on a
+  # refusal that names no invariant at all.
+  elif [ "$got" = RED ] && [ "$armed_n" -gt 1 ] \
+       && ! invariants_of "$cfg" | grep -vx TypeOK | grep -qxF "${verdict#RED: }"; then
+    mark="  !! expected RED on an invariant this configuration checks"
     FAILED=$((FAILED + 1))
   fi
   printf '%-42s %-38s states=%-9s distinct=%-8s depth=%-3s %ss%s\n' \
