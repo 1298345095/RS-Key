@@ -844,3 +844,79 @@ def test_both_sources_of_the_axis_add(tree):
     tree.write("assurance/bundle/SEC-T-001.toml",
                tree.bundle(subjects='["hardware"]', extra_build='board_revision = "RP2350 A2"\n'))
     assert tree.vector("SEC-T-001")["hardware"] == 2
+
+
+# --- the three outputs 1B asks for and the tree did not have ------------------
+
+
+def test_the_rollup_covers_every_built_image_the_matrix_names():
+    """The column list is `matrix_gate`'s, so the page cannot answer "how many
+    built images are there" differently from the gate that owns the question."""
+    import matrix_gate
+
+    rows = evidence_gate.vectors(ROOT, [])
+    named = {c.name for c in matrix_gate.columns(ROOT, matrix_gate.workspace(ROOT))}
+    assert {n for n, _k, _p, _pl, _u in evidence_gate.per_column(ROOT, rows)} == named
+
+
+def test_every_column_accounts_for_every_ledger_row():
+    """`placed + unplaced` is the denominator, and a rollup that loses rows is how
+    a gap stops being visible."""
+    rows = evidence_gate.vectors(ROOT, [])
+    ids = {r["entry"]["id"] for r in rows} & set(evidence_gate.scope_of(ROOT))
+    for name, _kind, _pub, placed, unplaced in evidence_gate.per_column(ROOT, rows):
+        assert placed + unplaced == len(ids), name
+
+
+def test_the_feature_columns_are_the_point_of_the_rollup():
+    """Roadmap §12 calls it feature blindness: a default-build proof is not a
+    proof about the image a feature builds. The rollup must name that kind."""
+    rows = evidence_gate.vectors(ROOT, [])
+    kinds = {k for _n, k, _p, _pl, _u in evidence_gate.per_column(ROOT, rows)}
+    assert {"package", "feature", "board"} <= kinds
+
+
+def test_the_outstanding_list_reads_all_three_sources():
+    """Bundle behind its inputs, property with no bundle, platform obligation
+    pending. Reading one alone reports a clean tree over an unclean one."""
+    rows = evidence_gate.vectors(ROOT, [])
+    listed = evidence_gate.outstanding(ROOT, rows)
+    kinds = {kind for kind, _s, _w in listed}
+    assert "platform" in kinds
+    assert "bundle" in kinds
+    assert any("no raw evidence bundle" in why for _k, _s, why in listed)
+
+
+def test_the_review_packet_names_what_reproduces_each_artifact():
+    made = evidence_gate.packet(ROOT, evidence_gate.vectors(ROOT, []))
+    assert made["artifacts"] and made["runs"]
+    assert all(command.startswith("python ") for _a, command in made["artifacts"])
+    assert made["commit"] != "unknown"
+
+
+def test_a_rollup_that_collapsed_is_a_finding_and_not_a_regenerated_blank(monkeypatch):
+    """The failure a byte-diff cannot see: a section that empties still matches
+    what the generator writes, because the generator writes the empty one."""
+    rows = evidence_gate.vectors(ROOT, [])
+    monkeypatch.setattr(evidence_gate, "per_column", lambda *a, **k: [])
+    findings = []
+    evidence_gate.check_rollups(ROOT, rows, findings)
+    assert any("rollup is empty" in f for f in findings), findings
+
+
+def test_an_outstanding_list_that_stopped_reading_a_source_is_a_finding(monkeypatch):
+    rows = evidence_gate.vectors(ROOT, [])
+    monkeypatch.setattr(evidence_gate, "outstanding", lambda *a, **k: [])
+    findings = []
+    evidence_gate.check_rollups(ROOT, rows, findings)
+    assert any("no platform obligation" in f for f in findings), findings
+
+
+def test_a_packet_that_lists_nothing_is_a_finding(monkeypatch):
+    rows = evidence_gate.vectors(ROOT, [])
+    monkeypatch.setattr(
+        evidence_gate, "packet", lambda *a, **k: {"artifacts": [], "runs": [], "commit": "x", "bundles": [], "stale": [], "properties": 0}
+    )
+    findings = []
+    evidence_gate.check_rollups(ROOT, rows, findings)
+    assert any("reproduces nothing" in f for f in findings), findings

@@ -601,6 +601,57 @@ def vectors(root, findings):
     return rows
 
 
+def check_rollups(root, rows, findings):
+    """The three sections a generated page can emit EMPTY and still regenerate.
+
+    The byte-diff catches a section that changed and not one that collapsed to a
+    header with nothing under it — a regenerated empty table is what the page
+    "makes", so it matches itself. Same family as the mutation table that was
+    deleted versus the one that was emptied, one layer out.
+    """
+    columns = per_column(root, rows)
+    if not columns:
+        if (root / "Cargo.toml").is_file():
+            findings.append(
+                "the per-column rollup is empty — `matrix_gate` gave no built images,"
+                " so the page would print coverage over nothing"
+            )
+        # No workspace manifest: no built images to enumerate, which is a fact
+        # about this checkout rather than a reader that stopped. The rules below
+        # are all about a rollup that HAS a source.
+        return
+    ids = {row["entry"]["id"] for row in rows} & set(scope_of(root))
+    for name, _kind, _published, placed, unplaced in columns:
+        if placed + unplaced != len(ids):
+            findings.append(
+                f"column `{name}` accounts for {placed + unplaced} of {len(ids)}"
+                " ledger rows — the rollup is counting a different denominator"
+                " than the ledger it reads"
+            )
+    kinds = {kind for _n, kind, _p, _pl, _u in columns}
+    for owed in ("package", "feature", "board"):
+        if owed not in kinds:
+            findings.append(
+                f"the rollup names no `{owed}` column — the axis feature blindness"
+                " is about would be missing from the page without a word"
+            )
+    pending = [row for row in outstanding(root, rows) if row[0] == "platform"]
+    if not pending and any(
+        entry.get("status") == "pending"
+        for entry in platform_gate.entries(root, []).values()
+    ):
+        findings.append(
+            "the outstanding list names no platform obligation while the registry"
+            " holds a pending one — the consolidated list stopped reading a source"
+        )
+    made = packet(root, rows)
+    if not made["artifacts"] or not made["runs"]:
+        findings.append(
+            "the review packet names no artifact or no model run — a packet that"
+            " lists nothing reproduces nothing"
+        )
+
+
 def check_derivations(root, rows, findings):
     """Each axis's reader must still reach the tree it reads.
 
@@ -751,6 +802,114 @@ def claims(rows):
     return may, must_not
 
 
+def per_column(root, rows):
+    """(column, kind, published, placed, unplaced) for every built image.
+
+    The rollup roadmap §1B п.7 asks for by name and the tree did not have. Its
+    columns come from `matrix_gate` and NOT from the ledger: a cell nobody wrote
+    is a `gap`, so counting gaps needs the derived list of images, and asking the
+    ledger how many images exist would be a second answer to a question one gate
+    already owns.
+
+    `placed` is any disposition the ledger actually wrote — including
+    `out-of-scope`, which is a decision. `unplaced` is the remainder, which is the
+    number the feature columns exist to make visible: six of them are `gap` for
+    every row, and that reads as coverage only while nobody prints it.
+    """
+    import matrix_gate
+
+    # Scoped the way `check_derivations` scopes its floors: a checkout with no
+    # workspace manifest has no built images to enumerate, which is a fact about
+    # that tree and not a reader that stopped. `check_rollups` asks for the
+    # emptiness only where the source IS there.
+    if not (root / "Cargo.toml").is_file():
+        return []
+    columns = matrix_gate.columns(root, matrix_gate.workspace(root))
+    scope = scope_of(root)
+    ids = [row["entry"]["id"] for row in rows if row["entry"]["id"] in scope]
+    out = []
+    for column in columns:
+        placed = sum(
+            1
+            for pid in ids
+            if any(column.name in named for named in scope.get(pid, {}).values())
+        )
+        out.append((column.name, column.kind, column.published, placed, len(ids) - placed))
+    return out
+
+
+def outstanding(root, rows):
+    """Every stale or pending thing, in one list instead of across two pages.
+
+    Three sources, because "stale" has three spellings here and reading only one
+    is how a page reports a clean tree over an unclean one: a bundle whose commit
+    is behind an input it is about, a P0-family property with no bundle at all,
+    and a platform obligation still `pending`.
+    """
+    out = []
+    for row in rows:
+        vector, entry = row["vector"], row["entry"]
+        if vector["freshness"] == "stale":
+            out.append(
+                (
+                    "bundle",
+                    entry["id"],
+                    f"{len(vector['behind'])} input(s) newer than `{vector['commit'][:7]}`",
+                )
+            )
+    have = {row["entry"]["id"] for row in rows if row["vector"]["freshness"] != "unrecorded"}
+    for pid in sorted(scope_of(root)):
+        if pid not in have:
+            out.append(("bundle", pid, "no raw evidence bundle"))
+    for entry in platform_gate.entries(root, []).values():
+        if entry.get("status") == "pending":
+            out.append(("platform", entry.get("id", "?"), entry.get("statement", "")[:70]))
+    return out
+
+
+def packet(root, rows):
+    """The reviewer's packet for THIS commit: what to reproduce, and with what.
+
+    Roadmap §1B п.7 asks for it and the tree had no such output — 0 mentions. It
+    is small on purpose: the assurance CASE is stage 12, and what 1B owes is that
+    a reviewer arriving at a release commit is not left to find the artifacts by
+    reading the history. So every line here is derived — the artifacts from the
+    generators that write them, the model runs from the record that provenances
+    them, and the counts from the vector this page already publishes.
+
+    It deliberately does NOT claim the packet is sufficient. A reviewer who runs
+    all of it has reproduced the software evidence and nothing about a board.
+    """
+    head = git(root, "rev-parse", "HEAD")[:7] or "unknown"
+    runs = []
+    path = root / pathlib.Path("formal/runs.toml")
+    if path.is_file():
+        for entry in tomllib.loads(path.read_text(encoding="utf-8")).get("run", []):
+            runs.append(
+                (
+                    entry.get("tier", "?"),
+                    entry.get("command", "?"),
+                    entry.get("date", "?"),
+                    (entry.get("commit", "") or "")[:7],
+                    entry.get("host", "?"),
+                )
+            )
+    stale = [row for row in rows if row["vector"]["freshness"] == "stale"]
+    return {
+        "commit": head,
+        "artifacts": [
+            (str(ARTIFACT), "python scripts/evidence_gate.py"),
+            ("docs/assurance-matrix.md", "python scripts/matrix_gate.py"),
+            ("docs/platform-assumptions.md", "python scripts/platform_gate.py"),
+            ("formal/README.md", "python scripts/assurance_gate.py"),
+        ],
+        "runs": runs,
+        "bundles": sorted(p.stem for p in (root / BUNDLES).glob("*.toml")),
+        "stale": [row["entry"]["id"] for row in stale],
+        "properties": len(rows),
+    }
+
+
 def render(root, rows=None):
     """`docs/assurance-vector.md` as the tree makes it."""
     rows = vectors(root, []) if rows is None else rows
@@ -866,6 +1025,86 @@ def render(root, rows=None):
         " everything else is a `gap`, and `docs/assurance-matrix.md` is the page"
         " that counts those.",
         "",
+        "## Coverage by built image",
+        "",
+        "The same 40 P0-family rows, counted the other way round: per column"
+        " rather than per property. `Placed` is a disposition the ledger actually"
+        " wrote, `out-of-scope` included, because a decision not to claim is a"
+        " decision. `Unplaced` is the remainder, and it is what a per-property"
+        " count cannot show — a property claimed on twenty images looks well"
+        " covered while an image nobody disposed anything on stays invisible."
+        " The columns are `matrix_gate.py`'s, so this asks nothing about how many"
+        " built images exist that another gate already answers.",
+        "",
+        "| Column | Kind | Published | Placed | Unplaced |",
+        "|---|---|---|---:|---:|",
+    ]
+    rollup = per_column(root, rows)
+    if not rollup:
+        out.append("| — | — | — | 0 | 0 |")
+    for name, kind, published, placed, unplaced in rollup:
+        out.append(
+            f"| `{name}` | {kind} | {'yes' if published else 'no'} |"
+            f" {placed} | {unplaced} |"
+        )
+    listed = outstanding(root, rows)
+    out += [
+        "",
+        "Read the feature rows first: every one of them carries the same handful"
+        " of placed cells and the rest unplaced, which is the shape roadmap §12"
+        " calls feature blindness. A default-build proof is not a proof about the"
+        " image a feature builds, and the column is where that stops being"
+        " invisible.",
+        "",
+        "## Stale and pending, in one place",
+        "",
+        "Three spellings of \"not current\", which used to sit on two different"
+        " pages and in a registry: a bundle whose commit is behind an input it is"
+        " about, a P0-family property with no raw bundle at all, and a platform"
+        " obligation still waiting on a board. Reading any one of them alone"
+        " reports a clean tree over an unclean one.",
+        "",
+        "| Kind | Subject | What is outstanding |",
+        "|---|---|---|",
+    ]
+    for kind, subject, why in listed:
+        out.append(f"| {kind} | `{subject}` | {why} |")
+    made = packet(root, rows)
+    out += [
+        "",
+        "## Review packet",
+        "",
+        f"For commit `{made['commit']}`. Every line is derived; none of it claims"
+        " to be sufficient, because a reviewer who runs all of it has reproduced"
+        " the software evidence and nothing about a board. The assurance case"
+        " itself is a later stage's artifact.",
+        "",
+        "**Generated artifacts, and the command that reproduces each.**",
+        "",
+        "| Artifact | Regenerated by |",
+        "|---|---|",
+    ]
+    for artifact, command in made["artifacts"]:
+        out.append(f"| `{artifact}` | `{command}` |")
+    out += [
+        "",
+        "**Model runs this tree publishes counts from.**",
+        "",
+        "| Tier | Command | Taken | Against | Host |",
+        "|---|---|---|---|---|",
+    ]
+    for tier, command, date, commit, host in made["runs"]:
+        out.append(f"| `{tier}` | `{command}` | {date} | `{commit}` | {host} |")
+    out += [
+        "",
+        f"**Raw evidence bundles:** {', '.join('`' + b + '`' for b in made['bundles']) or 'none'}"
+        f" — of {made['properties']} registered properties."
+        + (
+            f" Stale against this commit: {', '.join('`' + s + '`' for s in made['stale'])}."
+            if made["stale"]
+            else ""
+        ),
+        "",
     ]
     return "\n".join(out)
 
@@ -876,6 +1115,7 @@ def audit(root):
     findings = []
     rows = vectors(root, findings)
     check_derivations(root, rows, findings)
+    check_rollups(root, rows, findings)
 
     try:
         want = render(root, rows)

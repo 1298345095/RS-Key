@@ -115,3 +115,129 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 `Model` and `Trace` read *asserted of naming* and *accepted of replaying*. A `0 of 1` is a real state and not a defect: a clause row is asserted through the parent invariant its `clause_of` names, and `RequiredGateAgreesWithRelation` is registered precisely so that it is REFUTED.
 
 `Claimed on` counts the columns disposed `covered`, `equivalent` or `conditional`; `Out of scope` counts the ones where the ledger says the claim is not made. Their sum is not the number of built images — everything else is a `gap`, and `docs/assurance-matrix.md` is the page that counts those.
+
+## Coverage by built image
+
+The same 40 P0-family rows, counted the other way round: per column rather than per property. `Placed` is a disposition the ledger actually wrote, `out-of-scope` included, because a decision not to claim is a decision. `Unplaced` is the remainder, and it is what a per-property count cannot show — a property claimed on twenty images looks well covered while an image nobody disposed anything on stays invisible. The columns are `matrix_gate.py`'s, so this asks nothing about how many built images exist that another gate already answers.
+
+| Column | Kind | Published | Placed | Unplaced |
+|---|---|---|---:|---:|
+| `firmware` | package | yes | 40 | 0 |
+| `firmware-no-touch` | package | no | 7 | 33 |
+| `firmware-fips` | package | yes | 3 | 37 |
+| `firmware-pqc` | package | yes | 3 | 37 |
+| `firmware-fips-pqc` | package | yes | 3 | 37 |
+| `firmware-no-touch-pqc` | package | no | 7 | 33 |
+| `firmware-no-touch-fips` | package | no | 7 | 33 |
+| `firmware-no-touch-fips-pqc` | package | no | 7 | 33 |
+| `firmware-strong-pin` | package | yes | 3 | 37 |
+| `firmware-strong-pin-pqc` | package | yes | 3 | 37 |
+| `firmware-always-uv` | package | yes | 3 | 37 |
+| `firmware-always-uv-pqc` | package | yes | 3 | 37 |
+| `firmware-strict-up` | package | yes | 3 | 37 |
+| `firmware-strict-up-pqc` | package | yes | 3 | 37 |
+| `firmware-pico` | package | no | 40 | 0 |
+| `firmware-display` | package | yes | 0 | 40 |
+| `firmware-2mb` | package | yes | 9 | 31 |
+| `firmware-16mb` | package | yes | 9 | 31 |
+| `firmware-strict-config` | package | yes | 3 | 37 |
+| `keygen-bench` | feature | no | 3 | 37 |
+| `core1-stats` | feature | no | 3 | 37 |
+| `bench` | feature | no | 3 | 37 |
+| `fido-conformance` | feature | no | 3 | 37 |
+| `ea-conformance-rpid` | feature | no | 3 | 37 |
+| `largeblob-ext` | feature | no | 3 | 37 |
+| `abrobot-16m` | board | no | 9 | 31 |
+| `abrobot-4m` | board | no | 32 | 8 |
+| `seeed-xiao` | board | no | 9 | 31 |
+| `tenstar-usb` | board | no | 9 | 31 |
+| `waveshare-one` | board | no | 40 | 0 |
+| `waveshare-touch-lcd` | board | no | 9 | 31 |
+
+Read the feature rows first: every one of them carries the same handful of placed cells and the rest unplaced, which is the shape roadmap §12 calls feature blindness. A default-build proof is not a proof about the image a feature builds, and the column is where that stops being invisible.
+
+## Stale and pending, in one place
+
+Three spellings of "not current", which used to sit on two different pages and in a registry: a bundle whose commit is behind an input it is about, a P0-family property with no raw bundle at all, and a platform obligation still waiting on a board. Reading any one of them alone reports a clean tree over an unclean one.
+
+| Kind | Subject | What is outstanding |
+|---|---|---|
+| bundle | `SEC-FIDO-001` | 6 input(s) newer than `f52b720` |
+| bundle | `SEC-ADM-002` | no raw evidence bundle |
+| bundle | `SEC-ADM-004` | no raw evidence bundle |
+| bundle | `SEC-BOOT-001` | no raw evidence bundle |
+| bundle | `SEC-BOOT-002` | no raw evidence bundle |
+| bundle | `SEC-DISP-001` | no raw evidence bundle |
+| bundle | `SEC-DISP-002` | no raw evidence bundle |
+| bundle | `SEC-DISP-003` | no raw evidence bundle |
+| bundle | `SEC-FIDO-002` | no raw evidence bundle |
+| bundle | `SEC-FIDO-003` | no raw evidence bundle |
+| bundle | `SEC-FIDO-004` | no raw evidence bundle |
+| bundle | `SEC-FIDO-005` | no raw evidence bundle |
+| bundle | `SEC-FIDO-006` | no raw evidence bundle |
+| bundle | `SEC-FIDO-006A` | no raw evidence bundle |
+| bundle | `SEC-FIDO-006B` | no raw evidence bundle |
+| bundle | `SEC-FIDO-006C` | no raw evidence bundle |
+| bundle | `SEC-FIDO-007` | no raw evidence bundle |
+| bundle | `SEC-FIDO-008` | no raw evidence bundle |
+| bundle | `SEC-LAT-001` | no raw evidence bundle |
+| bundle | `SEC-LAT-002` | no raw evidence bundle |
+| bundle | `SEC-LAT-003` | no raw evidence bundle |
+| bundle | `SEC-POL-001` | no raw evidence bundle |
+| bundle | `SEC-POL-002` | no raw evidence bundle |
+| bundle | `SEC-POL-003` | no raw evidence bundle |
+| bundle | `SEC-POL-004` | no raw evidence bundle |
+| bundle | `SEC-POL-005` | no raw evidence bundle |
+| bundle | `SEC-POL-006` | no raw evidence bundle |
+| bundle | `SEC-SEAM-001` | no raw evidence bundle |
+| bundle | `SEC-SEAM-002` | no raw evidence bundle |
+| bundle | `SEC-SEAM-003` | no raw evidence bundle |
+| bundle | `SEC-SEAM-006` | no raw evidence bundle |
+| bundle | `SEC-STORE-001` | no raw evidence bundle |
+| bundle | `SEC-STORE-002` | no raw evidence bundle |
+| bundle | `SEC-STORE-003` | no raw evidence bundle |
+| bundle | `SEC-STORE-004` | no raw evidence bundle |
+| bundle | `SEC-STORE-005` | no raw evidence bundle |
+| bundle | `SEC-STORE-006` | no raw evidence bundle |
+| bundle | `SEC-TRANS-001` | no raw evidence bundle |
+| bundle | `SEC-TRANS-002` | no raw evidence bundle |
+| bundle | `SEC-TRANS-003` | no raw evidence bundle |
+| platform | `PLAT-RESET-001` | A real RP2350 power-on reset clears `WATCHDOG.scratch2`, so the PIN so |
+| platform | `PLAT-ROM-001` | M7-Q2: the boot ROM's BOOTSEL return path leaves `WATCHDOG.scratch2` a |
+| platform | `PLAT-ROM-002` | The vendor applet's reboot really reaches the bootloader: `tests/51_se |
+| platform | `PLAT-MEM-001` | SRAM does not survive the drop to BOOTSEL, so a seed unwrapped in RAM  |
+| platform | `PLAT-FLASH-001` | The silicon's program/erase tear behaviour under a real supply cut is  |
+| platform | `PLAT-OTP-001` | OTP read permissions, lock state and the chaffing layout behave as the |
+| platform | `PLAT-INPUT-001` | A PC/SC reader's `FEATURE_VERIFY_PIN_DIRECT` layer carries the PIN to  |
+| platform | `PLAT-TOOL-001` | A green `tools/emu` run is a protocol result, not a device result: the |
+| platform | `PLAT-TOOL-002` | `tools/emu` implements the same authorization gates as the firmware, s |
+| platform | `PLAT-TOOL-003` | Kani/CBMC is sound for the arithmetic its harnesses bound, and the sol |
+| platform | `PLAT-TOOLCHAIN-001` | The compiler on the path is the pinned rustc and its output is what th |
+| platform | `PLAT-TOOLCHAIN-002` | Every `unsafe` in the first-party tree upholds an invariant the compil |
+| platform | `PLAT-CRYPTO-001` | The HMAC-SHA-256 under `pinUvAuthProtocol` is correct as a MAC; the ha |
+| platform | `PLAT-BUILD-002` | `ea-conformance-rpid`'s enterprise-attestation allowlist is a conforma |
+| platform | `PLAT-THREAT-001` | A CTAPHID channel id is a routing label the sender writes, so channel  |
+| platform | `PLAT-MODEL-001` | `PermSets` — five of the sixteen permission subsets — is the set a hos |
+| platform | `PLAT-MODEL-002` | One credential per relying party is enough to carry the authorization  |
+
+## Review packet
+
+For commit `95e7bfc`. Every line is derived; none of it claims to be sufficient, because a reviewer who runs all of it has reproduced the software evidence and nothing about a board. The assurance case itself is a later stage's artifact.
+
+**Generated artifacts, and the command that reproduces each.**
+
+| Artifact | Regenerated by |
+|---|---|
+| `docs/assurance-vector.md` | `python scripts/evidence_gate.py` |
+| `docs/assurance-matrix.md` | `python scripts/matrix_gate.py` |
+| `docs/platform-assumptions.md` | `python scripts/platform_gate.py` |
+| `formal/README.md` | `python scripts/assurance_gate.py` |
+
+**Model runs this tree publishes counts from.**
+
+| Tier | Command | Taken | Against | Host |
+|---|---|---|---|---|
+| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-27 | `beb5969` | Apple M5 Pro (18 cores) |
+| `safety` | `./formal/run-tlc.sh safety` | 2026-08-27 | `beb5969` | Apple M5 Pro (18 cores) |
+
+**Raw evidence bundles:** `SEC-FIDO-001` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`.
