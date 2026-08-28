@@ -613,6 +613,18 @@ pub fn rebuild_att_cert<S: Storage>(
 ) -> Result<()> {
     let key = P256Key::from_scalar(seed).ok_or(Error::ExecError)?;
     let mut buf = [0u8; 512];
+    // The collapsing probe stands. The arm it collapses into REWRITES the leaf,
+    // which reads like the class this file is full of — but the rewrite is built
+    // from the seed the caller already holds, so it is always correct: everything
+    // but the serial and the signature is a fixed template, and the attesting key,
+    // the AAGUID and the subject come out byte-identical. The cost is a new serial
+    // and one flash write, i.e. a repeated repair.
+    //
+    // Skipping on the failure instead was tried and REFUTED by measurement: a
+    // truncated `scan` leaves `EF_EE_DEV` undecided, so the probe reaches the
+    // medium on a first boot too — and the skip then leaves the device with NO
+    // certificate, or lets `backup_load` install a new seed and report success
+    // over the leaf that certifies the old one.
     let fresh = match fs.read(EF_EE_DEV, &mut buf) {
         Some(n) => cert_matches_template(&buf[..n.min(buf.len())], &key),
         None => false,

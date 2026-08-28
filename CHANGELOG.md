@@ -142,6 +142,22 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   behaviour change: nothing branched on the field, so no image behaviour moves —
   the counter moves because the counter counts builds.
 
+- **Two faulted-read probes keep collapsing on purpose, with the reason recorded
+  at the site.** `rebuild_att_cert`'s freshness probe rewrites the attestation
+  leaf when it cannot judge the stored one — which reads like the class above,
+  and is not: the rewrite is built from the seed the caller already holds, so
+  everything but the serial and the signature is a fixed template and the
+  attesting key, the AAGUID and the subject come out byte-identical. Skipping the
+  rewrite instead was tried and refuted by measurement — a truncated `scan` leaves
+  `EF_EE_DEV` undecided, so the probe reaches the medium on a first boot too, and
+  the skip then left the device with no certificate at all, or let
+  `VENDOR_BACKUP_LOAD` install a new seed and report success over the leaf that
+  certifies the old one. `clear_force_change`'s probe stands for the mirror
+  reason: a refused read leaves the forced-change flag SET, which is the
+  restrictive answer, at the cost of one more changePIN onto a third value —
+  while propagating reports a FAILED change over a PIN `store_new_pin` has
+  already committed. **bcdDevice → 0x09AF.**
+
 ### Fixed
 
 - **`CONFIG_READ` over FIDO reported a record it could not read as an empty one.**
@@ -2196,6 +2212,7 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   and `(…, 1)` — each red against the unfixed code with `forceChangePin = 0` on
   the medium. Found while verifying the new read-fault threat-model clause against
   the code. **bcdDevice → 0x09AE.**
+
 
 ### Security
 

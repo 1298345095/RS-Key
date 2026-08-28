@@ -1010,6 +1010,10 @@ fn force_change_pending<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> bool {
 /// minimum and the RP-id hash list (EF_MINPINLEN = [min, force, hashes…]).
 fn clear_force_change<S: Storage>(fs: &mut Fs<S>) -> Result<(), CtapError> {
     let mut buf = [0u8; 2 + 32 * MAX_MIN_PIN_RPIDS];
+    // The collapsing probe stands: a faulted read leaves the flag SET — the
+    // restrictive answer — for one repeat changePIN, onto a third value (§6.5.5.6
+    // refuses the current one). Measured: propagating instead reports a FAILED
+    // change over the new PIN `store_new_pin` has already committed.
     if let Some(n) = fs.read(EF_MINPINLEN, &mut buf)
         && n >= 2
         && buf[1] != 0

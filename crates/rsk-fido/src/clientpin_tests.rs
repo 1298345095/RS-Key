@@ -2734,3 +2734,123 @@ fn a_faulted_force_change_probe_does_not_waive_the_pending_change() {
         "a flag the medium could not read must not be taken for no pending change"
     );
 }
+
+/// The collapse `clear_force_change` keeps, measured rather than assumed: a faulted
+/// probe there leaves `EF_MINPINLEN` exactly as it was — flag still standing, floor
+/// and RP-id list untouched — and the whole cost is one more changePIN, onto a
+/// THIRD value, since §6.5.5.6 refuses the current one. It is the
+/// third EF_MINPINLEN read of the command (`force_change_pending`, then
+/// `store_new_pin`'s floor, then this one), so `stick_after(.., 2)` is what reaches it.
+///
+/// The bound in both directions is the point. Nothing opens: the surviving flag is
+/// the RESTRICTIVE answer, so the token stays withheld. And propagating the `Err`
+/// instead would report a FAILED changePIN over a new PIN that is already stored —
+/// the one outcome here that costs the owner more than a repeat.
+#[test]
+fn a_faulted_force_change_clear_costs_one_more_pin_change_and_nothing_else() {
+    // A third distinct PIN, from the vetted vocabulary: the repeat change must land
+    // on a value the pending-change rule accepts (§6.5.5.6 refuses the current one).
+    const THIRD_PIN: &[u8] = DEVICE_PIN;
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    let mut state = FidoState::new();
+    let plat = key_agreement(&mut fs, &mut rng, &mut state, PinProto::Two, 2);
+    let mut out = [0u8; 256];
+    run(
+        &mut fs,
+        &mut rng,
+        &mut state,
+        &plat.set_pin_req(PIN),
+        &mut out,
+    )
+    .unwrap();
+    // [min, force, one RP-id hash]: the policy the absent arm would have to rebuild.
+    let mut policy = [0xC7u8; 2 + 32];
+    policy[0] = 4;
+    policy[1] = 1;
+    fs.put(EF_MINPINLEN, &policy).unwrap();
+    let pin_before = medium.value(EF_PIN).expect("the verifier is on the medium");
+
+    state.paut.permissions = 0;
+    assert_eq!(
+        run(
+            &mut fs,
+            &mut rng,
+            &mut state,
+            &plat.get_token_req(PIN),
+            &mut out
+        ),
+        Err(CtapError::PinInvalid),
+        "control: a pending forced change withholds the token"
+    );
+
+    medium.stick_after(EF_MINPINLEN, 2);
+    let r = run(
+        &mut fs,
+        &mut rng,
+        &mut state,
+        &plat.change_pin_req(PIN, NEW_PIN),
+        &mut out,
+    );
+    medium.stick(None);
+    assert_eq!(
+        medium.value(EF_MINPINLEN).as_deref(),
+        Some(&policy[..]),
+        "a faulted probe rewrote the minPINLength policy it could not read"
+    );
+    assert!(
+        r.is_ok(),
+        "the new PIN is stored by then, so the change must not report failure"
+    );
+    assert_ne!(
+        medium.value(EF_PIN),
+        Some(pin_before),
+        "and the new verifier really landed"
+    );
+
+    // Nothing opened: the flag survived, so the token is still withheld.
+    state.paut.permissions = 0;
+    assert_eq!(
+        run(
+            &mut fs,
+            &mut rng,
+            &mut state,
+            &plat.get_token_req(NEW_PIN),
+            &mut out
+        ),
+        Err(CtapError::PinInvalid),
+        "a surviving forced-change flag must still withhold the token"
+    );
+
+    // And the whole cost: ONE more changePIN clears it.
+    let plat = key_agreement(&mut fs, &mut rng, &mut state, PinProto::Two, 2);
+    run(
+        &mut fs,
+        &mut rng,
+        &mut state,
+        &plat.change_pin_req(NEW_PIN, THIRD_PIN),
+        &mut out,
+    )
+    .unwrap();
+    state.paut.permissions = 0;
+    assert!(
+        run(
+            &mut fs,
+            &mut rng,
+            &mut state,
+            &plat.get_token_req(THIRD_PIN),
+            &mut out
+        )
+        .is_ok(),
+        "one repeat change clears the flag — the cost is bounded there"
+    );
+    let mut after = [0u8; 2 + 32];
+    let n = fs.read(EF_MINPINLEN, &mut after).unwrap();
+    assert_eq!(
+        (after[0], after[1], &after[2..n]),
+        (4, 0, &policy[2..]),
+        "and it drops the flag alone, keeping the floor and the RP-id list"
+    );
+}

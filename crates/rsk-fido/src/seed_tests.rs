@@ -784,3 +784,85 @@ fn a_faulted_cred_state_probe_does_not_publish_the_zero_tag() {
         "an unreadable tag has no honest value; the optional member is omitted"
     );
 }
+
+/// The collapse `rebuild_att_cert` keeps, and the arm that refutes fixing it.
+///
+/// A faulted freshness probe rewrites `EF_EE_DEV` with a fresh serial. That is the
+/// whole cost: everything but the serial and the signature is a fixed template, so
+/// the attesting key, the AAGUID and the subject come out byte-identical and the
+/// device's attestation identity is unchanged — a repeated repair, which is where
+/// `Fs::try_read`'s own policy leaves a collapsing probe.
+#[test]
+fn a_faulted_cert_probe_reissues_the_leaf_and_keeps_the_identity() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&d, &mut fs, &mut SeqRng(1)).unwrap();
+    let before = medium
+        .value(EF_EE_DEV)
+        .expect("the attestation cert is on the medium");
+
+    let mut fs = Fs::new(fs.into_storage());
+    fs.scan();
+    medium.stick(Some(EF_EE_DEV));
+    let r = ensure_seed(&d, &mut fs, &mut SeqRng(2));
+    medium.stick(None);
+    let after = medium.value(EF_EE_DEV).expect("still on the medium");
+    use crate::cert::{SERIAL_OFF, TBS_LEN};
+    assert!(
+        r.is_ok(),
+        "a freshness probe that failed must not fail the boot"
+    );
+    assert_ne!(
+        &after[SERIAL_OFF..SERIAL_OFF + 16],
+        &before[SERIAL_OFF..SERIAL_OFF + 16],
+        "control: the collapse is what reissues the leaf — without it this test \
+         proves nothing about the identity below"
+    );
+    let seed = load_keydev(&d, &mut fs).expect("the seed it certifies");
+    let key = P256Key::from_scalar(&seed).unwrap();
+    assert!(
+        cert_matches_template(&after, &key),
+        "the reissued leaf must still certify this device's own attestation key"
+    );
+    // The TBS is fixed-length and the serial is the only field in it that moves,
+    // so this is the identity claim in bytes. NOT the first four: the outer
+    // SEQUENCE length follows the ECDSA signature, which is 70 or 71 bytes.
+    assert_eq!(after[4..SERIAL_OFF], before[4..SERIAL_OFF]);
+    assert_eq!(
+        after[SERIAL_OFF + 16..4 + TBS_LEN],
+        before[SERIAL_OFF + 16..4 + TBS_LEN],
+        "the reissue moved a field of the TBS other than the serial"
+    );
+}
+
+/// Why skipping the rewrite on a failed probe is NOT the fail-closed direction.
+///
+/// The premise it would rest on — "a genuinely absent record is answered from the
+/// scan cache, so the fault never reaches the medium" — is false under a TRUNCATED
+/// walk: `Fs::scan` fills `decided` only when the walk completed, so an un-yielded
+/// FID stays undecided and the probe goes to the medium. On a first boot that is a
+/// device left with no attestation certificate at all.
+#[test]
+fn a_truncated_scan_still_issues_the_attestation_certificate() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    medium.truncate_walk(true);
+    fs.scan(); // the walk that never decides EF_EE_DEV absent
+    medium.truncate_walk(false);
+    medium.stick(Some(EF_EE_DEV));
+    let r = ensure_seed(&d, &mut fs, &mut SeqRng(3));
+    medium.stick(None);
+    assert!(r.is_ok(), "a first boot must provision");
+    let cert = medium.value(EF_EE_DEV).expect(
+        "a first boot issues the attestation certificate even when the \
+                 freshness probe could not be answered",
+    );
+    let seed = load_keydev(&d, &mut fs).expect("and the seed it certifies");
+    assert!(
+        cert_matches_template(&cert, &P256Key::from_scalar(&seed).unwrap()),
+        "and it certifies that seed's public key"
+    );
+}
