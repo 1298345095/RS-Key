@@ -236,8 +236,16 @@ def solo_invariants(root: pathlib.Path, bug: str, index=None) -> list[str]:
     over.
 
     `index` is the whole-tree pass [`solo_index`] does, handed in by a caller that
-    asks about every bug — 70 bugs against 201 configurations is 14 000 parses if
-    each call rescans, and this runs inside a gate row.
+    asks about every bug — the 67 killed entries against 201 configurations is
+    13 000 parses if each call rescans, and this runs inside a gate row.
+
+    One asymmetry, stated rather than left to be found: the armed-alone condition
+    is the INDEX's, so the filename half accepts what the index refuses. Both
+    two-armed configurations (`Solo_BugSetPinKeepsPpuat.cfg`,
+    `Solo_BugBackupSealedNotAGate.cfg`) are still read by name. Not live — both
+    bugs are `status = "unreachable"`, so neither reaches the column — and the
+    filename is a deliberate statement about which bug the file is for, which the
+    index has no way to make.
     """
     if index is None:
         index = solo_index(root)
@@ -249,9 +257,10 @@ def solo_invariants(root: pathlib.Path, bug: str, index=None) -> list[str]:
 def solo_index(root: pathlib.Path) -> dict[str, list[str]]:
     """bug -> the invariants of every solo-style configuration arming it ALONE.
 
-    One pass over `formal/*.cfg`. No cache: a memo keyed on the root would answer
-    from a tree that has since been written to, which is the stale-green shape
-    this directory refuses everywhere else.
+    One pass over `formal/*.cfg`, and no memo of its own — `assurance_gate
+    .co_refuted` is already `@functools.cache`d on the same key, which is why its
+    tests call `cache_clear()`, so a second one here would cache a cache. Anything
+    calling this directly gets the tree as it stands now.
     """
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
     import verdict_gate
@@ -260,9 +269,20 @@ def solo_index(root: pathlib.Path) -> dict[str, list[str]]:
     for cfg in sorted((root / "formal").glob("*.cfg")):
         try:
             config = verdict_gate.Config(cfg)
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             continue
-        if len(config.armed) == 1 and config.solo and config.targets:
+        # `not disarmed` is what keeps a CONTROL from being read as a kill: a
+        # configuration that switches an observer OFF expects GREEN, and
+        # `verdict_gate.Config.want` says so. Not live today — the one such
+        # configuration, `TraceSecurityBadAlphaNoR4b.cfg`, escapes only because it
+        # checks three invariants and so is not solo-style — but the pattern exists
+        # in this tree and the next solo-style one would be credited as evidence.
+        if (
+            len(config.armed) == 1
+            and not config.disarmed
+            and config.solo
+            and config.targets
+        ):
             found = out.setdefault(config.armed[0], [])
             if config.targets[0] not in found:
                 found.append(config.targets[0])

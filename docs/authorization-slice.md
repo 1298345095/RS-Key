@@ -486,16 +486,19 @@ measurement itself.
   `crates/rsk-fido/src/seed.rs`, the field's home in `state.rs` and the load
   preference in `crates/rsk-fido/src/lib.rs`, so the caller audit is a
   three-file argument rather than one function with one call site;
-- and one field **cannot be filled at all** without a decision outside the
-  slice. A co-refutation verdict attributable to `SEC-FIDO-007` needs either a
+- and one field **could not be filled at all** without a decision outside the
+  slice: a co-refutation verdict attributable to `SEC-FIDO-007` needed either a
   dedicated `Bug*` switch per invariant or a change to how `comutate.py`
-  attributes a bug to an invariant. Naming that blocker is this counterpart's real
-  deliverable.
+  attributes a bug to an invariant. Naming that blocker was this counterpart's
+  real deliverable, and the second option is the one taken — `comutate.solo_index`
+  reads the invariant-named solo configurations, so the field is fillable and the
+  prerequisite is spent rather than owed.
 
 Estimate: **1.5× to 3× the human time of the strong row for the same contract**,
-dominated by groups 7 and 8, with the attribution decision as a hard prerequisite
-rather than a cost. That range is an estimate and is labelled as one; the whole
-point of the exercise is that only the measurement replaces it.
+dominated by groups 7 and 8. The attribution decision was priced as a hard
+prerequisite rather than a cost, and it stayed one — it was discharged before the
+measurement rather than inside it. That range is an estimate and is labelled as
+one; the whole point of the exercise is that only the measurement replaces it.
 
 ## Found and deliberately not fixed
 

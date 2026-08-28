@@ -207,17 +207,54 @@ def test_a_multi_invariant_configuration_attributes_nothing(tree):
     """A configuration checking the whole set says which defect fired and not
     which property it broke — that is the difference `Solo_` carries, and the
     reason this reads solo-style rather than "arms the bug"."""
+    # `BarHolds` FIRST: with `FooHolds` there, `targets[0]` collides with the name
+    # the filename half already gives and the dedup erases the difference — the case
+    # then passes with the solo-style condition deleted, which is measured and is
+    # why the order is spelled out here.
     (tree / "formal" / "Mut_BugAlpha.cfg").write_text(
         "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n"
-        "INVARIANTS\n    TypeOK\n    FooHolds\n    BarHolds\n"
+        "INVARIANTS\n    TypeOK\n    BarHolds\n    FooHolds\n"
     )
     assert comutate.solo_invariants(tree, "BugAlpha") == ["FooHolds"]
 
 
 def test_a_bug_no_solo_names_credits_nothing(tree):
     """The floor: a name nothing solos for answers with an empty list, not with
-    whatever the last file on disk happened to check."""
+    whatever the last file on disk happened to check.
+
+    The indexed configuration is the point of the case, not scenery: without one
+    the index is empty for every bug, and a "fall back to the last file" defect
+    passes it — measured, 53 green with that defect installed.
+    """
+    (tree / "formal" / "Solo_BarHolds.cfg").write_text(
+        "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n"
+        "INVARIANTS\n    TypeOK\n    BarHolds\n"
+    )
     assert comutate.solo_invariants(tree, "BugNoSuchSwitch") == []
+
+
+def test_the_same_invariant_is_credited_once(tree):
+    """The dedup, which nothing covered and which is the highest-blast-radius line
+    in the change: deleting `if inv != named` inflates 31 invariants on the real
+    tree, mostly by doubling — `NoAuthorizationBypass` 11 to 22 — and every gate
+    stays green. Here the filename solo is ALSO in the index, so both halves offer
+    `FooHolds` and only one may survive."""
+    (tree / "formal" / "Solo_BugAlpha.cfg").write_text(
+        "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n"
+        "INVARIANTS\n    TypeOK\n    FooHolds\n"
+    )
+    assert comutate.solo_invariants(tree, "BugAlpha") == ["FooHolds"]
+
+
+def test_a_disarmed_observer_is_a_control_and_not_a_kill(tree):
+    """A configuration that switches an observer OFF expects GREEN, so its RED is
+    not evidence of anything. `TraceSecurityBadAlphaNoR4b.cfg` is that shape in the
+    real tree and escapes only by checking three invariants."""
+    (tree / "formal" / "Solo_BarHolds.cfg").write_text(
+        "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n    CheckBar = FALSE\n"
+        "INVARIANTS\n    TypeOK\n    BarHolds\n"
+    )
+    assert comutate.solo_invariants(tree, "BugAlpha") == ["FooHolds"]
 
 
 def test_vanished_anchor_fails(tree):
