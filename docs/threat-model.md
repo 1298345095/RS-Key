@@ -52,11 +52,45 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   never a plausible wrong value. It is registered as `PLAT-FLASH-001` and is
   discharged by a board measurement, not by code
   ([platform-assumptions.md](platform-assumptions.md)). **Scope: the interrupted
-  write.** A flash *read* that comes back an error is a different condition, and
-  this page does not state it — not because a cut cannot produce one. A
-  half-programmed item header is deterministic *and* reads back as an error; what
-  keeps a store walk honest is that it skips that error on purpose rather than
-  never meeting it.
+  write.** A flash *read* that comes back an error is a different condition and
+  has its own clause below. Not that a cut cannot produce one: a half-programmed
+  item header is deterministic *and* reads back as an error, and what keeps a
+  store walk honest is that it skips that error on purpose rather than never
+  meeting it.
+- **A flash read can come back an error, and this firmware spells "not
+  configured" as an absence.** The backend answers a probe with the value, with
+  *no such key*, or with a failure — and its own API folds the last two together:
+  `Storage::read` and `Storage::size` return `None` for either, which is why a
+  second call, `last_error`, exists to tell them apart. The fold is what makes
+  this a security condition rather than a reliability one, because absence is how
+  the tree spells *no PIN set*, *no gate configured* and *not provisioned yet*: a
+  probe that merely failed then reads as a decision the owner never made.
+  Measured, before it was fixed: one refused `EF_PIN` probe on an unauthenticated
+  PIV `SELECT` re-seeded the factory PIN over the owner's, after which
+  `VERIFY 123456` answered `9000` — and the same fault aimed at the
+  management-key slot re-minted the default management key. What the device owes
+  is that a refusal is never laundered into an answer, and three rules carry it.
+  Two are owned by one function each and cited from the store's refinement: a
+  failed probe is never memoised as a decided absence, so one transient fault
+  cannot become a permanent "file absent" for the rest of the boot; and an
+  enumeration the medium truncated leaves the keys it never reached *undecided*,
+  so a walk that stopped early cannot report them gone. The third is a **per-site
+  discipline and not a mechanical property, which is worth saying plainly**: a
+  probe whose absent arm would overwrite configured material or open a gate is
+  answered fallibly — either propagating the failure, or resolving it to the
+  restrictive arm where that is the safe answer — rather than collapsing it into
+  an absence. Which class a site belongs in is decided by asking what becomes
+  reachable if the probe answers *absent* where the truth is *present*, and it is
+  held by a test at the site; no gate can check it, and the tree carries far more
+  collapsing probes than fallible ones because most absences cost only a status
+  field or a repeated repair. **Scope: the read the medium refused, whoever
+  caused it.** How much of a lever a host has here is deliberately not claimed. A
+  cut it aims leaves a half-programmed item header that reads back
+  `Error::Corrupted`, and the store walk skips that one on purpose, so it
+  truncates nothing; an interrupted page *erase* leaves a marker pair the backend
+  also reports as `Corrupted`, and that one does reach a per-key probe in the
+  source. Whether any of it is reachable on a board is unmeasured. The three
+  rules hold either way, because none of them asks who caused the refusal.
 - **You must be able to see and revoke every credential the device holds.**
   Resident credentials live in `EF_CRED`, and the two surfaces that let you
   BROWSE them — `enumerateRPs` and the trusted-display Passkeys view — reach them

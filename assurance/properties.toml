@@ -283,7 +283,7 @@ id = "SEC-STORE-003"
 name = "NoRecordLostToMetaWrite"
 status = "MODELLED-ONLY"
 statement = "A meta_add of one FID never drops another FID's committed metadata record — the 'torn meta_add wiped every existing record' crash, where a faulted EF_META read was rebuilt from empty."
-source = ["docs/store-refinement.md"]
+source = ["docs/store-refinement.md", "docs/threat-model.md#TM-HOST-READ-FAULT"]
 
 # ---- RSKeyRetryLattice — the PIV/OpenPGP retry & recovery budget lattice -----
 
@@ -292,14 +292,14 @@ id = "SEC-STORE-004"
 name = "NoFalseMetaAbsent"
 status = "MODELLED-ONLY"
 statement = "EF_META's own presence cache reports absence only when no metadata record exists."
-source = ["docs/architecture.md", "docs/store-refinement.md"]
+source = ["docs/architecture.md", "docs/store-refinement.md", "docs/threat-model.md#TM-HOST-READ-FAULT"]
 
 [[property]]
 id = "SEC-STORE-005"
 name = "CacheHonest"
 status = "MODELLED-ONLY"
 statement = "EF_META's presence cache says absent only when no metadata record stands, which is what makes a rebuild-from-empty safe."
-source = ["audit run-36", "formal/README.md — the induction probes"]
+source = ["audit run-36", "formal/README.md — the induction probes", "docs/threat-model.md#TM-HOST-READ-FAULT"]
 
 [[property]]
 id = "SEC-STORE-006"

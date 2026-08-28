@@ -92,14 +92,17 @@ VERDICTS = ("missing-clause", "defends-nothing")
 
 #: Floors AT today's counts, in the shape the rest of `scripts/` uses them: a
 #: derivation that finds nothing satisfies every rule below over an empty roster.
-#: 47 clauses is the page as it stands and 40 the P0 family as the tranches stand;
+#: 48 clauses is the page as it stands and 40 the P0 family as the tranches stand;
 #: shrinking either for real is a deliberate edit here, in the same diff.
-FLOOR_CLAUSES = 47
+FLOOR_CLAUSES = 48
 FLOOR_P0 = 40
 #: The untraced list is a finding register, and a finding register that grows
 #: silently is a hatch. Raising this is the deliberate admission that another
-#: property has no threat behind it.
-CEILING_UNTRACED = 5
+#: property has no threat behind it — and it is held EQUAL rather than as an upper
+#: bound, so closing one is a deliberate edit too. Three of the five were closed
+#: at once by `TM-HOST-READ-FAULT`, which is what left it at two, and both
+#: survivors are P0b: every p0-launch row has a root now.
+CEILING_UNTRACED = 2
 #: A `why` shorter than this is a shrug with a verdict column. Same floor and
 #: same reason as `matrix_gate.FLOOR_WORDS`, borrowed rather than re-picked.
 FLOOR_WORDS = matrix_gate.FLOOR_WORDS
