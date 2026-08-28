@@ -561,3 +561,75 @@ def test_the_pytest_temp_rules_can_go_red():
     assert len(set(seen)) == 1, seen
     # 4. …and the quoting must not be what makes two paths look different
     assert pinned_at('x --basetemp="$T/a"') == pinned_at("x --basetemp=$T/a")
+
+
+# --- and the leak neither of those rules can reach: the dev shell's own TMPDIR --
+
+#: The dev shell. `nix develop` hands every invocation a fresh
+#: `/tmp/nix-shell.XXXXXX` and never removes it — 159 had accumulated here, each
+#: holding whatever a hand run left behind. A `trap … EXIT` in the `shellHook`
+#: does NOT fix it, which is measured rather than argued: `nix develop -c` runs
+#: the command in a child, `trap -p EXIT` inside it prints nothing, and the
+#: directory survives with its contents. Moving TMPDIR is the mechanism that
+#: works, and it is invisible to every rule above because no `.sh` file carries it.
+DEVSHELL = pathlib.Path("nix/devshells.nix")
+#: The cache root, read out of `check.sh` rather than written here a second time:
+#: the gate's pytest bases already live under it, and a pin that drifted away
+#: from them would leave two temp roots where the file claims one.
+CACHE_ROOT = re.compile(r"\$\{XDG_CACHE_HOME:-\$HOME/\.cache\}/rs-key")
+#: `export TMPDIR=` to somewhere. The value is captured so the rule can ask WHERE,
+#: which is the half the pytest rules explicitly cannot ask.
+TMPDIR_EXPORT = re.compile(r'^\s*export TMPDIR="(?P<path>[^"]+)"', re.M)
+#: An age-bounded sweep of it. A relocated leak is still a leak; 7 days is longer
+#: than any run here by orders of magnitude, so the bound cannot reach a live
+#: invocation even with two shells open at once.
+TMPDIR_SWEEP = re.compile(r'find "\$TMPDIR".*-mtime \+(?P<days>\d+).*rm -rf')
+
+
+def devshell_text():
+    return (ROOT / DEVSHELL).read_text()
+
+
+def test_the_cache_root_is_one_root():
+    """`check.sh` names it and the dev shell must name the same one."""
+    assert CACHE_ROOT.search((ROOT / "scripts/check.sh").read_text())
+    assert CACHE_ROOT.search(devshell_text())
+
+
+def test_the_dev_shell_moves_tmpdir_off_the_directory_nothing_deletes():
+    """Without this, a bare `nix develop -c …` leaks into a dir nix never removes.
+
+    `check.sh` traps its seven `mktemp` sites and its pytest rows pin
+    `--basetemp`, so the gate is clean; a hand run is not, and that is the whole
+    residue of the class that filled this machine's disk to zero bytes.
+    """
+    found = TMPDIR_EXPORT.search(devshell_text())
+    assert found, f"{DEVSHELL} exports no TMPDIR"
+    assert CACHE_ROOT.search(found["path"]), (
+        f"{DEVSHELL} points TMPDIR at {found['path']!r}, not under the cache root"
+        " check.sh already owns")
+
+
+def test_the_relocated_tmpdir_is_bounded():
+    """A leak that moved is not a leak that stopped."""
+    swept = TMPDIR_SWEEP.search(devshell_text())
+    assert swept, f"{DEVSHELL} moves TMPDIR and never bounds it"
+    assert int(swept["days"]) >= 1, "a same-day sweep can reach a live invocation"
+
+
+def test_the_tmpdir_rules_can_go_red():
+    """The mutation table, each arm applied to `nix/devshells.nix` and driven
+    through the `pytest (gate scripts)` row with the exit code taken unpiped.
+
+    * the `export TMPDIR=` line deleted → `..._moves_tmpdir_off_…`, rc 1
+    * repointed at `/tmp/rs-key` → the same rule, on the path rather than absence
+    * the `find … -mtime` sweep deleted → `..._is_bounded`, rc 1
+    * the sweep left at `-mtime +0` → `..._is_bounded`, at the days assertion
+    * the cache-root spelling changed on ONE side → `..._is_one_root`, rc 1
+    """
+    assert not TMPDIR_EXPORT.search('export TMP="$X"\n')
+    moved = TMPDIR_EXPORT.search('  export TMPDIR="/tmp/rs-key"\n')
+    assert moved and not CACHE_ROOT.search(moved["path"])
+    assert not TMPDIR_SWEEP.search('find "$TMPDIR" -mindepth 1 -exec rm -rf {} +\n')
+    zero = TMPDIR_SWEEP.search('find "$TMPDIR" -mindepth 1 -mtime +0 -exec rm -rf {} +\n')
+    assert zero and int(zero["days"]) == 0
