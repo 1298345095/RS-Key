@@ -456,7 +456,10 @@ needs only the identifiers above. RS-Key implements:
   nothing. The tag is **stored**, not counted in RAM, so a power cycle does not reset
   it — and it is written *ahead of* the change it describes, so what a torn write
   leaves is a tag that over-reports (one wasted re-enumeration) rather than one that
-  under-reports (a stale cache). `authenticatorReset` clears it back to zero along
+  under-reports (a stale cache). A tag the flash cannot serve **omits the member**
+  rather than publishing the zero one: zero is what a fresh device carries, so a
+  platform can be holding it, while an absent member matches no cached tag at all
+  and costs only the walk. `authenticatorReset` clears it back to zero along
   with the credentials it summarises.
   **makeCredential accepts `attestationFormatsPreference` (request
   `0x0B`)**: a list of exactly `["none"]` is answered with `fmt:"none"` and an
