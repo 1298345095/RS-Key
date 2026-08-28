@@ -2441,6 +2441,26 @@ fn a_faulted_probe_does_not_report_a_config_record_as_empty() {
         let rn = config_read_req(target, &mut rreq);
         let mut rout = [0u8; 128];
 
+        // The healthy read first: the blob this command reports is the owner's, so
+        // the refusal below is measured against an answer that carries something
+        // rather than against a response the fixture never filled.
+        let r = call(
+            &mut fs,
+            &mut rng,
+            &mut st,
+            &mut Decline,
+            &rreq[..rn],
+            &mut rout,
+        )
+        .unwrap();
+        let mut d = Decoder::new(&rout[..r]);
+        d.map().unwrap();
+        assert_eq!(d.u8().unwrap(), 1);
+        assert!(
+            !d.bytes().unwrap().is_empty(),
+            "fixture: target {target:#x} reports nothing even without a fault"
+        );
+
         medium.stick_once(fid);
         assert_eq!(
             call(
