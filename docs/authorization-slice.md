@@ -447,18 +447,26 @@ A cost taken at the strongest end of the scale is a floor, so the design names
 the other end too. The counterpart is the
 weak end: `SEC-FIDO-007` `RamNeverOutlivesFlashSeed` and `SEC-FIDO-008`
 `NoLiveTokenWithoutPinRecord`, each measured at 3 configurations, 1 model mutant,
-0 co-refuted, 0 Kani, 0 fuzz, 0 device tests and 1 production owner
+0 Kani, 0 fuzz, 0 device tests and 1 production owner
 (`crates/rsk-fido/src/seed.rs` and `crates/rsk-fido/src/clientpin.rs`
-respectively).
+respectively). The co-refuted column read **0** when this was written and reads
+**1** now, which is the correction below carried out rather than described.
 
-**One measured correction changes what that `co = 0` means.** Both rows' solo
+**The correction, now made.** What that `co = 0` meant was never "no killed
+twin": Both rows' solo
 configurations set the *same* switch, `BugStateResetAfterWipe` — and that switch's
 code twin is in `formal/comutants.toml` with `status = "patch"` and
 `expect = "killed"` against `crates/rsk-fido/src/reset.rs`. The `0` is an artifact
 of attribution: `comutate.solo_invariant` resolves a bug to the one configuration
 named `Solo_<bug>.cfg`, which here checks `ResetNeverWeakensSurvivingState`, so the
-kill is credited to `SEC-FIDO-006`. The weak end is weaker in the ledger than it is
+kill is credited to `SEC-FIDO-006`. The weak end was weaker in the ledger than it is
 in the tree, and no amount of reading the column would have shown that.
+`comutate.solo_index` reads the invariant-named solo configurations too now, so
+the column says what the tree proves: in the launch tranche
+`SEC-FIDO-004` moved 1→2 and `006A`, `006B`, `007` and `008` each moved 0→1, so
+the rows standing at `co = 0` went from six to two. The prerequisite this section called a hard
+one is therefore discharged, and what the counterpart still owes is the
+measurement itself.
 
 **The estimate, stated as an estimate.** Same bundle contract, applied to
 `SEC-FIDO-007`:

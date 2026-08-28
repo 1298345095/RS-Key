@@ -29,8 +29,8 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 ## What a release may say
 
 - **53 of 59** security properties are ASSERTED by at least one finite TLA+ configuration whose recorded verdict is GREEN, and hold exhaustively over that configuration's constants.
-- **36 of 59** carry a model mutant whose code twin `formal/comutants.toml` records as patched into the real tree and killed. That verdict is re-driven by the weekly `comutate run`, not by the gate that writes this page.
-- **28 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
+- **40 of 59** carry a model mutant whose code twin `formal/comutants.toml` records as patched into the real tree and killed. That verdict is re-driven by the weekly `comutate run`, not by the gate that writes this page.
+- **30 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
 - **10 of 59** are checked by a configuration that ACCEPTS a recorded session, and **10** by one that must REFUSE a negative one.
 - **11 of 59** carry at least one Kani harness named after them. That is all `BOUNDED` keys on — a harness NAME, not the `#[kani::proof]` attribute, not a bound, not a `cfg` — so it points at the bundle's method table and is never the proof itself.
 - Rows carrying a dated raw evidence bundle: **1 of 59**; of those, still ahead of every input they are about: **0**.
@@ -61,14 +61,14 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-FIDO-001` | `NoAuthorizationBypass` | 2 of 45 | 11 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (6 input(s) newer) | BOUNDED |
 | `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 2 of 39 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | — | BOUNDED |
 | `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 2 of 41 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | — | BOUNDED |
-| `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 2 of 36 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 2 of 36 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-005` | `NoUnmanageableCredential` | 2 of 37 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 2 of 37 | 2 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 0 of 1 | 0 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 0 of 1 | 0 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
+| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
+| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 0 of 1 | 0 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 2 of 3 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 2 of 3 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L01` | `EveryOpQuiesces` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L02` | `EveryWaitReleases` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |

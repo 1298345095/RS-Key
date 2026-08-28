@@ -167,6 +167,59 @@ def test_store_solo_names_the_invariant(tree):
     assert comutate.solo_invariant(tree, "BugAlpha") == "FooHolds"
 
 
+def test_an_invariant_named_solo_credits_the_bug_it_arms_alone(tree):
+    """The evidence the filename-keyed lookup cannot see.
+
+    `Solo_<Invariant>.cfg` arms a switch and checks one invariant, so its RED is
+    the same proof as `Solo_<Bug>.cfg`'s under another name. Measured on the real
+    tree before this: two bugs credited with one invariant each while five more
+    stood proven, and four of the six P0-launch rows reading `co = 0` had a
+    killed code twin in one of them.
+    """
+    (tree / "formal" / "Solo_BarHolds.cfg").write_text(
+        "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n"
+        "INVARIANTS\n    TypeOK\n    BarHolds\n"
+    )
+    assert comutate.solo_invariants(tree, "BugAlpha") == ["FooHolds", "BarHolds"]
+    # …and the single-valued lookup, which the published table column takes, is
+    # unchanged: the filename still decides which ONE name it answers with.
+    assert comutate.solo_invariant(tree, "BugAlpha") == "FooHolds"
+
+
+def test_a_solo_arming_a_second_switch_credits_neither_bug(tree):
+    """Armed ALONE is the whole condition, and it is what the first measurement
+    got wrong: five bugs looked under-credited until it was applied, two after.
+
+    `Solo_BugSetPinKeepsPpuat.cfg` in the real tree arms a companion switch —
+    the shipped seed-lead makes its own defect unreachable otherwise — so reading
+    it as evidence for the companion credits `BugPpuatIsAGate` with an invariant
+    it does not break.
+    """
+    (tree / "formal" / "Solo_BarHolds.cfg").write_text(
+        "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n    BugBeta = TRUE\n"
+        "INVARIANTS\n    TypeOK\n    BarHolds\n"
+    )
+    assert comutate.solo_invariants(tree, "BugAlpha") == ["FooHolds"]
+    assert comutate.solo_invariants(tree, "BugBeta") == ["FooHolds"]
+
+
+def test_a_multi_invariant_configuration_attributes_nothing(tree):
+    """A configuration checking the whole set says which defect fired and not
+    which property it broke — that is the difference `Solo_` carries, and the
+    reason this reads solo-style rather than "arms the bug"."""
+    (tree / "formal" / "Mut_BugAlpha.cfg").write_text(
+        "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n"
+        "INVARIANTS\n    TypeOK\n    FooHolds\n    BarHolds\n"
+    )
+    assert comutate.solo_invariants(tree, "BugAlpha") == ["FooHolds"]
+
+
+def test_a_bug_no_solo_names_credits_nothing(tree):
+    """The floor: a name nothing solos for answers with an empty list, not with
+    whatever the last file on disk happened to check."""
+    assert comutate.solo_invariants(tree, "BugNoSuchSwitch") == []
+
+
 def test_vanished_anchor_fails(tree):
     edit(tree / "src" / "lib.rs", "GUARD_LINE\n", "")
     red(tree, "anchor 1 resolves 0 times")

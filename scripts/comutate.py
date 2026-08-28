@@ -205,6 +205,70 @@ def phase2_entries(root: pathlib.Path, entries: dict) -> list[tuple[str, dict]]:
     )
 
 
+def solo_invariants(root: pathlib.Path, bug: str, index=None) -> list[str]:
+    """Every invariant a solo-style configuration proves this bug breaks.
+
+    [`solo_invariant`] answers with ONE, resolved by filename, and that is the
+    name the published table column takes. It is not the whole evidence: a
+    configuration named after the INVARIANT rather than the bug —
+    `Solo_RamNeverOutlivesFlashSeed.cfg` — arms a switch too, and where it arms
+    THIS one and nothing else its RED is the same proof under another filename.
+    Measured before this existed: two bugs were credited with one invariant each
+    while the tree carried five more, and FOUR of the six P0-launch rows reading
+    `co = 0` had a killed code twin standing in one of them.
+
+    Armed ALONE is the whole condition, not a nicety. `Solo_BugSetPinKeepsPpuat
+    .cfg` arms a companion switch as well — the shipped seed-lead makes its own
+    defect unreachable otherwise — and reading that as evidence for the companion
+    credits `BugPpuatIsAGate` with an invariant it does not break. The first
+    measurement said five bugs were under-credited; with this condition it says
+    two, and the difference is exactly the two-armed pairs.
+
+    What the column means after this is worth stating, because it is one axis and
+    not two: that a faithful defect of this property exists at both levels and the
+    suite kills the code half. It does not say the killing TEST is a test of this
+    property. That is a stronger claim, it has no column, and inventing one here
+    would be the false ladder §4.1 refuses.
+
+    The parse is `verdict_gate.Config`'s, not a second copy: it already reads a
+    configuration's armed switches and decides solo-style from the INVARIANTS
+    block, and two parsers disagreeing about one file is the defect one directory
+    over.
+
+    `index` is the whole-tree pass [`solo_index`] does, handed in by a caller that
+    asks about every bug — 70 bugs against 201 configurations is 14 000 parses if
+    each call rescans, and this runs inside a gate row.
+    """
+    if index is None:
+        index = solo_index(root)
+    named = solo_invariant(root, bug)
+    out = [named] if named else []
+    return out + [inv for inv in index.get(bug, []) if inv != named]
+
+
+def solo_index(root: pathlib.Path) -> dict[str, list[str]]:
+    """bug -> the invariants of every solo-style configuration arming it ALONE.
+
+    One pass over `formal/*.cfg`. No cache: a memo keyed on the root would answer
+    from a tree that has since been written to, which is the stale-green shape
+    this directory refuses everywhere else.
+    """
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import verdict_gate
+
+    out: dict[str, list[str]] = {}
+    for cfg in sorted((root / "formal").glob("*.cfg")):
+        try:
+            config = verdict_gate.Config(cfg)
+        except OSError:
+            continue
+        if len(config.armed) == 1 and config.solo and config.targets:
+            found = out.setdefault(config.armed[0], [])
+            if config.targets[0] not in found:
+                found.append(config.targets[0])
+    return out
+
+
 def solo_invariant(root: pathlib.Path, bug: str) -> str | None:
     solo = None
     for _, solo_pre in PREFIXES:

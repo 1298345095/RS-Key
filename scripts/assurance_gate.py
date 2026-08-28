@@ -208,12 +208,16 @@ def co_refuted(root: pathlib.Path) -> dict[str, list[str]]:
     import comutate
 
     entries = tomllib.loads(src.read_text())["comutant"]
+    index = comutate.solo_index(root)
     out: dict[str, list[str]] = {}
     for bug, entry in sorted(entries.items()):
         if entry.get("status") != "patch" or entry.get("expect") != "killed":
             continue
-        inv = comutate.solo_invariant(root, bug)
-        if inv:
+        # Plural: a bug's kill is evidence for every invariant a solo-style
+        # configuration shows it breaks, not only for the one whose FILENAME
+        # carries the bug. Four of the six P0-launch rows reading `co = 0` had a
+        # killed code twin standing in a configuration named after the invariant.
+        for inv in comutate.solo_invariants(root, bug, index):
             out.setdefault(inv, []).append(bug)
     return out
 
