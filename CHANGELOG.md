@@ -144,6 +144,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe minted a fresh card-level AES key over the OpenPGP owner's,
+  and the card then deciphered every old ciphertext to garbage at `9000`.**
+  `keygen_tail` seeds `D5` when the DEC slot is generated and `EF_AES_KEY` is empty,
+  and it asked with `fs.has_key` — the same `false` for an absent slot and for one
+  the flash could not read. `D5` is card-level (§7.2.12 gives PSO:ENCIPHER no key
+  reference at all), so the blast radius is everything ever enciphered under it.
+
+  Driven end to end: a `PUT DATA D5` key, a plaintext enciphered under it, then a
+  DEC GENERATE. Control leg first — a healthy medium leaves the standing key
+  byte-identical, which is the documented "the seed never **replaces** a standing
+  key". Then one faulted probe: the sealed record is replaced (60 bytes for 60,
+  entirely different), the GENERATE answers `9000`, and PSO:DECIPHER of the old
+  ciphertext answers `9000` with the wrong plaintext — a success status over
+  corruption, not an error.
+
+  Fixed by fail-closed skip, not refusal. The private key is already committed when
+  this runs, so refusing would fail a GENERATE whose key is in the slot; the seed is
+  documented non-fatal and the next DEC generate makes it again. Skipping costs a
+  card with no `D5` until then; overwriting costs every message.
+
 - **One faulted probe took the minPINLength floor down permanently, and a second
   copy of the same read stored a PIN underneath it.** CTAP 2.1 §6.11 makes
   minPINLength monotonic — setMinPINLength may only raise it, and nothing short of

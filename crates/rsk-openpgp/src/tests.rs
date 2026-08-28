@@ -2976,3 +2976,60 @@ fn a_faulted_pw_status_probe_does_not_extend_a_one_shot_pin() {
         "the second signature on a one-shot PIN entry has to be refused"
     );
 }
+
+/// `keygen_tail` seeds the card's AES key (`D5`) when the DEC slot is generated and
+/// `EF_AES_KEY` is empty. It asked with `fs.has_key`, which answers the same `false`
+/// for an absent slot and for one the flash could not read — so a faulted probe minted
+/// a fresh key and `store_aes_key` put it over the live one. `D5` is card-level
+/// (§7.2.12 gives PSO:ENCIPHER no key reference at all), so everything ever enciphered
+/// under it becomes undecryptable, and the GENERATE that did it discards
+/// `store_aes_key`'s result and answers `9000`.
+#[test]
+fn a_faulted_aes_key_probe_does_not_reseed_the_live_key() {
+    let rng = RefCell::new(LcgRng(31));
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    let presence = RefCell::new(crate::AlwaysConfirm);
+    let mut app = OpenpgpApplet::new(SERIAL_ID, SERIAL_HASH, None, &rng, &presence);
+    verify_pin(&mut app, &mut fs, consts::PW3_MODE83, consts::PW3_DEFAULT);
+    assert_eq!(put(&mut app, &mut fs, 0x00, 0xD5, &[0x11u8; 32]), Sw::OK);
+    assert_eq!(put(&mut app, &mut fs, 0x00, 0xC2, ATTR_P256_ECDH), Sw::OK);
+    verify_pin(&mut app, &mut fs, consts::PW1_MODE82, consts::PW1_DEFAULT);
+
+    // The owner's ciphertext, made under the key that is standing now.
+    let pt = [0xABu8; 32];
+    let mut a = vec![0x00, consts::INS_PSO, 0x86, 0x80, pt.len() as u8];
+    a.extend_from_slice(&pt);
+    let (cg, sw) = run(&mut app, &mut fs, &a);
+    assert_eq!(sw, Sw::OK);
+    let mut dec = vec![0x00, consts::INS_PSO, 0x80, 0x86, cg.len() as u8];
+    dec.extend_from_slice(&cg);
+    let before = medium
+        .value(consts::EF_AES_KEY.get())
+        .expect("the owner's AES key is stored");
+
+    let genkey = [0x00, consts::INS_KEYPAIR_GEN, 0x80, 0x00, 0x02, 0xB8, 0x00];
+    // Control: a standing D5 key survives a DEC generate on a healthy medium.
+    assert_eq!(run(&mut app, &mut fs, &genkey).1, Sw::OK);
+    assert_eq!(
+        medium.value(consts::EF_AES_KEY.get()),
+        Some(before.clone()),
+        "control: the seed never replaces a standing key"
+    );
+
+    medium.stick_once(consts::EF_AES_KEY.get());
+    assert_eq!(run(&mut app, &mut fs, &genkey).1, Sw::OK);
+    medium.stick(None);
+    assert_eq!(
+        medium.value(consts::EF_AES_KEY.get()),
+        Some(before),
+        "a faulted probe re-seeded the live AES key"
+    );
+    assert_eq!(
+        run(&mut app, &mut fs, &dec),
+        (pt.to_vec(), Sw::OK),
+        "ciphertext made under the owner's AES key no longer decrypts"
+    );
+}

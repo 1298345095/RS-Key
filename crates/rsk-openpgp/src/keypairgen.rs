@@ -166,7 +166,11 @@ fn keygen_tail<S: Storage>(
     let _ = origin::mark(fs, fid, origin::ORIGIN_GENERATED);
     if fid == EF_PK_SIG {
         reset_sig_count(fs)?;
-    } else if fid == EF_PK_DEC && !fs.has_key(EF_AES_KEY) {
+    // A probe that FAILED is not an empty `D5` slot, and this arm WRITES: one faulted
+    // read minted a fresh card-level key over the live one, and every ciphertext made
+    // under it then deciphered to garbage at `9000`. Skipping the seed is the cheap
+    // wrong answer — the next DEC generate makes it again.
+    } else if fid == EF_PK_DEC && matches!(fs.try_has_key(EF_AES_KEY), Ok(false)) {
         let mut aes = [0u8; 32];
         rng.fill(&mut aes);
         let _ = store_aes_key(dev, fs, sess, &aes);
