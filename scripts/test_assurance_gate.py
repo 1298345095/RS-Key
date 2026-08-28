@@ -496,3 +496,103 @@ def test_the_allowlist_covers_every_key_the_shipped_registry_carries():
     assert set(shipped) <= set(assurance_gate.TABLES)
     for entry in shipped["property"]:
         assert set(entry) <= set(assurance_gate.PROPERTY_FIELDS), entry.get("id")
+
+
+# ---- The production set is what SHIPS, not what is named `*_tests.rs` ---------
+#
+# The filename filter read a NAME. Six `*_assurance.rs` mirrors carry neither
+# `kani` nor `tests` in theirs, and `store_assurance.rs` — `#[cfg(any(kani,
+# test))]`, in no image anybody can build — stood as a production owner of four
+# P0-launch store rows. Measured before the fix: `SEC-STORE-001` rust=3,
+# `-002`/`-003`/`-004`/`-006` rust=2, `SEC-TRANS-003` rust=2; after, 1 each.
+
+CFG_CASES = [
+    # (cfg expression, is the module still production?)
+    ("test", False),
+    ("kani", False),
+    ("any(kani, test)", False),
+    ("all(test, feature = \"display\")", False),
+    # A feature something outside `[dev-dependencies]` can turn on. The module
+    # ships in that column of the matrix, so it is production there.
+    ("feature = \"display\"", True),
+    # The refutation that decides the free value: an optimistic TRUE for a free
+    # feature makes `not(...)` FALSE, and `conformance/largeblobs.rs` — the
+    # DEFAULT build's large-blob design — would have been dropped as unreachable.
+    ("not(feature = \"largeblob-ext\")", True),
+    # Asked for by thirteen crates and by every one of them under
+    # `[dev-dependencies]`: on in `cargo test`, in no image.
+    ("any(test, feature = \"test-util\", kani)", False),
+    # One level out, and the reason the closure is ROOTED at firmware rather
+    # than unioned over the workspace: `rsk-device`'s `security-trace` enables
+    # `assurance-trace`, and only `tools/emu` enables `security-trace`.
+    ("any(test, kani, feature = \"assurance-trace\")", False),
+    # Unrecognised atoms stay free, because the direction that hides an owner
+    # also reddens `check_property_tags` and the direction that keeps one does not.
+    ("target_os = \"none\"", True),
+    ("some_future_atom", True),
+]
+
+
+@pytest.mark.parametrize("expr,production", CFG_CASES)
+def test_a_module_cfg_decides_whether_its_file_is_production(expr, production):
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    held = assurance_gate._cfg_holds(expr, assurance_gate.shippable_features(repo))
+    assert (held is not False) == production, (expr, held)
+
+
+def test_the_dev_half_of_the_feature_graph_is_not_shippable():
+    """`test-util` is a `[features]` KEY in three manifests, so a rule reading
+    keys calls it shippable. What decides it is who turns it ON."""
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    features = assurance_gate.shippable_features(repo)
+    assert "test-util" not in features
+    assert "assurance-trace" not in features
+    assert "display" in features and "fips-profile" in features
+    # The other direction: a feature no image can build with is not the same as
+    # a feature nobody ships. `largeblob-ext` holds four `check.sh` rows and no
+    # flake package, and it IS reachable from `firmware/Cargo.toml`.
+    assert "largeblob-ext" in features and "no-touch" in features
+
+
+def test_the_six_measured_mirrors_are_out_of_the_production_set():
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    names = {f.name for f in assurance_gate.production_rust(repo)}
+    for mirror in (
+        "store_assurance.rs",
+        "transport_assurance.rs",
+        "powercut.rs",
+        "reset_assurance.rs",
+        "state_assurance.rs",
+        "clientpin_assurance.rs",
+    ):
+        assert mirror not in names, mirror
+
+
+def test_no_property_lost_its_last_production_owner():
+    """The direction this change must NOT fail in. An owner column that drops to
+    zero is an invariant with no code behind it, and `check_property_tags` says
+    so — this asserts it on the shipped tree rather than waiting for the row."""
+    import tomllib
+
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    files = assurance_gate.production_rust(repo)
+    registry = tomllib.loads(
+        (repo / "assurance" / "properties.toml").read_text(encoding="utf-8")
+    )
+    owned = {
+        entry["id"]
+        for entry in registry["property"]
+        if assurance_gate.grep_word(files, entry["name"])
+    }
+    for wanted in ("SEC-STORE-001", "SEC-STORE-006", "SEC-TRANS-003", "SEC-FIDO-007"):
+        assert wanted in owned, wanted
+
+
+def test_a_declaration_reached_through_a_path_attribute_is_found():
+    """`#[path = "..."] mod x;` is how every `*_tests.rs` in this tree is hooked
+    in, so a resolver reading only `<name>.rs` finds none of them."""
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    excluded = assurance_gate.cfg_excluded(repo)
+    names = {path.name for path in excluded}
+    assert "store_assurance.rs" in names
+    assert any(name.endswith("_kani.rs") for name in names)

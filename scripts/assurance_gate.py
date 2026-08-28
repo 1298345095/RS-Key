@@ -175,13 +175,170 @@ def grep_word(files: list[pathlib.Path], word: str) -> list[str]:
     return [f.name for f in files if pat.search(f.read_text(errors="ignore"))]
 
 
+#: A `mod x;` declaration and the attributes above it. Files are reached through
+#: their DECLARATION, so what gates a file is written in its parent, not in it.
+MOD_DECL = re.compile(
+    r"(?m)^(?P<attrs>(?:[ \t]*\#!?\[[^\n]*\]\n)*)[ \t]*"
+    r"(?:pub(?:\([^)]*\))?[ \t]+)?mod[ \t]+(?P<name>[A-Za-z_][A-Za-z0-9_]*)[ \t]*;"
+)
+CFG_ATTR = re.compile(r"\#\[cfg\((?P<expr>.*)\)\][ \t]*$")
+PATH_ATTR = re.compile(r'\#\[path[ \t]*=[ \t]*"(?P<rel>[^"]+)"\]')
+
+#: The two cfg atoms no shipped image sets. `kani` is a `--cfg` the proof runner
+#: passes and `test` is cargo's; a module reachable only through them is in no
+#: firmware anybody can build, so a `Refines` tag inside it is a tag on a mirror.
+NEVER_SHIPPED = ("test", "kani")
+
+
+def _cfg_atom(atom: str, shippable: frozenset[str]) -> bool | None:
+    """One cfg atom under `test = kani = FALSE`: True, False, or None for free.
+
+    None means "some buildable configuration could set it", which keeps the file.
+    The failure direction is deliberate: over-counting a production owner is a
+    column one too high, under-counting one hides an owner AND reddens
+    `check_property_tags`, so anything unrecognised stays free.
+    """
+    atom = atom.strip()
+    if atom in NEVER_SHIPPED:
+        return False
+    feature = re.fullmatch(r'feature[ \t]*=[ \t]*"([^"]+)"', atom)
+    if feature:
+        return None if feature.group(1) in shippable else False
+    return None
+
+
+def _cfg_holds(expr: str, shippable: frozenset[str]) -> bool | None:
+    """`expr` under `test = kani = FALSE`, three-valued. None is satisfiable.
+
+    A hand parser and not a tokenizer because the grammar in this tree is three
+    combinators deep; anything it does not recognise answers None, which keeps
+    the file. `not(feature = "largeblob-ext")` is why the free value cannot be
+    TRUE: `conformance/largeblobs.rs` is the DEFAULT build's large-blob design
+    and an optimistic TRUE would have dropped it as unreachable.
+    """
+    expr = expr.strip()
+    for combinator in ("all", "any", "not"):
+        if not expr.startswith(f"{combinator}("):
+            continue
+        inner, depth, parts, start = expr[len(combinator) + 1 : -1], 0, [], 0
+        for index, char in enumerate(inner):
+            depth += (char == "(") - (char == ")")
+            if char == "," and depth == 0:
+                parts.append(inner[start:index])
+                start = index + 1
+        parts.append(inner[start:])
+        held = [_cfg_holds(part, shippable) for part in parts if part.strip()]
+        if combinator == "not":
+            return None if held[0] is None else not held[0]
+        if combinator == "any":
+            return True if True in held else (None if None in held else False)
+        return False if False in held else (None if None in held else True)
+    return _cfg_atom(expr, shippable)
+
+
+@functools.cache
+def shippable_features(root: pathlib.Path) -> frozenset[str]:
+    """Feature names a FIRMWARE image can be built with, to a fixed point.
+
+    Derived from the manifests, not listed, and rooted at `firmware` rather than
+    at "every `[features]` key in the workspace" — the difference is the whole
+    yield. A rule reading keys calls `test-util` shippable because three crates
+    declare it; a rule reading every `[features]` VALUE calls `assurance-trace`
+    shippable because `rsk-device`'s `security-trace` enables it. Neither is
+    reachable from an image: `test-util` is asked for thirteen times and every
+    one is a `[dev-dependencies]` edge, and `security-trace` is asked for once,
+    by `tools/emu`, which is not a firmware.
+
+    `[dev-dependencies]` is never followed. An optional dependency's `dep:`
+    prefix and a weak `crate?/feat` both reduce to the feature they name, which
+    is the safe side: naming a feature keeps its module in the production set.
+    """
+    tables = {}
+    for manifest in [root / "firmware" / "Cargo.toml"] + sorted(
+        (root / "crates").glob("*/Cargo.toml")
+    ):
+        try:
+            doc = tomllib.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        tables[str(doc.get("package", {}).get("name", manifest.parent.name))] = doc
+
+    def requested(doc: dict) -> set[str]:
+        """Features this manifest's own non-dev dependency edges turn on."""
+        out = set()
+        for spec in doc.get("dependencies", {}).values():
+            if isinstance(spec, dict):
+                out.update(str(f) for f in spec.get("features", []))
+        return out
+
+    firmware = tables.get("firmware", {})
+    features = set(firmware.get("features", {})) | requested(firmware)
+    crates = {"firmware"}
+    changed = True
+    while changed:
+        changed = False
+        for name in sorted(crates):
+            doc = tables.get(name, {})
+            for dep in doc.get("dependencies", {}):
+                if dep in tables and dep not in crates:
+                    crates.add(dep)
+                    features |= requested(tables[dep])
+                    changed = True
+        for name in sorted(crates):
+            for key, enables in tables.get(name, {}).get("features", {}).items():
+                if key not in features:
+                    continue
+                for target in enables if isinstance(enables, list) else []:
+                    word = str(target).removeprefix("dep:").rpartition("/")[2].lstrip("?")
+                    if word and word not in features:
+                        features.add(word)
+                        changed = True
+    return frozenset(features)
+
+
+def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
+    """Files whose `mod` declaration cannot hold in any buildable image.
+
+    The `kani`/`tests` filename filter this replaced read a NAME, and the six
+    `*_assurance.rs` mirrors carry neither: measured, `store_assurance.rs`
+    (`#[cfg(any(kani, test))]`) was counted as a production owner of
+    `SEC-STORE-002`, `-003`, `-004` and `-006`, and `transport_assurance.rs` of
+    `SEC-TRANS-003` — §2 principle 7 in the one direction it forbids, a
+    proof-only mirror standing in for the code it mirrors.
+    """
+    shippable = shippable_features(root)
+    out = {}
+    for parent in list((root / "crates").glob("*/src/**/*.rs")) + list(
+        (root / "firmware" / "src").glob("**/*.rs")
+    ):
+        for match in MOD_DECL.finditer(parent.read_text(errors="ignore")):
+            expr = None
+            for line in match.group("attrs").splitlines():
+                found = CFG_ATTR.search(line.strip())
+                if found:
+                    expr = found.group("expr")
+            if expr is None or _cfg_holds(expr, shippable) is not False:
+                continue
+            relative = PATH_ATTR.search(match.group("attrs"))
+            name = match.group("name")
+            target = parent.parent / (relative.group("rel") if relative else f"{name}.rs")
+            if not target.is_file():
+                target = parent.parent / name / "mod.rs"
+            if target.is_file():
+                out[target.resolve()] = f"{parent.name} declares `mod {name}` under cfg({expr})"
+    return out
+
+
 def production_rust(root: pathlib.Path) -> list[pathlib.Path]:
+    excluded = cfg_excluded(root)
     files = list((root / "crates").glob("*/src/**/*.rs"))
     files.extend((root / "firmware" / "src").glob("**/*.rs"))
     return [
         f
         for f in sorted(files)
-        if "kani" not in f.name and "tests" not in f.name
+        if "kani" not in f.name
+        and "tests" not in f.name
+        and f.resolve() not in excluded
     ]
 
 

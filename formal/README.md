@@ -2801,12 +2801,12 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-SEAM-004` | `ReselectPreservesAccessStatus` | MODELLED-ONLY | `RSKeyAppletSeams` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-SEAM-005` | `ExemptRefusalPreservesStatus` | MODELLED-ONLY | `RSKeyAppletSeams` | — | 1 | 2 | 2 | 0 | 0 | 0 |
 | `SEC-SEAM-006` | `AccessCodeRemovalNeedsTheCode` | MODELLED-ONLY | `RSKeyAppletSeams` | — | 1 | 1 | 1 | 0 | 0 | 0 |
-| `SEC-STORE-001` | `NoOrphanedMetadata` | MODELLED-ONLY | `RSKeyStore` | — | 3 | 2 | 2 | 0 | 0 | 0 |
-| `SEC-STORE-002` | `NoFalseAbsent` | BOUNDED | `RSKeyStore` | — | 2 | 2 | 2 | 3 | 0 | 0 |
-| `SEC-STORE-003` | `NoRecordLostToMetaWrite` | MODELLED-ONLY | `RSKeyStore` | — | 2 | 1 | 1 | 0 | 0 | 0 |
-| `SEC-STORE-004` | `NoFalseMetaAbsent` | MODELLED-ONLY | `RSKeyStore` | — | 2 | 1 | 1 | 0 | 0 | 0 |
+| `SEC-STORE-001` | `NoOrphanedMetadata` | MODELLED-ONLY | `RSKeyStore` | — | 1 | 2 | 2 | 0 | 0 | 0 |
+| `SEC-STORE-002` | `NoFalseAbsent` | BOUNDED | `RSKeyStore` | — | 1 | 2 | 2 | 3 | 0 | 0 |
+| `SEC-STORE-003` | `NoRecordLostToMetaWrite` | MODELLED-ONLY | `RSKeyStore` | — | 1 | 1 | 1 | 0 | 0 | 0 |
+| `SEC-STORE-004` | `NoFalseMetaAbsent` | MODELLED-ONLY | `RSKeyStore` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-STORE-005` | `CacheHonest` | MODELLED-ONLY | `RSKeyStore` | — | 1 | 0 | 0 | 0 | 0 | 0 |
-| `SEC-STORE-006` | `NoSilentOrphan` | MODELLED-ONLY | `RSKeyStore` | — | 2 | 1 | 1 | 0 | 0 | 0 |
+| `SEC-STORE-006` | `NoSilentOrphan` | MODELLED-ONLY | `RSKeyStore` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-LAT-001` | `NoAuthWhenBlocked` | MODELLED-ONLY | `RSKeyRetryLattice` | — | 2 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-LAT-002` | `WrongAttemptIsCharged` | MODELLED-ONLY | `RSKeyRetryLattice` | — | 2 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-LAT-003` | `BudgetRisesOnlyWithItsSecret` | MODELLED-ONLY | `RSKeyRetryLattice` | — | 2 | 1 | 1 | 0 | 0 | 0 |
@@ -2827,7 +2827,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-BOOT-002` | `TheWholeLockRides` | MODELLED-ONLY | `RSKeyBootHardening` | — | 1 | 1 | 0 | 0 | 0 | 0 |
 | `SEC-TRANS-001` | `NoCrossChannelSplice` | BOUNDED | `RSKeyTransport` | — | 1 | 1 | 1 | 2 | 0 | 0 |
 | `SEC-TRANS-002` | `NoSequenceGap` | BOUNDED | `RSKeyTransport` | — | 1 | 1 | 1 | 1 | 0 | 0 |
-| `SEC-TRANS-003` | `NoBufferOverrun` | BOUNDED | `RSKeyTransport` | — | 2 | 1 | 1 | 1 | 0 | 0 |
+| `SEC-TRANS-003` | `NoBufferOverrun` | BOUNDED | `RSKeyTransport` | — | 1 | 1 | 1 | 1 | 0 | 0 |
 | `SEC-RISK-001` | `PerDeviceAttestationCertIsACorrelationHandle` | ACCEPTED-RISK | — | — | — | — | — | — | — | — |
 | `SEC-RISK-002` | `FlashSnapshotRollsBackPinRetries` | ACCEPTED-RISK | — | — | — | — | — | — | — | — |
 
