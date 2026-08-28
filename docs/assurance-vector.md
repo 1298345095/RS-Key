@@ -222,7 +222,7 @@ Three spellings of "not current", which used to sit on two different pages and i
 
 ## Review packet
 
-For commit `95e7bfc`. Every line is derived; none of it claims to be sufficient, because a reviewer who runs all of it has reproduced the software evidence and nothing about a board. The assurance case itself is a later stage's artifact.
+For commit `d513827`. Every line is derived; none of it claims to be sufficient, because a reviewer who runs all of it has reproduced the software evidence and nothing about a board. The assurance case itself is a later stage's artifact.
 
 **Generated artifacts, and the command that reproduces each.**
 

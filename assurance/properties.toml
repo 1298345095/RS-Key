@@ -158,7 +158,7 @@ id = "SEC-FIDO-007"
 name = "RamNeverOutlivesFlashSeed"
 status = "MODELLED-ONLY"
 statement = "The RAM copy of the device seed never survives the flash record: ram implies store.seed. Structural fact the model asserts rather than argues from."
-source = ["docs/threat-model.md#TM-ZEROIZATION"]
+source = ["formal/README.md — the SeedReachable restatement"]
 
 [[property]]
 id = "SEC-FIDO-008"

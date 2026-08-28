@@ -101,8 +101,9 @@ FLOOR_P0 = 40
 #: property has no threat behind it — and it is held EQUAL rather than as an upper
 #: bound, so closing one is a deliberate edit too. Three of the five were closed
 #: at once by `TM-HOST-READ-FAULT`, which is what left it at two, and both
-#: survivors are P0b: every p0-launch row has a root now.
-CEILING_UNTRACED = 2
+#: survivors were P0b until the counterpoint read the third: a link is not
+#: coverage, and SEC-FIDO-007 came BACK here for it.
+CEILING_UNTRACED = 3
 #: A `why` shorter than this is a shrug with a verdict column. Same floor and
 #: same reason as `matrix_gate.FLOOR_WORDS`, borrowed rather than re-picked.
 FLOOR_WORDS = matrix_gate.FLOOR_WORDS

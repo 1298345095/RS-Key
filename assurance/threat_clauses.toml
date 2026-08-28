@@ -372,6 +372,30 @@ a private-disclosure process, not a threat or a defence a property could \
 serve"""
 
 [[untraced]]
+id = "SEC-FIDO-007"
+owner = "contributor"
+verdict = "missing-clause"
+why = """
+it was SOURCED to TM-ZEROIZATION and that link was linkage, not coverage — the \
+clause states one rule, that RAM key material is wiped when its use ends, and \
+names session state, PIN/UV tokens, transient copies, transport buffers, DEVK \
+and MKEK. It never names the vendor-unlock seed copy, and that copy is a \
+documented EXCEPTION to the rule it was filed under: state.rs says keydev_dec is \
+held until power-off, a reset or an AUT_DISABLE, and config.rs says "that is \
+accepted". Nor is it TM-HOST-POWER-CUT, which is about a torn write. Writing a \
+clause for it would be worse than leaving it here: formal/README.md records the \
+invariant as INERT on the shipped tree — dropping the ram disjunct leaves the \
+state set identical — so a threat clause would be a threat model stronger than \
+its firmware, the one direction this page may not be wrong in"""
+rests_on = ["""
+Key-grade material in RAM is wiped (`zeroize`, volatile writes) when its use \
+ends: session state and PIN/UV tokens on drop, transient key copies at end of \
+scope including error paths, and the transport/exchange buffers as soon as a \
+message completes""", """
+**Scope: the interrupted
+  write.**"""]
+
+[[untraced]]
 id = "SEC-POL-003"
 owner = "contributor"
 verdict = "missing-clause"
