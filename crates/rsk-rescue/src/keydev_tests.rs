@@ -125,3 +125,37 @@ fn legacy_cbc_record_loads_and_upgrades_to_gcm() {
     let after = load_or_generate(&dev(), None, &mut fs, &mut rng).unwrap();
     assert_eq!(after.to_bytes(), expect.to_bytes());
 }
+
+/// The other two arms of the same probe, which only this function can tell apart.
+/// A device with no `EF_DEVCERT_KEY` must still mint and persist one — that is the
+/// documented first use, and the fix must not take it away. Both reachable spellings
+/// of "absent" are driven: the boot walk that DECIDED the FID space (so `try_read`
+/// answers from the cache and never touches the backend) and a walk one read fault
+/// cut short (so the absence goes to the backend and comes back as a real `Ok(None)`).
+#[test]
+fn an_absent_devcert_key_is_still_minted_and_persisted() {
+    for truncated in [false, true] {
+        let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+        let mut fs = Fs::new(backend);
+        medium.truncate_walk(truncated);
+        fs.scan();
+        medium.truncate_walk(false);
+        let mut rng = LcgRng(13);
+        assert!(fs.read_key(EF_DEVCERT_KEY, &mut [0u8; GCM_LEN]).is_none());
+
+        let key = load_or_generate(&dev(), None, &mut fs, &mut rng).unwrap_or_else(|| {
+            panic!("a device with no key mints one (truncated walk: {truncated})")
+        });
+        assert_eq!(
+            medium.value(EF_DEVCERT_KEY.get()).map(|v| v.len()),
+            Some(GCM_LEN),
+            "the minted key is persisted GCM-sealed (truncated walk: {truncated})"
+        );
+        let again = load_or_generate(&dev(), None, &mut fs, &mut rng).unwrap();
+        assert_eq!(
+            key.to_bytes(),
+            again.to_bytes(),
+            "and the next call loads it rather than minting again"
+        );
+    }
+}

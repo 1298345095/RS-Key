@@ -147,14 +147,19 @@ pub fn load_or_generate<S: Storage>(
         return SigningKey::from_bytes(devk.into()).ok();
     }
     let mut buf = [0u8; GCM_LEN];
-    let key = match fs.read_key(EF_DEVCERT_KEY, &mut buf) {
-        Some(n) => {
+    let key = match fs.try_read_key(EF_DEVCERT_KEY, &mut buf) {
+        Ok(Some(n)) => {
             let mut scalar = unseal_scalar(dev, &buf[..n.min(GCM_LEN)])?;
             let k = SigningKey::from_bytes(&scalar.into()).ok();
             scalar.zeroize();
             k
         }
-        None => {
+        // Only a CONFIRMED absence mints. A probe the flash could not answer is not
+        // a device without a key, and the arm below PERSISTS: it would retire every
+        // certificate the standing key ever issued, permanently, and KEYDEV_SIGN
+        // P1=0x02 reaches here with no presence at all.
+        Err(_) => None,
+        Ok(None) => {
             // Draw until the scalar is a valid non-zero field element
             // (overwhelmingly the first draw), then persist it GCM-sealed.
             let mut scalar = [0u8; 32];

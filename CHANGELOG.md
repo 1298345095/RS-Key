@@ -144,6 +144,29 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe minted a new device-certificate key over the live one and
+  persisted it, unauthenticated, retiring every certificate the old key issued.**
+  `rsk-rescue`'s `load_or_generate` mints and persists a fresh secp256k1 key when
+  `EF_DEVCERT_KEY` reads absent — the documented first use. It probed with
+  `fs.read_key`, whose `None` covers both that and a read the flash could not serve.
+  `KEYDEV_SIGN P1=0x02` (read the device public key) takes no user presence at all,
+  so a USB host on its own reached it. This is the `ensure_seed` shape the original
+  sweep converted, in a crate that diff never opened.
+
+  Driven through the real APDU: the device's public key, a signature made under it
+  that verifies (the control), then one faulted probe on the same command. All four
+  assertions fall — the sealed record is replaced, the device advertises a different
+  65-byte key, the old signature no longer verifies against it, and the command
+  answers `9000`. The last leg is what makes it a loss rather than a hiccup: **after
+  the medium recovers the device still answers the new key**, because the mint was
+  persisted.
+
+  Only a CONFIRMED absence mints now. Both reachable spellings of that absence are
+  driven and still work — a boot walk that decided the FID space (so the probe never
+  reaches the backend) and one a read fault cut short (so the absence goes to the
+  backend and comes back as a real `Ok(None)`). That arm is proven non-vacuous by
+  its own mutant: stopping the mint from persisting turns it red.
+
 - **One faulted probe made OpenPGP GENERATE mint and seal RSA-2048 where the owner
   had configured Ed25519.** `read_advertised_algo` resolves the slot's algorithm
   attribute and GENERATE mints whatever it says. Its `_` arm covered three states at
