@@ -144,6 +144,33 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe took the minPINLength floor down permanently, and a second
+  copy of the same read stored a PIN underneath it.** CTAP 2.1 §6.11 makes
+  minPINLength monotonic — setMinPINLength may only raise it, and nothing short of
+  a factory reset puts a lowered floor back. Both readers of `EF_MINPINLEN[0]` used
+  the collapsing `Fs::read`, whose `None` covers "no policy set" and "the flash
+  could not serve it" alike, and the collapsed arm resolves to the build's
+  `MIN_PIN_LENGTH` — below any floor an owner would have configured.
+
+  `config::current_min_pin` is what the monotonic guard compares against. With an
+  enterprise floor of 16 stored and the control leg confirming `setMinPINLength(8)`
+  is refused on a healthy medium, one faulted probe and the record reads **8**.
+  `clientpin::min_pin_length` is the enforcement twin, and it is reached by two
+  different doors: with the same floor of 16 in place, one faulted probe and a
+  **six-code-point PIN is stored** — by the panel's `store_local_pin` and by the
+  host setPIN, both answering success.
+
+  Both are fixed by refusing, because both write. `current_min_pin` is fallible and
+  `set_min_pin_length` answers `CtapError::Other`; a new private
+  `clientpin::try_min_pin_length` serves the two sites that ENFORCE the floor
+  (`store_new_pin` → `CtapError::Other`, `store_local_pin` → `SetPinError::Storage`,
+  not `TooShort`, since the floor is exactly what could not be read and naming a
+  number would be an invention). The collapsing `min_pin_length` stays for the
+  sites that only *show* the floor or size a pad buffer from it — `builtin_uv`'s
+  entry length and the display's dot count — where a lowered value costs a wasted
+  entry the store path then refuses, not a stored PIN. Each copy is falsified by
+  its own test and by neither the other's.
+
 - **One faulted probe turned a one-shot OpenPGP PIN entry into an unlimited
   signing session.** OpenPGP 3.4 §7.2.10: DO `C4`'s first byte at `0x00` is "PW1
   valid for ONE PSO:CDS", and `inc_sig_count` is the only place that spends it. It

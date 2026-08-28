@@ -652,3 +652,59 @@ fn a_faulted_phy_probe_does_not_wipe_the_record_a_config_write_edits() {
         "a config write that could not read the record it edits must refuse"
     );
 }
+
+/// CTAP 2.1 §6.11 makes minPINLength monotonic — setMinPINLength may only raise it,
+/// and nothing but a factory reset puts a lowered floor back. `current_min_pin` is
+/// the only thing that knows what the floor currently is, and it read `EF_MINPINLEN`
+/// with `Fs::read`, whose `None` covers both "no policy set" and "the flash could not
+/// serve it". The collapsed arm resolves to the build's `MIN_PIN_LENGTH`, so one
+/// faulted probe let the monotonic guard pass and wrote the LOWER floor.
+#[test]
+fn a_faulted_min_pin_probe_does_not_lower_the_floor() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut state = armed(PERM_ACFG);
+    run_fs(
+        &mut fs,
+        &mut state,
+        &config_request(0x03, &subpara_min_pin(16), &TOKEN),
+    )
+    .unwrap();
+    assert_eq!(
+        medium.value(EF_MINPINLEN).as_deref().map(|v| v[0]),
+        Some(16),
+        "the enterprise floor is in place before the fault"
+    );
+
+    // Control: the monotonic guard refuses a lower floor on a healthy medium. 8 is
+    // above every profile's `MIN_PIN_LENGTH`, so a collapsed probe cannot refuse it
+    // for the length's own sake under `fips-profile` either.
+    assert_eq!(
+        run_fs(
+            &mut fs,
+            &mut state,
+            &config_request(0x03, &subpara_min_pin(8), &TOKEN)
+        ),
+        Err(CtapError::PinPolicyViolation),
+        "control: minPINLength can only grow"
+    );
+
+    medium.stick_once(EF_MINPINLEN);
+    let r = run_fs(
+        &mut fs,
+        &mut state,
+        &config_request(0x03, &subpara_min_pin(8), &TOKEN),
+    );
+    medium.stick(None);
+    assert_eq!(
+        medium.value(EF_MINPINLEN).as_deref().map(|v| v[0]),
+        Some(16),
+        "a faulted probe lowered the minPINLength floor, which only a reset raises back"
+    );
+    assert_eq!(
+        r,
+        Err(CtapError::Other),
+        "a setMinPINLength that could not read the floor it must not lower has to refuse"
+    );
+}

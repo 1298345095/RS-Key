@@ -457,7 +457,7 @@ fn set_min_pin_length<S: Storage, R: Rng>(
     force_change: bool,
     rp_ids: &[&str],
 ) -> CtapResult {
-    let current = current_min_pin(ctx) as u64;
+    let current = current_min_pin(ctx).map_err(|_| CtapError::Other)? as u64;
     let new_min = if new_min_pin == 0 {
         current
     } else {
@@ -515,12 +515,16 @@ fn set_min_pin_length<S: Storage, R: Rng>(
     Ok(0)
 }
 
-fn current_min_pin<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> u8 {
+/// The standing floor the monotonic guard compares against. Fallible on purpose: the
+/// collapsed answer is the build's [`MIN_PIN_LENGTH`], which sits below any floor an
+/// owner configured, so a faulted probe let the guard pass and stored the LOWER value
+/// — and nothing short of a reset raises minPINLength back.
+fn current_min_pin<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> rsk_sdk::error::Result<u8> {
     let mut buf = [0u8; 2];
-    match ctx.fs.read(EF_MINPINLEN, &mut buf) {
+    Ok(match ctx.fs.try_read(EF_MINPINLEN, &mut buf)? {
         Some(n) if n >= 1 => buf[0],
         _ => MIN_PIN_LENGTH,
-    }
+    })
 }
 
 #[cfg(test)]

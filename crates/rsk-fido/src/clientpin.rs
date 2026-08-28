@@ -958,7 +958,7 @@ fn store_new_pin<S: Storage, R: Rng>(
     // UTF-8 cannot be counted at all — refused under §6.5.5.5's "arbitrary, additional
     // constraints" allowance.
     let cps = pin_code_points(&padded[..pin_len]).ok_or(CtapError::PinPolicyViolation)?;
-    if cps < min_pin_length(ctx.fs) as usize {
+    if cps < try_min_pin_length(ctx.fs).map_err(|_| CtapError::Other)? as usize {
         return Err(CtapError::PinPolicyViolation);
     }
     #[cfg(any(feature = "strong-pin", feature = "fips-profile"))]
@@ -973,12 +973,23 @@ fn store_new_pin<S: Storage, R: Rng>(
 /// The configured minimum PIN length (`EF_MINPINLEN[0]`), or the CTAP default when no
 /// policy is set. Takes `Fs` directly (not a `Ctx`) so the trusted-display set-PIN flow
 /// can read the floor it must enforce without a `Ctx` it does not hold.
+///
+/// Collapsing, and only for the sites that *show* the floor or size a pad buffer from
+/// it. Every site that ENFORCES it takes [`try_min_pin_length`].
 pub fn min_pin_length<S: Storage>(fs: &mut Fs<S>) -> u8 {
+    try_min_pin_length(fs).unwrap_or(MIN_PIN_LENGTH)
+}
+
+/// [`min_pin_length`] with the failed read kept apart from the absence. The collapsed
+/// answer is the build's [`MIN_PIN_LENGTH`], which sits below any floor an owner
+/// configured, so a faulted probe stored a PIN the policy forbids — and the stored
+/// verifier is what every later authentication uses.
+fn try_min_pin_length<S: Storage>(fs: &mut Fs<S>) -> rsk_sdk::error::Result<u8> {
     let mut buf = [0u8; 2];
-    match fs.read(EF_MINPINLEN, &mut buf) {
+    Ok(match fs.try_read(EF_MINPINLEN, &mut buf)? {
         Some(n) if n >= 1 => buf[0],
         _ => MIN_PIN_LENGTH,
-    }
+    })
 }
 
 /// The pending forced-PIN-change flag (`EF_MINPINLEN[1]`).
@@ -1025,7 +1036,8 @@ pub enum SetPinError {
     /// The new PIN is longer than [`MAX_PIN_LENGTH`] — the host clientPIN path could not
     /// represent it, so it is refused here too; `max` is that ceiling.
     TooLong { max: u8 },
-    /// The `EF_PIN` write failed (flash error) — no PIN was stored.
+    /// A flash error — the `EF_PIN` write, or the `minPINLength` read the floor check
+    /// needs. No PIN was stored either way.
     Storage,
 }
 
@@ -1212,7 +1224,7 @@ pub fn store_local_pin<S: Storage>(
     fs: &mut Fs<S>,
     pin: &[u8],
 ) -> Result<(), SetPinError> {
-    let min = min_pin_length(fs);
+    let min = try_min_pin_length(fs).map_err(|_| SetPinError::Storage)?;
     // Counted in code points, like the host path — the pad types ASCII digits today,
     // but the floor is defined that way and the two must not drift apart.
     let cps = pin_code_points(pin).ok_or(SetPinError::TooShort { min })?;

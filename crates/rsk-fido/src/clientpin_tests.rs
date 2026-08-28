@@ -2599,3 +2599,78 @@ fn a_faulted_pin_probe_reads_as_pin_set_for_the_local_gates() {
         "a faulted EF_DEVICE_PIN probe waived the display's device-PIN gate"
     );
 }
+
+/// `min_pin_length` is the floor every set-PIN path enforces against, and it read
+/// `EF_MINPINLEN` with `Fs::read` — the same `None` for "no policy set" and for a
+/// record the flash could not serve, collapsing to the build's `MIN_PIN_LENGTH`. One
+/// faulted probe therefore stored a PIN the owner's policy forbids, and the stored
+/// verifier is what every later authentication uses. Both writers are driven: the
+/// panel's `store_local_pin` and the host setPIN, which reach the floor by different
+/// doors.
+#[test]
+fn a_faulted_min_pin_probe_does_not_store_a_pin_under_the_floor() {
+    // The panel's set-PIN. `PIN` is six code points — above every profile's
+    // `MIN_PIN_LENGTH`, so the collapsed floor is what admits it, not the length.
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    fs.put(EF_MINPINLEN, &[16, 0]).unwrap();
+    assert!(
+        matches!(
+            store_local_pin(&dev(), &mut fs, PIN),
+            Err(SetPinError::TooShort { min: 16 })
+        ),
+        "control: the panel enforces the policy floor"
+    );
+    medium.stick_once(EF_MINPINLEN);
+    let r = store_local_pin(&dev(), &mut fs, PIN);
+    medium.stick(None);
+    assert!(
+        !pin_is_set(&mut fs),
+        "a faulted floor probe stored a panel PIN of {} code points under a floor of 16",
+        PIN.len()
+    );
+    // `Storage`, not `TooShort`: the floor is exactly what could not be read, so
+    // naming a number the pad would then show would be an invention.
+    assert!(
+        matches!(r, Err(SetPinError::Storage)),
+        "a set that could not read the floor it must enforce has to refuse, got {r:?}"
+    );
+
+    // The host setPIN reaches the same floor through `store_new_pin`.
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    fs.put(EF_MINPINLEN, &[16, 0]).unwrap();
+    let mut state = FidoState::new();
+    let plat = key_agreement(&mut fs, &mut rng, &mut state, PinProto::Two, 2);
+    let mut out = [0u8; 256];
+    assert_eq!(
+        run(
+            &mut fs,
+            &mut rng,
+            &mut state,
+            &plat.set_pin_req(PIN),
+            &mut out
+        ),
+        Err(CtapError::PinPolicyViolation),
+        "control: the host setPIN enforces the policy floor"
+    );
+    medium.stick_once(EF_MINPINLEN);
+    let r = run(
+        &mut fs,
+        &mut rng,
+        &mut state,
+        &plat.set_pin_req(PIN),
+        &mut out,
+    );
+    medium.stick(None);
+    assert!(
+        !fs.has_data(EF_PIN),
+        "a faulted floor probe stored a host PIN of {} code points under a floor of 16",
+        PIN.len()
+    );
+    assert!(r.is_err(), "the host setPIN under the floor has to refuse");
+}
