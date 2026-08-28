@@ -399,6 +399,18 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **`CONFIG_READ` over FIDO reported a record it could not read as an empty one.**
+  Found by asking the other spellings of the four fixes above the same question.
+  Both targets are the baseline a host read-modify-writes: `rsk hw` and `rsk led`
+  read the record, apply what the user asked for and send the result back. An empty
+  answer makes `rsk hw --get` print "(build default)" for every field the owner
+  actually set. It is the weakest member of the class — `rsk led` already refuses a
+  block shorter than 17 bytes, and the phy answer contributes nothing to the
+  device-side merge, so no field is lost — but `rsk hw --get` over CCID refuses
+  after this release while the same command over FIDO showed a phantom baseline,
+  and one command should not answer two ways. `CtapError::Other` now; an absent
+  record still answers empty, which is what a first use of either tool needs.
+
 - **A faulted `EF_LED_CONF` probe overwrote the owner's LED configuration with the
   build defaults, at boot and unauthenticated.** The boot load has an absent arm on
   purpose: a device that never customised its LEDs gets the live block persisted

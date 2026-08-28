@@ -2408,3 +2408,51 @@ fn a_faulted_lock_probe_does_not_admit_a_load_over_a_wrapped_seed() {
     );
     assert_eq!(r, Err(CtapError::NotAllowed));
 }
+
+/// `CONFIG_READ` is the baseline `rsk hw` and `rsk led` read-modify-write ON THE
+/// HOST: they read this record, apply the flags the user asked for and send the
+/// result back. Answering a probe the flash could not complete with an empty record
+/// therefore hands the host a phantom baseline — and `rsk hw --get` prints
+/// "(build default)" for every field the owner actually set.
+///
+/// One row per target. The absent arm is unchanged and is what
+/// `config_read_returns_the_phy_record_ungated` and the `rsk led` length check
+/// stand on; only the faulted one moves.
+#[test]
+fn a_faulted_probe_does_not_report_a_config_record_as_empty() {
+    for (target, fid, plant) in [
+        (CONFIG_TARGET_PHY, rsk_phy::EF_PHY, true),
+        (CONFIG_TARGET_LED, EF_LED_CONF, false),
+    ] {
+        let (mut fs, medium, mut rng, mut st) = setup_stuck();
+        if plant {
+            rsk_phy::save(
+                &mut fs,
+                &rsk_phy::PhyData {
+                    vid_pid: Some((0x1234, 0x5678)),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        } else {
+            fs.put(fid, &[7u8; LED_CONF_LEN]).unwrap();
+        }
+        let mut rreq = [0u8; 32];
+        let rn = config_read_req(target, &mut rreq);
+        let mut rout = [0u8; 128];
+
+        medium.stick_once(fid);
+        assert_eq!(
+            call(
+                &mut fs,
+                &mut rng,
+                &mut st,
+                &mut Decline,
+                &rreq[..rn],
+                &mut rout,
+            ),
+            Err(CtapError::Other),
+            "CONFIG_READ target {target:#x} reported an unreadable record as an empty one"
+        );
+    }
+}

@@ -241,9 +241,13 @@ fn config_read<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req, out: &mut [u8
     match req.target {
         CONFIG_TARGET_PHY => {
             let mut buf = [0u8; rsk_phy::PHY_MAX_SIZE];
+            // A probe the flash could not answer is not an empty record. This
+            // response IS the baseline `rsk hw` read-modify-writes on the host, and
+            // an empty one displays "(build default)" for every field the owner set.
             let n = ctx
                 .fs
-                .read(rsk_phy::EF_PHY, &mut buf)
+                .try_read(rsk_phy::EF_PHY, &mut buf)
+                .map_err(|_| CtapError::Other)?
                 .unwrap_or(0)
                 .min(buf.len());
             // Key 1: the raw stored record (overrides only) for read-modify-write.
@@ -273,9 +277,13 @@ fn config_read<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req, out: &mut [u8
         }
         CONFIG_TARGET_LED => {
             let mut buf = [0u8; LED_CONF_LEN];
+            // Same rule as the phy target: `rsk led` reads this block to modify it.
+            // The short answer an absence gives is one the host refuses by length;
+            // an unreadable record must not borrow that arm to say so.
             let n = ctx
                 .fs
-                .read(EF_LED_CONF, &mut buf)
+                .try_read(EF_LED_CONF, &mut buf)
+                .map_err(|_| CtapError::Other)?
                 .unwrap_or(0)
                 .min(buf.len());
             encode(out, |e| {
