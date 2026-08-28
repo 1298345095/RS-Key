@@ -2908,3 +2908,71 @@ fn a_faulted_uif_probe_does_not_lower_a_permanent_touch_requirement() {
         "a write that could not read the value it must not lower has to refuse"
     );
 }
+
+/// OpenPGP 3.4 §7.2.10: DO `C4`'s first byte at `0x00` is "PW1 valid for ONE
+/// PSO:CDS", and `inc_sig_count` is the only place that spends it. It read the flag
+/// with `Fs::read`, which answers the same `None` for "no PW status stored" and for
+/// one the flash could not serve — and that arm LEAVES PW1 STANDING. So one faulted
+/// probe turned a one-shot PIN entry into an unlimited signing session for whoever
+/// is on the wire after the owner's one legitimate signature.
+///
+/// Aimed at `EF_PW_PRIV` alone: the statement immediately below reads `EF_SIG_COUNT`
+/// and already refuses, so a whole-backend fault would be caught by the neighbour
+/// and prove nothing about this line.
+#[test]
+fn a_faulted_pw_status_probe_does_not_extend_a_one_shot_pin() {
+    let rng = RefCell::new(CountRng(7));
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    let presence = RefCell::new(crate::AlwaysConfirm);
+    let mut app = OpenpgpApplet::new(SERIAL_ID, SERIAL_HASH, None, &rng, &presence);
+    verify_pin(&mut app, &mut fs, consts::PW3_MODE83, consts::PW3_DEFAULT);
+    assert_eq!(put(&mut app, &mut fs, 0x00, 0xC1, ATTR_P256), Sw::OK);
+    assert_eq!(
+        run(&mut app, &mut fs, &ec_import(0xB6, &[0x11u8; 32])).1,
+        Sw::OK
+    );
+    assert_eq!(put(&mut app, &mut fs, 0x00, 0xC4, &[0x00]), Sw::OK);
+    let mut sign = vec![0x00, consts::INS_PSO, 0x9E, 0x9A, 32];
+    sign.extend_from_slice(&[0x42u8; 32]);
+    let count = |fs: &mut Fs<_>| {
+        let mut c = [0u8; 3];
+        fs.read(consts::EF_SIG_COUNT, &mut c).unwrap();
+        ((c[0] as u32) << 16) | ((c[1] as u32) << 8) | c[2] as u32
+    };
+
+    // Control: one PIN entry buys exactly one signature.
+    verify_pin(&mut app, &mut fs, consts::PW1_MODE81, consts::PW1_DEFAULT);
+    assert_eq!(run(&mut app, &mut fs, &sign).1, Sw::OK);
+    assert_eq!(
+        run(&mut app, &mut fs, &sign).1,
+        Sw::SECURITY_STATUS_NOT_SATISFIED,
+        "control: the one-shot PW status spends PW1 at the signature"
+    );
+    assert_eq!(count(&mut fs), 1, "control: one PIN entry, one signature");
+
+    // The same PIN entry, with the flag's probe faulted once as the first signature
+    // spends it.
+    verify_pin(&mut app, &mut fs, consts::PW1_MODE81, consts::PW1_DEFAULT);
+    medium.stick_once(consts::EF_PW_PRIV);
+    assert_eq!(run(&mut app, &mut fs, &sign).1, Sw::OK);
+    let (sig, sw) = run(&mut app, &mut fs, &sign);
+    medium.stick(None);
+    assert!(
+        sig.is_empty(),
+        "a faulted PW-status probe produced a SECOND signature ({} bytes) on one PIN entry",
+        sig.len()
+    );
+    assert_eq!(
+        count(&mut fs),
+        2,
+        "the card signed more times than the PIN entries authorised"
+    );
+    assert_eq!(
+        sw,
+        Sw::SECURITY_STATUS_NOT_SATISFIED,
+        "the second signature on a one-shot PIN entry has to be refused"
+    );
+}

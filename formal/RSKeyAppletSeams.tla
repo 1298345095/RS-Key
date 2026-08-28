@@ -55,7 +55,7 @@ CONSTANTS
     \* The selection clamp removed: `pin_fresh` outlives the `has_pin` status it
     \* refines. `pfresh` remains the requirement-side copy that exposes the split.
     BugPinFreshOutlivesPin,
-    \* The same shape one applet over: crates/rsk-openpgp/src/keys.rs:405-409,
+    \* The same shape one applet over: crates/rsk-openpgp/src/keys.rs:405-419,
     \* `inc_sig_count` clearing has_pw1 under the one-shot PW status.
     BugSigPinNotSpent,
     \* A user status opening the ADMIN surface -- the reverse of
@@ -124,7 +124,7 @@ VARIABLES
     \* status a SELECT can take away.
     oathCodeSet,
     \* Whether PW1 is the one-shot kind: EF_PW_PRIV[0] = 0 makes PW1.81 valid for
-    \* exactly one PSO:CDS (crates/rsk-openpgp/src/keys.rs:405-409), which is
+    \* exactly one PSO:CDS (crates/rsk-openpgp/src/keys.rs:405-419), which is
     \* `pin_fresh` on the other applet. Host-writable through PUT DATA C4.
     oneShotSig,
     \* Ghost: the PW1.81 freshness the requirement leaves behind, spent by every

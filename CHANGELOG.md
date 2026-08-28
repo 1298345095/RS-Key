@@ -144,6 +144,29 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe turned a one-shot OpenPGP PIN entry into an unlimited
+  signing session.** OpenPGP 3.4 §7.2.10: DO `C4`'s first byte at `0x00` is "PW1
+  valid for ONE PSO:CDS", and `inc_sig_count` is the only place that spends it. It
+  read the flag with `Fs::read`, whose `None` covers both "no PW status stored" and
+  "the flash could not serve it" — and that arm leaves PW1 STANDING, so whoever is
+  on the wire after the owner's one legitimate signature gets every further
+  signature for free.
+
+  Driven with the fault aimed at `EF_PW_PRIV` alone, because the statement
+  immediately below reads `EF_SIG_COUNT` and already refuses — a whole-backend
+  fault would be caught by that neighbour and prove nothing about this line.
+  Control leg first: one PIN entry, one signature, `EF_SIG_COUNT` at 1 and the
+  second PSO:CDS `6982`. Same card, same one PIN entry, one transient faulted probe
+  as the first signature spends it: a **second 64-byte ECDSA signature** comes back
+  `9000`, and the card's own counter reads **3 where it owed 2**.
+
+  Fixed by failing closed — a probe that could not be completed spends PW1 —
+  rather than by refusing. The signature this call has already produced was
+  authorised; only the next one is in question, and refusing would discard a
+  finished private-key operation (the post-crypto DoS this same function's
+  `EF_SIG_COUNT` neighbour is commented for). The genuinely-absent arm is left
+  exactly as it was: only `Err` is new.
+
 - **One faulted probe let the trusted display overwrite a populated PIV retired
   slot — the sealed key and the certificate — with no management-key auth behind
   it.** `retired_slot_is_free` is the *whole* authorisation for the panel's
