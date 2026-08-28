@@ -399,6 +399,24 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **A faulted `EF_LED_CONF` probe overwrote the owner's LED configuration with the
+  build defaults, at boot and unauthenticated.** The boot load has an absent arm on
+  purpose: a device that never customised its LEDs gets the live block persisted
+  once, so a host `CONFIG_READ` always has a full block to read-modify-write (it
+  cannot know the build defaults). A failed probe took that arm. Driven on a
+  `ProbeStuck` medium over a boot walk one read fault cut short, the owner's stored
+  block was replaced byte for byte by the live one.
+
+  Both arms are proven, because they are reachable in different states rather than
+  on different devices: a *complete* boot scan decides the whole FID space, so a
+  legitimately absent record is answered without touching the backend and no fault
+  can reach it — asserted with a fault armed **persistently**, and the defaults are
+  still seeded. Only a truncated walk leaves the probe live, and there it refuses:
+  nothing applied, nothing stored.
+
+  The decision moved to `rsk_vendor::load_or_seed_led_config`, where the host can
+  run it; `firmware/src/vendor.rs` keeps the four lines that marshal the LED atomics.
+
 - **The phy read-modify-write existed in three copies, and each one read a failed
   flash probe as "no record was ever written".** `rsk_phy::merge_save` is what closes
   picoforge#102 / RS-Key#33 — a host tool that sends only the fields it changed can
