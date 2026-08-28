@@ -64,6 +64,33 @@ invariants_of() {
 # this is the generated relation being read, not a second column written by hand.
 derived_inv() { invariants_of "$1" | grep -v '^TypeOK$' | head -1; }
 
+# The temporal properties a configuration declares. A run refuted by one of these
+# prints `Action property <name> is violated` and no invariant at all, which is a
+# RIGHT answer and not a missing one: `TokenRefinementDeadToken.cfg` checks one
+# invariant, declares one property, and is RED on the PROPERTY by design -- the
+# state stutter it models is legal and the outcome is not. Measured by this rule
+# firing on it the first time it ran a whole tier.
+properties_of() {
+  awk '
+    /^PROPERT(Y|IES)[[:space:]]*$/ { block = 1; next }
+    /^PROPERT(Y|IES)[[:space:]]+[A-Za-z][A-Za-z0-9_]*[[:space:]]*$/ {
+      print $2; block = 0; next
+    }
+    block && /^[[:space:]]+[A-Za-z][A-Za-z0-9_]*[[:space:]]*$/ { print $1; next }
+    block { block = 0 }
+  ' "$1"
+}
+
+# Whether a RED verdict names something this configuration declares as a property.
+names_a_property() {
+  local cfg=$1 verdict=$2 name
+  while read -r name; do
+    [ -n "$name" ] || continue
+    case "$verdict" in *"$name"*) return 0 ;; esac
+  done < <(properties_of "$cfg")
+  return 1
+}
+
 # How many defect switches a configuration ARMS. One is what makes the derived
 # name the right question. Zero is `TraceSeamsBad.cfg`, which lists invariants and
 # is refused by a deadlock, so a derived name there would demand one no run can
@@ -202,13 +229,14 @@ one() {
   # only where the row names one, because the mutant families already name theirs
   # in their own INVARIANTS block.
   elif [ "$got" = RED ] && [ -n "${inv:-}" ] && [ "${inv:-}" != "-" ] \
-       && [ "$verdict" != "RED: $inv" ]; then
+       && [ "$verdict" != "RED: $inv" ] && ! names_a_property "$cfg" "$verdict"; then
     mark="  !! expected RED: $inv"
     FAILED=$((FAILED + 1))
   # A configuration arming two defects predicts no single name, but it still may
   # not pass on `TypeOK` -- which it checks and neither switch targets -- nor on a
   # refusal that names no invariant at all.
   elif [ "$got" = RED ] && [ "$armed_n" -gt 1 ] \
+       && ! names_a_property "$cfg" "$verdict" \
        && ! invariants_of "$cfg" | grep -vx TypeOK | grep -qxF "${verdict#RED: }"; then
     mark="  !! expected RED on an invariant this configuration checks"
     FAILED=$((FAILED + 1))

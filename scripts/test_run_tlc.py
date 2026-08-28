@@ -322,6 +322,36 @@ def test_a_two_armed_mutant_refused_without_an_invariant_is_rejected(fake_tlc):
     assert "expected RED on an invariant this configuration checks" in result.stdout
 
 
+#: A run refuted by a temporal PROPERTY of a configuration that also checks an
+#: invariant. `TokenRefinementDeadToken.cfg` is that shape: one invariant, one
+#: property, and RED on the property by design — the state stutter it models is
+#: legal and the outcome is not.
+RED_ACTION_PROPERTY = """\
+2 states generated
+2 distinct states found
+The depth of the complete state graph search is 2.
+Error: Action property R1oTokenOutcomes is violated.
+"""
+
+
+def test_a_property_the_configuration_declares_is_a_right_reason(fake_tlc):
+    """The false alarm this rule raised the first time it ran a whole tier: the
+    derived name is an INVARIANT, the refutation names a PROPERTY, and the two
+    are not alternatives — a configuration may declare both and be red on either."""
+    result = run(fake_tlc, "TokenRefinementDeadToken.cfg", RED_ACTION_PROPERTY)
+    assert result.returncode == 0
+    assert "R1oTokenOutcomes" in result.stdout
+
+
+def test_a_property_the_configuration_does_not_declare_is_still_wrong(fake_tlc):
+    """…and the carve-out is about the names the configuration itself declares,
+    not about the words `Action property` appearing in the line."""
+    other = RED_ACTION_PROPERTY.replace("R1oTokenOutcomes", "SomethingElseEntirely")
+    result = run(fake_tlc, "TokenRefinementDeadToken.cfg", other)
+    assert result.returncode == 1
+    assert "expected RED: R1oOutcomeCoverage" in result.stdout
+
+
 def test_a_properties_only_row_is_not_held_to_an_invariant(fake_tlc):
     """`LiveMut_*` check temporal properties and no invariant beyond `TypeOK`;
     the runner reads `Invariant … is violated` and nothing else, so there is no
