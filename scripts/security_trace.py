@@ -58,25 +58,56 @@ ABSTRACT_FIELDS = {
     "persistent_grant": "persistentGrant",
 }
 
-MODEL_ACTIONS = {
-    "PressDown", "PressUp", "HostCancel", "HostCancelLatched", "TouchConfirm",
-    "TouchCancel", "TouchTimeout", "LocalCeremonyStart", "LocalCeremonyEnds",
-    "OtpCancelWait", "GetPinToken", "WrongPin", "MintPpuat", "LocalPinWrong",
-    "LocalPinOk", "SetPinStart", "SetPinClearPpuat", "SetPinWrite",
-    "ChangePinStart", "ChangePinClearPpuat", "ChangePinWrite",
-    "ChangePinRotateToken", "StopUsingToken", "RegisterStart", "RegisterTouched",
-    "RegisterRefused", "RegisterWriteA", "RegisterWriteB",
-    # The token-less non-discoverable registration. It is UNREACHED by
-    # construction and that is not a gap: the mapper answers these boundaries
-    # from the R4c gate rule, because a served non-discoverable create writes
-    # nothing and the recording cannot tell it from the stutter.
-    "RegisterNdStart", "RegisterNdTouched", "RegisterNdRefused", "AssertStart",
-    "AssertFinish", "ConfigOp", "BackupFinalize", "DeviceUnlock",
-    "CmBeginViaToken", "CmBeginViaPpuat", "CmNext", "DeleteCredStart",
-    "DeleteCredWriteA", "DeleteCredWriteB", "ResetStart", "ResetRefused",
-    "ResetConfirmed", "ResetSweepSecrets", "ResetSweepGates", "ResetFinish",
-    "ResetAborts", "PowerCut", "WarmReset", "Tick", "WalkExpires",
-}
+#: A definition body that steps: it primes a variable or declares what does not
+#: move. What separates an ACTION from a set or a string constant, both of which
+#: `Next` also names.
+STEPS = re.compile(r"[A-Za-z0-9_\]]'|UNCHANGED")
+#: The floor under the derivation below, AT today's count the way `threat_gate`
+#: holds its own: a derivation that finds nothing satisfies "every action was
+#: reached" over an empty roster, which is the silent-green shape this file is
+#: against, and one that finds FEWER is a model that shrank. Either is a
+#: deliberate edit here, in the same change.
+MODEL_ACTION_FLOOR = 53
+
+
+def model_actions(module: Path | None = None, floor: int = MODEL_ACTION_FLOOR) -> set[str]:
+    """The security model's action roster, read out of the model.
+
+    Held by nothing before this: a 53-name set was written here by hand and read
+    in exactly one place — `unreached = MODEL_ACTIONS - reached` — so a name that
+    fell out of it silently shortened the list of actions nobody recorded. The
+    roadmap's own lesson names this file as one of two registries the tree does
+    not hold; measured before the change, the hand-written set and this derivation
+    agreed EXACTLY at 53, so nothing moves but the source.
+
+    The rule: a name disjuncted into `Next` whose own definition steps. Comments
+    are cut FIRST, and that is not tidiness — with them in, the derivation returns
+    54, because `Otp == "otp"` is a string constant and the comment block under it
+    carries an apostrophe that the prime test matches. Same trap
+    `verdict_gate.statements` carries, one file over.
+    """
+    text = (module or FORMAL / "RSKeySecurityState.tla").read_text(encoding="utf-8")
+    plain = "\n".join(line.split("\\*", 1)[0] for line in text.splitlines())
+    bodies: dict[str, str] = {}
+    for found in re.finditer(
+        r"^([A-Z][A-Za-z0-9_]*)(\([^)]*\))?\s*==([\s\S]*?)"
+        r"(?=^[A-Za-z_][A-Za-z0-9_]*(?:\([^)]*\))?\s*==|\Z)",
+        plain,
+        re.M,
+    ):
+        bodies.setdefault(found.group(1), found.group(3))
+    named = set(re.findall(r"\b([A-Z][A-Za-z0-9_]*)\b", bodies.get("Next", "")))
+    out = {n for n in named if n in bodies and STEPS.search(bodies[n])}
+    if len(out) < floor:
+        raise RuntimeError(
+            f"{module or 'RSKeySecurityState.tla'}: derived {len(out)} model actions,"
+            f" under the floor of {floor} — the derivation broke, or the model shrank;"
+            " an empty roster makes `unreached` empty for the wrong reason"
+        )
+    return out
+
+
+MODEL_ACTIONS = model_actions()
 
 OUTCOME_BY_ACTION = {
     "GetPinToken": "Authorized",

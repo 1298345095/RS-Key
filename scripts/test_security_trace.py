@@ -654,3 +654,68 @@ def test_a_green_trace_row_floored_below_the_step_ratchet_is_fatal(tmp_path, mon
 
 def test_the_real_floors_pin_every_green_trace_row():
     security_trace.check_green_floors_pin_the_replay()
+
+
+# --- the action roster, read out of the model instead of listed here ----------
+
+MODULE = """\
+---- MODULE Probe ----
+Otp     == "otp"           \\* SCOPE_OTP, and the comment under it carries an
+\\* apostrophe: without the comment cut the prime test matches THAT and a string
+\\* constant reads as an action. Measured on the real module -- 54 instead of 53.
+Transports == {Otp, "hid"}
+Idle    == UNCHANGED <<state>>
+PressDown == /\\ state' = "down"
+             /\\ UNCHANGED <<gate>>
+Unreached == state' = "never"
+Next == \\/ PressDown \\/ Idle \\/ \\E t \\in Transports : Otp
+====
+"""
+
+
+@pytest.fixture
+def module(tmp_path):
+    path = tmp_path / "Probe.tla"
+    path.write_text(MODULE)
+    return path
+
+
+def test_only_the_definitions_that_step_are_actions(module):
+    """A set and a string constant are named by `Next` too, and neither steps."""
+    assert security_trace.model_actions(module, floor=1) == {"PressDown", "Idle"}
+
+
+def test_a_definition_outside_next_is_not_in_the_roster(module):
+    """`Unreached` primes a variable and no disjunct names it — the roster is the
+    model's own `Next`, not every stepping definition in the file."""
+    assert "Unreached" not in security_trace.model_actions(module, floor=1)
+
+
+def test_a_comment_cannot_promote_a_constant_to_an_action(module):
+    """The measured trap, pinned: leave the comments in and `Otp` reads as an
+    action off an apostrophe in the prose below it."""
+    derived = security_trace.model_actions(module, floor=1)
+    assert "Otp" not in derived
+    assert "Transports" not in derived
+
+
+def test_a_broken_derivation_is_fatal_rather_than_an_empty_roster(module):
+    """An empty roster satisfies "every action was reached" over nothing, which is
+    the silent green this file exists against. The floor is a PARAMETER so this
+    drives the real comparison rather than monkeypatching the shipped value down —
+    which is how a ceiling gets shipped never having been exercised."""
+    with pytest.raises(RuntimeError, match="under the floor"):
+        security_trace.model_actions(module, floor=3)
+
+
+def test_the_shipped_roster_is_the_shipped_module(module):
+    """And the real one, so a module edit that drops an action is visible here
+    rather than only in a shorter `unreached` list."""
+    live = security_trace.model_actions()
+    assert live == security_trace.MODEL_ACTIONS
+    # AT the count, not merely above it: a floor with headroom is a floor nothing
+    # has to move, and the shipped roster shrinking is a deliberate edit.
+    assert len(live) == security_trace.MODEL_ACTION_FLOOR
+    # Named because they are the arms whose absence would be read as coverage:
+    # the token-less carve-out is UNREACHED by construction.
+    assert {"RegisterNdStart", "RegisterNdTouched", "RegisterNdRefused"} <= live
