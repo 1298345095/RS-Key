@@ -1280,7 +1280,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-openpgp"]
 expect = "killed"
-note = "the converse of BugAdminOpensKeyOps: a USER status opens PUT DATA's administrative surface. PIV states the same rule at seven separate 9B management-key gates (crates/rsk-piv/src/lib.rs:288, 594, 665, 793, 1034, 1094 and crates/rsk-piv/src/keygen.rs:585), none of them patched here."
+note = "the converse of BugAdminOpensKeyOps: a USER status opens PUT DATA's administrative surface. PIV states the same rule at seven separate 9B management-key gates (crates/rsk-piv/src/lib.rs:288, 594, 665, 793, 1034, 1094 and crates/rsk-piv/src/keygen.rs:600), none of them patched here."
 
 [comutant.BugRefusedValidateGrants]
 status = "patch"

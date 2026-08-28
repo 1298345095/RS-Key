@@ -144,6 +144,38 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe let the trusted display overwrite a populated PIV retired
+  slot — the sealed key and the certificate — with no management-key auth behind
+  it.** `retired_slot_is_free` is the *whole* authorisation for the panel's
+  Generate key: physical presence at the screen is the only other gate, and
+  docs/guides/display.md states the action is "restricted to empty slots
+  (add-only, never overwrite)". Both of its probes were the collapsing
+  `has_key` / `has_data`, which answer the same `false` for an absent record and
+  for one the flash could not read.
+
+  Driven on a `ProbeStuck` medium, one row per probe aimed at its OWN fid (a fault
+  on the key shadows the cert probe behind it). Slot 0x82 holding a key and no
+  certificate — the state a host GENERATE leaves, and the state an on-device
+  X25519 generate leaves, since X25519 cannot self-sign: one faulted `key_fid(0x82)`
+  read and the stored 64-byte sealed key is replaced by a fresh 61-byte sealed
+  P-256 key, `Ok(())` returned. Slot 0x83 holding a certificate and no key: one
+  faulted cert read and the stored certificate goes **5 bytes → 476**, again
+  `Ok(())`. Both destroy material that only a management-key-authenticated host
+  command is supposed to be able to touch.
+
+  It is two copies, not one. `rsk-piv`'s `info::next_free_retired` inlines the same
+  predicate to pick the target slot, and it offered the occupied slot in both rows.
+  The two are fixed differently because they answer different questions.
+  `retired_slot_is_free` **refuses** — `Sw::MEMORY_FAILURE` — because a generate
+  that cannot confirm the slot empty must not write; `next_free_retired`
+  **fail-closed defaults to "not free"** and moves to the next slot, because a
+  probe that failed is not a slot known free and skipping it costs one candidate
+  out of twenty rather than a key. Falsified by reverting each guard alone: the
+  keygen predicate's revert fails on the data assertion ("a faulted probe let the
+  panel generate destroy the sealed key"), the picker's revert fails on the picker
+  assertion with the data assertion still passing — so neither is held by the
+  other.
+
 - **One faulted probe erased the clone-detection evidence for every credential on
   the key, and signed an assertion with the fabricated value.** signCount is the
   only clone signal a relying party gets (WebAuthn L3 §6.1.1), and all three of its
