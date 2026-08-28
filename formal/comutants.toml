@@ -1248,12 +1248,12 @@ evidence = "the clamp is unobservable in today's Rust. `pin_fresh` has exactly o
 status = "patch"
 file = "crates/rsk-openpgp/src/keys.rs"
 find = """
-    if fs.read(EF_PW_PRIV, &mut pw).is_some() && pw[0] == 0 {
+    if one_shot {
         sess.has_pw1 = false;
     }
 """
 replace = """
-    if fs.read(EF_PW_PRIV, &mut pw).is_some() && pw[0] == 0 {
+    if one_shot {
         let _ = &sess;
     }
 """
