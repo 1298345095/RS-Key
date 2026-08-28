@@ -374,6 +374,14 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   measured, the obvious `rm -rf …; return 0` handler exits a **green** run 1 when
   its `rm` fails, since errexit leaves the function before the `return`.
 
+  `scripts/test_gate_scripts.py` holds the class shut: every live `mktemp` in a
+  tracked `*.sh` must bind the whole path it makes and must be registered for
+  removal **in the scope that made it**, and a script that makes one must trap
+  `EXIT` and drain what it accumulates. Scoping is the load-bearing word — with
+  the rule written file-wide, deleting a row's registration and commenting one
+  out both left the suite at rc 0 with 1789 passed, because `dir` names the temp
+  of three different rows and any one of them answered for the others.
+
 - **Three ceilings shipped with the defect their own series had measured.**
   `SCOPE_CEILING`, `SCOPE_SPAN_CAP` and `CARVE_OUT_CEILING` were upper bounds
   with headroom, and 37 → 999, 6 → 99 and 2 → 99 were all surviving mutants —

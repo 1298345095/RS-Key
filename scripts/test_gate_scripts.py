@@ -21,6 +21,13 @@ to its baseline. And a table can be EMPTIED: the roster asked `is_file()` and
 nothing else, so truncating one to its SPDX line took 241 cases out of the suite
 with zero new failures. Deleting either — the line, the file — was caught, which
 is what made the pair look covered.
+
+The second fact about the set is what each script does with a temp. `check.sh`
+was the only one of the nine that make one with no cleanup at all — five sites,
+~10 GB of build trees per run, until a full volume stopped a session dead — and
+nothing could say so, because every rule in the tree is about a guard's ROWS. One
+of those five could not be cleaned even by hand: `out=$(mktemp -d)/pt.elf` keeps
+the file and throws the directory away, so no name in the script reached it.
 """
 
 import pathlib
@@ -194,3 +201,221 @@ def test_every_gate_reports_a_summary_when_it_is_happy():
         text = (HERE / name).read_text()
         assert "def audit(" in text, f"{name} has no audit() the tests can drive"
         assert "def main(" in text, f"{name} has no main() check.sh can run"
+
+
+#: `VAR=$(mktemp …)` — the whole right-hand side, deliberately. A trailing path
+#: (`out=$(mktemp -d)/pt.elf`) keeps the file and drops the directory, so nothing
+#: in the script can name the temp to remove it; that is a leak by construction
+#: rather than by oversight, and it is what check.sh shipped for the store row.
+MKTEMP_ASSIGN = re.compile(
+    r'^(?:local\s+|declare\s+(?:-\w+\s+)*)?(?P<var>[A-Za-z_]\w*)='
+    r'(?P<q>"?)\$\(\s*mktemp[^()]*\)(?P=q)$'
+)
+
+#: How a script may put a temp on a cleanup path. Two idioms, because there are
+#: two: eight scripts hold one temp and remove it from their own EXIT trap, and
+#: `check.sh` holds seven — bash keeps ONE EXIT trap, so a per-site one there
+#: replaces the previous rather than joining it — and accumulates instead.
+REMOVES = "rm "
+ACCUMULATOR = "GATE_TMP"
+
+
+def shell_scripts():
+    """Every `*.sh` of the checkout, git's answer to what the tree is."""
+    return sorted(p for p in gate_lines.tree_files(ROOT) if p.suffix == ".sh")
+
+
+def code_lines(text):
+    """Each logical line's CODE, stripped — what the shell runs, not what it quotes."""
+    for _indent, body in gate_lines.logical_lines(text):
+        yield gate_lines.split_at_comment(body)[0].strip()
+
+
+def mktemp_sites(text):
+    """(line, variable) per live `mktemp`; the variable is "" when none is bound."""
+    for code in code_lines(text):
+        if "mktemp" in code:
+            found = MKTEMP_ASSIGN.match(code)
+            yield code, (found["var"] if found else "")
+
+
+#: A top-level shell function. Its body is the scope a temp shares with its
+#: cleanup — see [`regions`].
+FUNCTION = re.compile(r"^[A-Za-z_]\w*\(\)\s*\{\s*$")
+
+
+def regions(text):
+    """The script split into the scopes a cleanup may live in: each top-level
+    function body, and everything outside them as one more.
+
+    File scope was the first spelling, and it is too coarse in exactly the way
+    that matters: `dir` names the temp of three different `check.sh` rows, so one
+    row's registration satisfied the rule for all three. Measured — deleting the
+    assurance row's `GATE_TMP+=("$dir")`, and again with it merely commented out,
+    left `python -m pytest scripts -q` at rc 0 with 1789 passed both times, while
+    the other four mutations below were caught. The two spellings the class is
+    actually written in are the two that survived.
+    """
+    top, held, out = [], None, []
+    for line in text.splitlines():
+        if held is None and FUNCTION.match(line):
+            held = []
+        elif held is None:
+            top.append(line)
+        elif line == "}":
+            out.append("\n".join(held))
+            held = None
+        else:
+            held.append(line)
+    # An unbalanced body is kept rather than dropped: losing it would take its
+    # sites with it and read as a script with nothing to check.
+    return out + ([] if held is None else ["\n".join(held)]) + ["\n".join(top)]
+
+
+def registered(text, var):
+    """Whether this SCOPE's code puts `$var` on a removal path.
+
+    The two idioms differ in where the `rm` is: the trap carries it on the same
+    line, the accumulator carries it once in the handler that drains the list —
+    so requiring one on both reads every `GATE_TMP+=` line as a non-registration.
+    Measured: that spelling reported all seven of check.sh's registered sites as
+    loose, which is the rule failing in the loud direction and how it was found.
+    """
+    return any(
+        f'"${var}"' in code
+        and ((code.startswith("trap ") and REMOVES in code) or f"{ACCUMULATOR}+=(" in code)
+        for code in code_lines(text)
+    )
+
+
+def drains_accumulator(text):
+    """Whether anything in the script removes what the accumulator holds.
+
+    The half `registered` gives up when it stops asking for an `rm` on the line:
+    a list every temp is appended to and nothing reads leaks exactly as loudly as
+    no list at all, and reads as covered.
+    """
+    lines = list(code_lines(text))
+    return not any(ACCUMULATOR in code for code in lines) or any(
+        ACCUMULATOR in code and REMOVES in code for code in lines
+    )
+
+
+def traps_exit(text):
+    """Whether the script installs an EXIT trap at all.
+
+    The registration rule cannot see this: deleting `trap gate_cleanup EXIT` from
+    `check.sh` leaves every `GATE_TMP+=` line exactly where it was, and seven
+    temps with a list nothing reads. Same hole one layer out as an unwired guard.
+    """
+    return any(code.startswith("trap ") and code.endswith(" EXIT") for code in code_lines(text))
+
+
+def temp_makers():
+    """(path, whole text, scope, sites in that scope) per scope that makes a temp."""
+    out = []
+    for rel in shell_scripts():
+        text = (ROOT / rel).read_text()
+        for scope in regions(text):
+            sites = list(mktemp_sites(scope))
+            if sites:
+                out.append((rel, text, scope, sites))
+    return out
+
+
+def test_there_are_temp_making_scripts():
+    """A glob that matches nothing loops over nothing and passes every case below."""
+    found = {str(rel) for rel, _, _, _ in temp_makers()}
+    assert len(found) >= 8, sorted(found)
+
+
+def test_every_mktemp_names_the_path_it_makes():
+    """A temp the script cannot name is one nothing can remove."""
+    unnamed = [(str(rel), line) for rel, _, _, sites in temp_makers() for line, var in sites if not var]
+    assert not unnamed, f"mktemp with no variable bound to it: {unnamed}"
+
+
+def test_every_mktemp_is_registered_for_removal():
+    """…and one it names but never removes is the same leak, spelled longer."""
+    loose = [
+        (str(rel), var)
+        for rel, _text, scope, sites in temp_makers()
+        for _line, var in sites
+        if var and not registered(scope, var)
+    ]
+    assert not loose, f"temps on no cleanup path: {loose}"
+
+
+def test_every_temp_making_script_traps_exit():
+    """The rule above says a name is listed; this says something reads the list."""
+    untrapped = [str(rel) for rel, text, _, _ in temp_makers() if not traps_exit(text)]
+    assert not untrapped, f"makes a temp and traps no EXIT: {untrapped}"
+
+
+def test_the_accumulator_is_drained():
+    """…and this says what reads it removes something."""
+    inert = [str(rel) for rel, text, _, _ in temp_makers() if not drains_accumulator(text)]
+    assert not inert, f"accumulates temps and removes none: {inert}"
+
+
+def test_a_quoted_mktemp_is_not_one():
+    """The rules above are only worth having if a comment cannot trip or satisfy them.
+
+    Both directions: prose about a leak must not be read as one, and prose about a
+    trap must not be read as the cleanup. The comment-cut is `gate_lines`', so this
+    pins the two shapes that reach these rules rather than re-testing the cut.
+    """
+    assert not list(mktemp_sites("# dir=$(mktemp -d) used to leak here\n"))
+    assert not list(mktemp_sites("true # log=$(mktemp)\n"))
+    assert list(mktemp_sites("log=$(mktemp)\n")) == [("log=$(mktemp)", "log")]
+    assert not registered('# trap \'rm -rf "$d"\' EXIT\n', "d")
+    assert not traps_exit("# trap cleanup EXIT\n")
+
+
+def test_the_temp_rules_can_go_red():
+    """The mutation table: one line per way the class has actually been spelled.
+
+    Each was applied to `scripts/check.sh` and driven through `python -m pytest
+    scripts -q` — the `pytest (gate scripts)` row verbatim, exit code taken with
+    no pipe, and the failure read rather than the return code trusted. Unmutated:
+    rc 0, 1789 passed. Then rc 1 each, at the rule named beside it — the last one
+    at three of them, since the pre-fix file breaks three ways at once:
+
+    * registration deleted / commented out → `..._is_registered_for_removal`
+    * `out=$(mktemp -d)/pt.elf` → `..._names_the_path_it_makes`
+    * `trap gate_cleanup EXIT` deleted → `..._traps_exit`
+    * the handler's `rm` replaced by an `echo` → `..._accumulator_is_drained`
+    * the whole pre-fix `check.sh` → the first three together
+
+    The first two of those are the reason [`regions`] exists: with the rule
+    file-scoped they were rc 0, 1789 passed, indistinguishable from the control.
+    """
+    trapped = 'd=$(mktemp -d)\ntrap \'rm -rf "$d"\' EXIT\n'
+    assert list(mktemp_sites(trapped)) == [("d=$(mktemp -d)", "d")]
+    assert registered(trapped, "d") and traps_exit(trapped)
+
+    # 1. the site is not registered at all — check.sh, every row, before this fix
+    assert not registered('d=$(mktemp -d)\ntrap \'rm -rf "$other"\' EXIT\n', "d")
+    # 1b/1c. …and the two spellings that survived a file-scoped version of it: a
+    # sibling scope registering the SAME variable name must not answer for this
+    # one, whether the registration was deleted or only commented out.
+    two_rows = (
+        'a() {\n  dir=$(mktemp -d)\n}\n'
+        'b() {\n  dir=$(mktemp -d)\n  GATE_TMP+=("$dir")\n}\n'
+    )
+    covered = [registered(scope, "dir") for scope in regions(two_rows) if list(mktemp_sites(scope))]
+    assert covered == [False, True], covered
+    commented = two_rows.replace('GATE_TMP+=', '# GATE_TMP+=')
+    assert not any(registered(scope, "dir") for scope in regions(commented))
+    # 2. the directory is never bound, so no name reaches it — the store row
+    assert list(mktemp_sites("out=$(mktemp -d)/pt.elf\n")) == [("out=$(mktemp -d)/pt.elf", "")]
+    # 3. registered on a line that removes nothing — a list nothing acts on
+    assert not registered('d=$(mktemp -d)\ntrap \'echo "$d"\' EXIT\n', "d")
+    # 4. accumulated, but the EXIT trap that drains the accumulator is gone
+    assert not traps_exit('d=$(mktemp -d)\nGATE_TMP+=("$d")\n')
+    # 5. a trap on a signal is not the one that runs when the script simply ends
+    assert not traps_exit('trap \'rm -rf "$d"\' INT\n')
+    # 6. accumulated and trapped, but the handler removes nothing
+    assert registered('GATE_TMP+=("$d")\n', "d")
+    assert not drains_accumulator('GATE_TMP+=("$d")\ntrap \'echo "${GATE_TMP[@]}"\' EXIT\n')
+    assert drains_accumulator('GATE_TMP+=("$d")\nrm -rf -- "${GATE_TMP[@]}"\n')
