@@ -144,6 +144,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe reset every OpenPGP slot's key-origin claim to imported.**
+  `origin::mark` rewrites the whole `EF_KEY_ORIGIN` record to change one slot, so it
+  reads the others first — and it read with `Fs::read` and *discarded* the result.
+  For a short record from an older build that is right: `of` reads an uncovered slot
+  as imported anyway. A failed read is not that. The buffer stays zeroed and is
+  written straight back, so the other slots lose the on-card-generation claim
+  §4.4.3.8 exists to make, which reaches the host through DO `0xDE`.
+
+  Driven through the real IMPORT with two slots marked generated: one faulted probe
+  and both read back **imported (2, 2 where 1, 1 was owed)**, permanently. It refuses
+  now — `mark`'s two callers already weigh its `Result` opposite ways on purpose, so
+  the IMPORT stores no key over a record it could not carry forward and the GENERATE
+  keeps ignoring it, which only under-claims.
+
 - **One faulted probe minted a new device-certificate key over the live one and
   persisted it, unauthenticated, retiring every certificate the old key issued.**
   `rsk-rescue`'s `load_or_generate` mints and persists a fresh secp256k1 key when
