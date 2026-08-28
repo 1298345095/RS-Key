@@ -222,7 +222,7 @@ Three spellings of "not current", which used to sit on two different pages and i
 
 ## Review packet
 
-For commit `d513827`. Every line is derived; none of it claims to be sufficient, because a reviewer who runs all of it has reproduced the software evidence and nothing about a board. The assurance case itself is a later stage's artifact.
+For the commit that carries this page — which is why no commit is named here: a generated page that embeds the tree's head is stale the moment it lands, and this section learned that on its first gate run. Every line is derived; none of it claims to be sufficient, because a reviewer who runs all of it has reproduced the software evidence and nothing about a board. The assurance case itself is a later stage's artifact.
 
 **Generated artifacts, and the command that reproduces each.**
 
@@ -237,7 +237,7 @@ For commit `d513827`. Every line is derived; none of it claims to be sufficient,
 
 | Tier | Command | Taken | Against | Host |
 |---|---|---|---|---|
-| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-27 | `beb5969` | Apple M5 Pro (18 cores) |
-| `safety` | `./formal/run-tlc.sh safety` | 2026-08-27 | `beb5969` | Apple M5 Pro (18 cores) |
+| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-29 | `162c56c` | Apple M5 Pro (18 cores) |
+| `safety` | `./formal/run-tlc.sh safety` | 2026-08-29 | `162c56c` | Apple M5 Pro (18 cores) |
 
 **Raw evidence bundles:** `SEC-FIDO-001` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`.

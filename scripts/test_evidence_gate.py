@@ -891,7 +891,10 @@ def test_the_review_packet_names_what_reproduces_each_artifact():
     made = evidence_gate.packet(ROOT, evidence_gate.vectors(ROOT, []))
     assert made["artifacts"] and made["runs"]
     assert all(command.startswith("python ") for _a, command in made["artifacts"])
-    assert made["commit"] != "unknown"
+    # And it names NO commit: a page that embeds the tree's head is stale the
+    # moment it is committed, so the gate would redden on its own output. Measured
+    # — that is exactly how this section failed its first full `check.sh`.
+    assert "commit" not in made
 
 
 def test_a_rollup_that_collapsed_is_a_finding_and_not_a_regenerated_blank(monkeypatch):

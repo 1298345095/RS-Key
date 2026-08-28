@@ -880,7 +880,13 @@ def packet(root, rows):
     It deliberately does NOT claim the packet is sufficient. A reviewer who runs
     all of it has reproduced the software evidence and nothing about a board.
     """
-    head = git(root, "rev-parse", "HEAD")[:7] or "unknown"
+    # NOT `HEAD`. A generated page that embeds the tree's head commit is stale the
+    # instant it is committed — the value changes between writing the page and
+    # landing it, so the gate would go red on its own output, forever. That is the
+    # rule the `freshness` axis already states about itself and this section broke
+    # on its first full gate run. The packet is FOR the commit that carries it,
+    # which is the file's own position in history and needs no field; the commits
+    # that do vary are each bundle's, and they are in the table above.
     runs = []
     path = root / pathlib.Path("formal/runs.toml")
     if path.is_file():
@@ -896,7 +902,6 @@ def packet(root, rows):
             )
     stale = [row for row in rows if row["vector"]["freshness"] == "stale"]
     return {
-        "commit": head,
         "artifacts": [
             (str(ARTIFACT), "python scripts/evidence_gate.py"),
             ("docs/assurance-matrix.md", "python scripts/matrix_gate.py"),
@@ -1074,10 +1079,12 @@ def render(root, rows=None):
         "",
         "## Review packet",
         "",
-        f"For commit `{made['commit']}`. Every line is derived; none of it claims"
-        " to be sufficient, because a reviewer who runs all of it has reproduced"
-        " the software evidence and nothing about a board. The assurance case"
-        " itself is a later stage's artifact.",
+        "For the commit that carries this page — which is why no commit is named"
+        " here: a generated page that embeds the tree's head is stale the moment"
+        " it lands, and this section learned that on its first gate run. Every"
+        " line is derived; none of it claims to be sufficient, because a reviewer"
+        " who runs all of it has reproduced the software evidence and nothing"
+        " about a board. The assurance case itself is a later stage's artifact.",
         "",
         "**Generated artifacts, and the command that reproduces each.**",
         "",
