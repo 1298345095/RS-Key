@@ -144,6 +144,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe made OpenPGP GENERATE mint and seal RSA-2048 where the owner
+  had configured Ed25519.** `read_advertised_algo` resolves the slot's algorithm
+  attribute and GENERATE mints whatever it says. Its `_` arm covered three states at
+  once: a slot with no attribute configured (which must resolve to `DEFAULT_ALGO` —
+  the documented path for a slot the owner never set), an empty record, and a probe
+  the flash could not answer.
+
+  All three are asserted at the function, because only there can "absent" and
+  "faulted" be told apart: absent → `DEFAULT_ALGO`, empty → `DEFAULT_ALGO`,
+  configured → itself, faulted → `Ok([1, 8, 0, 0, 32, 0])`, which is RSA-2048.
+  Driven through the real GENERATE afterwards: the control leg with Ed25519
+  configured mints a 32-byte point, and one faulted probe stores a **270-byte
+  `EF_PB_SIG` with inner tag `0x81`** — an RSA modulus — at `9000`.
+
+  Fixed by splitting the arm three ways rather than by choosing a default: `Ok(_)`
+  keeps the documented absent/empty path exactly as it was, and only `Err` is new,
+  refusing with `Sw::MEMORY_FAILURE`. A GENERATE that cannot read the algorithm it
+  must honour has to refuse, because what it would otherwise do is seal a weaker key
+  the owner never asked for.
+
 - **One faulted probe minted a fresh card-level AES key over the OpenPGP owner's,
   and the card then deciphered every old ciphertext to garbage at `9000`.**
   `keygen_tail` seeds `D5` when the DEC slot is generated and `EF_AES_KEY` is empty,

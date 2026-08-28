@@ -248,7 +248,7 @@ formal/RSKeyAdminSurface.tla	crates/rsk-device/src/ccid.rs	340-340	self.disp.cur
 formal/RSKeyAdminSurface.tla	crates/rsk-rescue/src/lib.rs	141-143	/// Refines `RSKeyAdminSurface!PrivilegedOpNeedsPresence` — SEC-ADM-002.	self.presence.borrow_mut().request(confirm) == Presence::Confirmed
 formal/RSKeyAdminSurface.tla	crates/rsk-sdk/src/applet.rs	203-205	pub fn set_enabled(&mut self, mask: u32) {	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-oath/src/lib.rs	574-606	// gated here, before the HOTP counter burns.	fs,
-formal/RSKeyAppletPolicies.tla	crates/rsk-openpgp/src/keypairgen.rs	79-117	let priv_fid = slot_algo_fid(fid);	// sibling reader `info::slot_algo` has the same `attr.len() >= 3` gate.
+formal/RSKeyAppletPolicies.tla	crates/rsk-openpgp/src/keypairgen.rs	79-122	let priv_fid = slot_algo_fid(fid);	// sibling reader `info::slot_algo` has the same `attr.len() >= 3` gate.
 formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	438-450	/// P1 = 0x04/0x05: update the flag bytes of an existing config, keeping its	let fid = base + apdu.p2 as u16;
 formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	538-545	// The access code gates a swap's move/delete just as it gates	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-piv/src/auth.rs	58-66	fn pin_satisfied(sess: &Session, pinpol: u8) -> bool {	}

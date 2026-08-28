@@ -81,8 +81,12 @@ pub(crate) fn read_advertised_algo<'a, S: Storage>(
     // private companion EF (`algo_tag_to_priv` = `0x1000 | tag`), so undo that or
     // every lookup falls through to the `_ => false` arm and refuses valid keys.
     let tag = priv_fid & !0x1000;
-    match fs.read(priv_fid, buf) {
-        Some(n) if n > 0 => {
+    // Three states, not two. Absent and empty are "nothing configured" and must keep
+    // resolving to `DEFAULT_ALGO` — that is the documented path for a slot the owner
+    // never set. A probe the flash could not answer is neither: collapsed into the
+    // default it made GENERATE mint and SEAL RSA-2048 under an Ed25519 slot.
+    match fs.try_read(priv_fid, buf) {
+        Ok(Some(n)) if n > 0 => {
             let algo = &buf[..n.min(buf.len())];
             if crate::dobj::advertised_algo(tag, algo) {
                 Ok(algo)
@@ -90,7 +94,8 @@ pub(crate) fn read_advertised_algo<'a, S: Storage>(
                 Err(Sw::WRONG_DATA)
             }
         }
-        _ => Ok(DEFAULT_ALGO),
+        Ok(_) => Ok(DEFAULT_ALGO),
+        Err(_) => Err(Sw::MEMORY_FAILURE),
     }
 }
 

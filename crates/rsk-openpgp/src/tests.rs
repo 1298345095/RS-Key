@@ -3033,3 +3033,89 @@ fn a_faulted_aes_key_probe_does_not_reseed_the_live_key() {
         "ciphertext made under the owner's AES key no longer decrypts"
     );
 }
+
+/// `read_advertised_algo` resolves the slot's algorithm attribute and GENERATE mints
+/// and SEALS whatever it says. Its `_` arm covered three different states at once: a
+/// slot with no attribute configured (which must get `DEFAULT_ALGO` — the documented
+/// path), an empty record, and a probe the flash could not answer. Collapsing the
+/// third into the first made GENERATE mint RSA-2048 where the owner had configured
+/// Ed25519, and store it as the slot's key.
+///
+/// The three arms are asserted at the function, because only there can "absent" and
+/// "faulted" be told apart at all, and then the destructive one is driven through the
+/// real GENERATE.
+#[test]
+fn a_faulted_algo_probe_does_not_generate_the_default_algorithm() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    let mut buf = [0u8; 16];
+    let priv_fid = consts::algo_tag_to_priv(consts::EF_ALGO_SIG);
+
+    // No attribute configured — the documented default, and the arm the fix must not
+    // take away. `init` writes no algorithm attribute, so this is a fresh card.
+    assert_eq!(
+        crate::keypairgen::read_advertised_algo(&mut fs, consts::EF_PK_SIG, &mut buf),
+        Ok(consts::DEFAULT_ALGO),
+        "a slot with no attribute must still resolve to the default"
+    );
+    // An empty record is the same "nothing configured".
+    fs.put(priv_fid, &[]).unwrap();
+    assert_eq!(
+        crate::keypairgen::read_advertised_algo(&mut fs, consts::EF_PK_SIG, &mut buf),
+        Ok(consts::DEFAULT_ALGO),
+        "an empty attribute record must still resolve to the default"
+    );
+    // A configured one resolves to itself…
+    fs.put(priv_fid, ATTR_ED25519).unwrap();
+    assert_eq!(
+        crate::keypairgen::read_advertised_algo(&mut fs, consts::EF_PK_SIG, &mut buf),
+        Ok(ATTR_ED25519),
+        "control: a configured attribute resolves to itself"
+    );
+    // …and a probe that failed is none of the three.
+    medium.stick_once(priv_fid);
+    let faulted = crate::keypairgen::read_advertised_algo(&mut fs, consts::EF_PK_SIG, &mut buf);
+    medium.stick(None);
+    assert_eq!(
+        faulted,
+        Err(Sw::MEMORY_FAILURE),
+        "a failed probe resolved to the default algorithm"
+    );
+
+    // End to end: the owner configured Ed25519 and a GENERATE must not mint the
+    // default under it.
+    let rng = RefCell::new(LcgRng(11));
+    let presence = RefCell::new(crate::AlwaysConfirm);
+    let mut app = OpenpgpApplet::new(SERIAL_ID, SERIAL_HASH, None, &rng, &presence);
+    verify_pin(&mut app, &mut fs, consts::PW3_MODE83, consts::PW3_DEFAULT);
+    assert_eq!(put(&mut app, &mut fs, 0x00, 0xC1, ATTR_ED25519), Sw::OK);
+    let genkey = [0x00, consts::INS_KEYPAIR_GEN, 0x80, 0x00, 0x02, 0xB6, 0x00];
+    let (do_, sw) = run(&mut app, &mut fs, &genkey);
+    assert_eq!(sw, Sw::OK);
+    assert_eq!(
+        ec_point(&do_).len(),
+        32,
+        "control: the configured Ed25519 attribute mints a 32-byte point"
+    );
+    // Retire the slot so the generate below is the same command in the same state.
+    assert_eq!(put(&mut app, &mut fs, 0x00, 0xC1, ATTR_P256), Sw::OK);
+    assert_eq!(put(&mut app, &mut fs, 0x00, 0xC1, ATTR_ED25519), Sw::OK);
+    assert!(!fs.has_data(consts::EF_PB_SIG));
+
+    medium.stick_once(priv_fid);
+    let sw = run(&mut app, &mut fs, &genkey).1;
+    medium.stick(None);
+    assert_eq!(
+        medium.value(consts::EF_PB_SIG),
+        None,
+        "a faulted attribute probe generated and stored a key for the DEFAULT algorithm \
+         where the owner configured Ed25519"
+    );
+    assert_eq!(
+        sw,
+        Sw::MEMORY_FAILURE,
+        "a GENERATE that could not read the algorithm it must honour has to refuse"
+    );
+}
