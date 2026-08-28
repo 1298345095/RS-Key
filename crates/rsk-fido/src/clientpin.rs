@@ -975,7 +975,7 @@ fn store_new_pin<S: Storage, R: Rng>(
 /// can read the floor it must enforce without a `Ctx` it does not hold.
 ///
 /// Collapsing, and only for the sites that *show* the floor or size a pad buffer from
-/// it. Every site that ENFORCES it takes [`try_min_pin_length`].
+/// it. Every site that ENFORCES it takes the private `try_min_pin_length` below.
 pub fn min_pin_length<S: Storage>(fs: &mut Fs<S>) -> u8 {
     try_min_pin_length(fs).unwrap_or(MIN_PIN_LENGTH)
 }
