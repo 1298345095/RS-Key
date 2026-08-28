@@ -399,6 +399,25 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **A `ykman` one-field write turned into a whole-record replacement when the
+  merge could not read what it was merging onto.** A DeviceConfig write is a delta —
+  every `ykman config` command sends the field it is changing and nothing else — so
+  `overlay_dev_conf` reads `EF_DEV_CONF` and merges. Its probe collapsed a failed
+  read into "nothing stored", and the delta then *became* the record. Driven on a
+  `ProbeStuck` medium: an 11-byte record (`USB_ENABLED` + `AUTO_EJECT_TIMEOUT` 30 s +
+  `CHALRESP_TIMEOUT` 15) came back as the 4 bytes of the request, with the two
+  timeouts gone.
+
+  Its comment deliberately chose replace-on-unreadable, and that reasoning is sound
+  for two of the three answers a probe can give, not three. **Absent** still merges
+  onto nothing, so the request becomes the record — a first write. **Unparseable**
+  still keeps only the whole-TLV prefix, so a tail an older, laxer build wrote is
+  replaced; those are bytes no parser can attribute to a tag. **Faulted** is neither,
+  and refusing (`DevConfError::Store`, already mapped to `MEMORY_FAILURE` / `Other`)
+  is the only answer that cannot lose a field. `dev_conf_unchanged` needed no change:
+  it already reads a refused merge as "changed", so the write proceeds to the refusal
+  instead of being acked as a no-op.
+
 - **A flash read the applet gate could not complete re-enabled every application
   the owner had disabled.** `read_enabled_caps` is the mask the CCID dispatcher and
   the two FIDO transports are gated on, and its unreadable arm resolved to

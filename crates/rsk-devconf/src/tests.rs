@@ -578,6 +578,50 @@ fn a_faulted_dev_conf_probe_does_not_re_enable_disabled_applets() {
     );
 }
 
+/// A DeviceConfig write is a DELTA — `ykman` sends the one field it is changing —
+/// so the writer merges onto the stored record. The merge's own probe collapsed a
+/// failed read into "nothing stored", which turns that delta into a REPLACEMENT
+/// and discards every other field the owner had written.
+#[test]
+fn a_faulted_dev_conf_probe_does_not_replace_the_owners_record() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    persist_dev_conf(
+        &mut fs,
+        &[
+            TAG_USB_ENABLED,
+            2,
+            0x02,
+            0x00,
+            TAG_AUTO_EJECT_TIMEOUT,
+            2,
+            0x00,
+            0x1E,
+            TAG_CHALRESP_TIMEOUT,
+            1,
+            0x0F,
+        ],
+    )
+    .unwrap();
+    let before = medium.value(EF_DEV_CONF).expect("record written");
+    assert_eq!(before.len(), 11);
+
+    // `ykman config usb --enable OATH`: the one tag it changes, nothing else.
+    medium.stick_once(EF_DEV_CONF);
+    let r = persist_dev_conf(&mut fs, &[TAG_USB_ENABLED, 2, 0x02, 0x20]);
+    assert_eq!(
+        medium.value(EF_DEV_CONF).as_deref(),
+        Some(&before[..]),
+        "a faulted probe replaced the owner's record instead of merging onto it"
+    );
+    assert_eq!(
+        r,
+        Err(DevConfError::Store),
+        "a write that could not read the record it merges onto must refuse"
+    );
+}
+
 /// READ CONFIG must never report a capability set the dispatcher is not enforcing:
 /// that divergence is what run-34 #25 was. The synthesised arm takes its
 /// `USB_ENABLED` from `read_enabled_caps`, so the two move together — including
