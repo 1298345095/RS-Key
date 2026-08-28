@@ -391,6 +391,22 @@ def test_a_cfg_attribute_over_shipped_code(tree):
     assert tree.problems() == []
 
 
+def test_a_line_inside_a_cfg_gated_region_is_not_excused(tree):
+    """The arm this file gives up, pinned so it stays given up rather than found again.
+
+    A cfg-gated FILE is excused off the module graph; a cfg-gated REGION inside an
+    ordinary file is not, because only the attribute line itself is read. So a
+    constant the image cannot reach still moves the counter — measured on the real
+    tree at 0x0994, and measured for cost too: over 250 commits the line filter
+    fires on 51 and exactly ONE of those is excusable this way. Closing it needs a
+    cfg-expression evaluator and an item-extent finder in Python, and their failure
+    direction is to excuse a line that ships. Wrong the safe way round at 1-in-51
+    beats right-with-a-parser that can be wrong the other way.
+    """
+    tree.append("crates/rsk-a/src/lib.rs", "\n#[cfg(kani)]\npub const SHRUNK: u8 = 3;\n")
+    assert only(tree.problems(), "pub const SHRUNK")
+
+
 # --- the span, across commits -------------------------------------------------
 
 

@@ -57,6 +57,19 @@ reach the binary, and demanding a bump for a crate README is the false alarm tha
 gets a guard deleted. Every other `.toml` there — the board knobs — is compared
 as parsed TOML like a manifest, so a comment edit is not a build input either.
 
+A cfg-gated **file** is excused; a cfg-gated **region** inside an ordinary file is
+not, and that is a limitation rather than an oversight. Only the attribute line
+itself is excused, so `#[cfg(kani)] pub const EF_META: u16 = 0x0017;` costs a bump
+for a constant the image cannot reach (it did, at 0x0994). Region parsing was
+measured before being refused: over the last 250 commits the line filter fires on
+51, and on **1** of those every deciding line sits inside a `cfg(test|kani)`
+region — the 0x0994 commit itself. Closing it means a Rust cfg-expression
+evaluator and item-extent finder in Python, whose own failure direction is to
+excuse a line that ships, which is the direction this file must not be wrong in.
+So it is left wrong the safe way round at a measured 1-in-51, and pinned as given
+up by `test_bcd_gate.py`'s `..._region_is_not_excused` rather than left to be
+rediscovered.
+
 Which files are cfg-gated is read out of the module graph, not off a name
 pattern: a crate root's `#[cfg(test)] mod tests;` carries no `#[path]`, and
 `tests.rs` then declares `put_tests`, `increasing_tests` … with no `cfg` of their
