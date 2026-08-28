@@ -123,6 +123,10 @@ counter to gauge how much you use the key elsewhere (WebAuthn §6.1.1). A non-re
 second-factor credential stores nothing on the device, so it reports 0. Legacy U2F
 keeps the single monotonic counter that protocol expects.
 
+A counter the flash cannot serve is refused rather than reported as 0: an assertion
+the device could not count is not one it signs, so a read fault costs you the login
+instead of the tripwire.
+
 Upgrading an existing key is forward-safe for passkeys: each seeds its counter from
 the old global value on first use, so the reported number never counts backwards.
 

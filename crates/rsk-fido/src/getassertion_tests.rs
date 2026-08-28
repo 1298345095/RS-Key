@@ -1222,7 +1222,7 @@ fn mc_request_rk_uid(uid: &[u8]) -> std::vec::Vec<u8> {
 }
 
 /// Drive one makeCredential over `fs`, returning the response bytes.
-fn run_make(fs: &mut Fs<RamStorage>, rng: &mut SeqRng, req: &[u8]) -> std::vec::Vec<u8> {
+fn run_make<S: Storage>(fs: &mut Fs<S>, rng: &mut SeqRng, req: &[u8]) -> std::vec::Vec<u8> {
     let mut out = [0u8; 1024];
     let mut state = crate::FidoState::new();
     let mut presence = crate::AlwaysConfirm;
@@ -1239,7 +1239,7 @@ fn run_make(fs: &mut Fs<RamStorage>, rng: &mut SeqRng, req: &[u8]) -> std::vec::
 }
 
 /// Drive one getAssertion over `fs`, returning the response bytes.
-fn run_assert(fs: &mut Fs<RamStorage>, rng: &mut SeqRng, req: &[u8]) -> std::vec::Vec<u8> {
+fn run_assert<S: Storage>(fs: &mut Fs<S>, rng: &mut SeqRng, req: &[u8]) -> std::vec::Vec<u8> {
     let mut out = [0u8; 1024];
     let mut state = crate::FidoState::new();
     let mut presence = crate::AlwaysConfirm;
@@ -1253,6 +1253,201 @@ fn run_assert(fs: &mut Fs<RamStorage>, rng: &mut SeqRng, req: &[u8]) -> std::vec
     };
     let n = get_assertion(&mut ctx, req, &mut out).unwrap();
     out[..n].to_vec()
+}
+
+/// [`run_assert`] without the unwrap, for the paths that must REFUSE.
+fn try_assert<S: Storage>(
+    fs: &mut Fs<S>,
+    rng: &mut SeqRng,
+    req: &[u8],
+) -> Result<std::vec::Vec<u8>, CtapError> {
+    let mut out = [0u8; 1024];
+    let mut state = crate::FidoState::new();
+    let mut presence = crate::AlwaysConfirm;
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev: dev(),
+        fs,
+        rng,
+        state: &mut state,
+        now_ms: 30,
+    };
+    let n = get_assertion(&mut ctx, req, &mut out)?;
+    Ok(out[..n].to_vec())
+}
+
+/// [`setup`] on a medium whose reads of one chosen record can be made to fail.
+fn probe_setup() -> (
+    Fs<rsk_fs::storage::faults::ProbeStuck>,
+    rsk_fs::storage::faults::ProbeMedium,
+    SeqRng,
+) {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    (fs, medium, rng)
+}
+
+/// The chain the per-credential counter hangs on, driven end to end: a faulted
+/// `EF_CRED_CTR` read answers *unmaterialized*, the caller seeds from the global
+/// counter — itself 0 when its own record cannot be read — and the write-back
+/// merges into a zero-filled buffer. signCount is FIDO's clone-detection signal,
+/// so the host must never be handed one that did not come off the medium, and the
+/// credential the request never named must keep its own.
+#[test]
+fn a_faulted_cred_counter_probe_does_not_fabricate_a_sign_count() {
+    let (mut fs, medium, mut rng) = probe_setup();
+    let a = parse_mc(&run_make(
+        &mut fs,
+        &mut rng,
+        &mc_request_rk_uid(&[6, 6, 6, 6]),
+    ))
+    .0;
+    let b = parse_mc(&run_make(
+        &mut fs,
+        &mut rng,
+        &mc_request_rk_uid(&[7, 7, 7, 7]),
+    ))
+    .0;
+    for want in 1..=3 {
+        let r = run_assert(&mut fs, &mut rng, &ga_request(Some(&a)));
+        assert_eq!(assertion_sign_count(&r), want);
+    }
+    let r = run_assert(&mut fs, &mut rng, &ga_request(Some(&b)));
+    assert_eq!(assertion_sign_count(&r), 1);
+
+    medium.stick(Some(crate::consts::EF_CRED_CTR));
+    let faulted = try_assert(&mut fs, &mut rng, &ga_request(Some(&a)));
+    medium.stick(None);
+    // B was never named by that request; its counter is pure collateral.
+    assert_eq!(
+        assertion_sign_count(&run_assert(&mut fs, &mut rng, &ga_request(Some(&b)))),
+        2,
+        "an unrelated credential's signCount regressed"
+    );
+    assert_eq!(
+        assertion_sign_count(&run_assert(&mut fs, &mut rng, &ga_request(Some(&a)))),
+        4,
+        "and the named credential's own signCount regressed"
+    );
+    assert_eq!(
+        faulted.map(|r| assertion_sign_count(&r)),
+        Err(CtapError::Other),
+        "a signCount the medium never served was signed and returned"
+    );
+}
+
+/// The call sites' own guard, isolated. A PERSISTENT fault is caught by the
+/// write-back three statements later, so those tests hold the read guard up by a
+/// neighbour: drop the `?` here and they stay green. A fault on only the FIRST
+/// read leaves the write-back working, and then nothing downstream refuses on
+/// this guard's behalf — the host gets a fabricated signCount and the medium is
+/// rewritten from it.
+#[test]
+fn a_transient_cred_counter_fault_does_not_reach_the_signature() {
+    let (mut fs, medium, mut rng) = probe_setup();
+    let a = parse_mc(&run_make(
+        &mut fs,
+        &mut rng,
+        &mc_request_rk_uid(&[8, 8, 8, 8]),
+    ))
+    .0;
+    for want in 1..=3 {
+        let r = run_assert(&mut fs, &mut rng, &ga_request(Some(&a)));
+        assert_eq!(assertion_sign_count(&r), want);
+    }
+    let before = medium
+        .value(crate::consts::EF_CRED_CTR)
+        .expect("the packed file is on the medium");
+
+    medium.stick_once(crate::consts::EF_CRED_CTR);
+    let faulted = try_assert(&mut fs, &mut rng, &ga_request(Some(&a)));
+    assert_eq!(
+        medium.value(crate::consts::EF_CRED_CTR).as_deref(),
+        Some(&before[..]),
+        "the counter was rewritten from a value that was never read"
+    );
+    assert_eq!(
+        faulted.map(|r| assertion_sign_count(&r)),
+        Err(CtapError::Other),
+        "a signCount the medium never served was signed and returned"
+    );
+    // The medium recovered, so the credential resumes its own sequence.
+    assert_eq!(
+        assertion_sign_count(&run_assert(&mut fs, &mut rng, &ga_request(Some(&a)))),
+        4,
+        "the refusal cost the credential its place in its own sequence"
+    );
+}
+
+/// [`a_transient_cred_counter_fault_does_not_reach_the_signature`] for the walk:
+/// `getNextAssertion` reads the counter through its own call site, and its own
+/// write-back would otherwise stand in for the guard.
+#[test]
+fn a_transient_cred_counter_fault_does_not_reach_the_next_signature() {
+    let (mut fs, medium, mut rng) = probe_setup();
+    let mut state = crate::FidoState::new();
+    for (uid, t) in [(&[9u8, 8, 7, 6][..], 10u64), (&[1u8, 1, 1, 1][..], 20u64)] {
+        let mut out = [0u8; 1024];
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: t,
+        };
+        make_credential(&mut ctx, &mc_request_user(uid), &mut out).unwrap();
+    }
+    // Walk once un-faulted first: both slots leave `credential_store`'s seed of 1,
+    // and a mutant that writes 1 over a slot still holding 1 changes no byte.
+    let mut o1 = [0u8; 1024];
+    for t in [30u64, 32] {
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: t,
+        };
+        get_assertion(&mut ctx, &ga_request(None), &mut o1).unwrap();
+        if t == 30 {
+            get_next_assertion(&mut ctx, &mut o1).unwrap();
+        }
+    }
+    let before = medium
+        .value(crate::consts::EF_CRED_CTR)
+        .expect("the packed file is on the medium");
+
+    let mut o2 = [0u8; 1024];
+    medium.stick_once(crate::consts::EF_CRED_CTR);
+    let r = {
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: 31,
+        };
+        get_next_assertion(&mut ctx, &mut o2)
+    };
+    assert_eq!(
+        medium.value(crate::consts::EF_CRED_CTR).as_deref(),
+        Some(&before[..]),
+        "the counter was rewritten from a value that was never read"
+    );
+    assert_eq!(
+        r,
+        Err(CtapError::Other),
+        "a signCount the medium never served was signed and returned"
+    );
 }
 
 #[test]
@@ -1299,13 +1494,13 @@ fn non_resident_sign_count_is_zero() {
     // on every assertion (nothing to correlate) and never touches EF_COUNTER.
     let (mut fs, mut rng) = setup();
     let cred_id = parse_mc(&run_make(&mut fs, &mut rng, &mc_request(false))).0;
-    let g0 = crate::seed::get_sign_counter(&mut fs);
+    let g0 = crate::seed::global_sign_counter(&mut fs).unwrap();
     for _ in 0..3 {
         let resp = run_assert(&mut fs, &mut rng, &ga_request(Some(&cred_id)));
         assert_eq!(assertion_sign_count(&resp), 0);
     }
     assert_eq!(
-        crate::seed::get_sign_counter(&mut fs),
+        crate::seed::global_sign_counter(&mut fs).unwrap(),
         g0,
         "global counter untouched by CTAP2 assertions"
     );

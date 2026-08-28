@@ -4,7 +4,7 @@
 use super::*;
 use crate::FidoState;
 use crate::consts::{EF_BACKUP_SEALED, EF_CRED, EF_LARGEBLOB, EF_PIN, EF_RP, RESET_WINDOW_MS};
-use crate::seed::{bump_sign_counter, get_sign_counter, load_keydev};
+use crate::seed::{bump_sign_counter, global_sign_counter, load_keydev};
 use rsk_crypto::Device;
 use rsk_fs::Fs;
 use rsk_fs::storage::faults::{MetaStuck, RemoveStuck, TruncatedWalk, Undead};
@@ -51,10 +51,10 @@ fn reset_wipes_state_and_regenerates() {
     fs.put(0x1083, &[0xAB; 34]).unwrap();
     bump_sign_counter(&mut fs).unwrap();
     bump_sign_counter(&mut fs).unwrap();
-    assert_eq!(get_sign_counter(&mut fs), 2);
+    assert_eq!(global_sign_counter(&mut fs).unwrap(), 2);
     // A per-credential signature-counter entry must also be wiped by reset.
     crate::seed::set_cred_sign_counter(&mut fs, 0, 7).unwrap();
-    assert_eq!(crate::seed::cred_sign_counter(&mut fs, 0), Some(7));
+    assert_eq!(crate::seed::cred_sign_counter(&mut fs, 0), Ok(Some(7)));
 
     let mut state = FidoState::new();
     state.paut.permissions = 0x07;
@@ -84,8 +84,8 @@ fn reset_wipes_state_and_regenerates() {
         fs.has_data(0x1083),
         "OpenPGP files must survive a FIDO reset"
     );
-    assert_eq!(get_sign_counter(&mut fs), 0);
-    assert_eq!(crate::seed::cred_sign_counter(&mut fs, 0), None);
+    assert_eq!(global_sign_counter(&mut fs).unwrap(), 0);
+    assert_eq!(crate::seed::cred_sign_counter(&mut fs, 0), Ok(None));
     assert!(load_keydev(&dev(), &mut fs).is_some());
     // Large blob wiped and re-initialised to the CTAP2.1 default.
     let mut lb = [0u8; 64];

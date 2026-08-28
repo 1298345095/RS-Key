@@ -144,6 +144,46 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe erased the clone-detection evidence for every credential on
+  the key, and signed an assertion with the fabricated value.** signCount is the
+  only clone signal a relying party gets (WebAuthn L3 §6.1.1), and all three of its
+  readers spelled a failed flash read as *not provisioned*: `get_sign_counter`
+  answered **0**, `cred_sign_counter` answered *unmaterialized* — which the caller
+  seeds from the global counter — and `set_cred_sign_counter` merged the new value
+  into a **zero-filled** buffer truncated to the target slot.
+
+  Measured end to end over two resident credentials, A at three assertions and B at
+  one: one faulted `EF_CRED_CTR` read and the host receives `Ok` with signCount
+  **0** for a credential that had just reported 3, the packed file goes **8 bytes →
+  4** holding `[1,0,0,0]`, B's next assertion reports **0** where it owed 2 and A's
+  reports 1 where it owed 5. Both credentials lost their counters and B was never
+  named by the request. At the writer alone, three slots held at 11/22/33: one
+  faulted read truncates **12 bytes → 8**, zeroes slot 0, drops slot 2 — and returns
+  `Ok(())`. On the global counter `bump_sign_counter` writes **1** over a live 77,
+  and U2F AUTHENTICATE signs and returns the fabricated 0.
+
+  The class was re-derived mechanically rather than read off the diff, and the file
+  says so itself: `ensure_seed`'s converted guard fifty lines above reads "a faulted
+  probe here would roll the signature counter back to zero" — the code that actually
+  rolls it back was left alone.
+
+  Fixed by keeping the states apart instead of choosing a default.
+  `cred_sign_counter` answers `Result<Option<u32>>` — `Err` a fault, `Ok(None)` an
+  unmaterialized slot (absent, short, or a real 0 in a gap a higher write
+  zero-extended over), `Ok(Some)` a live counter — and `report_sign_counter` owns
+  the one place the per-credential and global reads combine. `get_sign_counter` is
+  gone rather than kept as a collapsing sibling: all four of its callers sign or
+  persist the value, so the sibling would have had no user but the tests, and unlike
+  `backup_sealed` / `device_pin_is_set` there is no conservative `u32` to collapse
+  to. getAssertion, getNextAssertion and U2F AUTHENTICATE now refuse
+  (`CTAP2_ERR_OTHER` / `6F00`) rather than sign a number the medium never served.
+
+  Two of the guards sat behind a neighbour: with the fault STUCK, the write-back
+  three statements later refuses on the read guard's behalf, so both call-site
+  `?`s could be reverted with the suite green. `stick_once` reaches them — the
+  medium recovers before the write-back — and the reversion then rewrites the
+  counter from the fabricated value: slot 0 `[2,0,0,0]` → `[1,0,0,0]`.
+
 - **One faulted probe at an unauthenticated SELECT handed a host every OATH secret
   on the card.** `select` derives the session's lock state from a single probe —
   `validated = !fs.has_key(EF_OATH_CODE)` — and `validated` is the access-code gate

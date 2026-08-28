@@ -203,7 +203,7 @@ fn ensure_seed_is_idempotent() {
     ensure_seed(&d, &mut fs, &mut rng).unwrap();
     let seed1 = load_keydev(&d, &mut fs).unwrap();
     assert!(fs.has_data(EF_COUNTER));
-    assert_eq!(get_sign_counter(&mut fs), 0);
+    assert_eq!(global_sign_counter(&mut fs).unwrap(), 0);
     // A second scan must not regenerate the seed.
     ensure_seed(&d, &mut fs, &mut rng).unwrap();
     assert_eq!(load_keydev(&d, &mut fs).unwrap(), seed1);
@@ -216,7 +216,7 @@ fn counter_bumps_and_persists() {
     fs.put(EF_COUNTER, &[0u8; 4]).unwrap();
     assert_eq!(bump_sign_counter(&mut fs).unwrap(), 0);
     assert_eq!(bump_sign_counter(&mut fs).unwrap(), 1);
-    assert_eq!(get_sign_counter(&mut fs), 2);
+    assert_eq!(global_sign_counter(&mut fs).unwrap(), 2);
 }
 
 #[test]
@@ -624,4 +624,124 @@ fn a_faulted_probe_does_not_reinitialise_the_counter_or_the_large_blob() {
             "a boot that could not read {what} must fail, not re-initialise it"
         );
     }
+}
+
+/// The global signature counter is FIDO's clone-detection signal, and a collapsing
+/// `Fs::read` of it answers the same 0 for "never written" and "I could not look".
+/// `bump_sign_counter` then persists 1 over whatever was there, and U2F
+/// AUTHENTICATE signs that fabricated 0 — one faulted probe erases the monotonic
+/// evidence an RP uses to notice a cloned key.
+#[test]
+fn a_faulted_counter_probe_does_not_roll_the_global_counter_back() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&d, &mut fs, &mut SeqRng(1)).unwrap();
+    // Off the value a first boot writes, so a roll-back shows.
+    fs.put(EF_COUNTER, &77u32.to_le_bytes()).unwrap();
+    let before = medium.value(EF_COUNTER).expect("on the medium");
+
+    medium.stick(Some(EF_COUNTER));
+    let bumped = bump_sign_counter(&mut fs);
+    medium.stick(None);
+    assert_eq!(
+        medium.value(EF_COUNTER).as_deref(),
+        Some(&before[..]),
+        "a faulted probe rolled the global signature counter back"
+    );
+    assert!(
+        bumped.is_err(),
+        "and reported a counter it never read as the one to sign"
+    );
+}
+
+/// `set_cred_sign_counter` reads the packed file to preserve the other slots, so
+/// that read IS the merge. Defaulting it to 0 makes a fault look like an absent
+/// file, and the write that follows is a ZERO-filled buffer truncated to the target
+/// slot: every other credential's counter zeroed or dropped by one flash fault.
+#[test]
+fn a_faulted_cred_counter_probe_does_not_zero_the_other_slots() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&d, &mut fs, &mut SeqRng(1)).unwrap();
+    for (slot, v) in [(0u16, 11u32), (1, 22), (2, 33)] {
+        set_cred_sign_counter(&mut fs, slot, v).unwrap();
+    }
+    let before = medium.value(EF_CRED_CTR).expect("on the medium");
+    assert_eq!(before.len(), 12, "three packed slots");
+
+    medium.stick(Some(EF_CRED_CTR));
+    let wrote = set_cred_sign_counter(&mut fs, 1, 23);
+    medium.stick(None);
+    let after = medium.value(EF_CRED_CTR).expect("still on the medium");
+    assert_eq!(
+        after.len(),
+        before.len(),
+        "a faulted probe truncated the packed counter file"
+    );
+    assert_eq!(
+        cred_sign_counter(&mut fs, 0),
+        Ok(Some(11)),
+        "and zeroed a lower slot's counter"
+    );
+    assert_eq!(
+        cred_sign_counter(&mut fs, 2),
+        Ok(Some(33)),
+        "and dropped a higher slot's counter"
+    );
+    assert!(
+        wrote.is_err(),
+        "a write that could not read the file it merges into must fail"
+    );
+}
+
+/// The slot has FOUR states and only three answers may share one. A faulted read
+/// must not read as *unmaterialized*: the caller seeds that from the global
+/// counter, so the collapse hands a live credential a signCount off a different
+/// sequence. Absent, short and a zero-filled gap stay together — they are the
+/// legacy slot the seeding rule was written for.
+#[test]
+fn a_faulted_cred_counter_probe_is_not_an_unmaterialized_slot() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&d, &mut fs, &mut SeqRng(1)).unwrap();
+    fs.put(EF_COUNTER, &60u32.to_le_bytes()).unwrap();
+
+    // Absent: no packed file at all.
+    assert_eq!(cred_sign_counter(&mut fs, 0), Ok(None));
+    assert_eq!(report_sign_counter(&mut fs, 0).unwrap(), 60);
+
+    // Short: writing slot 0 leaves the file 4 bytes, so slot 1 is past its end.
+    set_cred_sign_counter(&mut fs, 0, 44).unwrap();
+    assert_eq!(cred_sign_counter(&mut fs, 1), Ok(None));
+    assert_eq!(report_sign_counter(&mut fs, 1).unwrap(), 60);
+
+    // Live-zero gap: writing slot 2 zero-extends the file across slot 1, which is
+    // a real 0 on the medium and still unmaterialized.
+    set_cred_sign_counter(&mut fs, 2, 55).unwrap();
+    assert_eq!(medium.value(EF_CRED_CTR).map(|v| v.len()), Some(12));
+    assert_eq!(cred_sign_counter(&mut fs, 1), Ok(None));
+    assert_eq!(report_sign_counter(&mut fs, 1).unwrap(), 60);
+    // Live: its own value, never the global.
+    assert_eq!(cred_sign_counter(&mut fs, 0), Ok(Some(44)));
+    assert_eq!(report_sign_counter(&mut fs, 0).unwrap(), 44);
+
+    // Faulted: the fourth state, and the only one that is not an answer.
+    medium.stick(Some(EF_CRED_CTR));
+    let read = cred_sign_counter(&mut fs, 0);
+    let reported = report_sign_counter(&mut fs, 0);
+    medium.stick(None);
+    assert!(
+        read.is_err(),
+        "a counter the medium could not serve read as an unmaterialized slot"
+    );
+    assert!(
+        reported.is_err(),
+        "and was reported as the global counter, off another sequence"
+    );
 }

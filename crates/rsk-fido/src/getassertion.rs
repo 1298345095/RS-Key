@@ -35,7 +35,7 @@ use crate::hmacsecret::{self, HmacSecretReq, SALT_AUTH_MAX, SALT_ENC_MAX};
 use crate::journal;
 use crate::keyderiv::{KEY_HANDLE_LEN, fido_load_key, verify_key};
 use crate::largeblobext::{self, GaInput};
-use crate::seed::{cred_sign_counter, get_sign_counter, set_cred_sign_counter};
+use crate::seed::{report_sign_counter, set_cred_sign_counter};
 use crate::state::{AssertionState, MAX_ASSERTION_CREDS, PERM_GA};
 use crate::{Ctx, Rng};
 
@@ -747,7 +747,7 @@ fn get_assertion_inner<S: Storage, R: Rng>(
     // has no entry yet and seeds from the frozen global counter (never decreasing).
     // A non-resident credential keeps no on-device state and reports 0.
     let ctr = match best.slot {
-        Some(slot) => cred_sign_counter(ctx.fs, slot).unwrap_or_else(|| get_sign_counter(ctx.fs)),
+        Some(slot) => report_sign_counter(ctx.fs, slot).map_err(|_| CtapError::Other)?,
         None => 0,
     };
     let mut ad = [0u8; 37 + 320 + 32];
@@ -1026,7 +1026,7 @@ fn next_assertion_response<S: Storage, R: Rng>(
     // getNextAssertion only ever walks resident discovery, so every credential
     // here has an EF_CRED slot and its own signature counter (a legacy credential
     // seeds from the frozen global). See [`get_assertion_inner`].
-    let ctr = cred_sign_counter(ctx.fs, slot).unwrap_or_else(|| get_sign_counter(ctx.fs));
+    let ctr = report_sign_counter(ctx.fs, slot).map_err(|_| CtapError::Other)?;
     let mut ad = [0u8; 37 + 320];
     ad[..32].copy_from_slice(rp_id_hash);
     let up_flag = if up { FLAG_UP } else { 0 };

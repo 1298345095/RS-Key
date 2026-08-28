@@ -632,20 +632,27 @@ pub fn rebuild_att_cert<S: Storage>(
     fs.put(EF_EE_DEV, &buf[..n])
 }
 
-/// The global signature counter, stored little-endian.
-pub fn get_sign_counter<S: Storage>(fs: &mut Fs<S>) -> u32 {
+/// The global signature counter, stored little-endian; 0 when the record is
+/// absent or short (`authenticatorReset` deletes it, `ensure_seed` recreates it
+/// at the next boot).
+///
+/// Not `Fs::read`, and no collapsing sibling: signCount is the ONLY clone
+/// evidence a relying party gets (WebAuthn L3 §6.1.1), and the value a failed
+/// probe would collapse to is 0 — the one that erases it. The safe default the
+/// [`crate::vendor::backup_sealed`] pair leans on does not exist for a `u32`.
+pub fn global_sign_counter<S: Storage>(fs: &mut Fs<S>) -> Result<u32> {
     let mut buf = [0u8; 4];
-    match fs.read(EF_COUNTER, &mut buf) {
+    Ok(match fs.try_read(EF_COUNTER, &mut buf)? {
         Some(4) => u32::from_le_bytes(buf),
         _ => 0,
-    }
+    })
 }
 
 /// Persist `counter+1`; returns the value *before* the bump — the value to
 /// report in the current operation. Now used only by U2F authenticate (CTAP2
 /// signature counters are per-credential, see [`cred_sign_counter`]).
 pub fn bump_sign_counter<S: Storage>(fs: &mut Fs<S>) -> Result<u32> {
-    let ctr = get_sign_counter(fs);
+    let ctr = global_sign_counter(fs)?;
     fs.put(EF_COUNTER, &ctr.wrapping_add(1).to_le_bytes())?;
     Ok(ctr)
 }
@@ -653,30 +660,52 @@ pub fn bump_sign_counter<S: Storage>(fs: &mut Fs<S>) -> Result<u32> {
 /// Packed EF_CRED_CTR length: one `u32` per resident slot.
 const CRED_CTR_LEN: usize = MAX_RESIDENT_CREDENTIALS as usize * 4;
 
-/// The per-credential signature counter stored for EF_CRED `slot`, or `None` when
-/// the slot has no LIVE entry — meaning "unmaterialized". `None` covers three
-/// cases that are all handled identically (seed from the frozen global): the
-/// packed file is absent, it is shorter than `slot`, OR the slot reads as **0**.
+/// The per-credential signature counter stored for EF_CRED `slot`. Three answers,
+/// deliberately kept apart: `Err` is a probe the medium could not serve,
+/// `Ok(None)` is an UNMATERIALIZED slot, `Ok(Some(v))` a live counter.
 ///
-/// The zero case matters: a write to a HIGHER slot zero-extends the packed file
-/// across every lower slot, so a legacy slot below a freshly written one reads
-/// back a real `0` rather than staying short. A LIVE counter is always `>= 1`
-/// (`credential_store` seeds a new credential at 1; each assertion stores `ctr+1`;
-/// a migrated credential seeds from the global, which is `>= 1` whenever any
-/// resident credential exists), so `0` unambiguously marks an unmaterialized slot.
-/// The caller seeds a `None` from the frozen global counter so a migrated
-/// credential's signCount never DEcreases (see [`crate::getassertion`]).
-pub fn cred_sign_counter<S: Storage>(fs: &mut Fs<S>, slot: u16) -> Option<u32> {
+/// `Ok(None)` covers three cases that are all handled identically (seed from the
+/// frozen global): the packed file is absent, it is shorter than `slot`, OR the
+/// slot reads as **0**. The zero case matters: a write to a HIGHER slot
+/// zero-extends the packed file across every lower slot, so a legacy slot below a
+/// freshly written one reads back a real `0` rather than staying short. A LIVE
+/// counter is always `>= 1` (`credential_store` seeds a new credential at 1; each
+/// assertion stores `ctr+1`; a migrated credential seeds from the global, which is
+/// `>= 1` whenever any resident credential exists), so `0` unambiguously marks an
+/// unmaterialized slot.
+///
+/// The fault is the fourth state and cannot join them: the caller seeds an
+/// unmaterialized slot from the global counter, so collapsing the two hands a LIVE
+/// credential a signCount off a different sequence (see [`report_sign_counter`]).
+pub fn cred_sign_counter<S: Storage>(fs: &mut Fs<S>, slot: u16) -> Result<Option<u32>> {
     let off = slot as usize * 4;
     let mut buf = [0u8; CRED_CTR_LEN];
-    let n = fs.read(EF_CRED_CTR, &mut buf)?;
+    let Some(n) = fs.try_read(EF_CRED_CTR, &mut buf)? else {
+        return Ok(None);
+    };
     let end = off + 4;
     if end > n.min(CRED_CTR_LEN) {
-        return None;
+        return Ok(None);
     }
-    match u32::from_le_bytes(buf[off..end].try_into().unwrap()) {
-        0 => None, // a zero-filled gap slot is unmaterialized, not a live signCount 0
-        v => Some(v),
+    Ok(
+        match u32::from_le_bytes(buf[off..end].try_into().unwrap()) {
+            0 => None, // a zero-filled gap slot is unmaterialized, not a live signCount 0
+            v => Some(v),
+        },
+    )
+}
+
+/// The signCount to report for EF_CRED `slot`: its own counter, or the frozen
+/// global one for a slot that has none yet — a credential from before EF_CRED_CTR
+/// existed, whose count must not DEcrease across the upgrade.
+///
+/// Fallible on both reads. A counter that could not be read has no substitute:
+/// the global is not this credential's sequence, and 0 is the value an RP reads
+/// as "no clone detection here".
+pub fn report_sign_counter<S: Storage>(fs: &mut Fs<S>, slot: u16) -> Result<u32> {
+    match cred_sign_counter(fs, slot)? {
+        Some(v) => Ok(v),
+        None => global_sign_counter(fs),
     }
 }
 
@@ -685,6 +714,10 @@ pub fn cred_sign_counter<S: Storage>(fs: &mut Fs<S>, slot: u16) -> Option<u32> {
 /// entries in the newly grown gap are left 0, which [`cred_sign_counter`] reads
 /// back as unmaterialized (so a legacy slot below this one still seeds from the
 /// global counter). `slot` is an EF_CRED index (`< MAX_RESIDENT_CREDENTIALS`).
+///
+/// Not `Fs::read`: this read is the merge, so a fault collapsing to "absent"
+/// writes a ZERO-filled buffer truncated to `end` — one bad probe zeroes every
+/// lower slot and drops every higher one, for credentials this call never named.
 pub fn set_cred_sign_counter<S: Storage>(fs: &mut Fs<S>, slot: u16, value: u32) -> Result<()> {
     let off = slot as usize * 4;
     let end = off + 4;
@@ -693,7 +726,7 @@ pub fn set_cred_sign_counter<S: Storage>(fs: &mut Fs<S>, slot: u16, value: u32) 
     }
     let mut buf = [0u8; CRED_CTR_LEN];
     let n = fs
-        .read(EF_CRED_CTR, &mut buf)
+        .try_read(EF_CRED_CTR, &mut buf)?
         .unwrap_or(0)
         .min(CRED_CTR_LEN);
     buf[off..end].copy_from_slice(&value.to_le_bytes());

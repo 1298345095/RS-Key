@@ -393,8 +393,8 @@ fn resident_make_credential_stores_and_returns_resident_id() {
     // global EF_COUNTER stays untouched and the credential's own counter is seeded
     // to 1 so its first assertion reports 1.
     assert_eq!(u32::from_be_bytes(auth_data[33..37].try_into().unwrap()), 0);
-    assert_eq!(crate::seed::get_sign_counter(&mut fs), 0);
-    assert_eq!(crate::seed::cred_sign_counter(&mut fs, 0), Some(1));
+    assert_eq!(crate::seed::global_sign_counter(&mut fs).unwrap(), 0);
+    assert_eq!(crate::seed::cred_sign_counter(&mut fs, 0), Ok(Some(1)));
 }
 
 #[test]
