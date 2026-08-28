@@ -39,6 +39,27 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# The other temp this file makes, and the one with no `mktemp` in it: pytest's
+# `tmp_path` lives under $TMPDIR, and `nix develop` hands every invocation a
+# FRESH /tmp/nix-shell.XXXXXX it never removes — so pytest's own "keep the last
+# three runs" retention never meets a previous run, and every gate leaves its
+# scratch behind for good. 361 orphaned bases and 8.9 GB in one day; 351 MB of
+# that per run is the gate-scripts row, spread over ~1400 directories with no
+# fat one to slim. Same volume-to-zero as the mktemp sites above.
+#
+# A pinned --basetemp is removed and recreated by pytest at startup, so a row
+# holds one run instead of every run. Three things it has to get right. It must
+# not be inside the checkout: under `target/`, `git rev-parse` answers from
+# RS-Key's own .git and test_verdict_gate's "git cannot answer here" case goes
+# red (measured, 1788 of 1789). pytest creates the leaf but not its parents. And
+# it wipes whatever it is pointed at, so each row gets a leaf of its own.
+GATE_PYTEST_TMP="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest"
+mkdir -p "$GATE_PYTEST_TMP"
+# A passing test's directory goes as it passes, a failing one's stays — the only
+# kind anybody opens. 351 MB → 1 MB on the row above, which is what keeps a base
+# in a cache directory nobody thinks to sweep from becoming a hoard.
+GATE_PYTEST_KEEP=(-o tmp_path_retention_policy=failed)
+
 run() { echo; echo "== $1 =="; shift; "$@"; }
 
 # `cargo test` calls a selection of nothing a pass: a name filter that matches
@@ -720,13 +741,16 @@ run "token refinement completeness" python scripts/token_refinement_gate.py
 # The two guards above decide whether the gate covers the tree, and neither had
 # a single test while five commits rewrote them by hand. This is that hand
 # battery kept: a fixture workspace, one mutation per case, both directions.
-run "pytest (gate scripts)"    python -m pytest scripts -q
+run "pytest (gate scripts)"    python -m pytest scripts -q \
+  --basetemp="$GATE_PYTEST_TMP/gate" "${GATE_PYTEST_KEEP[@]}"
 run "docs constants match code" python scripts/docs_constants.py
-run "pytest (tools/rsk)"       python -m pytest tools/rsk -q
+run "pytest (tools/rsk)"       python -m pytest tools/rsk -q \
+  --basetemp="$GATE_PYTEST_TMP/rsk" "${GATE_PYTEST_KEEP[@]}"
 # The interop allow-list is the only thing that tells an expected RS-Key/YubiKey
 # divergence from a fidelity gap, and it goes stale silently — a firmware change
 # moved maxSerializedLargeBlobArray and nobody noticed until the next two-key run.
-run "pytest (tests/interop)"   python -m pytest tests/interop -q
+run "pytest (tests/interop)"   python -m pytest tests/interop -q \
+  --basetemp="$GATE_PYTEST_TMP/interop" "${GATE_PYTEST_KEEP[@]}"
 run "gitleaks (tree)"          gitleaks detect --redact --no-banner
 
 echo

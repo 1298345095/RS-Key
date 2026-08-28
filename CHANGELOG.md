@@ -280,6 +280,46 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   out both left the suite at rc 0 with 1789 passed, because `dir` names the temp
   of three different rows and any one of them answered for the others.
 
+- **The three `pytest` rows leaked the same way, with no `mktemp` in sight.**
+  pytest puts `tmp_path` under `$TMPDIR`, `nix develop` hands every invocation a
+  fresh `/tmp/nix-shell.XXXXXX` and removes none of them, and the retention that
+  would have swept the scratch — keep the last three run directories, collect the
+  rest — is counted per base directory, so it never met a previous run. Within one
+  base it works exactly as documented; the base moving is what defeats it.
+  Measured in a single day: 361 orphaned bases, 8.9 GB, on the volume the fix
+  above had just been written for. 351 MB of that is one run of the gate-scripts
+  row, and there is no fat fixture in it to slim — ~1400 directories, the largest
+  1.5 MB.
+
+  Each row pins a `--basetemp` of its own now, under
+  `${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest`. That flag is not the retention
+  the documentation describes: pytest removes the directory and recreates it at
+  startup, so a row holds one run instead of every run and numbered `pytest-N`
+  directories stop being made at all. Three things had to be right. It cannot live
+  in the checkout, which was the obvious place and is the one that fails — under
+  `target/` a `tmp_path` is inside RS-Key's own repository, `git rev-parse HEAD`
+  answers there, and `test_verdict_gate.py`'s "git answers None rather than
+  nothing when it cannot answer" case goes red on it: 1788 of 1789, at that
+  assertion, against 1789 of 1789 for the same pin one directory outside the tree.
+  pytest creates the leaf and not its parents, so the parent is made first. And it
+  wipes whatever it is pointed at, which is why no row shares a leaf — two that
+  did would race, the second wiping the first and then running green on the empty
+  directory it had just made.
+
+  A green run leaves 1 MB rather than 351, because a passing test's directory is
+  dropped as it passes while a failing one's is kept. That is the only kind anyone
+  opens, and it is what stops a base in a cache directory nobody sweeps from
+  becoming the hoard it replaced.
+
+  `scripts/test_gate_scripts.py` holds this half of the class shut as well: every
+  live pytest invocation in a tracked `*.sh` pins a `--basetemp`, and no two pin
+  the same one. Read at a command position with quoted spans cut, since
+  `usbip-guest.sh` prints the word; and over a bare `pytest foo` as well as the
+  `python -m` spelling the tree uses. Narrowing it to the long form was the
+  mutation worth reading: it does not leave the pin rule reporting a green tree,
+  it leaves it with no rows to report on, and it is the roster sentinel beside it
+  that says so.
+
 - **Three ceilings shipped with the defect their own series had measured.**
   `SCOPE_CEILING`, `SCOPE_SPAN_CAP` and `CARVE_OUT_CEILING` were upper bounds
   with headroom, and 37 → 999, 6 → 99 and 2 → 99 were all surviving mutants —

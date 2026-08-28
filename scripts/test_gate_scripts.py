@@ -28,6 +28,13 @@ was the only one of the nine that make one with no cleanup at all — five sites
 nothing could say so, because every rule in the tree is about a guard's ROWS. One
 of those five could not be cleaned even by hand: `out=$(mktemp -d)/pt.elf` keeps
 the file and throws the directory away, so no name in the script reached it.
+
+And the temp a script does NOT make. Those four rules are spelled over `mktemp`,
+so the three `pytest` rows were invisible to every one of them while leaking
+harder than any site they cover: pytest puts `tmp_path` under $TMPDIR, `nix
+develop` hands each invocation a fresh one it never removes, and the retention
+that would have swept it is counted per base directory — so it never met a
+previous run. 361 orphaned bases, 8.9 GB, inside one day.
 """
 
 import pathlib
@@ -419,3 +426,138 @@ def test_the_temp_rules_can_go_red():
     assert registered('GATE_TMP+=("$d")\n', "d")
     assert not drains_accumulator('GATE_TMP+=("$d")\ntrap \'echo "${GATE_TMP[@]}"\' EXIT\n')
     assert drains_accumulator('GATE_TMP+=("$d")\nrm -rf -- "${GATE_TMP[@]}"\n')
+
+
+#: A quoted span, single or double. Blanked before a call is looked for, because
+#: `echo "third_party (fido): pytest exit $tp"` is prose the shell prints and
+#: reading it as an invocation would demand a `--basetemp` on an `echo`. It is
+#: also what stops `run "pytest (gate scripts)" …` matching on its own label, and
+#: `GATE_PYTEST_TMP=".../rs-key/pytest"` on the name of its own directory.
+QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
+
+#: A live pytest invocation, at a command position rather than anywhere in the
+#: line. Spelled to cover the bare `pytest foo -q` as well as the `python -m`
+#: form the tree uses: a rule that only knew the long one would be satisfied by
+#: writing the short one, which is the hole this file exists to catch.
+PYTEST_CALL = re.compile(r"(?:^|[\s;|&(])pytest(?:\s|$)")
+
+#: The pin that bounds it, `=` form only. `--basetemp <path>` leaves a bare path
+#: in the row, and `roster_gate.collects` reads every word of a pytest row as
+#: something it collects — a basetemp named `scripts` would answer for the row
+#: that collects `scripts/`.
+BASETEMP = re.compile(r"--basetemp=(?P<path>\S+)")
+
+
+def unquoted(code):
+    """`code` with quoted spans blanked — what it runs, not what it says."""
+    return QUOTED.sub('""', code)
+
+
+def pytest_calls():
+    """(path, code line) per live pytest invocation in a tracked `*.sh`."""
+    for rel in shell_scripts():
+        for code in code_lines((ROOT / rel).read_text()):
+            if PYTEST_CALL.search(unquoted(code)):
+                yield str(rel), code
+
+
+def pinned_at(code):
+    """The `--basetemp` this line pins, quotes stripped, or "" if it pins none."""
+    found = BASETEMP.search(code)
+    return found["path"].strip("\"'") if found else ""
+
+
+def test_there_are_pytest_rows():
+    """A pattern that matches nothing loops over nothing and passes both rules."""
+    found = list(pytest_calls())
+    assert len(found) >= 3, found
+
+
+def test_every_pytest_row_pins_a_basetemp():
+    """An unpinned row leaks its whole `tmp_path` tree, once per run, for good.
+
+    `--basetemp` is not the retention the docs describe — pytest removes the
+    directory and recreates it at startup, so the row holds one run instead of
+    every run. What this cannot say is WHERE: the path is a variable by the time
+    it reaches here. That half is covered where it bites — a base inside the
+    checkout lets `git rev-parse` answer from RS-Key's own .git, and
+    `test_verdict_gate.py`'s "git cannot answer here" case fails on it (measured:
+    `--basetemp=target/pytest/scripts` → 1788 of 1789, at that assertion).
+    """
+    loose = [(rel, code) for rel, code in pytest_calls() if not pinned_at(code)]
+    assert not loose, f"pytest rows with no --basetemp: {loose}"
+
+
+def test_no_two_pytest_rows_share_a_basetemp():
+    """…and two rows pinned to one directory are a race, not a saving.
+
+    The startup wipe is `rm -rf` over the whole path, so the second row through
+    a shared base destroys the first row's output — silently, since it then runs
+    green on an empty directory. Copying a row and forgetting its leaf is the way
+    that arrives, and the copy is the half nobody re-reads. Compared as written,
+    quotes off: two spellings of one path read as two, which errs toward letting
+    a collision through rather than inventing one.
+    """
+    pinned = [pinned_at(code) for _rel, code in pytest_calls()]
+    shared = sorted({p for p in pinned if p and pinned.count(p) > 1})
+    assert not shared, f"pytest rows sharing one --basetemp: {shared}"
+
+
+def test_a_quoted_pytest_is_not_a_call():
+    """Both directions, the way the `mktemp` rules pin theirs.
+
+    Prose about pytest must not be read as a row that owes a pin, and a row must
+    not be excused by prose. One line in the tree needs the quote-cut and only
+    one: `usbip-guest.sh` prints `pytest exit $tp`, where the word follows a
+    space *inside* a string and matched. `emu-suites.sh`'s `tp_note="pytest exit
+    $tp"` and `check.sh`'s own `…/rs-key/pytest` never did — [`PYTEST_CALL`] asks
+    for a command position, so a `"` and a `/` in front of the word already
+    answered for those two. Measured, both ways, before writing this down.
+    """
+    assert not PYTEST_CALL.search(unquoted('echo "third_party (fido): pytest exit $tp"'))
+    assert not PYTEST_CALL.search(unquoted('GATE_PYTEST_TMP="${X:-$HOME/.cache}/rs-key/pytest"'))
+    assert PYTEST_CALL.search(unquoted('run "pytest (x)" python -m pytest scripts -q'))
+    assert PYTEST_CALL.search(unquoted("pytest scripts -q"))
+    # The comment-cut is `code_lines`', so this pins that a commented-out row
+    # neither owes a pin nor answers for one — the way `NAMED` learned to.
+    assert not [c for c in code_lines("# python -m pytest scripts -q\n") if PYTEST_CALL.search(unquoted(c))]
+    assert not [c for c in code_lines("true # pytest tools/rsk -q\n") if PYTEST_CALL.search(unquoted(c))]
+
+
+def test_the_pytest_temp_rules_can_go_red():
+    """The mutation table: one line per way the pin has been got wrong.
+
+    Each was applied to `scripts/check.sh` and driven through the `pytest (gate
+    scripts)` row, exit code taken with no pipe and the failing assertion read
+    rather than the return code trusted. Unmutated: rc 0, 1794 passed.
+
+    * the gate row's `--basetemp` deleted → `..._pins_a_basetemp`, rc 1
+    * the `tools/rsk` row's deleted instead → the same rule, rc 1, other row
+    * `tools/rsk` re-pinned onto the `gate` leaf → `..._share_a_basetemp`, rc 1
+    * all three deleted → `..._pins_a_basetemp` names all three, rc 1
+    * …and rewritten as a bare `pytest foo -q` → the same rule again, rc 1
+    * every row's `pytest` renamed away → `..._there_are_pytest_rows`, rc 1
+    * [`PYTEST_CALL`] narrowed to `python -m` while the rows say `pytest` → rc 1,
+      but at `..._there_are_pytest_rows` and at this table, NOT at the pin rule
+
+    The last one is the interesting reading and it corrected what was written
+    here first. Narrowing the pattern does not leave the pin rule reporting a
+    green tree — it leaves it with nothing to report on, and the sentinel above
+    is what says so. That the three cases land at three different assertions is
+    the point: with exactly three rows and a floor of three, one row going
+    invisible is still a red, and it stops being one the moment a fourth row is
+    added. Which is the argument for the pattern covering both spellings rather
+    than for the floor being load-bearing.
+    """
+    pinned = 'run "x" python -m pytest scripts -q --basetemp="$T/scripts"'
+    assert PYTEST_CALL.search(unquoted(pinned)) and pinned_at(pinned) == "$T/scripts"
+    # 1. no pin at all — every row, before this fix
+    assert not pinned_at('run "x" python -m pytest scripts -q')
+    # 2. the bare spelling, which a `python -m`-only pattern would not see
+    assert PYTEST_CALL.search(unquoted("pytest tools/rsk -q"))
+    # 3. two rows on one leaf: the second wipes the first at startup
+    rows = ['python -m pytest scripts -q --basetemp="$T/a"', "pytest tools/rsk -q --basetemp=$T/a"]
+    seen = [pinned_at(r) for r in rows]
+    assert len(set(seen)) == 1, seen
+    # 4. …and the quoting must not be what makes two paths look different
+    assert pinned_at('x --basetemp="$T/a"') == pinned_at("x --basetemp=$T/a")
