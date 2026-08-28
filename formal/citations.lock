@@ -58,7 +58,7 @@ crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	746-746	None if sel
 crates/rsk-fs/src/store_steps_tests.rs	crates/rsk-fs/src/fs.rs	535-535	let meta = self.meta_delete(fid);	let meta = self.meta_delete(fid);
 crates/rsk-piv/src/tests.rs	crates/rsk-fido/src/clientpin.rs	764-764	if !matched && ctx.dev.otp_key.is_some() {	if !matched && ctx.dev.otp_key.is_some() {
 crates/rsk-usb/src/secure_pin_kani.rs	crates/rsk-usb/src/secure_pin.rs	96-96	// Force the canonical VERIFY class byte; never honour the host template's CLA.	// Force the canonical VERIFY class byte; never honour the host template's CLA.
-formal/README.md	crates/rsk-devconf/src/lib.rs	264-277	// and `read_enabled_caps` reads empty as "no record" and returns	return Ok(());
+formal/README.md	crates/rsk-devconf/src/lib.rs	265-278	// and `read_enabled_caps` reads empty as "no record" and returns	return Ok(());
 formal/README.md	crates/rsk-device/src/ccid.rs	67-74	/// Refines `RSKeyAdminSurface!AdminSurfaceAlwaysReachable` — SEC-ADM-001.	rsk_devconf::CAP_PIV,
 formal/README.md	crates/rsk-device/src/ccid.rs	91-109	pub struct CcidApplets<'a, S: Storage, R: rsk_sdk::Rng + 'static, VP: rsk_vendor::Platform> {	enabled_caps: u16,
 formal/README.md	crates/rsk-device/src/ccid.rs	243-251	/// bit `i` set → applet `i` (in `APPLET_CAPS` order) is selectable.	mask
@@ -101,7 +101,7 @@ formal/README.md	crates/rsk-fido/src/clientpin.rs	827-831	/// here rather than i
 formal/README.md	crates/rsk-fido/src/clientpin.rs	1089-1093	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
 formal/README.md	crates/rsk-fido/src/clientpin.rs	1095-1101	pub fn spend_and_verify_local_pin<S: Storage>(	}
 formal/README.md	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
-formal/README.md	crates/rsk-fido/src/config.rs	429-430	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
+formal/README.md	crates/rsk-fido/src/config.rs	427-428	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
 formal/README.md	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 formal/README.md	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
 formal/README.md	crates/rsk-fido/src/credential.rs	805-827	if !occupied[i as usize] {	let slot = slot.ok_or(Error::NoMemory)?; // KEY_STORE_FULL
@@ -238,10 +238,10 @@ formal/README.md	firmware/src/worker.rs	526-528	// Nothing is in flight again: a
 formal/README.md	firmware/src/worker.rs	528-528	crate::presence::set_wait_scope(crate::presence::SCOPE_NONE);	crate::presence::set_wait_scope(crate::presence::SCOPE_NONE);
 formal/README.md	firmware/src/worker.rs	661-663	// Scope any touch wait this command starts to the OTP transport, so a host	crate::presence::set_wait_scope(crate::presence::SCOPE_OTP);
 formal/README.md	tools/emu/src/device.rs	264-264	/// power cycle restarts (`crate::usb_attach`). One clock, not two, is what stops a	/// power cycle restarts (`crate::usb_attach`). One clock, not two, is what stops a
-formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	242-242	/// the enabled-applications TLV *without* any transport length prefix; the caller	/// the enabled-applications TLV *without* any transport length prefix; the caller
-formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	253-267	// the lock, and READ CONFIG echoes this blob to any unauthenticated host, so a	let mut merged = [0u8; DEV_CONF_MERGE_MAX];
-formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	588-588	return u16::from_be_bytes([conf[i + 2], conf[i + 3]]) & SUPPORTED_CAPS;	return u16::from_be_bytes([conf[i + 2], conf[i + 3]]) & SUPPORTED_CAPS;
-formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	592-592	SUPPORTED_CAPS	SUPPORTED_CAPS
+formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	243-243	/// the enabled-applications TLV *without* any transport length prefix; the caller	/// the enabled-applications TLV *without* any transport length prefix; the caller
+formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	254-268	// the lock, and READ CONFIG echoes this blob to any unauthenticated host, so a	let mut merged = [0u8; DEV_CONF_MERGE_MAX];
+formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	592-592	return u16::from_be_bytes([conf[i + 2], conf[i + 3]]) & SUPPORTED_CAPS;	return u16::from_be_bytes([conf[i + 2], conf[i + 3]]) & SUPPORTED_CAPS;
+formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	596-596	SUPPORTED_CAPS	SUPPORTED_CAPS
 formal/RSKeyAdminSurface.tla	crates/rsk-device/src/ccid.rs	67-74	/// Refines `RSKeyAdminSurface!AdminSurfaceAlwaysReachable` — SEC-ADM-001.	rsk_devconf::CAP_PIV,
 formal/RSKeyAdminSurface.tla	crates/rsk-device/src/ccid.rs	243-251	/// bit `i` set → applet `i` (in `APPLET_CAPS` order) is selectable.	mask
 formal/RSKeyAdminSurface.tla	crates/rsk-device/src/ccid.rs	340-340	self.disp.current() == Some(idx) && self.caps_enabled(APPLET_CAPS[idx])	self.disp.current() == Some(idx) && self.caps_enabled(APPLET_CAPS[idx])
@@ -363,7 +363,7 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1095-1101	pub fn 
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1129-1131	return LocalPin::Blocked;	if n != PIN_FILE_LEN || pin_data[0] == 0 {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	244-244	|| ctx.state.paut.permissions & PERM_ACFG == 0	|| ctx.state.paut.permissions & PERM_ACFG == 0
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	429-430	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	427-428	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	397-397	/// display honors a reset only this long after power-up, so the wipe takes a	/// display honors a reset only this long after power-up, so the wipe takes a
@@ -485,7 +485,7 @@ formal/RSKeyTrustedDisplay.tla	crates/rsk-fido/src/makecredential.rs	662-663	// 
 formal/RSKeyTrustedDisplay.tla	crates/rsk-fido/src/u2f.rs	94-94	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());
 formal/RSKeyTrustedDisplay.tla	crates/rsk-ui/src/lib.rs	248-256	/// Refines `RSKeyTrustedDisplay!OnlyAllowConfirms` — SEC-DISP-003.	}
 formal/TraceSecurity.tla	crates/rsk-fido/src/clientpin.rs	612-612	ctx.presence.uv_available() && ctx.fs.has_data(EF_PIN)	ctx.presence.uv_available() && ctx.fs.has_data(EF_PIN)
-formal/TraceSecurity.tla	crates/rsk-fido/src/config.rs	317-317	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
+formal/TraceSecurity.tla	crates/rsk-fido/src/config.rs	315-315	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
 formal/TraceSecurity.tla	crates/rsk-fido/src/makecredential.rs	530-548	let always_uv = crate::config::always_uv_enabled(ctx.fs);	Ok(UvOutcome::NONE)
 formal/TraceSecurity.tla	crates/rsk-fido/src/reset.rs	216-216	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	539-541	if always_uv {	}

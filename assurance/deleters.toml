@@ -72,7 +72,7 @@ head_minters = ["crates/rsk-piv"]
 
 [[site]]
 file = "crates/rsk-fido/src/config.rs"
-line = 356
+line = 354
 call = "ctx.fs.delete(EF_ALWAYS_UV).map_err(|_| CtapError::Other)?;"
 verb = "delete"
 answer = "read"
@@ -83,7 +83,7 @@ why = "the record IS the alwaysUv policy, and toggleAlwaysUv's whole effect is m
 
 [[site]]
 file = "crates/rsk-fido/src/config.rs"
-line = 389
+line = 387
 call = ".and_then(|()| ctx.fs.delete_key(EF_KEY_DEV))"
 verb = "delete_key"
 answer = "read"
@@ -94,7 +94,7 @@ why = "AUT_ENABLE wraps the seed and then drops the plain copy: a survivor means
 
 [[site]]
 file = "crates/rsk-fido/src/config.rs"
-line = 428
+line = 426
 call = ".delete_key(EF_KEY_DEV_ENC)"
 verb = "delete_key"
 answer = "read"
@@ -105,7 +105,7 @@ why = "AUT_DISABLE's mirror — a surviving wrapped copy keeps lock_engaged true
 
 [[site]]
 file = "crates/rsk-fido/src/config.rs"
-line = 441
+line = 439
 call = "ctx.fs.delete(EF_EA_RPIDS).map_err(|_| CtapError::Other)?;"
 verb = "delete"
 answer = "read"

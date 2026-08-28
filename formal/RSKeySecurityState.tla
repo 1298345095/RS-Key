@@ -1065,7 +1065,7 @@ BackupFinalize ==
 \* WIDER than the firmware in two directions, both sound: the model has no device
 \* lock, so it does not require the seed to be stored WRAPPED (only a locked
 \* device has an EF_KEY_DEV_ENC to open), and it omits AUT_DISABLE
-\* (config.rs:429-430), which only ever CLEARS the copy.
+\* (config.rs:427-428), which only ever CLEARS the copy.
 DeviceUnlock ==
     /\ Idle
     /\ store.seed
