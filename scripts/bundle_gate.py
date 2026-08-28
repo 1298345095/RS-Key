@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 RS-Key contributors
-"""Hold a closed slice's raw evidence bundle to stage 1A's ten-group contract.
+"""Hold every closed slice's raw evidence bundle to stage 1A's ten-group contract.
+
+EVERY bundle: the roster is `assurance/bundle/*.toml`, read off the directory on
+each run and floored, so a file dropped in is audited and a file taken out is a
+finding. It was one hard-coded path until the calibration counterpart of §10
+needed a second one, and a hard-coded path is the shape where the second bundle
+arrives green because nothing looks at it.
 
 The contract is in `docs/authorization-slice.md`: property/subject and owners;
 commit/build/features; method and scope/bounds; tool, version, invocation and
@@ -75,7 +81,33 @@ import matrix_gate
 import token_refinement_gate
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-BUNDLE = pathlib.Path("assurance/bundle/SEC-FIDO-001.toml")
+
+#: Where the bundles live. The ROSTER IS THE DIRECTORY and is not written down:
+#: a second bundle named here would be a second bundle to remember to name, and
+#: this tree has measured that failure four times over (`MODEL_ACTIONS`, the four
+#: registries with no allowlist, `comutate.PREFIXES`, the `check.sh` row filter).
+#: A file dropped in is held to the contract on the next run; a file taken out is
+#: the roster floor below.
+BUNDLE_DIR = pathlib.Path("assurance/bundle")
+
+#: The bundle `test_bundle_gate.py` mutates. Still named, because a mutation
+#: table over "whichever file the glob returned first" is a table over nothing —
+#: but it is no longer WHAT IS AUDITED, which is every row of [`bundles`].
+BUNDLE = BUNDLE_DIR / "SEC-FIDO-001.toml"
+
+#: Bundles the tree must carry. Under the measured count like every ratchet here,
+#: and a PARAMETER of [`audit`] rather than a global a case can monkeypatch down:
+#: the shipped value is then the one every case runs against. `SCAN_FLOOR` in
+#: `run_count_gate.py` shipped the other way and its own commit message said so —
+#: "the case patches the floor down to 4, so the shipped 8 was never checked
+#: against the shipped tree".
+#:
+#: It is a floor and not an equality because a bundle ARRIVING is the programme
+#: working; a bundle LEAVING is a closed slice unclosing itself with the row
+#: green, which is the family "the table was DELETED rather than EMPTIED" one
+#: layer out.
+ROSTER_FLOOR = 1
+
 REGISTRY = pathlib.Path("assurance/properties.toml")
 #: Where a bare `Name.cfg` lives. The bundle names TLC configurations without a
 #: directory throughout — four of the eight method rows do — and `formal/` is the
@@ -398,7 +430,7 @@ def answers(value) -> bool:
     return bool(word) and word not in NON_ANSWERS
 
 
-def leaf_answers(doc: dict, findings: list[str]) -> None:
+def leaf_answers(bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """Every string leaf of the bundle says something, not just the two prose ones."""
     for path, value in walk(doc):
         if not isinstance(value, str) or not value.strip():
@@ -407,13 +439,13 @@ def leaf_answers(doc: dict, findings: list[str]) -> None:
             continue
         if not answers(value):
             findings.append(
-                f"{BUNDLE}: `{path}` is {value!r}, which answers nothing — a field"
+                f"{bundle}: `{path}` is {value!r}, which answers nothing — a field"
                 " occupied by a non-answer is the same field dropped, in a spelling"
                 " the REQUIRED roster cannot see"
             )
 
 
-def method_answers(doc: dict, findings: list[str]) -> None:
+def method_answers(bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """A method row's two prose fields are PROSE.
 
     Their string values are [`leaf_answers`]'s, like every other leaf's. What is
@@ -426,13 +458,13 @@ def method_answers(doc: dict, findings: list[str]) -> None:
         for field in PROSE_FIELDS:
             if field in row and not isinstance(row[field], str):
                 findings.append(
-                    f"{BUNDLE} method #{index}: `{field}` is {row[field]!r}, which"
+                    f"{bundle} method #{index}: `{field}` is {row[field]!r}, which"
                     " answers nothing — a required field occupied by a non-answer is"
                     " the same field dropped, in a spelling the roster cannot see"
                 )
 
 
-def method_bounds(doc: dict, findings: list[str]) -> None:
+def method_bounds(bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """A method row's bounds are BOUNDS, and there are enough of them.
 
     `REQUIRED`'s `bound_*` is satisfied by one key: reducing all 8 rows to a
@@ -444,7 +476,7 @@ def method_bounds(doc: dict, findings: list[str]) -> None:
     for index, row in enumerate(doc.get("method", []), 1):
         if not isinstance(row, dict):
             continue
-        where = f"{BUNDLE} method #{index}"
+        where = f"{bundle} method #{index}"
         bounds = [key for key in row if key.startswith("bound_") and key != "bound_"]
         total += len(bounds)
         if "bound_" in row:
@@ -464,13 +496,13 @@ def method_bounds(doc: dict, findings: list[str]) -> None:
             )
     if total < BOUNDS_FLOOR:
         findings.append(
-            f"{BUNDLE}: {total} `bound_*` key(s) over the method rows, under the"
+            f"{bundle}: {total} `bound_*` key(s) over the method rows, under the"
             f" floor of {BOUNDS_FLOOR} — a scope sentence beside one bound is the"
             " same row the roster was added to refuse"
         )
 
 
-def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> None:
+def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """Every `[[method]]`'s `artifact` names something this tree still has, OF THE
     KIND its own `method` word calls for.
 
@@ -484,7 +516,7 @@ def method_references(root: pathlib.Path, doc: dict, findings: list[str]) -> Non
     for index, row in enumerate(doc.get("method", []), 1):
         if not isinstance(row, dict) or "artifact" not in row:
             continue  # a dropped field is the REQUIRED rule's, reported once
-        where = f"{BUNDLE} method #{index}"
+        where = f"{bundle} method #{index}"
         method = str(row.get("method", ""))
         if "method" in row and method not in METHODS:
             findings.append(
@@ -609,7 +641,7 @@ def gate_corpus() -> dict[str, str]:
     }
 
 
-def gate_transcriptions(doc: dict, findings: list[str]) -> None:
+def gate_transcriptions(bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """Every number in a transcribed `[result]` gate line is that gate's own.
 
     A `name=<number>` pair is compared as a pair; everything else is compared as
@@ -624,14 +656,14 @@ def gate_transcriptions(doc: dict, findings: list[str]) -> None:
     for key in GATE_RESULTS:
         if key not in result:
             findings.append(
-                f"{BUNDLE}: `result.{key}` is gone — this file derives that line"
+                f"{bundle}: `result.{key}` is gone — this file derives that line"
                 " from the gate that emits it, and a roster entry with nothing to"
                 " check is the claim deleted rather than refuted"
             )
     for key in sorted(k for k in result if k.startswith("gate_")):
         if key not in corpus:
             findings.append(
-                f"{BUNDLE}: `result.{key}` transcribes a gate this file cannot"
+                f"{bundle}: `result.{key}` transcribes a gate this file cannot"
                 " derive — an unreadable claim that says nothing is the hole with"
                 " more code"
             )
@@ -642,21 +674,21 @@ def gate_transcriptions(doc: dict, findings: list[str]) -> None:
         # roster, the leaf floor and the non-answer rule, and transcribes nothing.
         if not re.search(r"\d", claim):
             findings.append(
-                f"{BUNDLE}: `result.{key}` transcribes a gate and carries no number"
+                f"{bundle}: `result.{key}` transcribes a gate and carries no number"
                 " — the counts are what this line is, and a sentence in their place"
                 " is the claim withdrawn rather than checked"
             )
         for name, value in CLAIMED_PAIR.findall(claim):
             if not re.search(rf"\b{re.escape(name)}={re.escape(value)}(?!\d)", derived):
                 findings.append(
-                    f"{BUNDLE}: `result.{key}` says `{name}={value}` and the gate"
+                    f"{bundle}: `result.{key}` says `{name}={value}` and the gate"
                     f" derives `{derived[:120]}…` — a transcribed count is a copy of"
                     " a number some other program counts"
                 )
         for number in re.findall(r"\d+", CLAIMED_PAIR.sub("", claim)):
             if not re.search(rf"(?<!\d){re.escape(number)}(?!\d)", derived):
                 findings.append(
-                    f"{BUNDLE}: `result.{key}` says {number} and the gate derives no"
+                    f"{bundle}: `result.{key}` says {number} and the gate derives no"
                     f" such number — `{derived[:120]}…`"
                 )
 
@@ -678,7 +710,7 @@ def corrected_by(rows: dict, start: str) -> str | None:
     return name if name in rows else None
 
 
-def mutation_dispositions(doc: dict, findings: list[str]) -> int:
+def mutation_dispositions(bundle: pathlib.Path, doc: dict, findings: list[str]) -> int:
     """Hold the `inverse` register, and return how many rows it disposed of."""
     rows = [row for row in doc.get("mutation", []) if isinstance(row, dict)]
     by_name = {str(row.get("mutant", "")): row for row in rows}
@@ -687,7 +719,7 @@ def mutation_dispositions(doc: dict, findings: list[str]) -> int:
     for index, row in enumerate(doc.get("mutation", []), 1):
         if not isinstance(row, dict):
             continue
-        where = f"{BUNDLE} mutation #{index} ({row.get('mutant', '?')})"
+        where = f"{bundle} mutation #{index} ({row.get('mutant', '?')})"
         direction = row.get("direction")
         readings.append(core(str(row.get("reading", ""))))
         if direction != "inverse":
@@ -738,14 +770,14 @@ def mutation_dispositions(doc: dict, findings: list[str]) -> int:
                 )
     for text in sorted({r for r in readings if r and readings.count(r) > 1}):
         findings.append(
-            f"{BUNDLE}: {readings.count(text)} mutation rows share one `reading`"
+            f"{bundle}: {readings.count(text)} mutation rows share one `reading`"
             " — it argues THIS row's direction, and one sentence copied across"
             " rows argues none of them. All 10 in this bundle are distinct"
         )
     verdicts = len(named) - inverse
     if verdicts < VERDICT_FLOOR:
         findings.append(
-            f"{BUNDLE}: {verdicts} mutation verdict(s), under the floor of"
+            f"{bundle}: {verdicts} mutation verdict(s), under the floor of"
             f" {VERDICT_FLOOR} — all ten rows `inverse` printed '0 mutation"
             " verdict(s) and 10 disposed as inverse' at exit 0, and a group that"
             " disposed of every row killed nothing"
@@ -753,22 +785,61 @@ def mutation_dispositions(doc: dict, findings: list[str]) -> int:
     return inverse
 
 
-def audit(root: pathlib.Path) -> tuple[list[str], str]:
+def bundles(root: pathlib.Path) -> list[pathlib.Path]:
+    """Every bundle in the tree, as a path relative to `root`.
+
+    Sorted, so the summary and the findings are in a stable order and a diff of
+    two runs is about the tree rather than about the filesystem.
+    """
+    return sorted(
+        found.relative_to(root)
+        for found in (root / BUNDLE_DIR).glob("*.toml")
+        if found.is_file()
+    )
+
+
+def audit(root: pathlib.Path, roster_floor: int = ROSTER_FLOOR) -> tuple[list[str], str]:
     root = pathlib.Path(root)
     findings: list[str] = []
-    path = root / BUNDLE
+    roster = bundles(root)
+    if len(roster) < roster_floor:
+        findings.append(
+            f"{BUNDLE_DIR}: {len(roster)} bundle(s), under the floor of"
+            f" {roster_floor} — a closed slice whose bundle is gone is a slice"
+            " that unclosed itself with this row green"
+        )
+    summaries = []
+    for bundle in roster:
+        one, summary = audit_one(root, bundle)
+        findings.extend(one)
+        if summary:
+            summaries.append(summary)
+    return findings, "bundle-gate: ok — " + "; ".join(summaries)
+
+
+def audit_one(root: pathlib.Path, bundle: pathlib.Path) -> tuple[list[str], str]:
+    root = pathlib.Path(root)
+    findings: list[str] = []
+    path = root / bundle
     if not path.is_file():
-        return [f"{BUNDLE}: no such bundle"], ""
-    doc = tomllib.loads(path.read_text(encoding="utf-8"))
+        return [f"{bundle}: no such bundle"], ""
+    try:
+        doc = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as broken:
+        # A file the glob found and TOML cannot read is a finding and not a
+        # crash: the roster is the directory, so anything dropped in is audited,
+        # and an unreadable one must say so rather than take the row down with a
+        # traceback nobody attributes to a bundle.
+        return [f"{bundle}: is not readable as TOML — {broken}"], ""
 
     for group in GROUPS:
         if group not in doc:
             findings.append(
-                f"{BUNDLE}: group `{group}` is missing — stage 1A п.3 blocks the exit"
+                f"{bundle}: group `{group}` is missing — stage 1A п.3 blocks the exit"
                 " on any field of the contract, not on most of them"
             )
     for group in sorted(set(doc) - set(GROUPS)):
-        findings.append(f"{BUNDLE}: `{group}` is in no group of the contract")
+        findings.append(f"{bundle}: `{group}` is in no group of the contract")
 
     total = 0
     for group in GROUPS:
@@ -777,10 +848,10 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
         found, empty = leaves(doc[group], group)
         total += found
         for hole in empty:
-            findings.append(f"{BUNDLE}: `{hole}` is empty — a blank leaf is a dropped field")
+            findings.append(f"{bundle}: `{hole}` is empty — a blank leaf is a dropped field")
         if found < FLOORS[group]:
             findings.append(
-                f"{BUNDLE}: group `{group}` carries {found} leaf/leaves, under the floor"
+                f"{bundle}: group `{group}` carries {found} leaf/leaves, under the floor"
                 f" of {FLOORS[group]} — a heading with one line under it is what"
                 " 'unabridged' has to be a predicate about"
             )
@@ -790,7 +861,7 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
             continue
         rows = doc[group] if isinstance(doc[group], list) else [doc[group]]
         for index, row in enumerate(rows, 1):
-            where = f"{BUNDLE} {group}" + (f" #{index}" if isinstance(doc[group], list) else "")
+            where = f"{bundle} {group}" + (f" #{index}" if isinstance(doc[group], list) else "")
             if not isinstance(row, dict):
                 findings.append(f"{where}: is not a table — the contract's groups are tables")
                 continue
@@ -803,17 +874,27 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
     known = {entry["id"] for entry in registry.get("property", [])}
     subject = doc.get("property", {}).get("id")
     if subject not in known:
-        findings.append(f"{BUNDLE}: property `{subject}` is in no row of {REGISTRY}")
+        findings.append(f"{bundle}: property `{subject}` is in no row of {REGISTRY}")
+    # The FILENAME is a claim, and it is the only one a reader of the directory
+    # sees. Copying `SEC-FIDO-001.toml` to `SEC-FIDO-007.toml` and changing
+    # nothing else clears every rule above — ten groups, every floor, every
+    # artifact digest — and puts a second closed slice in the roster that is the
+    # first one twice.
+    if subject != bundle.stem:
+        findings.append(
+            f"{bundle}: carries property `{subject}` and is named for"
+            f" `{bundle.stem}` — the filename is what the roster is read by"
+        )
 
-    leaf_answers(doc, findings)
-    method_answers(doc, findings)
-    method_bounds(doc, findings)
-    method_references(root, doc, findings)
+    leaf_answers(bundle, doc, findings)
+    method_answers(bundle, doc, findings)
+    method_bounds(bundle, doc, findings)
+    method_references(root, bundle, doc, findings)
 
     for index, row in enumerate(doc.get("artifact", []), 1):
         if not isinstance(row, dict):
             continue  # `is not a table` is the roster rule's, reported once
-        where = f"{BUNDLE} artifact #{index}"
+        where = f"{bundle} artifact #{index}"
         target = row.get("path", "")
         if pathlib.PurePosixPath(target).is_absolute():
             findings.append(
@@ -848,7 +929,7 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
     for index, row in enumerate(doc.get("cost", []), 1):
         if not isinstance(row, dict):
             continue
-        where = f"{BUNDLE} cost #{index} ({row.get('artifact', '?')})"
+        where = f"{bundle} cost #{index} ({row.get('artifact', '?')})"
         # A foreign key nothing joins is a name. 10 of the 11 cost rows are
         # byte-identical to an `[[artifact]].path` and the 11th is deliberate
         # prose; re-pointing all 11 at a log that is nowhere was exit 0.
@@ -872,16 +953,16 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
 
     for target in sorted(logged - costed):
         findings.append(
-            f"{BUNDLE}: `{target}` is a raw artifact with no `[[cost]]` row — the"
+            f"{bundle}: `{target}` is a raw artifact with no `[[cost]]` row — the"
             " other direction of the same join, and the one that loses a run's cost"
             " rather than inventing one"
         )
 
-    gate_transcriptions(doc, findings)
-    inverse = mutation_dispositions(doc, findings)
+    gate_transcriptions(bundle, doc, findings)
+    inverse = mutation_dispositions(bundle, doc, findings)
 
     summary = (
-        f"bundle-gate: ok — {BUNDLE.name} carries {len(GROUPS)} groups and {total}"
+        f"{bundle.name} carries {len(GROUPS)} groups and {total}"
         f" leaves, {len(doc.get('artifact', []))} raw artifact(s),"
         f" {len(doc.get('mutation', [])) - inverse} mutation verdict(s)"
         f" and {inverse} disposed as inverse"

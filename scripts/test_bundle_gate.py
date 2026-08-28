@@ -70,16 +70,24 @@ def method_targets(doc):
 
 
 def tree(tmp_path):
-    """A checkout carrying the real bundle, the registry, every artifact and
-    every file a method row's `artifact` names."""
-    for relative in (bundle_gate.BUNDLE, bundle_gate.REGISTRY):
+    """A checkout carrying EVERY real bundle, the registry, every artifact and
+    every file a method row's `artifact` names.
+
+    Every bundle and not just [`bundle_gate.BUNDLE`], because the roster is the
+    directory now: a fixture holding one of two would put the shipped roster
+    under its own floor and make every case in this file fail for the wrong
+    reason — the failure mode this table exists to refuse.
+    """
+    (tmp_path / bundle_gate.REGISTRY).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / bundle_gate.REGISTRY, tmp_path / bundle_gate.REGISTRY)
+    for relative in bundle_gate.bundles(ROOT):
         (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, tmp_path / relative)
-    doc = tomllib.loads((ROOT / bundle_gate.BUNDLE).read_text())
-    for relative in [row["path"] for row in doc["artifact"]] + list(method_targets(doc)):
-        target = tmp_path / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(ROOT / relative, target)
+        doc = tomllib.loads((ROOT / relative).read_text())
+        for name in [row["path"] for row in doc["artifact"]] + list(method_targets(doc)):
+            target = tmp_path / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(ROOT / name, target)
     return tmp_path
 
 
@@ -955,9 +963,66 @@ def test_a_group_outside_the_contract_is_refused(tmp_path):
     assert any("is in no group of the contract" in p for p in findings(root)), findings(root)
 
 
-def test_a_bundle_that_is_gone(tmp_path):
+def test_an_empty_roster_is_under_the_floor(tmp_path):
     (tmp_path / "assurance").mkdir()
-    assert any("no such bundle" in p for p in findings(tmp_path)), findings(tmp_path)
+    assert any("under the floor of" in p for p in findings(tmp_path)), findings(tmp_path)
+
+
+def test_a_bundle_removed_from_the_roster_reddens(tmp_path):
+    """The direction that matters: a closed slice unclosing itself, silently.
+
+    The floor is passed as a PARAMETER at the SHIPPED value, so this case proves
+    the rule about the number the tree actually ships rather than about a 1 the
+    case wrote. Deleting one bundle from an n-bundle tree must leave n-1 < n.
+    """
+    root = tree(tmp_path)
+    shipped = len(bundle_gate.bundles(root))
+    assert shipped >= bundle_gate.ROSTER_FLOOR, shipped
+    (root / bundle_gate.bundles(root)[0]).unlink()
+    reported = bundle_gate.audit(root, roster_floor=shipped)[0]
+    assert any("under the floor of" in p for p in reported), reported
+
+
+def test_the_shipped_floor_is_not_above_the_shipped_roster():
+    """A floor over the count is the row red on a tree nobody touched."""
+    assert len(bundle_gate.bundles(ROOT)) >= bundle_gate.ROSTER_FLOOR
+
+
+def test_a_second_bundle_is_audited_and_not_merely_counted(tmp_path):
+    """The roster is the DIRECTORY: a file dropped in is held to the contract.
+
+    Without this the generalisation is a counter — `len(glob)` past a floor —
+    and a second bundle arrives green because nothing opens it. Measured on the
+    first version, which globbed for the count and audited `BUNDLE`.
+    """
+    root = tree(tmp_path)
+    first = bundle_gate.bundles(root)[0]
+    text = (root / first).read_text().replace('id = "SEC-FIDO-001"', 'id = "SEC-FIDO-002"', 1)
+    # Broken in ONE place, and in the place the contract turns on: a copy that is
+    # merely valid proves only that the roster counted it.
+    (root / bundle_gate.BUNDLE_DIR / "SEC-FIDO-002.toml").write_text(
+        text[: text.index("[[cost]]")]
+    )
+    reported = findings(root)
+    assert any("SEC-FIDO-002.toml" in p and "`cost`" in p for p in reported), reported
+
+
+def test_a_bundle_named_for_a_property_it_does_not_carry(tmp_path):
+    """A copy under a new name is the first slice twice, and every other rule
+    passes it: same ten groups, same floors, same artifact digests."""
+    root = tree(tmp_path)
+    first = bundle_gate.bundles(root)[0]
+    shutil.copy(root / first, root / bundle_gate.BUNDLE_DIR / "SEC-FIDO-007.toml")
+    reported = findings(root)
+    assert any("is named for" in p and "SEC-FIDO-007" in p for p in reported), reported
+
+
+def test_a_bundle_that_is_not_readable_as_toml(tmp_path):
+    """The glob finds it, so it must be a finding and not a traceback."""
+    root = tree(tmp_path)
+    (root / bundle_gate.BUNDLE_DIR / "SEC-FIDO-008.toml").write_text("[property\nid =")
+    reported = findings(root)
+    assert any("is not readable as TOML" in p for p in reported), reported
 
 
 def test_main_prints_a_summary_and_reports_findings(tmp_path, capsys, monkeypatch):
