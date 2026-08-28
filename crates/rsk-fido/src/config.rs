@@ -473,7 +473,13 @@ fn set_min_pin_length<S: Storage, R: Rng>(
     if new_min > crate::clientpin::MAX_PIN_LENGTH as u64 {
         return Err(CtapError::PinPolicyViolation);
     }
-    let pin_set = ctx.fs.has_data(EF_PIN);
+    // Both probes fallible, for the reason `current_min_pin` above is: a collapsed
+    // answer at either leaves `force` FALSE, and `force` is PERSISTED two statements
+    // down. A PIN below the floor this command just raised then keeps working with
+    // no change demanded, `force_change_pending` reads the cleared flag for good,
+    // and the live token is not invalidated. Nothing is written yet here, so
+    // refusing costs a retry.
+    let pin_set = ctx.fs.try_has_data(EF_PIN).map_err(|_| CtapError::Other)?;
     if force_change && !pin_set {
         return Err(CtapError::PinNotSet);
     }
@@ -481,7 +487,10 @@ fn set_min_pin_length<S: Storage, R: Rng>(
     let mut force = force_change;
     if pin_set {
         let mut pf = [0u8; crate::clientpin::PIN_FILE_LEN];
-        if let Some(n) = ctx.fs.read(EF_PIN, &mut pf)
+        if let Some(n) = ctx
+            .fs
+            .try_read(EF_PIN, &mut pf)
+            .map_err(|_| CtapError::Other)?
             && n >= 2
             && (pf[1] as u64) < new_min
         {

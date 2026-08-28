@@ -2181,6 +2181,22 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   fault as `KeyStoreFull`, which tells the platform to delete passkeys: that
   cannot help a refused read and destroys data to no end. **bcdDevice → 0x09AD.**
 
+- **A faulted `EF_PIN` probe cleared the forced PIN change that `setMinPINLength`
+  had just imposed, and persisted the cleared flag.** `set_min_pin_length` reads
+  `EF_PIN` twice — `has_data` for "is a PIN set at all", then the record for its
+  length — and a collapsed answer at either left `force` false. That value is
+  written to `EF_MINPINLEN[1]` two statements later, so a PIN below the floor the
+  command had just raised kept working with no change demanded,
+  `force_change_pending` read the cleared flag from then on, and the
+  `reset_pin_uv_auth_token` / `clear_ppuat` invalidation was skipped with a live
+  token standing. Nothing short of another `setMinPINLength` repaired it and
+  nothing told the owner. Both probes are fallible now and the command refuses:
+  nothing is written at that point, so a refusal costs a retry. Driven on a medium
+  that refuses one nominated fid, both arms separately — `stick_after(EF_PIN, 0)`
+  and `(…, 1)` — each red against the unfixed code with `forceChangePin = 0` on
+  the medium. Found while verifying the new read-fault threat-model clause against
+  the code. **bcdDevice → 0x09AE.**
+
 ### Security
 
 - **One faulted probe replayed the credential-store tag, and a platform holding the

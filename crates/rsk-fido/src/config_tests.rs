@@ -321,6 +321,55 @@ fn enable_enterprise_attestation() {
     assert!(fs.has_data(EF_EA_ENABLED));
 }
 
+/// The same rule under a medium that would not answer, on both of the probes that
+/// decide it. `set_min_pin_length` reads `EF_PIN` twice — `has_data` for "is a PIN
+/// set at all", then the record for its length — and a collapsed answer at either
+/// leaves `force` FALSE. That value is then PERSISTED as `EF_MINPINLEN[1] = 0`, so a
+/// PIN below the new floor keeps working with no change demanded, `force_change_pending`
+/// reads the cleared flag forever, and the live token is never invalidated. Nothing
+/// short of another setMinPINLength repairs it, and nothing tells the owner.
+#[test]
+fn a_faulted_pin_probe_does_not_clear_the_forced_change() {
+    for skip in [0u32, 1] {
+        let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+        let mut fs = Fs::new(backend);
+        fs.scan();
+        // A 4-char PIN on file, and a floor already above it.
+        let mut pin_file = [0u8; 35];
+        pin_file[0] = 8;
+        pin_file[1] = 4;
+        pin_file[2] = 1;
+        fs.put(EF_PIN, &pin_file).unwrap();
+        let mut state = armed(PERM_ACFG);
+        let before = state.paut.token;
+
+        medium.stick_after(EF_PIN, skip);
+        let r = run_fs(
+            &mut fs,
+            &mut state,
+            &config_request(0x03, &subpara_min_pin(6), &TOKEN),
+        );
+        medium.stick(None);
+
+        assert_ne!(
+            medium.value(EF_MINPINLEN).as_deref().map(|v| v[1]),
+            Some(0),
+            "probe {skip}: a faulted read persisted forceChangePin = 0 over a PIN \
+             shorter than the floor it just raised"
+        );
+        assert_eq!(
+            r,
+            Err(CtapError::Other),
+            "probe {skip}: a setMinPINLength that could not read the PIN it must \
+             judge has to refuse"
+        );
+        assert_eq!(
+            state.paut.token, before,
+            "probe {skip}: and a refused command must not disturb the live token"
+        );
+    }
+}
+
 #[test]
 fn set_min_pin_forces_change_when_pin_too_short() {
     let mut fs = Fs::new(RamStorage::new());
