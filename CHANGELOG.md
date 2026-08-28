@@ -142,432 +142,6 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   behaviour change: nothing branched on the field, so no image behaviour moves —
   the counter moves because the counter counts builds.
 
-### Security
-
-- **One faulted probe waived a pending forced PIN change and issued the token it
-  exists to withhold.** While `EF_MINPINLEN[1]` is set, a correct PIN buys no
-  pinUvAuthToken until changePIN lifts the flag (CTAP 2.1 §6.5.5.7.1;
-  ClientPin2-GetPinToken F-5 asserts it). `force_change_pending` read the flag with
-  `Fs::read`, and all three of its callers spend `false` to let something *through*
-  — a token issued, a changePIN allowed to reuse the old value.
-
-  Control leg: the correct PIN answers `PIN_INVALID` while the flag stands and no
-  token is minted. One faulted probe on the same command and the host gets a live
-  `mc|ga` token. Reads as PENDING now, the same fail-closed direction and the same
-  reasoning as `pin_is_set` five functions below it.
-
-- **One faulted probe reset every OpenPGP slot's key-origin claim to imported.**
-  `origin::mark` rewrites the whole `EF_KEY_ORIGIN` record to change one slot, so it
-  reads the others first — and it read with `Fs::read` and *discarded* the result.
-  For a short record from an older build that is right: `of` reads an uncovered slot
-  as imported anyway. A failed read is not that. The buffer stays zeroed and is
-  written straight back, so the other slots lose the on-card-generation claim
-  §4.4.3.8 exists to make, which reaches the host through DO `0xDE`.
-
-  Driven through the real IMPORT with two slots marked generated: one faulted probe
-  and both read back **imported (2, 2 where 1, 1 was owed)**, permanently. It refuses
-  now — `mark`'s two callers already weigh its `Result` opposite ways on purpose, so
-  the IMPORT stores no key over a record it could not carry forward and the GENERATE
-  keeps ignoring it, which only under-claims.
-
-- **One faulted probe minted a new device-certificate key over the live one and
-  persisted it, unauthenticated, retiring every certificate the old key issued.**
-  `rsk-rescue`'s `load_or_generate` mints and persists a fresh secp256k1 key when
-  `EF_DEVCERT_KEY` reads absent — the documented first use. It probed with
-  `fs.read_key`, whose `None` covers both that and a read the flash could not serve.
-  `KEYDEV_SIGN P1=0x02` (read the device public key) takes no user presence at all,
-  so a USB host on its own reached it. This is the `ensure_seed` shape the original
-  sweep converted, in a crate that diff never opened.
-
-  Driven through the real APDU: the device's public key, a signature made under it
-  that verifies (the control), then one faulted probe on the same command. All four
-  assertions fall — the sealed record is replaced, the device advertises a different
-  65-byte key, the old signature no longer verifies against it, and the command
-  answers `9000`. The last leg is what makes it a loss rather than a hiccup: **after
-  the medium recovers the device still answers the new key**, because the mint was
-  persisted.
-
-  Only a CONFIRMED absence mints now. Both reachable spellings of that absence are
-  driven and still work — a boot walk that decided the FID space (so the probe never
-  reaches the backend) and one a read fault cut short (so the absence goes to the
-  backend and comes back as a real `Ok(None)`). That arm is proven non-vacuous by
-  its own mutant: stopping the mint from persisting turns it red.
-
-- **One faulted probe made OpenPGP GENERATE mint and seal RSA-2048 where the owner
-  had configured Ed25519.** `read_advertised_algo` resolves the slot's algorithm
-  attribute and GENERATE mints whatever it says. Its `_` arm covered three states at
-  once: a slot with no attribute configured (which must resolve to `DEFAULT_ALGO` —
-  the documented path for a slot the owner never set), an empty record, and a probe
-  the flash could not answer.
-
-  All three are asserted at the function, because only there can "absent" and
-  "faulted" be told apart: absent → `DEFAULT_ALGO`, empty → `DEFAULT_ALGO`,
-  configured → itself, faulted → `Ok([1, 8, 0, 0, 32, 0])`, which is RSA-2048.
-  Driven through the real GENERATE afterwards: the control leg with Ed25519
-  configured mints a 32-byte point, and one faulted probe stores a **270-byte
-  `EF_PB_SIG` with inner tag `0x81`** — an RSA modulus — at `9000`.
-
-  Fixed by splitting the arm three ways rather than by choosing a default: `Ok(_)`
-  keeps the documented absent/empty path exactly as it was, and only `Err` is new,
-  refusing with `Sw::MEMORY_FAILURE`. A GENERATE that cannot read the algorithm it
-  must honour has to refuse, because what it would otherwise do is seal a weaker key
-  the owner never asked for.
-
-- **One faulted probe minted a fresh card-level AES key over the OpenPGP owner's,
-  and the card then deciphered every old ciphertext to garbage at `9000`.**
-  `keygen_tail` seeds `D5` when the DEC slot is generated and `EF_AES_KEY` is empty,
-  and it asked with `fs.has_key` — the same `false` for an absent slot and for one
-  the flash could not read. `D5` is card-level (§7.2.12 gives PSO:ENCIPHER no key
-  reference at all), so the blast radius is everything ever enciphered under it.
-
-  Driven end to end: a `PUT DATA D5` key, a plaintext enciphered under it, then a
-  DEC GENERATE. Control leg first — a healthy medium leaves the standing key
-  byte-identical, which is the documented "the seed never **replaces** a standing
-  key". Then one faulted probe: the sealed record is replaced (60 bytes for 60,
-  entirely different), the GENERATE answers `9000`, and PSO:DECIPHER of the old
-  ciphertext answers `9000` with the wrong plaintext — a success status over
-  corruption, not an error.
-
-  Fixed by fail-closed skip, not refusal. The private key is already committed when
-  this runs, so refusing would fail a GENERATE whose key is in the slot; the seed is
-  documented non-fatal and the next DEC generate makes it again. Skipping costs a
-  card with no `D5` until then; overwriting costs every message.
-
-- **One faulted probe took the minPINLength floor down permanently, and a second
-  copy of the same read stored a PIN underneath it.** CTAP 2.1 §6.11 makes
-  minPINLength monotonic — setMinPINLength may only raise it, and nothing short of
-  a factory reset puts a lowered floor back. Both readers of `EF_MINPINLEN[0]` used
-  the collapsing `Fs::read`, whose `None` covers "no policy set" and "the flash
-  could not serve it" alike, and the collapsed arm resolves to the build's
-  `MIN_PIN_LENGTH` — below any floor an owner would have configured.
-
-  `config::current_min_pin` is what the monotonic guard compares against. With an
-  enterprise floor of 16 stored and the control leg confirming `setMinPINLength(8)`
-  is refused on a healthy medium, one faulted probe and the record reads **8**.
-  `clientpin::min_pin_length` is the enforcement twin, and it is reached by two
-  different doors: with the same floor of 16 in place, one faulted probe and a
-  **six-code-point PIN is stored** — by the panel's `store_local_pin` and by the
-  host setPIN, both answering success.
-
-  Both are fixed by refusing, because both write. `current_min_pin` is fallible and
-  `set_min_pin_length` answers `CtapError::Other`; a new private
-  `clientpin::try_min_pin_length` serves the two sites that ENFORCE the floor
-  (`store_new_pin` → `CtapError::Other`, `store_local_pin` → `SetPinError::Storage`,
-  not `TooShort`, since the floor is exactly what could not be read and naming a
-  number would be an invention). The collapsing `min_pin_length` stays for the
-  sites that only *show* the floor or size a pad buffer from it — `builtin_uv`'s
-  entry length and the display's dot count — where a lowered value costs a wasted
-  entry the store path then refuses, not a stored PIN. Each copy is falsified by
-  its own test and by neither the other's.
-
-- **One faulted probe turned a one-shot OpenPGP PIN entry into an unlimited
-  signing session.** OpenPGP 3.4 §7.2.10: DO `C4`'s first byte at `0x00` is "PW1
-  valid for ONE PSO:CDS", and `inc_sig_count` is the only place that spends it. It
-  read the flag with `Fs::read`, whose `None` covers both "no PW status stored" and
-  "the flash could not serve it" — and that arm leaves PW1 STANDING, so whoever is
-  on the wire after the owner's one legitimate signature gets every further
-  signature for free.
-
-  Driven with the fault aimed at `EF_PW_PRIV` alone, because the statement
-  immediately below reads `EF_SIG_COUNT` and already refuses — a whole-backend
-  fault would be caught by that neighbour and prove nothing about this line.
-  Control leg first: one PIN entry, one signature, `EF_SIG_COUNT` at 1 and the
-  second PSO:CDS `6982`. Same card, same one PIN entry, one transient faulted probe
-  as the first signature spends it: a **second 64-byte ECDSA signature** comes back
-  `9000`, and the card's own counter reads **3 where it owed 2**.
-
-  Fixed by failing closed — a probe that could not be completed spends PW1 —
-  rather than by refusing. The signature this call has already produced was
-  authorised; only the next one is in question, and refusing would discard a
-  finished private-key operation (the post-crypto DoS this same function's
-  `EF_SIG_COUNT` neighbour is commented for). The genuinely-absent arm is left
-  exactly as it was: only `Err` is new.
-
-- **One faulted probe let the trusted display overwrite a populated PIV retired
-  slot — the sealed key and the certificate — with no management-key auth behind
-  it.** `retired_slot_is_free` is the *whole* authorisation for the panel's
-  Generate key: physical presence at the screen is the only other gate, and
-  docs/guides/display.md states the action is "restricted to empty slots
-  (add-only, never overwrite)". Both of its probes were the collapsing
-  `has_key` / `has_data`, which answer the same `false` for an absent record and
-  for one the flash could not read.
-
-  Driven on a `ProbeStuck` medium, one row per probe aimed at its OWN fid (a fault
-  on the key shadows the cert probe behind it). Slot 0x82 holding a key and no
-  certificate — the state a host GENERATE leaves, and the state an on-device
-  X25519 generate leaves, since X25519 cannot self-sign: one faulted `key_fid(0x82)`
-  read and the stored 64-byte sealed key is replaced by a fresh 61-byte sealed
-  P-256 key, `Ok(())` returned. Slot 0x83 holding a certificate and no key: one
-  faulted cert read and the stored certificate goes **5 bytes → 476**, again
-  `Ok(())`. Both destroy material that only a management-key-authenticated host
-  command is supposed to be able to touch.
-
-  It is two copies, not one. `rsk-piv`'s `info::next_free_retired` inlines the same
-  predicate to pick the target slot, and it offered the occupied slot in both rows.
-  The two are fixed differently because they answer different questions.
-  `retired_slot_is_free` **refuses** — `Sw::MEMORY_FAILURE` — because a generate
-  that cannot confirm the slot empty must not write; `next_free_retired`
-  **fail-closed defaults to "not free"** and moves to the next slot, because a
-  probe that failed is not a slot known free and skipping it costs one candidate
-  out of twenty rather than a key. Falsified by reverting each guard alone: the
-  keygen predicate's revert fails on the data assertion ("a faulted probe let the
-  panel generate destroy the sealed key"), the picker's revert fails on the picker
-  assertion with the data assertion still passing — so neither is held by the
-  other.
-
-- **One faulted probe erased the clone-detection evidence for every credential on
-  the key, and signed an assertion with the fabricated value.** signCount is the
-  only clone signal a relying party gets (WebAuthn L3 §6.1.1), and all three of its
-  readers spelled a failed flash read as *not provisioned*: `get_sign_counter`
-  answered **0**, `cred_sign_counter` answered *unmaterialized* — which the caller
-  seeds from the global counter — and `set_cred_sign_counter` merged the new value
-  into a **zero-filled** buffer truncated to the target slot.
-
-  Measured end to end over two resident credentials, A at three assertions and B at
-  one: one faulted `EF_CRED_CTR` read and the host receives `Ok` with signCount
-  **0** for a credential that had just reported 3, the packed file goes **8 bytes →
-  4** holding `[1,0,0,0]`, B's next assertion reports **0** where it owed 2 and A's
-  reports 1 where it owed 5. Both credentials lost their counters and B was never
-  named by the request. At the writer alone, three slots held at 11/22/33: one
-  faulted read truncates **12 bytes → 8**, zeroes slot 0, drops slot 2 — and returns
-  `Ok(())`. On the global counter `bump_sign_counter` writes **1** over a live 77,
-  and U2F AUTHENTICATE signs and returns the fabricated 0.
-
-  The class was re-derived mechanically rather than read off the diff, and the file
-  says so itself: `ensure_seed`'s converted guard fifty lines above reads "a faulted
-  probe here would roll the signature counter back to zero" — the code that actually
-  rolls it back was left alone.
-
-  Fixed by keeping the states apart instead of choosing a default.
-  `cred_sign_counter` answers `Result<Option<u32>>` — `Err` a fault, `Ok(None)` an
-  unmaterialized slot (absent, short, or a real 0 in a gap a higher write
-  zero-extended over), `Ok(Some)` a live counter — and `report_sign_counter` owns
-  the one place the per-credential and global reads combine. `get_sign_counter` is
-  gone rather than kept as a collapsing sibling: all four of its callers sign or
-  persist the value, so the sibling would have had no user but the tests, and unlike
-  `backup_sealed` / `device_pin_is_set` there is no conservative `u32` to collapse
-  to. getAssertion, getNextAssertion and U2F AUTHENTICATE now refuse
-  (`CTAP2_ERR_OTHER` / `6F00`) rather than sign a number the medium never served.
-
-  Two of the guards sat behind a neighbour: with the fault STUCK, the write-back
-  three statements later refuses on the read guard's behalf, so both call-site
-  `?`s could be reverted with the suite green. `stick_once` reaches them — the
-  medium recovers before the write-back — and the reversion then rewrites the
-  counter from the fabricated value: slot 0 `[2,0,0,0]` → `[1,0,0,0]`.
-
-- **One faulted probe at an unauthenticated SELECT handed a host every OATH secret
-  on the card.** `select` derives the session's lock state from a single probe —
-  `validated = !fs.has_key(EF_OATH_CODE)` — and `validated` is the access-code gate
-  on PUT, DELETE, SET CODE, RESET, RENAME, LIST, CALCULATE and CALCULATE ALL. SELECT
-  takes no authentication and the host drives it, so a probe read as "no code set"
-  unlocked the whole credential store for the session with nothing presented.
-  Measured on a code-locked applet: control `LIST` → `6982`, one faulted
-  `EF_OATH_CODE` probe → `9000` and the credential list on the wire. It resolves to
-  CODE SET now, the direction `lock_engaged` and `pin_is_set` already take.
-
-  Found by re-deriving the class mechanically rather than by reading the diff again
-  — the file's OTP-PIN gate 180 lines above had been converted while the applet's
-  primary gate had not.
-
-  Its sibling at `cmd_validate` was left collapsing **on purpose**: `select` now
-  reads an unprobeable code as set, so `validated` is already false in every state
-  that arm can be reached in, and the fallible twin there is bit-identical. A guard
-  nothing can falsify is a comment with a type; the reason is recorded at the site.
-
-- **A card whose boot walk hit one transient fault reported every credential slot
-  FULL for the rest of the power cycle — a factory reset included.** `Fs::scan`
-  latches `scan_truncated`, and `present_slots` answers "occupied" over the whole
-  range while it is set, which is the right trade for a walk that decided nothing.
-  `factory_wipe` resets the caches that flag describes — `present`, `decided`, the
-  dynamic set — but not the flag. Measured after one transient boot-walk fault and
-  a successful wipe: `for_each_key` yields nothing (`seen = 0`, the store really is
-  empty) while `present_slots` still answers `[true, true, true, true]`, so
-  `credential_store` and OATH's `free_slot` refuse on a card that was just reset.
-  The doc comment's own defence — "a fresh `Fs` that has not scanned still reports
-  free — its store is empty" — is precisely the case it got wrong. The wipe clears
-  it now, and it may: the wipe does not return at all without a COMPLETE walk of
-  every phase, which is the same evidence `scan` requires.
-
-- **A faulted probe waived the OpenPGP touch gate, and lowered a UIF the card
-  documents as unchangeable.** `check_uif` is the touch gate itself — PSO:CDS,
-  PSO:DEC and INTERNAL AUTHENTICATE all pass through it — and it decided on a
-  `Fs::read` that answers the same `None` for "no UIF configured" and "I could not
-  read it". Measured over a declined touch: control `6600`, one faulted
-  `EF_UIF_SIG` probe `9000` — the signature made with no confirmation at all. It
-  resolves to ON now.
-
-  The second is the guard the reviewer named and did not drive; driven here.
-  OpenPGP 3.4 §4.4.3.6: UIF `02` is "permanently enabled … not changeable with PUT
-  DATA", clearable only by a factory reset, and its guard read the stored value the
-  same collapsing way. Measured with PW3 verified: control
-  `CONDITIONS_NOT_SATISFIED`, one faulted probe and the stored value goes `02` →
-  `00`, irreversibly short of TERMINATE DF.
-
-  Separately, `formal/README.md` cited `putdata.rs:192-194` twice for "PUT DATA
-  `0xC4` is an administrative write gated on PW3". The locked text says that span
-  is the **UIF** block; the PW3 gate is `put_pw_status`'s own `!sess.has_pw3` at
-  `:244-247`. The citation named code the prose was never about, and only became
-  visible because this change rewrote the line it ended on — `citation_gate.py`
-  reports a locked line that MOVED, never one edited where it stood.
-
-- **PIV `MOVE KEY` destroyed the certificate at BOTH slots on a faulted probe, and
-  answered `9000`.** It reads the source certificate and, finding none, deletes the
-  destination's; the source's goes at the end of the move. `Fs::read` answers the
-  same `None` for "no certificate" and "I could not read it". Measured: `MOVE 9A ->
-  82` with `0xD205` stuck → `sw = 0x9000`, source certificate `None`, destination
-  certificate `None` (it was 40 bytes of a known fill). Three more probes in the
-  same command took the fallible twin: the metadata head (a faulted `meta_find`
-  stranded the moved key with no head, which `GET METADATA` and the PIN/touch gate
-  both read), the tail read-back (`has_key`'s collapsed `false` let a failed
-  `remove` answer OK over a key that is still live — the shape `Fs::delete` closed
-  one layer up), and the source blob itself (`FILE_NOT_FOUND` over a slot the medium
-  merely could not read tells the host the slot is EMPTY, and a host that believes
-  it fills the slot). `Fs::try_read_key` is the `read_key` twin, keeping the
-  `KeyFid` chokepoint.
-
-  The fault medium grew the two capabilities these needed: `ProbeMedium::stick_after`
-  lets N reads of a fid through before faulting — a guard standing BEHIND another
-  probe of the same record is otherwise unfalsifiable, which is how 18 of the
-  previous batch's guards ended up held by nothing — and `refuse_remove` drives a
-  failed delete and a faulted read-back on one medium.
-
-- **One faulted flash probe erased the tamper-evident audit trail and left it
-  looking freshly initialised.** `journal::load_meta` read `EF_AUDIT_META` with the
-  collapsing `Fs::read`, and its absent arm is *genesis* — the state of a journal
-  that has never been written. `raw_append` then wrote at slot 0 and `put_meta`
-  **persisted** it. Measured: `seq_next` 10 → 1, `start` 0, the head no longer over
-  the window, ten entries out of the live window, all of it on flash. The chain's
-  whole job is to make that undetectable-loss case impossible.
-
-  The eviction fold was the second half: `raw_append` folded the entry it is about
-  to overwrite into the epoch only `if read_slot(..).is_some()`, so a faulted slot
-  read at eviction dropped an entry from the chain *without* folding it — and the
-  head still verified over the shortened history. Three more readers spelled the
-  same thing: `chain_head` (whose result gets SIGNED by `AUDIT_CHECKPOINT`),
-  `vendor_read` (the export the host folds against that signature) and
-  `fold_and_scrub` (which deletes the slots after committing the fold). All four
-  refuse now; the two coalesce paths decline instead, which sends the caller to
-  `append`, which refuses. `for_each_event` deliberately keeps the collapse — it
-  writes nothing, signs nothing and opens no gate, and its one caller is a display
-  screen with no error state to paint; a faulted `EF_AUDIT_META` still renders
-  there as an empty log.
-
-- **One faulted flash probe waived the vendor PIN gate and handed out the device
-  master seed.** `vendor::pin_gate` is the *only* PIN half of the gate on
-  `BACKUP_EXPORT`, `BACKUP_LOAD`, `BACKUP_FINALIZE`, `ATT_IMPORT`, `ATT_CLEAR`,
-  `AUDIT_READ`, `AUDIT_CHECKPOINT`, `AUDIT_CONFIG` and `CONFIG_WRITE`, and it
-  decided "is a PIN configured" on the collapsing `Fs::has_data`. `VENDOR_MSE` is
-  ungated, so the residual barrier was one touch under "Export secret seed?" — and
-  none at all on a `no-touch` build. Measured on a PIN-protected card with the MSE
-  channel re-handshaked and no token: control `Err(PuatRequired)`, one faulted
-  `EF_PIN` probe `Ok(64)` — the 64-byte encrypted seed blob. Both of the gate's
-  records took the fallible probe, not just the one that was driven: a display
-  build's owner often sets only the **device** PIN, and a faulted `EF_DEVICE_PIN`
-  probe waived the gate identically (measured `Ok(64)` with both halves at their
-  old spelling).
-
-- **A faulted `EF_BACKUP_SEALED` probe re-opened the export window
-  `BACKUP_FINALIZE` had sealed** — irreversible short of a reset that destroys the
-  identity it protects. Measured: control after FINALIZE `Err(NotAllowed)`, one
-  faulted probe `Ok(64)`. Its second reader is the trusted display, whose Backup
-  screen offers the on-device recovery-phrase reveal on `!sealed`; `backup_sealed`
-  / `backup_status` resolve to SEALED on a probe the medium could not answer, the
-  same direction `lock_engaged` already took. `pin_is_set` and `device_pin_is_set`
-  move with them: `local_pin_gate` returns `true` outright when no PIN of that
-  scope exists, so the collapsed `false` waived every destructive on-device action
-  rather than raising its gate.
-
-- **The comment that scoped a threat-model clause was wrong about the physics,
-  and three registry verdicts argued from it.** `crates/rsk-store/src/lib.rs`
-  said the walk's early exit is a read fault *"which a NOR power cut never
-  produces (a torn write yields deterministic bytes, not a read error)"*. All
-  four legs re-derived, and the claim is refuted: `WRITE_SIZE` is **1** on this
-  target (embassy-rp `flash.rs:35`, forwarded through `BlockingAsync` and
-  `SharedFlash`, and `WORD_SIZE = max(WRITE_SIZE, READ_SIZE) = 1`); the item
-  header is **8 bytes** written in **one** `flash.write` call
-  (`third_party/sequential-storage/src/item.rs`, `LENGTH = 8`, fields `0..4` /
-  `4..6` / `6..8`, and one call at `write`); a cut that leaves the length field
-  programmed and the length-CRC erased at `0xFFFF` cannot match, because
-  **0 of 65 536** two-byte lengths produce `0xFFFF` — measured exhaustively, and
-  not by luck: **8 of them do** before `crc16`'s closing `match crc { 0xFFFF =>
-  0xFFFE }`, a clamp whose own doc line is "A crc that never returns 0xFFFF", so
-  the guard is load-bearing rather than decorative. `ItemHeader::read_new` then
-  answers `Error::Corrupted` after one retry. A torn write is deterministic **and**
-  a read error.
-
-  What actually keeps the enumeration honest is that `ItemHeaderIter::traverse`
-  advances one word past `Corrupted` on purpose instead of propagating it. The
-  comment says that now, and so does its second copy in `crates/rsk-store/src/
-  tests.rs` — which no list of consumers had, and which the same wording had been
-  retyped into. `docs/threat-model.md`'s clause A keeps its scope and drops the
-  false reason; the `rests_on` pin moves with the sentence in the same change, and
-  reddens the gate from either side (measured both ways).
-
-  The routing of `SEC-STORE-003/-004/-005` away from `TM-HOST-POWER-CUT` is
-  unchanged, but its reason is replaced. It was "a cut cannot produce a read
-  fault"; it is now the THREAT — the cut clause is about what a write leaves
-  behind and in what order, those three are about a read the medium refused,
-  whoever caused it. The open half is named rather than assumed: whether any
-  cut-reachable page state makes a per-key `fetch_item` return `Corrupted` is
-  unmeasured. Within one boot it cannot — the location cache a cut clears is the
-  only path that propagates it — and no board has been asked the rest.
-
-- **One faulted flash probe re-seeded the factory PIN, PUK and management key at
-  an unauthenticated PIV `SELECT`.** `Storage::read`/`size` answer the same `None`
-  for "no such record" and for "that read failed", and an absent record is how
-  this firmware spells *not provisioned yet* and *no gate configured* — so the two
-  collapse at the place it costs most. Measured over one faulted `EF_PIN` probe:
-  `SELECT` → `9000`, the PIN record replaced byte-for-byte with the `DEFAULT_PIN`
-  verifier, `VERIFY` of the owner's PIN → `63C2`, `VERIFY 123456` → `9000`. It is
-  a class, not a site, and PIV was not the worst of it: FIDO's `ensure_seed` ran
-  the same guard over `EF_KEY_DEV` at **boot**, so one faulted probe minted a new
-  device seed over the live one and every credential derived from it — no host
-  command involved. Also measured re-seeded: OpenPGP's `PW1` verifier (`123456`
-  then verifies, and the owner's PW1 does not), the PIV management key, the FIDO
-  signature counter and large-blob array. And the gates: OATH's OTP-PIN check
-  handed the stored passwords to an unauthenticated host, `clientPin`'s `setPIN`
-  let one install a PIN over the owner's, `alwaysUv` resolved to the compile
-  default, and the makeCredential and largeBlobs UV gates both dropped to user
-  presence.
-
-  `Fs` published no way to tell an absence from a failed read — the distinction
-  existed inside the crate (`Storage::last_error`, used to keep the present-cache
-  honest) and stopped at its edge, so "check whether the read faulted" was not
-  expressible at a call site. It is now: `Fs::try_read`, `try_has_data`,
-  `try_has_key` and `try_meta_find` answer `Err` for a probe the backend could not
-  complete and `Ok` only for one it answered, and the collapsing `read`/`has_data`
-  /`meta_find` are defined in terms of them, so the collapse is one visible line
-  per method instead of a property of the type. **50 guards in 25 functions across
-  four crates** take the fallible probe — every one whose *absent* arm overwrites
-  configured material or opens a gate. The recipe, because two of those three
-  numbers shipped wrong the first time: a guard is a `try_*` call **site** (one per
-  line, tests, Kani, assurance shims and `rsk-fs` itself excluded), minus the three
-  module-local wrapper bodies (`piv::files::provisioned`,
-  `openpgp::init::provisioned` and `read_file`), plus every call of those wrappers —
-  32 − 3 + 21. A function counts once if it holds any guard, which is the reading
-  that makes the sentence say what it looks like it says; the wrapper bodies are not
-  among them. `17` matched no reading of the tree it described, and `five` counted
-  `rsk-fs` — which publishes the probes and holds no guard. `docs/limitations.md`
-  named four crates all along, so the two copies disagreed. Guards whose absent arm only reports a status field, repeats an
-  idempotent repair, or already fails the command closed keep `has_data` — the
-  `EF_MINPINLEN` floor among them, where the weaker reading costs the OWNER a
-  shorter PIN of their own choosing and gives an attacker nothing. `try_read`'s
-  documentation names the rule rather than the sites.
-
-- **A boot scan a read fault cut short made every credential slot it never
-  reached read FREE, and `makeCredential` writes a free slot without re-reading
-  it.** `Fs::present_slots` answered from the raw present bit, which is clear both
-  for a slot the walk proved empty and for one the walk never got to — measured,
-  a truncated scan gave `[false, false, false, false]` over a range where
-  `Fs::read` still returned the live record. The two are the same class as the
-  faulted probe above, one call out: `for_each_key`'s completeness flag was
-  already captured by `scan` and then used for nothing but the decided-bitmap
-  fill. `scan` remembers it now, and a range it could not enumerate reports
-  occupied — `credential_store` answers `KEY_STORE_FULL` instead of minting over a
-  live passkey, and every other reader re-`read`s the slot it was told about and
-  skips the empty ones. A scan that COMPLETED is bit-for-bit the old answer, and a
-  fresh `Fs` that has not scanned still reports free.
-
 ### Fixed
 
 - **`CONFIG_READ` over FIDO reported a record it could not read as an empty one.**
@@ -1794,8 +1368,6 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `./scripts/check.sh` — EXIT=1 at `== threat-model traceability ==`, 90 rows
   green before it — rather than only through the function.
 
-### Fixed
-
 - **The number that justified the whole lock design did not reproduce.** The
   choice of a per-sentence pin over a whole-body hash was argued from "39 clause
   bodies changed with their first line intact against 12 first lines reworded, so
@@ -2549,6 +2121,432 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `deleteCredential` both already did. Four tests over a medium that refuses to
   remove one nominated fid, each driven red against the unfixed code with the
   whole suite watched. **bcdDevice → 0x0988.**
+
+### Security
+
+- **One faulted probe waived a pending forced PIN change and issued the token it
+  exists to withhold.** While `EF_MINPINLEN[1]` is set, a correct PIN buys no
+  pinUvAuthToken until changePIN lifts the flag (CTAP 2.1 §6.5.5.7.1;
+  ClientPin2-GetPinToken F-5 asserts it). `force_change_pending` read the flag with
+  `Fs::read`, and all three of its callers spend `false` to let something *through*
+  — a token issued, a changePIN allowed to reuse the old value.
+
+  Control leg: the correct PIN answers `PIN_INVALID` while the flag stands and no
+  token is minted. One faulted probe on the same command and the host gets a live
+  `mc|ga` token. Reads as PENDING now, the same fail-closed direction and the same
+  reasoning as `pin_is_set` five functions below it.
+
+- **One faulted probe reset every OpenPGP slot's key-origin claim to imported.**
+  `origin::mark` rewrites the whole `EF_KEY_ORIGIN` record to change one slot, so it
+  reads the others first — and it read with `Fs::read` and *discarded* the result.
+  For a short record from an older build that is right: `of` reads an uncovered slot
+  as imported anyway. A failed read is not that. The buffer stays zeroed and is
+  written straight back, so the other slots lose the on-card-generation claim
+  §4.4.3.8 exists to make, which reaches the host through DO `0xDE`.
+
+  Driven through the real IMPORT with two slots marked generated: one faulted probe
+  and both read back **imported (2, 2 where 1, 1 was owed)**, permanently. It refuses
+  now — `mark`'s two callers already weigh its `Result` opposite ways on purpose, so
+  the IMPORT stores no key over a record it could not carry forward and the GENERATE
+  keeps ignoring it, which only under-claims.
+
+- **One faulted probe minted a new device-certificate key over the live one and
+  persisted it, unauthenticated, retiring every certificate the old key issued.**
+  `rsk-rescue`'s `load_or_generate` mints and persists a fresh secp256k1 key when
+  `EF_DEVCERT_KEY` reads absent — the documented first use. It probed with
+  `fs.read_key`, whose `None` covers both that and a read the flash could not serve.
+  `KEYDEV_SIGN P1=0x02` (read the device public key) takes no user presence at all,
+  so a USB host on its own reached it. This is the `ensure_seed` shape the original
+  sweep converted, in a crate that diff never opened.
+
+  Driven through the real APDU: the device's public key, a signature made under it
+  that verifies (the control), then one faulted probe on the same command. All four
+  assertions fall — the sealed record is replaced, the device advertises a different
+  65-byte key, the old signature no longer verifies against it, and the command
+  answers `9000`. The last leg is what makes it a loss rather than a hiccup: **after
+  the medium recovers the device still answers the new key**, because the mint was
+  persisted.
+
+  Only a CONFIRMED absence mints now. Both reachable spellings of that absence are
+  driven and still work — a boot walk that decided the FID space (so the probe never
+  reaches the backend) and one a read fault cut short (so the absence goes to the
+  backend and comes back as a real `Ok(None)`). That arm is proven non-vacuous by
+  its own mutant: stopping the mint from persisting turns it red.
+
+- **One faulted probe made OpenPGP GENERATE mint and seal RSA-2048 where the owner
+  had configured Ed25519.** `read_advertised_algo` resolves the slot's algorithm
+  attribute and GENERATE mints whatever it says. Its `_` arm covered three states at
+  once: a slot with no attribute configured (which must resolve to `DEFAULT_ALGO` —
+  the documented path for a slot the owner never set), an empty record, and a probe
+  the flash could not answer.
+
+  All three are asserted at the function, because only there can "absent" and
+  "faulted" be told apart: absent → `DEFAULT_ALGO`, empty → `DEFAULT_ALGO`,
+  configured → itself, faulted → `Ok([1, 8, 0, 0, 32, 0])`, which is RSA-2048.
+  Driven through the real GENERATE afterwards: the control leg with Ed25519
+  configured mints a 32-byte point, and one faulted probe stores a **270-byte
+  `EF_PB_SIG` with inner tag `0x81`** — an RSA modulus — at `9000`.
+
+  Fixed by splitting the arm three ways rather than by choosing a default: `Ok(_)`
+  keeps the documented absent/empty path exactly as it was, and only `Err` is new,
+  refusing with `Sw::MEMORY_FAILURE`. A GENERATE that cannot read the algorithm it
+  must honour has to refuse, because what it would otherwise do is seal a weaker key
+  the owner never asked for.
+
+- **One faulted probe minted a fresh card-level AES key over the OpenPGP owner's,
+  and the card then deciphered every old ciphertext to garbage at `9000`.**
+  `keygen_tail` seeds `D5` when the DEC slot is generated and `EF_AES_KEY` is empty,
+  and it asked with `fs.has_key` — the same `false` for an absent slot and for one
+  the flash could not read. `D5` is card-level (§7.2.12 gives PSO:ENCIPHER no key
+  reference at all), so the blast radius is everything ever enciphered under it.
+
+  Driven end to end: a `PUT DATA D5` key, a plaintext enciphered under it, then a
+  DEC GENERATE. Control leg first — a healthy medium leaves the standing key
+  byte-identical, which is the documented "the seed never **replaces** a standing
+  key". Then one faulted probe: the sealed record is replaced (60 bytes for 60,
+  entirely different), the GENERATE answers `9000`, and PSO:DECIPHER of the old
+  ciphertext answers `9000` with the wrong plaintext — a success status over
+  corruption, not an error.
+
+  Fixed by fail-closed skip, not refusal. The private key is already committed when
+  this runs, so refusing would fail a GENERATE whose key is in the slot; the seed is
+  documented non-fatal and the next DEC generate makes it again. Skipping costs a
+  card with no `D5` until then; overwriting costs every message.
+
+- **One faulted probe took the minPINLength floor down permanently, and a second
+  copy of the same read stored a PIN underneath it.** CTAP 2.1 §6.11 makes
+  minPINLength monotonic — setMinPINLength may only raise it, and nothing short of
+  a factory reset puts a lowered floor back. Both readers of `EF_MINPINLEN[0]` used
+  the collapsing `Fs::read`, whose `None` covers "no policy set" and "the flash
+  could not serve it" alike, and the collapsed arm resolves to the build's
+  `MIN_PIN_LENGTH` — below any floor an owner would have configured.
+
+  `config::current_min_pin` is what the monotonic guard compares against. With an
+  enterprise floor of 16 stored and the control leg confirming `setMinPINLength(8)`
+  is refused on a healthy medium, one faulted probe and the record reads **8**.
+  `clientpin::min_pin_length` is the enforcement twin, and it is reached by two
+  different doors: with the same floor of 16 in place, one faulted probe and a
+  **six-code-point PIN is stored** — by the panel's `store_local_pin` and by the
+  host setPIN, both answering success.
+
+  Both are fixed by refusing, because both write. `current_min_pin` is fallible and
+  `set_min_pin_length` answers `CtapError::Other`; a new private
+  `clientpin::try_min_pin_length` serves the two sites that ENFORCE the floor
+  (`store_new_pin` → `CtapError::Other`, `store_local_pin` → `SetPinError::Storage`,
+  not `TooShort`, since the floor is exactly what could not be read and naming a
+  number would be an invention). The collapsing `min_pin_length` stays for the
+  sites that only *show* the floor or size a pad buffer from it — `builtin_uv`'s
+  entry length and the display's dot count — where a lowered value costs a wasted
+  entry the store path then refuses, not a stored PIN. Each copy is falsified by
+  its own test and by neither the other's.
+
+- **One faulted probe turned a one-shot OpenPGP PIN entry into an unlimited
+  signing session.** OpenPGP 3.4 §7.2.10: DO `C4`'s first byte at `0x00` is "PW1
+  valid for ONE PSO:CDS", and `inc_sig_count` is the only place that spends it. It
+  read the flag with `Fs::read`, whose `None` covers both "no PW status stored" and
+  "the flash could not serve it" — and that arm leaves PW1 STANDING, so whoever is
+  on the wire after the owner's one legitimate signature gets every further
+  signature for free.
+
+  Driven with the fault aimed at `EF_PW_PRIV` alone, because the statement
+  immediately below reads `EF_SIG_COUNT` and already refuses — a whole-backend
+  fault would be caught by that neighbour and prove nothing about this line.
+  Control leg first: one PIN entry, one signature, `EF_SIG_COUNT` at 1 and the
+  second PSO:CDS `6982`. Same card, same one PIN entry, one transient faulted probe
+  as the first signature spends it: a **second 64-byte ECDSA signature** comes back
+  `9000`, and the card's own counter reads **3 where it owed 2**.
+
+  Fixed by failing closed — a probe that could not be completed spends PW1 —
+  rather than by refusing. The signature this call has already produced was
+  authorised; only the next one is in question, and refusing would discard a
+  finished private-key operation (the post-crypto DoS this same function's
+  `EF_SIG_COUNT` neighbour is commented for). The genuinely-absent arm is left
+  exactly as it was: only `Err` is new.
+
+- **One faulted probe let the trusted display overwrite a populated PIV retired
+  slot — the sealed key and the certificate — with no management-key auth behind
+  it.** `retired_slot_is_free` is the *whole* authorisation for the panel's
+  Generate key: physical presence at the screen is the only other gate, and
+  docs/guides/display.md states the action is "restricted to empty slots
+  (add-only, never overwrite)". Both of its probes were the collapsing
+  `has_key` / `has_data`, which answer the same `false` for an absent record and
+  for one the flash could not read.
+
+  Driven on a `ProbeStuck` medium, one row per probe aimed at its OWN fid (a fault
+  on the key shadows the cert probe behind it). Slot 0x82 holding a key and no
+  certificate — the state a host GENERATE leaves, and the state an on-device
+  X25519 generate leaves, since X25519 cannot self-sign: one faulted `key_fid(0x82)`
+  read and the stored 64-byte sealed key is replaced by a fresh 61-byte sealed
+  P-256 key, `Ok(())` returned. Slot 0x83 holding a certificate and no key: one
+  faulted cert read and the stored certificate goes **5 bytes → 476**, again
+  `Ok(())`. Both destroy material that only a management-key-authenticated host
+  command is supposed to be able to touch.
+
+  It is two copies, not one. `rsk-piv`'s `info::next_free_retired` inlines the same
+  predicate to pick the target slot, and it offered the occupied slot in both rows.
+  The two are fixed differently because they answer different questions.
+  `retired_slot_is_free` **refuses** — `Sw::MEMORY_FAILURE` — because a generate
+  that cannot confirm the slot empty must not write; `next_free_retired`
+  **fail-closed defaults to "not free"** and moves to the next slot, because a
+  probe that failed is not a slot known free and skipping it costs one candidate
+  out of twenty rather than a key. Falsified by reverting each guard alone: the
+  keygen predicate's revert fails on the data assertion ("a faulted probe let the
+  panel generate destroy the sealed key"), the picker's revert fails on the picker
+  assertion with the data assertion still passing — so neither is held by the
+  other.
+
+- **One faulted probe erased the clone-detection evidence for every credential on
+  the key, and signed an assertion with the fabricated value.** signCount is the
+  only clone signal a relying party gets (WebAuthn L3 §6.1.1), and all three of its
+  readers spelled a failed flash read as *not provisioned*: `get_sign_counter`
+  answered **0**, `cred_sign_counter` answered *unmaterialized* — which the caller
+  seeds from the global counter — and `set_cred_sign_counter` merged the new value
+  into a **zero-filled** buffer truncated to the target slot.
+
+  Measured end to end over two resident credentials, A at three assertions and B at
+  one: one faulted `EF_CRED_CTR` read and the host receives `Ok` with signCount
+  **0** for a credential that had just reported 3, the packed file goes **8 bytes →
+  4** holding `[1,0,0,0]`, B's next assertion reports **0** where it owed 2 and A's
+  reports 1 where it owed 5. Both credentials lost their counters and B was never
+  named by the request. At the writer alone, three slots held at 11/22/33: one
+  faulted read truncates **12 bytes → 8**, zeroes slot 0, drops slot 2 — and returns
+  `Ok(())`. On the global counter `bump_sign_counter` writes **1** over a live 77,
+  and U2F AUTHENTICATE signs and returns the fabricated 0.
+
+  The class was re-derived mechanically rather than read off the diff, and the file
+  says so itself: `ensure_seed`'s converted guard fifty lines above reads "a faulted
+  probe here would roll the signature counter back to zero" — the code that actually
+  rolls it back was left alone.
+
+  Fixed by keeping the states apart instead of choosing a default.
+  `cred_sign_counter` answers `Result<Option<u32>>` — `Err` a fault, `Ok(None)` an
+  unmaterialized slot (absent, short, or a real 0 in a gap a higher write
+  zero-extended over), `Ok(Some)` a live counter — and `report_sign_counter` owns
+  the one place the per-credential and global reads combine. `get_sign_counter` is
+  gone rather than kept as a collapsing sibling: all four of its callers sign or
+  persist the value, so the sibling would have had no user but the tests, and unlike
+  `backup_sealed` / `device_pin_is_set` there is no conservative `u32` to collapse
+  to. getAssertion, getNextAssertion and U2F AUTHENTICATE now refuse
+  (`CTAP2_ERR_OTHER` / `6F00`) rather than sign a number the medium never served.
+
+  Two of the guards sat behind a neighbour: with the fault STUCK, the write-back
+  three statements later refuses on the read guard's behalf, so both call-site
+  `?`s could be reverted with the suite green. `stick_once` reaches them — the
+  medium recovers before the write-back — and the reversion then rewrites the
+  counter from the fabricated value: slot 0 `[2,0,0,0]` → `[1,0,0,0]`.
+
+- **One faulted probe at an unauthenticated SELECT handed a host every OATH secret
+  on the card.** `select` derives the session's lock state from a single probe —
+  `validated = !fs.has_key(EF_OATH_CODE)` — and `validated` is the access-code gate
+  on PUT, DELETE, SET CODE, RESET, RENAME, LIST, CALCULATE and CALCULATE ALL. SELECT
+  takes no authentication and the host drives it, so a probe read as "no code set"
+  unlocked the whole credential store for the session with nothing presented.
+  Measured on a code-locked applet: control `LIST` → `6982`, one faulted
+  `EF_OATH_CODE` probe → `9000` and the credential list on the wire. It resolves to
+  CODE SET now, the direction `lock_engaged` and `pin_is_set` already take.
+
+  Found by re-deriving the class mechanically rather than by reading the diff again
+  — the file's OTP-PIN gate 180 lines above had been converted while the applet's
+  primary gate had not.
+
+  Its sibling at `cmd_validate` was left collapsing **on purpose**: `select` now
+  reads an unprobeable code as set, so `validated` is already false in every state
+  that arm can be reached in, and the fallible twin there is bit-identical. A guard
+  nothing can falsify is a comment with a type; the reason is recorded at the site.
+
+- **A card whose boot walk hit one transient fault reported every credential slot
+  FULL for the rest of the power cycle — a factory reset included.** `Fs::scan`
+  latches `scan_truncated`, and `present_slots` answers "occupied" over the whole
+  range while it is set, which is the right trade for a walk that decided nothing.
+  `factory_wipe` resets the caches that flag describes — `present`, `decided`, the
+  dynamic set — but not the flag. Measured after one transient boot-walk fault and
+  a successful wipe: `for_each_key` yields nothing (`seen = 0`, the store really is
+  empty) while `present_slots` still answers `[true, true, true, true]`, so
+  `credential_store` and OATH's `free_slot` refuse on a card that was just reset.
+  The doc comment's own defence — "a fresh `Fs` that has not scanned still reports
+  free — its store is empty" — is precisely the case it got wrong. The wipe clears
+  it now, and it may: the wipe does not return at all without a COMPLETE walk of
+  every phase, which is the same evidence `scan` requires.
+
+- **A faulted probe waived the OpenPGP touch gate, and lowered a UIF the card
+  documents as unchangeable.** `check_uif` is the touch gate itself — PSO:CDS,
+  PSO:DEC and INTERNAL AUTHENTICATE all pass through it — and it decided on a
+  `Fs::read` that answers the same `None` for "no UIF configured" and "I could not
+  read it". Measured over a declined touch: control `6600`, one faulted
+  `EF_UIF_SIG` probe `9000` — the signature made with no confirmation at all. It
+  resolves to ON now.
+
+  The second is the guard the reviewer named and did not drive; driven here.
+  OpenPGP 3.4 §4.4.3.6: UIF `02` is "permanently enabled … not changeable with PUT
+  DATA", clearable only by a factory reset, and its guard read the stored value the
+  same collapsing way. Measured with PW3 verified: control
+  `CONDITIONS_NOT_SATISFIED`, one faulted probe and the stored value goes `02` →
+  `00`, irreversibly short of TERMINATE DF.
+
+  Separately, `formal/README.md` cited `putdata.rs:192-194` twice for "PUT DATA
+  `0xC4` is an administrative write gated on PW3". The locked text says that span
+  is the **UIF** block; the PW3 gate is `put_pw_status`'s own `!sess.has_pw3` at
+  `:244-247`. The citation named code the prose was never about, and only became
+  visible because this change rewrote the line it ended on — `citation_gate.py`
+  reports a locked line that MOVED, never one edited where it stood.
+
+- **PIV `MOVE KEY` destroyed the certificate at BOTH slots on a faulted probe, and
+  answered `9000`.** It reads the source certificate and, finding none, deletes the
+  destination's; the source's goes at the end of the move. `Fs::read` answers the
+  same `None` for "no certificate" and "I could not read it". Measured: `MOVE 9A ->
+  82` with `0xD205` stuck → `sw = 0x9000`, source certificate `None`, destination
+  certificate `None` (it was 40 bytes of a known fill). Three more probes in the
+  same command took the fallible twin: the metadata head (a faulted `meta_find`
+  stranded the moved key with no head, which `GET METADATA` and the PIN/touch gate
+  both read), the tail read-back (`has_key`'s collapsed `false` let a failed
+  `remove` answer OK over a key that is still live — the shape `Fs::delete` closed
+  one layer up), and the source blob itself (`FILE_NOT_FOUND` over a slot the medium
+  merely could not read tells the host the slot is EMPTY, and a host that believes
+  it fills the slot). `Fs::try_read_key` is the `read_key` twin, keeping the
+  `KeyFid` chokepoint.
+
+  The fault medium grew the two capabilities these needed: `ProbeMedium::stick_after`
+  lets N reads of a fid through before faulting — a guard standing BEHIND another
+  probe of the same record is otherwise unfalsifiable, which is how 18 of the
+  previous batch's guards ended up held by nothing — and `refuse_remove` drives a
+  failed delete and a faulted read-back on one medium.
+
+- **One faulted flash probe erased the tamper-evident audit trail and left it
+  looking freshly initialised.** `journal::load_meta` read `EF_AUDIT_META` with the
+  collapsing `Fs::read`, and its absent arm is *genesis* — the state of a journal
+  that has never been written. `raw_append` then wrote at slot 0 and `put_meta`
+  **persisted** it. Measured: `seq_next` 10 → 1, `start` 0, the head no longer over
+  the window, ten entries out of the live window, all of it on flash. The chain's
+  whole job is to make that undetectable-loss case impossible.
+
+  The eviction fold was the second half: `raw_append` folded the entry it is about
+  to overwrite into the epoch only `if read_slot(..).is_some()`, so a faulted slot
+  read at eviction dropped an entry from the chain *without* folding it — and the
+  head still verified over the shortened history. Three more readers spelled the
+  same thing: `chain_head` (whose result gets SIGNED by `AUDIT_CHECKPOINT`),
+  `vendor_read` (the export the host folds against that signature) and
+  `fold_and_scrub` (which deletes the slots after committing the fold). All four
+  refuse now; the two coalesce paths decline instead, which sends the caller to
+  `append`, which refuses. `for_each_event` deliberately keeps the collapse — it
+  writes nothing, signs nothing and opens no gate, and its one caller is a display
+  screen with no error state to paint; a faulted `EF_AUDIT_META` still renders
+  there as an empty log.
+
+- **One faulted flash probe waived the vendor PIN gate and handed out the device
+  master seed.** `vendor::pin_gate` is the *only* PIN half of the gate on
+  `BACKUP_EXPORT`, `BACKUP_LOAD`, `BACKUP_FINALIZE`, `ATT_IMPORT`, `ATT_CLEAR`,
+  `AUDIT_READ`, `AUDIT_CHECKPOINT`, `AUDIT_CONFIG` and `CONFIG_WRITE`, and it
+  decided "is a PIN configured" on the collapsing `Fs::has_data`. `VENDOR_MSE` is
+  ungated, so the residual barrier was one touch under "Export secret seed?" — and
+  none at all on a `no-touch` build. Measured on a PIN-protected card with the MSE
+  channel re-handshaked and no token: control `Err(PuatRequired)`, one faulted
+  `EF_PIN` probe `Ok(64)` — the 64-byte encrypted seed blob. Both of the gate's
+  records took the fallible probe, not just the one that was driven: a display
+  build's owner often sets only the **device** PIN, and a faulted `EF_DEVICE_PIN`
+  probe waived the gate identically (measured `Ok(64)` with both halves at their
+  old spelling).
+
+- **A faulted `EF_BACKUP_SEALED` probe re-opened the export window
+  `BACKUP_FINALIZE` had sealed** — irreversible short of a reset that destroys the
+  identity it protects. Measured: control after FINALIZE `Err(NotAllowed)`, one
+  faulted probe `Ok(64)`. Its second reader is the trusted display, whose Backup
+  screen offers the on-device recovery-phrase reveal on `!sealed`; `backup_sealed`
+  / `backup_status` resolve to SEALED on a probe the medium could not answer, the
+  same direction `lock_engaged` already took. `pin_is_set` and `device_pin_is_set`
+  move with them: `local_pin_gate` returns `true` outright when no PIN of that
+  scope exists, so the collapsed `false` waived every destructive on-device action
+  rather than raising its gate.
+
+- **The comment that scoped a threat-model clause was wrong about the physics,
+  and three registry verdicts argued from it.** `crates/rsk-store/src/lib.rs`
+  said the walk's early exit is a read fault *"which a NOR power cut never
+  produces (a torn write yields deterministic bytes, not a read error)"*. All
+  four legs re-derived, and the claim is refuted: `WRITE_SIZE` is **1** on this
+  target (embassy-rp `flash.rs:35`, forwarded through `BlockingAsync` and
+  `SharedFlash`, and `WORD_SIZE = max(WRITE_SIZE, READ_SIZE) = 1`); the item
+  header is **8 bytes** written in **one** `flash.write` call
+  (`third_party/sequential-storage/src/item.rs`, `LENGTH = 8`, fields `0..4` /
+  `4..6` / `6..8`, and one call at `write`); a cut that leaves the length field
+  programmed and the length-CRC erased at `0xFFFF` cannot match, because
+  **0 of 65 536** two-byte lengths produce `0xFFFF` — measured exhaustively, and
+  not by luck: **8 of them do** before `crc16`'s closing `match crc { 0xFFFF =>
+  0xFFFE }`, a clamp whose own doc line is "A crc that never returns 0xFFFF", so
+  the guard is load-bearing rather than decorative. `ItemHeader::read_new` then
+  answers `Error::Corrupted` after one retry. A torn write is deterministic **and**
+  a read error.
+
+  What actually keeps the enumeration honest is that `ItemHeaderIter::traverse`
+  advances one word past `Corrupted` on purpose instead of propagating it. The
+  comment says that now, and so does its second copy in `crates/rsk-store/src/
+  tests.rs` — which no list of consumers had, and which the same wording had been
+  retyped into. `docs/threat-model.md`'s clause A keeps its scope and drops the
+  false reason; the `rests_on` pin moves with the sentence in the same change, and
+  reddens the gate from either side (measured both ways).
+
+  The routing of `SEC-STORE-003/-004/-005` away from `TM-HOST-POWER-CUT` is
+  unchanged, but its reason is replaced. It was "a cut cannot produce a read
+  fault"; it is now the THREAT — the cut clause is about what a write leaves
+  behind and in what order, those three are about a read the medium refused,
+  whoever caused it. The open half is named rather than assumed: whether any
+  cut-reachable page state makes a per-key `fetch_item` return `Corrupted` is
+  unmeasured. Within one boot it cannot — the location cache a cut clears is the
+  only path that propagates it — and no board has been asked the rest.
+
+- **One faulted flash probe re-seeded the factory PIN, PUK and management key at
+  an unauthenticated PIV `SELECT`.** `Storage::read`/`size` answer the same `None`
+  for "no such record" and for "that read failed", and an absent record is how
+  this firmware spells *not provisioned yet* and *no gate configured* — so the two
+  collapse at the place it costs most. Measured over one faulted `EF_PIN` probe:
+  `SELECT` → `9000`, the PIN record replaced byte-for-byte with the `DEFAULT_PIN`
+  verifier, `VERIFY` of the owner's PIN → `63C2`, `VERIFY 123456` → `9000`. It is
+  a class, not a site, and PIV was not the worst of it: FIDO's `ensure_seed` ran
+  the same guard over `EF_KEY_DEV` at **boot**, so one faulted probe minted a new
+  device seed over the live one and every credential derived from it — no host
+  command involved. Also measured re-seeded: OpenPGP's `PW1` verifier (`123456`
+  then verifies, and the owner's PW1 does not), the PIV management key, the FIDO
+  signature counter and large-blob array. And the gates: OATH's OTP-PIN check
+  handed the stored passwords to an unauthenticated host, `clientPin`'s `setPIN`
+  let one install a PIN over the owner's, `alwaysUv` resolved to the compile
+  default, and the makeCredential and largeBlobs UV gates both dropped to user
+  presence.
+
+  `Fs` published no way to tell an absence from a failed read — the distinction
+  existed inside the crate (`Storage::last_error`, used to keep the present-cache
+  honest) and stopped at its edge, so "check whether the read faulted" was not
+  expressible at a call site. It is now: `Fs::try_read`, `try_has_data`,
+  `try_has_key` and `try_meta_find` answer `Err` for a probe the backend could not
+  complete and `Ok` only for one it answered, and the collapsing `read`/`has_data`
+  /`meta_find` are defined in terms of them, so the collapse is one visible line
+  per method instead of a property of the type. **50 guards in 25 functions across
+  four crates** take the fallible probe — every one whose *absent* arm overwrites
+  configured material or opens a gate. The recipe, because two of those three
+  numbers shipped wrong the first time: a guard is a `try_*` call **site** (one per
+  line, tests, Kani, assurance shims and `rsk-fs` itself excluded), minus the three
+  module-local wrapper bodies (`piv::files::provisioned`,
+  `openpgp::init::provisioned` and `read_file`), plus every call of those wrappers —
+  32 − 3 + 21. A function counts once if it holds any guard, which is the reading
+  that makes the sentence say what it looks like it says; the wrapper bodies are not
+  among them. `17` matched no reading of the tree it described, and `five` counted
+  `rsk-fs` — which publishes the probes and holds no guard. `docs/limitations.md`
+  named four crates all along, so the two copies disagreed. Guards whose absent arm only reports a status field, repeats an
+  idempotent repair, or already fails the command closed keep `has_data` — the
+  `EF_MINPINLEN` floor among them, where the weaker reading costs the OWNER a
+  shorter PIN of their own choosing and gives an attacker nothing. `try_read`'s
+  documentation names the rule rather than the sites.
+
+- **A boot scan a read fault cut short made every credential slot it never
+  reached read FREE, and `makeCredential` writes a free slot without re-reading
+  it.** `Fs::present_slots` answered from the raw present bit, which is clear both
+  for a slot the walk proved empty and for one the walk never got to — measured,
+  a truncated scan gave `[false, false, false, false]` over a range where
+  `Fs::read` still returned the live record. The two are the same class as the
+  faulted probe above, one call out: `for_each_key`'s completeness flag was
+  already captured by `scan` and then used for nothing but the decided-bitmap
+  fill. `scan` remembers it now, and a range it could not enumerate reports
+  occupied — `credential_store` answers `KEY_STORE_FULL` instead of minting over a
+  live passkey, and every other reader re-`read`s the slot it was told about and
+  skips the empty ones. A scan that COMPLETED is bit-for-bit the old answer, and a
+  fresh `Fs` that has not scanned still reports free.
 
 ## [0.4.11] - 2026-08-24
 
