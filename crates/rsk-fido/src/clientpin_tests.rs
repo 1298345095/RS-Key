@@ -2674,3 +2674,63 @@ fn a_faulted_min_pin_probe_does_not_store_a_pin_under_the_floor() {
     );
     assert!(r.is_err(), "the host setPIN under the floor has to refuse");
 }
+
+/// While `EF_MINPINLEN[1]` is set, a correct PIN still does not buy a
+/// pinUvAuthToken — changePIN has to lift the flag first (CTAP 2.1 §6.5.5.7.1,
+/// ClientPin2-GetPinToken F-5). `force_change_pending` read the flag with `Fs::read`,
+/// and every caller spends its `false` to let something THROUGH, so a faulted probe
+/// waived the gate and handed out the token the flag exists to withhold.
+#[test]
+fn a_faulted_force_change_probe_does_not_waive_the_pending_change() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    let mut state = FidoState::new();
+    let plat = key_agreement(&mut fs, &mut rng, &mut state, PinProto::Two, 2);
+    let mut out = [0u8; 256];
+    run(
+        &mut fs,
+        &mut rng,
+        &mut state,
+        &plat.set_pin_req(PIN),
+        &mut out,
+    )
+    .unwrap();
+    fs.put(EF_MINPINLEN, &[4, 1]).unwrap(); // forceChangePin pending
+
+    // Control: the correct PIN is refused while the flag stands, and no token is
+    // minted for the host.
+    state.paut.permissions = 0;
+    assert_eq!(
+        run(
+            &mut fs,
+            &mut rng,
+            &mut state,
+            &plat.get_token_req(PIN),
+            &mut out
+        ),
+        Err(CtapError::PinInvalid),
+        "control: a pending forced change withholds the token"
+    );
+
+    state.paut.permissions = 0;
+    medium.stick_once(EF_MINPINLEN);
+    let r = run(
+        &mut fs,
+        &mut rng,
+        &mut state,
+        &plat.get_token_req(PIN),
+        &mut out,
+    );
+    medium.stick(None);
+    assert_eq!(
+        state.paut.permissions, 0,
+        "a faulted probe issued a pinUvAuthToken while a forced PIN change was pending"
+    );
+    assert_eq!(
+        r,
+        Err(CtapError::PinInvalid),
+        "a flag the medium could not read must not be taken for no pending change"
+    );
+}

@@ -98,8 +98,8 @@ formal/README.md	crates/rsk-fido/src/clientpin.rs	726-811	ctx: &mut Ctx<S, R>,	/
 formal/README.md	crates/rsk-fido/src/clientpin.rs	764-764	if !matched && ctx.dev.otp_key.is_some() {	if !matched && ctx.dev.otp_key.is_some() {
 formal/README.md	crates/rsk-fido/src/clientpin.rs	786-786	if retries == 0 {	if retries == 0 {
 formal/README.md	crates/rsk-fido/src/clientpin.rs	827-831	/// here rather than in each caller: the `pcmr` grant is a flash record that no PIN	fn write_pin_verifier<S: Storage>(
-formal/README.md	crates/rsk-fido/src/clientpin.rs	1101-1105	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
-formal/README.md	crates/rsk-fido/src/clientpin.rs	1107-1113	pub fn spend_and_verify_local_pin<S: Storage>(	}
+formal/README.md	crates/rsk-fido/src/clientpin.rs	1109-1113	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
+formal/README.md	crates/rsk-fido/src/clientpin.rs	1115-1121	pub fn spend_and_verify_local_pin<S: Storage>(	}
 formal/README.md	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
 formal/README.md	crates/rsk-fido/src/config.rs	427-428	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
 formal/README.md	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
@@ -358,9 +358,9 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	778-778	// A Yubi
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	786-786	if retries == 0 {	if retries == 0 {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	787-792	// The transition into the hard lockout (later attempts are turned	ctx.state.new_pin_mismatches += 1;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	805-806	ctx.state.new_pin_mismatches = 0;	ctx.fs
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1101-1105	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1107-1113	pub fn spend_and_verify_local_pin<S: Storage>(	}
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1141-1143	return LocalPin::Blocked;	if n != PIN_FILE_LEN || pin_data[0] == 0 {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1109-1113	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1115-1121	pub fn spend_and_verify_local_pin<S: Storage>(	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1149-1151	return LocalPin::Blocked;	if n != PIN_FILE_LEN || pin_data[0] == 0 {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	244-244	|| ctx.state.paut.permissions & PERM_ACFG == 0	|| ctx.state.paut.permissions & PERM_ACFG == 0
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	427-428	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();

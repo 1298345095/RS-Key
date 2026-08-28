@@ -144,6 +144,18 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe waived a pending forced PIN change and issued the token it
+  exists to withhold.** While `EF_MINPINLEN[1]` is set, a correct PIN buys no
+  pinUvAuthToken until changePIN lifts the flag (CTAP 2.1 §6.5.5.7.1;
+  ClientPin2-GetPinToken F-5 asserts it). `force_change_pending` read the flag with
+  `Fs::read`, and all three of its callers spend `false` to let something *through*
+  — a token issued, a changePIN allowed to reuse the old value.
+
+  Control leg: the correct PIN answers `PIN_INVALID` while the flag stands and no
+  token is minted. One faulted probe on the same command and the host gets a live
+  `mc|ga` token. Reads as PENDING now, the same fail-closed direction and the same
+  reasoning as `pin_is_set` five functions below it.
+
 - **One faulted probe reset every OpenPGP slot's key-origin claim to imported.**
   `origin::mark` rewrites the whole `EF_KEY_ORIGIN` record to change one slot, so it
   reads the others first — and it read with `Fs::read` and *discarded* the result.

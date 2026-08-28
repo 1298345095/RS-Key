@@ -993,9 +993,17 @@ fn try_min_pin_length<S: Storage>(fs: &mut Fs<S>) -> rsk_sdk::error::Result<u8> 
 }
 
 /// The pending forced-PIN-change flag (`EF_MINPINLEN[1]`).
+///
+/// A probe the medium could not answer reads as PENDING, for the same reason as
+/// [`pin_is_set`]: every caller spends `false` to let something through — a token
+/// issued, a changePIN allowed to reuse the old value — so the collapsed answer
+/// waived the gate rather than raising it.
 fn force_change_pending<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> bool {
     let mut buf = [0u8; 2];
-    matches!(ctx.fs.read(EF_MINPINLEN, &mut buf), Some(n) if n >= 2 && buf[1] != 0)
+    match ctx.fs.try_read(EF_MINPINLEN, &mut buf) {
+        Ok(v) => matches!(v, Some(n) if n >= 2 && buf[1] != 0),
+        Err(_) => true,
+    }
 }
 
 /// A successful changePIN satisfies the policy: drop the flag, keep the
