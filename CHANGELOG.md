@@ -399,6 +399,29 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **A flash read the applet gate could not complete re-enabled every application
+  the owner had disabled.** `read_enabled_caps` is the mask the CCID dispatcher and
+  the two FIDO transports are gated on, and its unreadable arm resolved to
+  `SUPPORTED_CAPS` — the all-enabled set. Driven on a `ProbeStuck` medium against a
+  key configured FIDO2-only, one faulted probe of `EF_DEV_CONF` brought back
+  **`0x003B`**: OTP, U2F, OpenPGP, PIV and OATH, all selectable, with `WRITE CONFIG`
+  reachable for as long as the cached mask lived.
+
+  The irony is the comment three lines below the arm, which explains why the walk is
+  deliberately *not* gated on `well_formed_writable`: "refusing to honour a record it
+  cannot fully validate would silently re-enable applets the owner disabled." The
+  `_ =>` arm performed exactly that, by the one path the author did not enumerate —
+  the record is not invalid, it is unread.
+
+  A *confirmed* absence still means the factory default (a device nobody configured
+  has every supported application on); a probe the backend could not answer is
+  `NO_CAPS` instead. Failing closed is recoverable in the direction that matters:
+  `cap_enabled` keeps management, vendor and rescue selectable at `cap == 0`, so the
+  owner can still rewrite the record, and the next boot or config write re-reads
+  flash. READ CONFIG follows without a second rule — its synthesised arm takes
+  `USB_ENABLED` from the same function, so report and enforcement are one answer even
+  under a persistent fault, which is the run-34 #25 property.
+
 - **`scripts/check.sh` called `mktemp` seven times over five rows and removed
   none of them on any path that mattered.** It was the one script under
   `scripts/` with no `trap` at all: the assurance-trace row's copy of the source

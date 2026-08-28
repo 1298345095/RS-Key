@@ -147,10 +147,10 @@ pub fn config_tlv<S: Storage>(serial: &[u8; 4], fs: &mut Fs<S>, res: &mut ResBuf
     // has only ever guarded the write path, so a record a **pre-`9171ccf` build**
     // accepted — a 1-byte `USB_ENABLED`, a duplicate tag — survived the upgrade and
     // kept being echoed, which is how one permanently hid the device from ykman
-    // (audit run-34 #25). An unusable record falls back to the factory default: the
-    // host then sees "everything supported is enabled", which is exactly what
-    // `enabled_from_conf` enforces for a record it cannot read either, so the two
-    // sides agree instead of diverging.
+    // (audit run-34 #25). An unusable record falls back to the arm below, which
+    // synthesises the echo from `read_enabled_caps` — so what is reported is what is
+    // enforced by construction, for an unreadable record as much as an unparseable
+    // one, instead of the two sides diverging.
     let stored = match fs.read(EF_DEV_CONF, &mut conf) {
         Some(full) if full > 0 && full <= conf.len() && well_formed_writable(&conf[..full]) => {
             Some(full)
@@ -594,20 +594,37 @@ pub fn enabled_from_conf(conf: &[u8]) -> u16 {
 
 /// Read `EF_DEV_CONF` and return its enabled-applications mask ([`enabled_from_conf`]).
 /// The firmware caches this and re-reads it when [`take_dev_conf_dirty`] fires.
+///
+/// No record, or an empty one, is the factory default: everything supported is
+/// enabled. A probe the backend could not answer is [`NO_CAPS`] instead — see there
+/// for why the two absences must not share an arm.
 pub fn read_enabled_caps<S: Storage>(fs: &mut Fs<S>) -> u16 {
     // The read width, not the write cap: a pre-cap build's larger record must still
     // be scanned whole, or a disabled applet silently comes back after the upgrade.
     let mut conf = [0u8; EF_DEV_CONF_READ_MAX];
-    match fs.read(EF_DEV_CONF, &mut conf) {
-        Some(full) if full > 0 => enabled_from_conf(&conf[..full.min(conf.len())]),
-        _ => SUPPORTED_CAPS,
+    match fs.try_read(EF_DEV_CONF, &mut conf) {
+        Ok(Some(full)) if full > 0 => enabled_from_conf(&conf[..full.min(conf.len())]),
+        Ok(_) => SUPPORTED_CAPS,
+        Err(_) => NO_CAPS,
     }
     // Deliberately NOT gated on `well_formed_writable`, unlike the echo: this walk
     // is already defensive (a `USB_ENABLED` that is not exactly two bytes is
-    // skipped, and an unreadable record yields the default), and refusing to honour
-    // a record it cannot *fully* validate would silently re-enable applets the owner
-    // disabled. The echo is normalised to this answer instead (audit run-34 #25).
+    // skipped), and refusing to honour a record it cannot *fully* validate would
+    // silently re-enable applets the owner disabled. The echo is normalised to this
+    // answer instead (audit run-34 #25).
 }
+
+/// What a `EF_DEV_CONF` probe the backend could not answer enables: nothing gated.
+///
+/// The permissive default belongs to a *confirmed* absence — a device nobody has
+/// configured. A read fault is not that, and resolving it the same way performed
+/// the harm the note in [`read_enabled_caps`] says the walk exists to prevent: one
+/// faulted probe re-enabled every application the owner had disabled, for as long
+/// as the cached mask lived. Failing closed is recoverable in the direction that
+/// matters — [`cap_enabled`] keeps management, vendor and rescue selectable at
+/// `cap == 0`, so the owner can still rewrite the record, and the next boot or
+/// config write re-reads flash.
+const NO_CAPS: u16 = 0;
 
 /// Whether an applet guarded by capability bit `cap` is enabled under `mask`.
 /// `cap == 0` marks an always-available applet (management, vendor, rescue) — the
