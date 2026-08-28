@@ -351,3 +351,27 @@ def test_a_ufcs_caller_is_on_the_roster(tree, capsys):
     said = red(tree, capsys)
     assert "Fs::force_delete(fs, SEED)" in said
     assert "<Fs<S>>::delete(fs, INDEX)" in said
+
+
+# --- the keys the file may carry ----------------------------------------------
+
+
+def _insert(tree, after, line):
+    path = tree.root / deleter_gate.LEDGER
+    text = path.read_text()
+    i = text.index(after) + len(after)
+    path.write_text(text[:i] + line + text[i:])
+
+
+def test_a_field_nobody_reads_is_refused(tree, capsys):
+    """Measured before the rule: an invented key in the first `[[site]]` left this
+    row at EXIT=0, so a field added here was held by nothing and shown to nobody."""
+    _insert(tree, "[[site]]\n", 'nonsense_field_nobody_holds = "x"\n')
+    assert "which nothing reads" in red(tree, capsys)
+
+
+def test_a_table_nobody_reads_is_refused(tree, capsys):
+    """And a whole section, invisible in both directions before this."""
+    path = tree.root / deleter_gate.LEDGER
+    path.write_text(path.read_text() + '\n[[nonsense_table]]\nname = "x"\n')
+    assert "which nothing reads" in red(tree, capsys)

@@ -185,6 +185,14 @@ def production_rust(root: pathlib.Path) -> list[pathlib.Path]:
     ]
 
 
+#: What a `[[property]]` may say, and the only table this file may have. Neither
+#: was held: an invented key in the first record left this row at EXIT=0, measured
+#: — so a field added to the property registry was read by nothing and shown to no
+#: reader, which is exactly the hole `matrix_gate`'s `[[question]]` had.
+PROPERTY_FIELDS = ("clause_of", "id", "name", "ruling", "source", "statement", "status")
+TABLES = ("property",)
+
+
 @functools.cache
 def co_refuted(root: pathlib.Path) -> dict[str, list[str]]:
     """invariant -> the comutants that patch real code for it and expect a kill.
@@ -300,7 +308,18 @@ def workspace_members(root: pathlib.Path) -> set[str]:
 def check_properties(root: pathlib.Path, findings: list[str]) -> list[dict]:
     formal = root / "formal"
     with open(root / "assurance" / "properties.toml", "rb") as fh:
-        entries = tomllib.load(fh).get("property", [])
+        doc = tomllib.load(fh)
+    entries = doc.get("property", [])
+    if stray := sorted(set(doc) - set(TABLES)):
+        findings.append(
+            f"properties.toml carries {stray}, which nothing reads — a table added"
+            " here is held by no rule and shown to no reader"
+        )
+    for entry in entries:
+        if extra := sorted(set(entry) - set(PROPERTY_FIELDS)):
+            findings.append(
+                f"{entry.get('id', '?')}: carries {extra}, which nothing reads"
+            )
     checked = checked_names(formal)
     defs = tla_definitions(formal)
     solo = solo_target_counts(formal)

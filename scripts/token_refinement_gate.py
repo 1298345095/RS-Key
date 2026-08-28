@@ -523,10 +523,54 @@ def check_entry(
         findings.append(f"{label}: {site} is configuration-conditional with no reason")
 
 
+#: What a record of `assurance/token_refinement.toml` may say, and which tables the
+#: file may have. Neither was held: an invented key in the first record left this
+#: row at EXIT=0, measured, so a field added here was read by nothing and printed
+#: by nothing.
+#:
+#: ONE union rather than a list per table, and that is a correction the suite made
+#: rather than a preference. Per-table lists derived from the records that exist
+#: today refuse `column` on a `[[volatile_writer]]` — no record carries one — while
+#: the shared per-entry checker above accepts it from every table, so two
+#: parametrized cases went red on a key the gate itself reads. An allowlist taken
+#: from the DATA under-approximates the contract; this one is taken from the keys
+#: the CODE reads.
+ENTRY_FIELDS = (
+    "column",
+    "disposition",
+    "file",
+    "function",
+    "generic",
+    "op",
+    "test_only",
+    "why",
+)
+TABLES = (
+    "volatile_writer",
+    "persistent_writer",
+    "outcome_producer",
+    "walk_owner",
+    "softlock_owner",
+    "reset_window_owner",
+)
+
+
 def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per axis
     root = Path(root)
     data = tomllib.loads((root / MANIFEST).read_text(encoding="utf-8"))
     findings: list[str] = []
+    if stray := sorted(set(data) - set(TABLES)):
+        findings.append(
+            f"{MANIFEST} carries {stray}, which nothing reads — a table added here"
+            " is held by no rule and shown to no reader"
+        )
+    for table in TABLES:
+        for entry in data.get(table, []):
+            if extra := sorted(set(entry) - set(ENTRY_FIELDS)):
+                findings.append(
+                    f"{MANIFEST} [[{table}]] {entry.get('function', '?')}: carries"
+                    f" {extra}, which nothing reads"
+                )
     ops = {
         line.split("|", 2)[2]
         for line in (root / EXPORT).read_text(encoding="utf-8").splitlines()

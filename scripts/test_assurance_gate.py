@@ -454,3 +454,45 @@ def test_a_patch_the_suite_is_not_expected_to_catch_is_not_evidence(tmp_path):
         "SPECIFICATION Spec\nINVARIANTS\n    TypeOK\n    SomeInvariant\n", encoding="utf-8")
     assurance_gate.co_refuted.cache_clear()
     assert assurance_gate.co_refuted(tmp_path) == {}
+
+
+# --- the keys the property registry may carry ---------------------------------
+
+
+def _properties(tree):
+    return tree / "assurance" / "properties.toml"
+
+
+def test_a_field_nobody_reads_is_refused(tree, capsys):
+    """Measured before the rule: an invented key in the first `[[property]]` left
+    this row at EXIT=0, so a field added to the property registry was held by
+    nothing and shown to no reader."""
+    path = _properties(tree)
+    text = path.read_text()
+    i = text.index("[[property]]\n") + len("[[property]]\n")
+    path.write_text(text[:i] + 'nonsense_field_nobody_holds = "x"\n' + text[i:])
+    red(tree, capsys, "which nothing reads")
+
+
+def test_a_table_nobody_reads_is_refused(tree, capsys):
+    """And a whole section, invisible in both directions before this."""
+    path = _properties(tree)
+    path.write_text(path.read_text() + '\n[[nonsense_table]]\nname = "x"\n')
+    red(tree, capsys, "which nothing reads")
+
+
+def test_the_allowlist_covers_every_key_the_shipped_registry_carries():
+    """The direction an allowlist fails in, and the one the token-refinement gate
+    was caught in: a list taken from the records that exist can be NARROWER than
+    the contract, and then it refuses a legitimate field. Here the shipped file is
+    the floor — if a record grows a key the gate reads, this says so before the
+    row does."""
+    import tomllib
+
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    shipped = tomllib.loads(
+        (repo / "assurance" / "properties.toml").read_text(encoding="utf-8")
+    )
+    assert set(shipped) <= set(assurance_gate.TABLES)
+    for entry in shipped["property"]:
+        assert set(entry) <= set(assurance_gate.PROPERTY_FIELDS), entry.get("id")

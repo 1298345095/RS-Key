@@ -711,3 +711,27 @@ def test_a_floor_reports_beside_the_comparison_and_not_instead_of_it(tree: Tree)
     findings = token_refinement_gate.audit(tree.root)[0]
     assert contains(findings, "reset_window: 0 site(s) derived, under the floor of"), findings
     assert contains(findings, "reset_window: stale owner"), findings
+
+
+# --- the keys the file may carry ----------------------------------------------
+
+
+def test_a_field_nobody_reads_is_refused(tree):
+    """Six tables and no list held any of them. Measured before the rule: an
+    invented key in the first record left this row at EXIT=0, so a field added
+    here was read by nothing and printed by nothing."""
+    tree.append(
+        "assurance/token_refinement.toml",
+        '\n[[walk_owner]]\nfile = "crates/rsk-fido/src/state.rs"\n'
+        'function = "may_walk_rps"\nwhy = "x"\ndisposition = "owned"\n'
+        'nonsense_field_nobody_holds = "x"\n',
+    )
+    assert contains(tree.findings(), "which nothing reads")
+
+
+def test_a_table_nobody_reads_is_refused(tree):
+    """And a seventh table, which was invisible in both directions."""
+    tree.append(
+        "assurance/token_refinement.toml", '\n[[nonsense_table]]\nname = "x"\n'
+    )
+    assert contains(tree.findings(), "which nothing reads")

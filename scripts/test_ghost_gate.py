@@ -307,3 +307,30 @@ def test_a_module_with_no_entry_point_says_so(tmp_path):
     path = root / ghost_gate.MODULE
     path.write_text(path.read_text().replace("\nNext ==", "\nNotNext ==", 1))
     assert any("defines no `Next`" in p for p in findings(root)), findings(root)[:3]
+
+
+# --- the keys the file may carry ----------------------------------------------
+
+
+def _insert(root, after, line):
+    path = root / ghost_gate.LEDGER
+    text = path.read_text()
+    i = text.index(after) + len(after)
+    path.write_text(text[:i] + line + text[i:])
+
+
+def test_a_field_nobody_reads_is_refused(tmp_path):
+    """Measured before the rule: an invented key in the first record left this row
+    at EXIT=0, so a field added to the ledger was held by nothing and shown to
+    nobody — the hole `matrix_gate`'s `[[question]]` had, asked of this file."""
+    root = tree(tmp_path)
+    _insert(root, "[[action]]\n", 'nonsense_field_nobody_holds = "x"\n')
+    assert any("which nothing reads" in p for p in findings(root))
+
+
+def test_a_table_nobody_reads_is_refused(tmp_path):
+    """And a whole section, which was invisible in both directions."""
+    root = tree(tmp_path)
+    path = root / ghost_gate.LEDGER
+    path.write_text(path.read_text() + '\n[[nonsense_table]]\nname = "x"\n')
+    assert any("which nothing reads" in p for p in findings(root))

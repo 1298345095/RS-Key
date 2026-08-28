@@ -216,6 +216,25 @@ def entries(root):
         return tomllib.load(handle)
 
 
+#: What a `[[site]]` may say, and which tables the file may have. Neither had a
+#: list: a key added here was read by nothing and printed by nothing, and a whole
+#: new table was invisible in both directions. Measured before the rule went in —
+#: an invented key in the first record left this row at EXIT=0. The idiom is
+#: `scripts/threat_gate.py`'s, which learned it from `matrix_gate`'s `[[cell]]`.
+SITE_FIELDS = (
+    "answer",
+    "call",
+    "class",
+    "disposition",
+    "file",
+    "line",
+    "metadata",
+    "verb",
+    "why",
+)
+TABLES = ("head_minters", "site")
+
+
 def audit(root):
     """Every disagreement between the ledger and the tree, each reported once."""
     problems = []
@@ -276,8 +295,15 @@ def audit(root):
             f" {LEDGER} says {sorted(doc['head_minters'])} — every `drops-head`"
             " disposition rests on that set"
         )
+    if stray := sorted(set(doc) - set(TABLES)):
+        problems.append(
+            f"{LEDGER} carries {stray}, which nothing reads — a table added here is"
+            " held by no rule and shown to no reader"
+        )
     for entry in doc.get("site", []):
         where = f"{entry['file']}:{entry['line']}"
+        if stray := sorted(set(entry) - set(SITE_FIELDS)):
+            problems.append(f"{where}: carries {stray}, which nothing reads")
         if entry["class"] not in CLASSES:
             problems.append(f"{where}: class `{entry['class']}` is not one of {CLASSES}")
         if entry["metadata"] not in METADATA:

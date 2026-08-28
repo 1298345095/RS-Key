@@ -288,6 +288,12 @@ def unaccounted(bodies: dict[str, str], direct: dict, alias_names) -> list[str]:
     return out
 
 
+#: What an `[[action]]` may say, and the only table this file may have. Neither
+#: was held: an invented key in the first record left this row at EXIT=0, measured.
+ACTION_FIELDS = ("name", "policies", "routes", "why")
+TABLES = ("action",)
+
+
 def audit(root: pathlib.Path) -> tuple[list[str], str]:
     findings: list[str] = []
     text = strip_comments((root / MODULE).read_text(encoding="utf-8"))
@@ -298,11 +304,19 @@ def audit(root: pathlib.Path) -> tuple[list[str], str]:
             " action below is unreached rather than absent"
         )
     findings.extend(unaccounted(bodies, direct, alias_names))
-    entries = tomllib.loads((root / LEDGER).read_text(encoding="utf-8")).get(
-        "action", []
-    )
+    ledger = tomllib.loads((root / LEDGER).read_text(encoding="utf-8"))
+    if stray := sorted(set(ledger) - set(TABLES)):
+        findings.append(
+            f"{LEDGER} carries {stray}, which nothing reads — a table added here is"
+            " held by no rule and shown to no reader"
+        )
+    entries = ledger.get("action", [])
     owned: dict[str, dict] = {}
     for index, entry in enumerate(entries):
+        if stray := sorted(set(entry) - set(ACTION_FIELDS)):
+            findings.append(
+                f"{LEDGER}: entry #{index + 1} carries {stray}, which nothing reads"
+            )
         name = entry.get("name")
         if not name:
             findings.append(f"{LEDGER}: entry #{index + 1} has no 'name'")
