@@ -401,7 +401,10 @@ pub fn enc_identifier<S: Storage>(
 /// [`enc_identifier`] this member survives a soft lock.
 ///
 /// `None` when no persistent token has been issued yet: the member is optional, and
-/// a value under a key nobody holds says nothing to anyone.
+/// a value under a key nobody holds says nothing to anyone. `None` too when the tag
+/// itself cannot be read — an absent member equals no tag a platform is holding, so
+/// it re-enumerates, where the collapsed zero is exactly the tag a fresh device
+/// publishes and would tell one its cache is still good.
 pub fn enc_cred_store_state<S: Storage>(
     dev: &Device,
     fs: &mut Fs<S>,
@@ -415,7 +418,7 @@ pub fn enc_cred_store_state<S: Storage>(
         key.zeroize();
         return None;
     }
-    let mut block = crate::credential::cred_store_state(fs);
+    let mut block = crate::credential::cred_store_state(fs).ok()?;
     let out = seal_getinfo_member(&key, &mut block, rng);
     key.zeroize();
     out

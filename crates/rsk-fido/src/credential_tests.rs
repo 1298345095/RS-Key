@@ -739,3 +739,50 @@ fn a_truncated_scan_does_not_let_a_new_credential_land_on_a_live_one() {
         "the live credential was overwritten"
     );
 }
+
+/// `bump_cred_store_state` reads the tag it advances with the collapsing `Fs::read`,
+/// whose `None` covers "never written" and "the flash could not serve it" alike, and
+/// the absent arm is the ZERO tag — right for the first, a replay for the second. So
+/// a faulted probe writes 1 over the live value and starts the sequence again from a
+/// prefix the platform has already been served: it is handed a tag it is holding, so
+/// it keeps the cache this record exists to make it drop.
+///
+/// Refused rather than clamped, because the bump runs BEFORE the write it describes:
+/// its `Err` aborts the store change too, so tag and store stay in step.
+#[test]
+fn a_faulted_cred_state_probe_does_not_replay_the_store_tag() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    // Three store changes: 1, 2 and 3 are each a tag the platform has been served.
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        bump_cred_store_state(&mut fs).unwrap();
+        seen.push(medium.value(EF_CRED_STATE).unwrap());
+    }
+    assert_eq!(
+        seen[2],
+        3u128.to_le_bytes(),
+        "control: three changes, tag 3"
+    );
+
+    medium.stick_once(EF_CRED_STATE);
+    let bumped = bump_cred_store_state(&mut fs);
+    medium.stick(None);
+
+    let after = medium.value(EF_CRED_STATE).unwrap();
+    assert!(
+        !seen[..2].contains(&after),
+        "a faulted probe replayed tag {} — a platform holding it is told nothing changed",
+        u128::from_le_bytes(after[..].try_into().unwrap())
+    );
+    assert_eq!(
+        after, seen[2],
+        "a refused bump must leave the tag where it was"
+    );
+    assert_eq!(
+        bumped,
+        Err(Error::MemoryFatal),
+        "a bump that could not read the tag it advances must refuse"
+    );
+}

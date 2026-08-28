@@ -474,7 +474,7 @@ fn enc_cred_store_state_is_fresh_per_call_and_carries_the_stored_tag() {
     );
     assert_eq!(
         open_enc_cred_store_state(&token, &after),
-        crate::credential::cred_store_state(&mut f),
+        crate::credential::cred_store_state(&mut f).unwrap(),
         "and it must be the tag the record holds, not some other value"
     );
 }
@@ -743,5 +743,44 @@ fn a_faulted_cred_counter_probe_is_not_an_unmaterialized_slot() {
     assert!(
         reported.is_err(),
         "and was reported as the global counter, off another sequence"
+    );
+}
+
+/// The platform-facing half of the same probe. `encCredStoreState` is the only place
+/// the tag is published, and the collapsed answer is the ZERO tag — which is not a
+/// neutral value here but the one a fresh (or just-reset) device serves, so a
+/// platform that cached it is told its cache is still good while the store has
+/// gained credentials since.
+///
+/// Omitted instead: the member is optional, and an ABSENT one equals no tag the
+/// platform holds, so it re-enumerates. That is the direction this record can afford
+/// — over-reporting a change costs one walk, under-reporting costs correctness.
+#[test]
+fn a_faulted_cred_state_probe_does_not_publish_the_zero_tag() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&d, &mut fs, &mut SeqRng(29)).unwrap();
+    let token = ensure_ppuat(&d, &mut fs, &mut SeqRng(31)).unwrap();
+    let fresh = enc_cred_store_state(&d, &mut fs, &mut SeqRng(33)).unwrap();
+    assert_eq!(
+        open_enc_cred_store_state(&token, &fresh),
+        [0u8; 16],
+        "control: a store nothing has written to publishes the zero tag"
+    );
+
+    crate::credential::bump_cred_store_state(&mut fs).unwrap();
+    medium.stick_once(crate::consts::EF_CRED_STATE);
+    let faulted = enc_cred_store_state(&d, &mut fs, &mut SeqRng(35));
+    medium.stick(None);
+    assert!(
+        faulted.is_none_or(|b| open_enc_cred_store_state(&token, &b) != [0u8; 16]),
+        "a faulted probe published the zero tag — the platform that cached it \
+         is told the credential set is unchanged"
+    );
+    assert!(
+        faulted.is_none(),
+        "an unreadable tag has no honest value; the optional member is omitted"
     );
 }

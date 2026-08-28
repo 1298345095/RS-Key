@@ -791,11 +791,11 @@ fn every_credential_mutation_moves_the_store_tag() {
     use crate::credential::cred_store_state;
 
     let (mut fs, mut rng) = setup();
-    let empty = cred_store_state(&mut fs);
+    let empty = cred_store_state(&mut fs).unwrap();
     assert_eq!(empty, [0u8; 16], "a store nothing has written to is zero");
 
     let (id_a, ..) = register(&mut fs, &mut rng, "example.com", &[1, 1], "alice");
-    let after_create = cred_store_state(&mut fs);
+    let after_create = cred_store_state(&mut fs).unwrap();
     assert_ne!(after_create, empty, "makeCredential must move the tag");
 
     let mut state = armed(PERM_CM);
@@ -811,7 +811,7 @@ fn every_credential_mutation_moves_the_store_tag() {
     )
     .unwrap();
     assert_eq!(
-        cred_store_state(&mut fs),
+        cred_store_state(&mut fs).unwrap(),
         after_create,
         "enumerateCredentials changed nothing and must say so"
     );
@@ -827,7 +827,7 @@ fn every_credential_mutation_moves_the_store_tag() {
         &mut out,
     )
     .unwrap();
-    let after_update = cred_store_state(&mut fs);
+    let after_update = cred_store_state(&mut fs).unwrap();
     assert_ne!(
         after_update, after_create,
         "updateUserInformation leaves the slot count alone, so nothing but the tag reports it"
@@ -841,7 +841,7 @@ fn every_credential_mutation_moves_the_store_tag() {
     )
     .unwrap();
     assert_ne!(
-        cred_store_state(&mut fs),
+        cred_store_state(&mut fs).unwrap(),
         after_update,
         "deleteCredential must move the tag"
     );
@@ -858,12 +858,12 @@ fn the_store_tag_survives_a_remount() {
 
     let (mut fs, mut rng) = setup();
     register(&mut fs, &mut rng, "example.com", &[1, 1], "alice");
-    let live = cred_store_state(&mut fs);
+    let live = cred_store_state(&mut fs).unwrap();
     assert_ne!(live, [0u8; 16]);
 
     let mut fs = Fs::new(fs.into_storage());
     assert_eq!(
-        cred_store_state(&mut fs),
+        cred_store_state(&mut fs).unwrap(),
         live,
         "power is what a platform's cache has to survive"
     );
@@ -880,7 +880,7 @@ fn a_refused_delete_never_under_reports() {
 
     let (mut fs, mut rng) = setup();
     register(&mut fs, &mut rng, "example.com", &[1, 1], "alice");
-    let before = cred_store_state(&mut fs);
+    let before = cred_store_state(&mut fs).unwrap();
     let mut state = armed(PERM_CM);
     let mut out = [0u8; 256];
     let bogus = [0u8; CRED_RESIDENT_LEN];
@@ -895,7 +895,7 @@ fn a_refused_delete_never_under_reports() {
     );
     // It never reached the bump — the lookup refused first — so the tag stands. What
     // matters is the direction: it must not have moved *backwards*.
-    assert_eq!(cred_store_state(&mut fs), before);
+    assert_eq!(cred_store_state(&mut fs).unwrap(), before);
 }
 
 #[test]

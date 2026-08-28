@@ -730,23 +730,32 @@ pub(crate) fn slot_map<S: Storage>(fs: &mut Fs<S>, base: u16, out: &mut [bool]) 
 /// whenever the discoverable-credential set does. An absent record reads as zero —
 /// the state of a store nothing has written to, which a fresh device and a
 /// just-reset one both are.
-pub(crate) fn cred_store_state<S: Storage>(fs: &mut Fs<S>) -> [u8; CRED_STATE_LEN] {
+///
+/// Fallible, because that zero is a value and not a neutral one: it is the tag a
+/// fresh device publishes, so a platform can be holding it. Collapsing a failed
+/// read into it replays a prefix of the sequence — see the two callers.
+pub(crate) fn cred_store_state<S: Storage>(fs: &mut Fs<S>) -> Result<[u8; CRED_STATE_LEN]> {
     let mut tag = [0u8; CRED_STATE_LEN];
-    match fs.read(EF_CRED_STATE, &mut tag) {
+    Ok(match fs.try_read(EF_CRED_STATE, &mut tag)? {
         Some(CRED_STATE_LEN) => tag,
         // A short or absent record is the zero state rather than a partial one: the
         // value is compared for equality by the platform and never interpreted, so
         // half of an old one would be a tag that means nothing and collides freely.
         _ => [0u8; CRED_STATE_LEN],
-    }
+    })
 }
 
 /// Advance that tag. Called **before** the write it describes, so a power cut
 /// between the two leaves a state that over-reports: the platform re-enumerates
 /// once, which costs a walk. The other order leaves a changed store under an
 /// unchanged tag — a stale cache with nothing to correct it.
+///
+/// A read it cannot make is that other order by a different road: the tag would
+/// restart at 1 over the live value, so the next change hands the platform a tag it
+/// already holds. Refused instead, and refusing here aborts the store change with
+/// it — which is the point of running before the write rather than after.
 pub(crate) fn bump_cred_store_state<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
-    let next = u128::from_le_bytes(cred_store_state(fs)).wrapping_add(1);
+    let next = u128::from_le_bytes(cred_store_state(fs)?).wrapping_add(1);
     fs.put(EF_CRED_STATE, &next.to_le_bytes())
 }
 

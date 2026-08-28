@@ -104,10 +104,10 @@ formal/README.md	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_toke
 formal/README.md	crates/rsk-fido/src/config.rs	427-428	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
 formal/README.md	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 formal/README.md	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
-formal/README.md	crates/rsk-fido/src/credential.rs	805-827	if !occupied[i as usize] {	let slot = slot.ok_or(Error::NoMemory)?; // KEY_STORE_FULL
-formal/README.md	crates/rsk-fido/src/credential.rs	808-827	}	let slot = slot.ok_or(Error::NoMemory)?; // KEY_STORE_FULL
-formal/README.md	crates/rsk-fido/src/credential.rs	815-825	if n < RECORD_PREFIX || rec[..32] != *rp_id_hash {	}
-formal/README.md	crates/rsk-fido/src/credential.rs	829-836	let total = compose_cred_record(rp_id_hash, &resident, pubkey, cred_id, &mut rec)	// both walk EF_RP to find, so neither can list or delete it, while `getAssertion`
+formal/README.md	crates/rsk-fido/src/credential.rs	814-836	if !occupied[i as usize] {	let slot = slot.ok_or(Error::NoMemory)?; // KEY_STORE_FULL
+formal/README.md	crates/rsk-fido/src/credential.rs	817-836	}	let slot = slot.ok_or(Error::NoMemory)?; // KEY_STORE_FULL
+formal/README.md	crates/rsk-fido/src/credential.rs	824-834	if n < RECORD_PREFIX || rec[..32] != *rp_id_hash {	}
+formal/README.md	crates/rsk-fido/src/credential.rs	838-845	let total = compose_cred_record(rp_id_hash, &resident, pubkey, cred_id, &mut rec)	// both walk EF_RP to find, so neither can list or delete it, while `getAssertion`
 formal/README.md	crates/rsk-fido/src/credmgmt.rs	240-242	if authorized_by_ppuat(ctx, proto, payload, param) {	}
 formal/README.md	crates/rsk-fido/src/credmgmt.rs	249-266	/// Whether the MAC was made with the persistent token (CTAP 2.2 §6.8.2 step 4).	let Some(mut tok) = load_ppuat(&ctx.dev, ctx.fs) else {
 formal/README.md	crates/rsk-fido/src/credmgmt.rs	278-278	fn verify_cm_token(	fn verify_cm_token(
@@ -367,9 +367,9 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	427-428	.map_err(|_|
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	397-397	/// display honors a reset only this long after power-up, so the wipe takes a	/// display honors a reset only this long after power-up, so the wipe takes a
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/credential.rs	829-836	let total = compose_cred_record(rp_id_hash, &resident, pubkey, cred_id, &mut rec)	// both walk EF_RP to find, so neither can list or delete it, while `getAssertion`
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/credential.rs	829-852	let total = compose_cred_record(rp_id_hash, &resident, pubkey, cred_id, &mut rec)	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/credential.rs	832-852	// Order so that any truncation of this non-transactional sequence leaves an RP	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/credential.rs	838-845	let total = compose_cred_record(rp_id_hash, &resident, pubkey, cred_id, &mut rec)	// both walk EF_RP to find, so neither can list or delete it, while `getAssertion`
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/credential.rs	838-861	let total = compose_cred_record(rp_id_hash, &resident, pubkey, cred_id, &mut rec)	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/credential.rs	841-861	// Order so that any truncation of this non-transactional sequence leaves an RP	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/credmgmt.rs	240-242	if authorized_by_ppuat(ctx, proto, payload, param) {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/credmgmt.rs	240-297	if authorized_by_ppuat(ctx, proto, payload, param) {	return Ok(());
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/credmgmt.rs	249-266	/// Whether the MAC was made with the persistent token (CTAP 2.2 §6.8.2 step 4).	let Some(mut tok) = load_ppuat(&ctx.dev, ctx.fs) else {

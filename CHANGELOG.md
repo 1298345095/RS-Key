@@ -2124,6 +2124,29 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe replayed the credential-store tag, and a platform holding the
+  replayed value kept a stale cache.** `encCredStoreState` (getInfo `0x1E`) is a
+  128-bit tag a platform compares for equality to decide whether to re-enumerate
+  its discoverable credentials. `cred_store_state` read `EF_CRED_STATE` with
+  `Fs::read`, whose `None` covers "never written" and "the flash could not serve
+  it" alike, and the absent arm is the ZERO tag.
+
+  Zero is right for the first and a replay for the second, because it is not a
+  neutral value: it is exactly what a fresh (or just-reset) device publishes, so a
+  platform can be holding it. `bump_cred_store_state` reads that tag, adds one and
+  writes the result — so one faulted probe wrote `1` over the live value and
+  started the sequence again from a prefix already served. Measured with three
+  credential-set changes on the record: tag `3`, one fault, tag `1`.
+
+  Refused now, not clamped. The bump deliberately runs *before* the write it
+  describes, so its `Err` aborts the store change too and the tag never falls
+  behind what it describes — all four callers already carried the error arm. The
+  publishing half is the same probe seen from the platform's side, and it takes the
+  other available direction: `seed::enc_cred_store_state` omits the optional member
+  rather than publishing a zero, because an absent member equals no tag any
+  platform holds, so it re-enumerates. Over-reporting a change costs one walk;
+  under-reporting costs correctness.
+
 - **One faulted probe reported the PIN-readable management-key escrow revoked over
   the host's own new key.** PIV `SET MANAGEMENT KEY` revokes the escrow last —
   `mgm_clear_protected` clears the ADMIN-DATA `0x02` flag after the new key is

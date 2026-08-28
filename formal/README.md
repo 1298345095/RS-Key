@@ -98,7 +98,7 @@ match more than one file in the tree.
 | `NoCrossTransportTouchConsumption` | A presence decision produced for one transport is never applied to another — neither a confirm nor a cancel | `crates/rsk-device/src/presence.rs`: `Arbiter::pending_for` · `::request_cancel` / `::cancel_otp_wait` (the scope guards) · `ButtonWait::wait` (the `spent` latch). `firmware/src/presence.rs` keeps only the board half. **The stale-cancel drop that carries this property is the one at the wait's ENTRY.** The exit clear cannot substitute for it — a cancel latched by a dispatch that never entered `wait` is never seen by the exit — see "The cancel that no wait was open for" |
 | `NoTokenAfterInvalidation` | A grant invalidated by a PIN change, PIN set, reset, `stopUsingPinUvAuthToken` or power cycle never authorizes again | `crates/rsk-fido/src/`: `state.rs:488-502` (`reset_pin_uv_auth_token`) · `state.rs:547-562` (`stop_using_token`) · `state.rs:596-609` (`expire_stale_token`) · `clientpin.rs:305-316` · `seed.rs:323-324` (`clear_ppuat`) |
 | `NoAccessibleSecretWithoutGate` | No live secret is reachable while the gate record that protects it is gone | `crates/rsk-fido/src/`: `reset.rs:182-209` (`is_fido_gate_fid`) · `reset.rs:57-79` (phase order) · `credmgmt.rs:249-266` (`authorized_by_ppuat`) · `clientpin.rs:217-221`, `:827-831` |
-| `NoUnmanageableCredential` | Every live credential is reachable by the management surface (its `EF_RP` entry exists) | `crates/rsk-fido/src/`: `credential.rs:805-827` (registration write order) · `credmgmt.rs:658-713` (`delete_credential` / `decrement_rp`) · `passkeys.rs:90-152` (`for_each_rp`, the `EF_RP` walk the display lists from) |
+| `NoUnmanageableCredential` | Every live credential is reachable by the management surface (its `EF_RP` entry exists) | `crates/rsk-fido/src/`: `credential.rs:814-836` (registration write order) · `credmgmt.rs:658-713` (`delete_credential` / `decrement_rp`) · `passkeys.rs:90-152` (`for_each_rp`, the `EF_RP` walk the display lists from) |
 | `ResetNeverWeakensSurvivingState` | No prefix of an `authenticatorReset` — torn or complete — leaves a surviving usable secret whose gate has already gone, where "surviving" counts the RAM copy of the seed as well as the flash record | `crates/rsk-fido/src/`: `reset.rs:36-95` (`reset`, session then seed then two phases) · `reset.rs:63-66` (`ctx.state.reset()` ahead of every flash write) · `reset.rs:97-143` (`sweep`, and the `Err` at `:124-128` that leaves the device running) · `reset.rs:182-209` (`is_fido_gate_fid`, incl. `EF_BACKUP_SEALED`) · `reset.rs:263-271` (`survives_factory_reset`) · `crates/rsk-fido/src/lib.rs:104-108` (`Ctx::load_keydev`, the RAM copy that wins) · `state.rs:426-436` (`FidoState::reset`, what drops it). Shipped twin for its third clause: `reset_tests.rs::a_torn_reset_never_unseals_a_surviving_seed` |
 
 ### Two more that are not among the six, and three clauses that now have names
@@ -197,7 +197,7 @@ says how deep TLC had to go to find it, roughly.
 |---|---|---|---|
 | `BugResetGatesFirst` | `reset.rs:82-83` phase order | `ResetNeverWeakensSurvivingState` | 2 352 states |
 | `BugBackupSealedNotAGate` | `reset.rs:187-208` — `EF_BACKUP_SEALED` back in phase 1 (audit run-36) | `ResetNeverWeakensSurvivingState` | 2 347 states |
-| `BugCredBeforeRp` | `credential.rs:808-827` write order | `NoUnmanageableCredential` | 820 states |
+| `BugCredBeforeRp` | `credential.rs:817-836` write order | `NoUnmanageableCredential` | 820 states |
 | `BugDeleteRpBeforeCred` | `credmgmt.rs:665-673` — `decrement_rp` ahead of the `EF_CRED` delete | `NoUnmanageableCredential` | 111 503 states |
 | `BugTokenSurvivesPinChange` | `clientpin.rs:316` | `NoTokenAfterInvalidation` | 15 299 states |
 | `BugSetPinKeepsPpuat` | `clientpin.rs:217-221` | `NoTokenAfterInvalidation` | 416 314 states |
@@ -1003,7 +1003,7 @@ the seed still present — a usable discoverable passkey that `enumerateRPs` and
 the trusted-display Passkeys view cannot list (both walk `EF_RP`) and that
 `enumerateCredentials` therefore cannot reach to delete, while `getAssertion`
 (which scans `EF_CRED`) authenticates with it happily. That is precisely the
-state `credential.rs:829-836` orders registration to avoid and that audit
+state `credential.rs:838-845` orders registration to avoid and that audit
 run-35 recorded as one that "never self-heals" — reached here from the *other*
 direction, the wipe rather than the write.
 
@@ -2213,7 +2213,7 @@ version of this paragraph said no correct build could make it FALSE at one. That
 was wrong, and the review measured it.** The argument was that a served
 discoverable registration writes a credential, so it arrives as a `RegisterWrite`
 and never as the stutter a gate row is made of. It does — the *first* time.
-`credential.rs:815-825` reuses the slot when `(rpIdHash, userId)` already match
+`credential.rs:824-834` reuses the slot when `(rpIdHash, userId)` already match
 and `bump_rp` is then skipped, so a RE-registration of the same user writes
 nothing the snapshot can see. Driven on the emulator with no PIN: the second and
 third `makeCredential rk:true` each come back `0x00` having moved only
