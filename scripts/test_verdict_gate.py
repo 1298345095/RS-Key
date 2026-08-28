@@ -593,8 +593,15 @@ def test_a_directory_named_like_a_configuration_is_reported_not_raised(tmp_path)
 def test_a_runner_that_cannot_read_a_digit_is_rejected():
     """`[A-Za-z]+` was the runner's extractor for its whole life and every `R4*`
     invariant has a DIGIT in its name, so nine rows printed a blank verdict
-    column and compared nothing. It is a static disagreement between two files."""
-    narrowed = RUNNER.replace("[A-Za-z][A-Za-z0-9_]*", "[A-Za-z]+", 1)
+    column and compared nothing. It is a static disagreement between two files.
+
+    Mutated by NAMING the extractor rather than by taking the file's first
+    occurrence of that character class: the runner grew a second one when it
+    learned to derive an expected invariant from a configuration's own
+    INVARIANTS block, and a positional `replace(…, 1)` then narrowed *that*
+    instead — leaving this case green over an extractor it had not touched."""
+    narrowed = RUNNER.replace("'Invariant [A-Za-z][A-Za-z0-9_]* is violated'",
+                              "'Invariant [A-Za-z]+ is violated'", 1)
     assert narrowed != RUNNER
     problems = findings(REGISTRY, runner=narrowed)
     assert any("cannot read" in p for p in problems), problems[:3]

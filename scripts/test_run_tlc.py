@@ -225,12 +225,79 @@ def test_a_red_for_the_wrong_invariant_is_rejected(fake_tlc):
     assert "expected RED: R4cGateAnswers" in result.stdout
 
 
-def test_a_row_that_names_no_invariant_is_not_held_to_one(fake_tlc):
-    """`TraceSeamsBad.cfg` is refused by a DEADLOCK, which names nothing, and the
-    `Mut_*` families name theirs in their own INVARIANTS block."""
-    result = run(fake_tlc, "Mut_BugResetGatesFirst.cfg", RED)
+#: `Mut_BugResetGatesFirst.cfg` targets `ResetNeverWeakensSurvivingState` and
+#: says so first under its own INVARIANTS. These three are the same run reddening
+#: on that name, on a DIFFERENT invariant of the same block, and on `TypeOK`.
+RED_TARGET = RED.replace("NoAuthorizationBypass", "ResetNeverWeakensSurvivingState")
+RED_TYPEOK = RED.replace("NoAuthorizationBypass", "TypeOK")
+
+#: A refusal that names no invariant at all: what `TraceSeamsBad.cfg` produces,
+#: and what a mutant producing it instead of its invariant would produce too.
+RED_DEADLOCK = """\
+2 states generated
+2 distinct states found
+The depth of the complete state graph search is 2.
+Error: Deadlock reached.
+"""
+
+#: A temporal refutation. TLC does not print `Invariant … is violated` for one,
+#: so no name can be derived and none is demanded.
+RED_PROPERTY = """\
+1475 states generated
+497 distinct states found
+The depth of the complete state graph search is 6.
+Error: Temporal properties were violated.
+"""
+
+
+def test_a_mutant_reddening_on_its_own_target_passes(fake_tlc):
+    """The floors row names nothing; the configuration does."""
+    result = run(fake_tlc, "Mut_BugResetGatesFirst.cfg", RED_TARGET)
     assert result.returncode == 0
-    assert "RED: NoAuthorizationBypass" in result.stdout
+    assert "RED: ResetNeverWeakensSurvivingState" in result.stdout
+
+
+def test_a_mutant_reddening_on_another_invariant_is_rejected(fake_tlc):
+    """The colour is right and the reason is not, on a row floors.txt leaves
+    blank — 168 of the 177 RED rows are that row, so this was the shape the
+    comparison skipped on 95% of them."""
+    result = run(fake_tlc, "Mut_BugResetGatesFirst.cfg", RED)
+    assert result.returncode == 1
+    assert "expected RED: ResetNeverWeakensSurvivingState" in result.stdout
+
+
+def test_a_mutant_reddening_on_typeok_is_rejected(fake_tlc):
+    """`TypeOK` is checked by every configuration and targeted by no mutant, so
+    a RED there attributes the failure to nothing at all."""
+    result = run(fake_tlc, "Mut_BugResetGatesFirst.cfg", RED_TYPEOK)
+    assert result.returncode == 1
+    assert "expected RED: ResetNeverWeakensSurvivingState" in result.stdout
+
+
+def test_a_mutant_refused_without_naming_an_invariant_is_rejected(fake_tlc):
+    """A mutant that deadlocks instead of breaking what it models is the same
+    wrong-reason RED wearing a different error line."""
+    result = run(fake_tlc, "Solo_BugResetGatesFirst.cfg", RED_DEADLOCK)
+    assert result.returncode == 1
+    assert "expected RED: ResetNeverWeakensSurvivingState" in result.stdout
+
+
+def test_a_deadlock_row_with_no_switch_armed_is_not_held_to_a_name(fake_tlc):
+    """`TraceSeamsBad.cfg` lists six invariants and is refused by a DEADLOCK: no
+    defect switch is armed in it, so the first name in its block describes
+    nothing it does. Deriving there would demand a name no run of it can print."""
+    result = run(fake_tlc, "TraceSeamsBad.cfg", RED_DEADLOCK)
+    assert result.returncode == 0
+    assert "RED: Error: Deadlock reached." in result.stdout
+
+
+def test_a_properties_only_row_is_not_held_to_an_invariant(fake_tlc):
+    """`LiveMut_*` check temporal properties and no invariant beyond `TypeOK`;
+    the runner reads `Invariant … is violated` and nothing else, so there is no
+    name to compare and demanding one would refuse every such row."""
+    result = run(fake_tlc, "LiveMut_BugWalkNeverExpires.cfg", RED_PROPERTY)
+    assert result.returncode == 0
+    assert "RED: Error: Temporal properties were violated." in result.stdout
 
 
 def test_a_placeholder_heap_does_not_reach_the_jvm(fake_tlc):

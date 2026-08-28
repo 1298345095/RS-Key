@@ -171,7 +171,20 @@ Fairness.cfg                         GREEN   2000000
 
 \* Every mutant must FIRE. A counterexample search halts at the first violation,
 \* so its state count is worker-scheduling dependent and carries no floor.
+\*
+\* The reason is compared too, and where these rows say nothing the runner takes
+\* the first invariant of the configuration's own INVARIANTS block -- which
+\* `gen-configs.sh` writes as the mutant's target for exactly that purpose. ONE
+\* configuration cannot be read that way and it is named here instead. Two of the
+\* 201 arm a SECOND defect, because the shipped tree makes the first unreachable
+\* on its own, and for `BugSetPinKeepsPpuat` the companion's counterexample is the
+\* shallower one: measured, `NoAccessibleSecretWithoutGate` at depth 13 against
+\* `NoTokenAfterInvalidation` at depth 15. So this row's RED is the companion's
+\* and says so; the mutant's own attribution is `Solo_BugSetPinKeepsPpuat.cfg`,
+\* which checks that one invariant alone and is RED on it. First match wins, so
+\* the exact name has to precede the class glob.
 Historical_*.cfg                     RED     -
+Mut_BugSetPinKeepsPpuat.cfg          RED     -       -       NoAccessibleSecretWithoutGate
 Mut_*.cfg                            RED     -
 Solo_*.cfg                           RED     -
 SoloClause_*.cfg                     RED     -

@@ -45,6 +45,37 @@ fi
 # module's, and TLC takes the module name rather than reading it from the cfg.
 spec_for() { case "$1" in TokenGate*) echo RSKeyTokenGate ;; TokenRefinement*) echo RSKeyTokenRefinement ;; TraceSecurity*) echo TraceSecurity ;; TraceSeamsBad*) echo TraceSeamsBad ;; TraceSeams*) echo TraceSeams ;; Seam*) echo RSKeyAppletSeams ;; Store*) echo RSKeyStore ;; Lat*) echo RSKeyRetryLattice ;; Polic*) echo RSKeyAppletPolicies ;; Admin*) echo RSKeyAdminSurface ;; Disp*) echo RSKeyTrustedDisplay ;; Boot*) echo RSKeyBootHardening ;; Trans*) echo RSKeyTransport ;; *) echo RSKeySecurityState ;; esac; }
 
+# The invariant a MUTATION configuration says it targets, for the rows where
+# floors.txt says nothing: `gen-configs.sh` writes that one first under
+# INVARIANTS because TLC reports the first violated invariant and stops, and
+# scripts/verdict_gate.py reads the same block to decide solo attribution. So
+# this is the generated relation being read, not a second column written by hand.
+derived_inv() {
+  awk '
+    /^INVARIANTS?[[:space:]]*$/ { block = 1; next }
+    /^INVARIANTS?[[:space:]]+[A-Za-z][A-Za-z0-9_]*[[:space:]]*$/ {
+      block = 0
+      if ($2 != "TypeOK") { print $2; exit }
+      next
+    }
+    block && /^[[:space:]]+[A-Za-z][A-Za-z0-9_]*[[:space:]]*$/ {
+      if ($1 != "TypeOK") { print $1; exit }
+      next
+    }
+    block { block = 0 }
+  ' "$1"
+}
+
+# Whether a defect switch is ARMED, which is what makes the derived name the
+# right question: `TraceSeamsBad.cfg` also lists invariants and is refused by a
+# deadlock instead, so deriving one there would demand a name no run can print.
+# Both prefixes and both operators, because `scripts/verdict_gate.py` reads
+# `(?:Bug|Mutate)[A-Z]` and `=|<-`, and a spelling one file calls a defect and
+# the other does not is how a rule gets walked around here.
+armed() {
+  grep -qE '^[[:space:]]*(Bug|Mutate)[A-Z][A-Za-z0-9_]*[[:space:]]*(=|<-)[[:space:]]*TRUE([[:space:]]|$)' "$1"
+}
+
 # floors.txt: what each configuration must produce. First match wins.
 expect_for() {
   local cfg=$1 pat rest
@@ -69,6 +100,12 @@ one() {
   # Passed through it becomes `-Xmx-`, and every such row died reporting
   # "Could not create the Java Virtual Machine" -- a RED for no reason at all.
   if [ "${heap:-}" = "-" ]; then heap=""; fi
+  # 168 of the 177 RED rows named no invariant, so the reason went uncompared on
+  # 95% of them and a mutant reddening on `TypeOK` -- which every configuration
+  # checks and none targets -- exited 0. The configuration itself names one.
+  if [ -z "${inv:-}" ] || [ "$inv" = "-" ]; then
+    if armed "$cfg"; then inv=$(derived_inv "$cfg"); fi
+  fi
   local t0 t1 cov=()
   # THE VACUITY QUESTION, and it is the same one `kani::cover!` answers: an
   # action that never fires makes every clause guarding it free. COVERAGE=1

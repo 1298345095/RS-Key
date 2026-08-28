@@ -193,7 +193,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 41
+SCOPE_CEILING = 42
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -274,6 +274,12 @@ SCOPED = {
         "102 of the then-192\nconfigurations",
     ): "the finding that produced the verdict registry, in that registry's own mutation "
     "table — and already carrying its scope label, in the word `then-`",
+    (
+        "formal/run-tlc.sh",
+        "168 of the 177 RED",
+    ): "the finding that produced the derived-invariant rule, in the comment that "
+    "introduces it — the tree's shape on the day the runner stopped skipping the "
+    "reason comparison, not a tally of anything the runner emits",
     (
         "formal/README.md",
         "passed all 98\nrows",
