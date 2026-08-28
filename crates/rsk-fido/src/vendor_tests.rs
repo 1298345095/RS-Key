@@ -2476,3 +2476,64 @@ fn a_faulted_probe_does_not_report_a_config_record_as_empty() {
         );
     }
 }
+
+/// The DEV_CONF merge guard's own row: FIDO `CONFIG_WRITE`, which is UNGATED on
+/// the default build and is the transport an attacker reaches without pcscd.
+///
+/// Two probes of the record run before the guard does — `dev_conf_unchanged` calls
+/// the same merge and then compares — so a suite that drives `persist_dev_conf`
+/// alone leaves the guard shadowed here. Both are aimed at: skip 0 lands on the
+/// short-circuit, which must NOT ack a write it could not decide, and skip 2 lands
+/// on the writer's own merge, which must refuse rather than replace.
+#[test]
+fn a_faulted_dev_conf_probe_over_fido_neither_acks_nor_replaces() {
+    use rsk_devconf::raw::{EF_DEV_CONF, TAG_AUTO_EJECT_TIMEOUT, TAG_USB_ENABLED};
+    // The owner's record: the applications mask plus a field the delta omits.
+    let owner: &[u8] = &[
+        TAG_USB_ENABLED,
+        2,
+        0x02,
+        0x00,
+        TAG_AUTO_EJECT_TIMEOUT,
+        2,
+        0,
+        0x1E,
+    ];
+    // `ykman config usb --enable OATH`: the one tag it changes.
+    let delta: &[u8] = &[TAG_USB_ENABLED, 2, 0x02, 0x20];
+
+    for (skip, want) in [(0u32, Ok(0)), (2, Err(CtapError::Other))] {
+        let (mut fs, medium, mut rng, mut st) = setup_stuck();
+        rsk_devconf::persist_dev_conf(&mut fs, owner).unwrap();
+        let before = medium.value(EF_DEV_CONF).expect("record written");
+
+        let mut req = [0u8; 96];
+        let n = config_write_req(CONFIG_TARGET_DEV_CONF, delta, false, &mut req);
+        let mut out = [0u8; 16];
+        medium.stick_after(EF_DEV_CONF, skip);
+        let got = call(
+            &mut fs,
+            &mut rng,
+            &mut st,
+            &mut AlwaysConfirm,
+            &req[..n],
+            &mut out,
+        );
+        medium.stick(None);
+        let after = medium.value(EF_DEV_CONF).expect("record present");
+
+        // The data first: whatever the status word, the field the delta omits is
+        // the thing a collapsed probe destroys.
+        assert!(
+            after.windows(4).any(|w| w == &owner[4..8]),
+            "skip {skip}: the auto-eject field the write never mentioned is gone \
+             ({} bytes stored, was {})",
+            after.len(),
+            before.len()
+        );
+        assert_eq!(got, want, "skip {skip}");
+        if want.is_err() {
+            assert_eq!(after, before, "a refused write must store nothing");
+        }
+    }
+}
