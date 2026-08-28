@@ -2124,6 +2124,36 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **One faulted probe reported the PIN-readable management-key escrow revoked over
+  the host's own new key.** PIV `SET MANAGEMENT KEY` revokes the escrow last —
+  `mgm_clear_protected` clears the ADMIN-DATA `0x02` flag after the new key is
+  sealed, so a torn write cannot strand a PRINTED-only owner. Both of its
+  `EF_PIVMAN_DATA` probes read with `Fs::read`, whose `None` covers "no ADMIN DATA
+  record" and "the flash could not serve it" alike, and the absent arm is `Ok(())`
+  — nothing to revoke.
+
+  The flag is what makes `GET DATA` PRINTED synthesize the management key from the
+  sealed `0x9B` slot, and that slot now holds the key the *host* just chose. Both
+  probes measured on a `ProbeStuck` medium: `9000`, the flag still `0x02`, and
+  PRINTED handing the new key back to the PIN. A persistent fault stops at the
+  first probe, so the second needs `stick_after(EF_PIVMAN_DATA, 1)` to be reached
+  at all — it collapses the same way. The status word is the whole repair here:
+  the key-then-flag ordering means a refused revocation legitimately leaves the
+  flag standing, so what may not happen is reporting it as done. `MEMORY_FAILURE`
+  now, from both probes.
+
+  Same probe, second site: `PUT DATA` PRINTED refuses ordinary printed information
+  while the escrow is live, because `GET DATA` answers with the synthesized key and
+  the stored object could never be read back. That refusal is a match guard, so the
+  collapsed answer made it a branch that never runs — the write fell through to the
+  generic object arm, was persisted, and was acknowledged `9000`. Stored and
+  hidden, the one outcome the arm exists to avoid.
+
+  The collapsing `mgm_is_protected` stays at its third caller, `GET DATA` PRINTED,
+  where an unreadable record costs the `6A82` an absent object already answers —
+  and where the opposite direction is the one that must not happen: a `true` over
+  no escrow would synthesize the *live* management key for the PIN.
+
 - **One faulted probe waived a pending forced PIN change and issued the token it
   exists to withhold.** While `EF_MINPINLEN[1]` is set, a correct PIN buys no
   pinUvAuthToken until changePIN lifts the flag (CTAP 2.1 §6.5.5.7.1;

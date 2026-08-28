@@ -8624,3 +8624,144 @@ fn a_faulted_meta_probe_at_select_does_not_retire_the_management_touch_gate() {
         "a boot that could not read the head it decides on must refuse"
     );
 }
+
+/// SET MANAGEMENT KEY revokes the PIN-readable escrow last, and both of
+/// `mgm_clear_protected`'s `EF_PIVMAN_DATA` probes answered the same `None` for "no
+/// ADMIN DATA record" and for one the flash could not serve. The absent arm is
+/// `Ok(())` — nothing to revoke — so a faulted probe answered `9000` with the flag
+/// still standing, and the flag is what makes GET DATA PRINTED synthesize the key
+/// from the 0x9B slot. That slot now holds the key the HOST just chose, so the card
+/// hands it to the PIN while reporting the escrow gone.
+///
+/// The standing flag itself is not the defect: the ordering is key-then-flag on
+/// purpose (a torn write must not strand a PRINTED-only owner), so that state is
+/// reachable by a power cut too. What may not happen is reporting it as done — the
+/// status word is the only thing that lets the host repair it.
+///
+/// Both probes, each reached on its own: a persistent fault stops at the first
+/// (`try_mgm_is_protected`), so only `stick_after(.., 1)` reaches the second.
+#[test]
+fn a_faulted_pivman_probe_does_not_report_an_escrow_revoked() {
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let printed_id = [0x5C, 0x03, 0x5F, 0xC1, 0x09];
+    let new_key = [0x5Au8; 32];
+    let mut set_key = vec![ALGO_AES256, SLOT_CARDMGM, new_key.len() as u8];
+    set_key.extend_from_slice(&new_key);
+    let card = |medium: &rsk_fs::storage::faults::ProbeMedium,
+                app: &mut PivApplet,
+                fs: &mut Fs<ProbeStuck>| {
+        select(app, fs);
+        auth_mgm(app, fs);
+        verify_pin(app, fs);
+        assert_eq!(protect_mgm_key(&dev, fs, &mut TestRng(42)), Sw::OK);
+        assert!(mgm_is_protected(fs), "the escrow is live");
+        assert!(medium.value(EF_PIVMAN_DATA).is_some());
+    };
+
+    // Control: on a medium that answers, the revocation happens and PRINTED stops
+    // yielding a key at all.
+    {
+        let rng = RefCell::new(TestRng(7));
+        let pres = RefCell::new(AlwaysConfirm);
+        let (backend, medium) = ProbeStuck::new();
+        let mut fs = Fs::new(backend);
+        fs.scan();
+        let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+        card(&medium, &mut app, &mut fs);
+        assert_eq!(
+            run(&mut app, &mut fs, INS_SET_MGMKEY, 0xFF, 0xFF, &set_key).0,
+            Sw::OK
+        );
+        assert!(!mgm_is_protected(&mut fs), "control: the escrow is revoked");
+        assert_eq!(
+            run(&mut app, &mut fs, INS_GET_DATA, 0x3F, 0xFF, &printed_id).0,
+            Sw::FILE_NOT_FOUND,
+            "control: PRINTED is an ordinary absent object again"
+        );
+    }
+
+    for skip in [0u32, 1] {
+        let rng = RefCell::new(TestRng(7));
+        let pres = RefCell::new(AlwaysConfirm);
+        let (backend, medium) = ProbeStuck::new();
+        let mut fs = Fs::new(backend);
+        fs.scan();
+        let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+        card(&medium, &mut app, &mut fs);
+
+        medium.stick_after(EF_PIVMAN_DATA, skip);
+        let sw = run(&mut app, &mut fs, INS_SET_MGMKEY, 0xFF, 0xFF, &set_key).0;
+        medium.stick(None);
+
+        // What the status word is about, measured first: the escrow the command was
+        // asked to revoke still stands, and it now escrows the host's own new key.
+        assert!(
+            mgm_is_protected(&mut fs),
+            "skip={skip}: vacuous — the fault did not reach the revocation"
+        );
+        let (get_sw, body) = run(&mut app, &mut fs, INS_GET_DATA, 0x3F, 0xFF, &printed_id);
+        assert_eq!(get_sw, Sw::OK);
+        assert!(
+            body.windows(new_key.len()).any(|w| w == new_key),
+            "skip={skip}: vacuous — PRINTED does not hand back the host's new key"
+        );
+        assert_eq!(
+            sw,
+            Sw::MEMORY_FAILURE,
+            "skip={skip}: the card reported an escrow revoked that still hands the \
+             host's own new management key to the PIN"
+        );
+    }
+}
+
+/// PUT DATA refuses ordinary printed information while the escrow is live, because
+/// GET DATA would answer with the synthesized key and the stored object could never
+/// be read back. That refusal is a match guard over `mgm_is_protected`, so a faulted
+/// probe made it an unwritten branch: the write fell through to the generic object
+/// arm, was persisted, and was acknowledged `9000` — stored and hidden, the one
+/// outcome the arm exists to avoid.
+#[test]
+fn a_faulted_pivman_probe_does_not_admit_a_hidden_printed_write() {
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let rng = RefCell::new(TestRng(7));
+    let pres = RefCell::new(AlwaysConfirm);
+    let (backend, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    auth_mgm(&mut app, &mut fs);
+    assert_eq!(protect_mgm_key(&dev, &mut fs, &mut TestRng(42)), Sw::OK);
+    let printed_fid = data_object_fid(0x09).unwrap();
+    let mut put = vec![TAG_DATA_PATH, 0x03, 0x5F, 0xC1, 0x09, TAG_DATA_OBJECT, 0x04];
+    put.extend_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD]);
+    assert_eq!(
+        run(&mut app, &mut fs, INS_PUT_DATA, 0x3F, 0xFF, &put).0,
+        Sw::CONDITIONS_NOT_SATISFIED,
+        "control: the escrow refuses the write on a medium that answers"
+    );
+    assert_eq!(medium.value(printed_fid), None, "control: nothing stored");
+
+    medium.stick_once(EF_PIVMAN_DATA);
+    let sw = run(&mut app, &mut fs, INS_PUT_DATA, 0x3F, 0xFF, &put).0;
+    medium.stick(None);
+    assert_eq!(
+        medium.value(printed_fid),
+        None,
+        "a faulted probe stored printed information under the live escrow, where \
+         GET DATA can never read it back"
+    );
+    assert_eq!(
+        sw,
+        Sw::MEMORY_FAILURE,
+        "a write that could not read the escrow it must not land under has to refuse"
+    );
+}

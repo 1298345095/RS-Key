@@ -820,9 +820,17 @@ impl PivApplet<'_> {
             // never be read back. Refused rather than acknowledged and hidden —
             // and a YubiKey's alternative, overwriting the escrow, loses the only
             // copy of a management key the owner may never have seen.
-            (0x5F, 0xC1, 0x09) if !obj.is_empty() && mgm_is_protected(fs) => {
-                return Sw::CONDITIONS_NOT_SATISFIED;
-            }
+            // `try_mgm_is_protected`: a probe the medium could not answer reads as
+            // "no escrow", and this refusal is then the branch that never runs —
+            // the write lands, hidden under the synthesized key it was refused for.
+            (0x5F, 0xC1, b @ 0x09) if !obj.is_empty() => match try_mgm_is_protected(fs) {
+                Ok(true) => return Sw::CONDITIONS_NOT_SATISFIED,
+                Err(sw) => return sw,
+                Ok(false) => match data_object_fid(b) {
+                    Some(fid) => fid,
+                    None => return Sw::WRONG_DATA,
+                },
+            },
             (0x5F, 0xC1, b) => match data_object_fid(b) {
                 Some(fid) => fid,
                 None => return Sw::WRONG_DATA,
@@ -1481,37 +1489,58 @@ fn is_mgm_key_len(len: usize) -> bool {
 /// Whether the management key is marked PIN-protected (the ADMIN-DATA `0x02`
 /// flag). The PRINTED object only yields the key when this is set, so a default
 /// or plain management key is never PIN-readable.
+///
+/// Collapsing, and only for GET DATA, where an unreadable record costs the `6A82`
+/// an absent object already answers. The other direction is the one that must not
+/// happen there: a `true` over no escrow would synthesize the LIVE management key
+/// for the PIN. Every site that writes on the answer takes
+/// [`try_mgm_is_protected`].
 fn mgm_is_protected<S: Storage>(fs: &mut Fs<S>) -> bool {
+    try_mgm_is_protected(fs).unwrap_or(false)
+}
+
+/// [`mgm_is_protected`] with the failed probe kept apart from the absence.
+fn try_mgm_is_protected<S: Storage>(fs: &mut Fs<S>) -> Result<bool, Sw> {
     // Sized to hold a real ykman PivmanData (flags + 16-byte salt + 4-byte timestamp ≈ 29B);
     // `Storage::read` returns the value's FULL stored length, so clamp to the bytes we hold
     // before slicing — a larger record must not panic, and an unparsable one fails closed
     // (read as not protected), the safe direction.
     let mut obj = [0u8; 64];
-    let Some(n) = fs.read(EF_PIVMAN_DATA, &mut obj) else {
-        return false;
+    let Some(n) = fs
+        .try_read(EF_PIVMAN_DATA, &mut obj)
+        .map_err(|_| Sw::MEMORY_FAILURE)?
+    else {
+        return Ok(false);
     };
     let body = &obj[..n.min(obj.len())];
     if body.len() < 2 || body[0] != PIVMAN_TAG {
-        return false;
+        return Ok(false);
     }
     let inner_len = (body[1] as usize).min(body.len() - 2);
-    matches!(
+    Ok(matches!(
         find_tag(&body[2..2 + inner_len], PIVMAN_FLAGS_TAG as u16),
         Some(f) if !f.is_empty() && f[0] & PIVMAN_FLAG_MGM_PROTECTED != 0
-    )
+    ))
 }
 
 /// Revoke the PIN-readable escrow: clear the ADMIN-DATA `0x02` flag, carrying
 /// the rest of the record forward ([`pivman_set_protected`] with the bit off).
 /// A record without the flag is left untouched, so a host's PivmanData is only
 /// rewritten when there is an escrow to revoke.
+///
+/// Fallible on BOTH probes: its one caller has already replaced the key the flag
+/// escrows, so a record read absent out of a fault leaves the flag standing over
+/// the host's own new key — PIN-readable, under the `9000` that says revoked.
 fn mgm_clear_protected<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
-    if !mgm_is_protected(fs) {
+    if !try_mgm_is_protected(fs)? {
         return Ok(());
     }
-    // Sized as in `mgm_is_protected`: a real ykman record (flags + salt + timestamp).
+    // Sized as in `try_mgm_is_protected`: a real ykman record (flags + salt + timestamp).
     let mut prior = [0u8; 64];
-    let Some(n) = fs.read(EF_PIVMAN_DATA, &mut prior) else {
+    let Some(n) = fs
+        .try_read(EF_PIVMAN_DATA, &mut prior)
+        .map_err(|_| Sw::MEMORY_FAILURE)?
+    else {
         return Ok(());
     };
     let mut admin = [0u8; PIVMAN_MAX];

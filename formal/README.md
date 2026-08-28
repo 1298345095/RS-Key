@@ -397,7 +397,7 @@ whole seam module is about was handed to nobody who looked.
 
 #### The ninth row, and the column number that decided it
 
-`crates/rsk-piv/src/lib.rs:1304` `&&` → `||` is the sharpest thing this pass has
+`crates/rsk-piv/src/lib.rs:1312` `&&` → `||` is the sharpest thing this pass has
 produced. The PIV PIN gate ends in
 
 ```rust
@@ -1625,9 +1625,9 @@ seam modules keep, so a switch is one real thing a reviewer could break:
 
 | Mutation switch | Removes | Target invariant | Caught in |
 |---|---|---|---|
-| `BugUseWhenBlocked` | the `left == 0 => PIN_BLOCKED` floor (`crates/rsk-piv/src/lib.rs:1273-1275` / `crates/rsk-openpgp/src/pin.rs:218-220`), which guards a direct verify AND a recovery reference | `NoAuthWhenBlocked` | 30 states |
-| `BugWrongDoesNotSpend` | the decrement that IS the gate (`crates/rsk-piv/src/lib.rs:1291` / `crates/rsk-openpgp/src/pin.rs:125`) | `WrongAttemptIsCharged` | 2 states |
-| `BugRecoveryWithoutSecret` | the recovery secret verified before the refill (`crates/rsk-piv/src/lib.rs:1424` / `crates/rsk-openpgp/src/pin.rs:793`) | `BudgetRisesOnlyWithItsSecret` | 9 states |
+| `BugUseWhenBlocked` | the `left == 0 => PIN_BLOCKED` floor (`crates/rsk-piv/src/lib.rs:1281-1283` / `crates/rsk-openpgp/src/pin.rs:218-220`), which guards a direct verify AND a recovery reference | `NoAuthWhenBlocked` | 30 states |
+| `BugWrongDoesNotSpend` | the decrement that IS the gate (`crates/rsk-piv/src/lib.rs:1299` / `crates/rsk-openpgp/src/pin.rs:125`) | `WrongAttemptIsCharged` | 2 states |
+| `BugRecoveryWithoutSecret` | the recovery secret verified before the refill (`crates/rsk-piv/src/lib.rs:1432` / `crates/rsk-openpgp/src/pin.rs:793`) | `BudgetRisesOnlyWithItsSecret` | 9 states |
 
 `Lattice.cfg` is **GREEN, exhaustive** over 243 distinct states at depth 11, with
 no dead action; every `LatSolo_*.cfg` is RED on its own target. The all-blocked
