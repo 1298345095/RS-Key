@@ -45,7 +45,7 @@ CONSTANTS
 (* defect; `formal/README.md` maps every switch to its commit or audit id.   *)
 CONSTANTS
     BugResetGatesFirst,           \* reset.rs:82-83   two-phase wipe order
-    BugCredBeforeRp,              \* credential.rs:841-861 registration order
+    BugCredBeforeRp,              \* credential.rs:841-894 registration order
     BugTokenSurvivesPinChange,    \* clientpin.rs:316  resetPinUvAuthToken
     BugSetPinKeepsPpuat,          \* clientpin.rs:217-221
     BugChangePinKeepsPpuat,       \* clientpin.rs:305-309
@@ -77,8 +77,8 @@ CONSTANTS
     \* The two halves of the token-less carve-out, one switch each, so a RED
     \* names which half was load-bearing -- the split TraceSecurity's own
     \* MutateUvNotRqd / MutateAlwaysUvArm already make one layer out.
-    BugUvNotRqdIgnoresRk,         \* makecredential.rs:545-547 makeCredUvNotRqd
-    BugTokenlessIgnoresAlwaysUv   \* makecredential.rs:539-541 the alwaysUv arm
+    BugUvNotRqdIgnoresRk,         \* makecredential.rs:548-550 makeCredUvNotRqd
+    BugTokenlessIgnoresAlwaysUv   \* makecredential.rs:542-544 the alwaysUv arm
 
 (* Mutation switches for the LIVENESS properties. Kept apart from the set above *)
 (* because they break no invariant -- a wedge is a perfectly safe state -- so    *)
@@ -481,7 +481,7 @@ OtpCancelWait ==
 (***************************************************************************)
 
 \* THE FOUR CALL SITES DO NOT TEST THE SAME THING, and the difference is
-\* load-bearing. makeCredential (makecredential.rs:515-518) and getAssertion
+\* load-bearing. makeCredential (makecredential.rs:518-521) and getAssertion
 \* (getassertion.rs:384-387) test the MAC, `user_verified()` -- which is
 \* `in_use && user_verified` (state.rs:666-668) -- the permission bit and the
 \* rpId binding. authenticatorConfig (config.rs:243-245) and
@@ -520,13 +520,13 @@ UvRequired == pin.set \/ gate.alwaysUv
 OpGuard(p, rp)  == IF UvRequired THEN TokenGuardUv(p, rp) ELSE TRUE
 OpPolicy(p, rp) == IF UvRequired THEN TokenPolicy(p, rp) ELSE TRUE
 
-\* THE TOKEN-LESS CARVE-OUT -- makecredential.rs:529-548, the `None` arm of
+\* THE TOKEN-LESS CARVE-OUT -- makecredential.rs:532-551, the `None` arm of
 \* `enforce_pin`, which `assurance/token_refinement.toml` owns as the `UseMc`
 \* volatile writer and outcome producer. `disc` is the request's `rk`, an INPUT
 \* and not state, which is why the two arms below are a function of it:
-\*   makecredential.rs:539-541 -- CTAP 2.1 6.1.2 steps 6.2/6.4: alwaysUv with no
+\*   makecredential.rs:542-544 -- CTAP 2.1 6.1.2 steps 6.2/6.4: alwaysUv with no
 \*     way to verify refuses whatever `rk` says;
-\*   makecredential.rs:545-547 -- steps 7/10, makeCredUvNotRqd: with a PIN set a
+\*   makecredential.rs:548-550 -- steps 7/10, makeCredUvNotRqd: with a PIN set a
 \*     DISCOVERABLE credential still needs a token, a non-discoverable one does
 \*     not (issue #51).
 \* Step 6.3's third arm -- a pad UPGRADES a token-less request to built-in UV
@@ -587,7 +587,7 @@ ConsumedTok ==
              ELSE [tok EXCEPT !.perms = {}]
 
 \* makeCredential/getAssertion bind an unbound pinUvAuthToken to the request's
-\* rpId before consuming its permissions (makecredential.rs:523-525,
+\* rpId before consuming its permissions (makecredential.rs:526-528,
 \* getassertion.rs:394-396).
 BoundConsumedTok(r) ==
     LET consumed == ConsumedTok IN
@@ -679,9 +679,9 @@ MintPpuat ==
 \* It spends the SAME persistent retry counter the wire path spends -- a correct
 \* PIN refills it, a wrong one costs a try -- because
 \* `spend_and_verify_local_pin` is `spend_and_verify_pin_at(EF_PIN, ..)`
-\* (crates/rsk-fido/src/clientpin.rs:1119-1125). What it deliberately does NOT
+\* (crates/rsk-fido/src/clientpin.rs:1124-1130). What it deliberately does NOT
 \* touch is the CTAP session: no ECDH regeneration, no RAM 3-strikes lock, no
-\* journal (crates/rsk-fido/src/clientpin.rs:1113-1117). So this is not a
+\* journal (crates/rsk-fido/src/clientpin.rs:1118-1122). So this is not a
 \* PinAttempt: the pad neither consults `lock.soft` nor arms it, and the
 \* persistent 8-try counter is the whole gate. A host-soft-locked device still
 \* takes PIN entry at the pad, which is the documented recovery.
@@ -689,7 +689,7 @@ MintPpuat ==
 \* gate" while nothing could see it move: deleting it left the reachable space
 \* BIT-IDENTICAL at 79 985 500 states. `spend_and_verify_pin_at` refuses at zero
 \* before any compare and a correct PIN at zero must not refill
-\* (crates/rsk-fido/src/clientpin.rs:1153-1155), which is the same shape
+\* (crates/rsk-fido/src/clientpin.rs:1158-1160), which is the same shape
 \* PinAttemptEnabled / PinAttemptPolicy carry for the wire path.
 LocalPinGuard  == IF BugLocalPinIgnoresBudget THEN pin.set
                                               ELSE pin.set /\ pin.retries > 0
@@ -726,7 +726,7 @@ LocalPinWrong ==
     /\ UNCHANGED << gate, store, lock, pres, sys, op, snap, upSpent, ram >>
 
 \* A correct PIN at the pad refills the persistent budget
-\* (crates/rsk-fido/src/clientpin.rs:1119-1125) and grants NOTHING host-visible:
+\* (crates/rsk-fido/src/clientpin.rs:1124-1130) and grants NOTHING host-visible:
 \* no token, no `pcmr`, no CCID security status. It also leaves the RAM soft lock
 \* armed, which fails closed -- the host stays blocked until a replug.
 LocalPinOk ==
@@ -855,7 +855,7 @@ StopUsingToken ==
 (* makeCredential / getAssertion.                                          *)
 (***************************************************************************)
 
-\* makecredential.rs:513-521. Needs PERM_MC and a touch.
+\* makecredential.rs:516-524. Needs PERM_MC and a touch.
 RegisterStart(r, t) ==
     /\ Idle
     /\ ButtonFreeGuard
@@ -870,7 +870,7 @@ RegisterStart(r, t) ==
     \* buys the shipped tree no state at all. It exists to be MUTATED --
     \* BugUvNotRqdIgnoresRk drops the `disc` conjunct and a discoverable
     \* registration is then served with a PIN set and no token, which is the
-    \* defect deleting makecredential.rs:545-547 makes.
+    \* defect deleting makecredential.rs:548-550 makes.
     /\ (OpGuard("mc", r) \/ McTokenlessGuard(TRUE))
     /\ viol' = (IF OpPolicy("mc", r) \/ McTokenlessPolicy(TRUE)
                   THEN viol ELSE viol \cup TokenBypass)
@@ -908,8 +908,8 @@ RegisterRefused ==
     /\ UNCHANGED << pin, gate, store, lock, tok, plat, walk, sys, snap,
                     upSpent, viol, ram >>
 
-\* credential.rs:838-861. Order so that any truncation leaves an RP entry
-\* without a credential -- invisible but harmless -- never a credential
+\* credential.rs:838-894. Order so that any truncation leaves an RP entry
+\* without a credential -- rolled back best-effort, never reclaimed -- never a
 \* without an RP entry, which enumerateRPs and the display can neither list
 \* nor delete while getAssertion authenticates with it happily (audit run-35).
 RegisterWriteA ==
@@ -932,8 +932,8 @@ RegisterWriteB ==
                     viol, ram >>
 
 \* THE NON-DISCOVERABLE REGISTRATION, and the reason it is not `RegisterStart`
-\* with a flag: it writes NOTHING. makecredential.rs:779-780 stores only under
-\* `req.rk`, and makecredential.rs:754-756 says why -- "a non-discoverable
+\* with a flag: it writes NOTHING. makecredential.rs:782-783 stores only under
+\* `req.rk`, and makecredential.rs:757-759 says why -- "a non-discoverable
 \* credential keeps no on-device state at all". So there is no `rp` to carry
 \* either: `store` is exactly what it observes per relying party, and a
 \* credential the device does not record is one it cannot tell apart from
@@ -1039,12 +1039,12 @@ ConfigOp ==
                     ram >>
 
 (***************************************************************************)
-(* Vendor BACKUP_FINALIZE -- vendor.rs:913-920, and its on-device twin      *)
-(* mark_backup_sealed (vendor.rs:981-987).                                  *)
+(* Vendor BACKUP_FINALIZE -- vendor.rs:922-929, and its on-device twin      *)
+(* mark_backup_sealed (vendor.rs:990-996).                                  *)
 (***************************************************************************)
 
 \* Writing EF_BACKUP_SEALED closes the one-time seed-export window: after it,
-\* BACKUP_EXPORT refuses (vendor.rs:818) and the display's recovery-phrase
+\* BACKUP_EXPORT refuses (vendor.rs:827) and the display's recovery-phrase
 \* reveal is gone, until a reset reopens the window. Modelled UNGATED -- the
 \* real one carries the PIN half and a deliberate hold -- which widens only the
 \* states the marker can be SET in, never the states it can be LOST in, and it
@@ -1056,7 +1056,7 @@ BackupFinalize ==
     /\ UNCHANGED << pin, store, lock, tok, plat, pres, walk, sys, op, snap,
                     upSpent, viol, ram >>
 
-\* Vendor UNLOCK (vendor.rs:557-580): the host presents the 32-byte lock key over
+\* Vendor UNLOCK (vendor.rs:566-589): the host presents the 32-byte lock key over
 \* the MSE channel, the wrapped seed on flash decrypts, and `state.keydev_dec`
 \* holds it until power-off. No PIN and no touch -- knowing the lock key IS the
 \* authorization -- so this is not modelled as a gate, only as the one door
