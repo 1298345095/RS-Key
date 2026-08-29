@@ -38,6 +38,11 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+**RS-Key is not formally verified.** Entries below say what evidence a change
+added; none of them says a whole-system theorem exists. `scripts/claims_gate.py`
+holds every page naming three or more registered properties to that sentence,
+and to the statuses it quotes.
+
 ### Added
 
 - **More than half of the fallible-probe conversion was held by no test, and the
@@ -3261,8 +3266,10 @@ could not fail are written down, each with what it missed.
   six ran past the 5-minute FAST cap (520 s and 794 s), at three bytes all six
   run in 0.04–0.08 s — and what the shrink stops proving is a compile-time
   assertion instead, which is the stronger form because it is about the shipped
-  width. `SEC-STORE-002` rises to BOUNDED; the other three store properties stay
-  MODELLED-ONLY and say why. The verification code is `cfg`-excluded from every
+  width. `SEC-STORE-002` rises to BOUNDED. `SEC-STORE-001`, `SEC-STORE-003`,
+  `SEC-STORE-004`, `SEC-STORE-005` and `SEC-STORE-006` stay MODELLED-ONLY and say
+  why — the family has six members, and "the other three" stood here until
+  `scripts/claims_gate.py` read this file. The verification code is `cfg`-excluded from every
   firmware image; what the production build gained is one compile-time assertion
   and one `cfg` attribute, so `bcdDevice` 0x095F → 0x0960 is a refactor with no
   behaviour change — the emitted image does the same thing with the same 8 KiB

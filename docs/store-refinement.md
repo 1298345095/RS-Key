@@ -5,7 +5,9 @@
 
 The third C→B pilot, and the smallest. It connects `RSKeyStore`'s **cache** half
 to the code that maintains it: the model's `present` and `decided` variables, and
-the `Fs` primitives that write them.
+the `Fs` primitives that write them. **RS-Key is not formally verified**: this is
+one half of one model bridged to the code that maintains it, and the statuses
+below are what that buys and no more.
 
 ## Why only half
 

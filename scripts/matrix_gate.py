@@ -66,6 +66,7 @@ import re
 import sys
 import tomllib
 
+import claims_gate
 import gate_lines
 import platform_gate
 
@@ -1195,6 +1196,8 @@ def render(root):
         f"<!-- {GENERATED_BY} — do not edit by hand -->",
         "",
         "# Assurance matrix",
+        "",
+        claims_gate.DISCLAIMER_PARAGRAPH,
         "",
         "Which security property is claimed about which buildable image. The rows are"
         " the P0-family properties of `assurance/properties.toml`; the columns are"

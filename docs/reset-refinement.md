@@ -6,7 +6,8 @@
 This is the phase-6 bridge for `SEC-FIDO-006`,
 `ResetNeverWeakensSurvivingState`. It joins the existing TLA+ reset machine to
 the concrete FIDO reset order, the `rsk-fs` power-cut contract, and a real-board
-test. It does **not** make RS-Key formally verified: the C→B step is bounded,
+test. **RS-Key is not formally verified**, and this page does not move that:
+the C→B step is bounded,
 the flash composition has an executable oracle rather than a deductive proof of
 the storage backend, and a HIL result witnesses only the cut that was run.
 

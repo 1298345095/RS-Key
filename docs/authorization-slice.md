@@ -9,6 +9,10 @@ the **design and the measurement plan**, written before any of the proof code it
 describes exists. It closes nothing, moves no property status, and adds no gate
 row.
 
+**RS-Key is not formally verified**, and a design page is the easiest place to
+forget it: nothing below is evidence, and the closed slice it plans does not make
+the firmware proven either.
+
 Its purpose is narrow and worth stating so nobody reads more into it: fix a scope
 that can be checked, so that the cost of actually closing the slice can be
 *observed* rather than estimated. The three completed pilots — [token](token-refinement.md),
@@ -61,8 +65,12 @@ and `SEC-FIDO-008`'s `co` moved 0 -> 1, and the copy said 0 with every gate
 green — the status half stayed true, so nothing about it looked stale. That is
 the shape `scripts/claims_gate.py` now refuses outright.
 
-The registry-wide line is 59 properties (2 accepted-risk, 11 bounded, 46
-modelled-only), 28 crates ledgered, 199 configurations tiered plus 2 exempt.
+The registry-wide line — how many properties, how many at each status, how many
+crates ledgered and how many configurations tiered — is what
+`python3 scripts/assurance_gate.py` prints, and it is not copied here. It was:
+"199 configurations tiered plus 2 exempt" stood in this paragraph and was right
+at the commit that wrote it; three configurations landed six minutes later and
+nothing said so.
 
 `SEC-FIDO-001`'s configuration column is `firmware` — the default image, no
 cargo feature and no build knob. Everything below is about that column, and

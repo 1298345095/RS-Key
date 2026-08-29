@@ -243,3 +243,252 @@ def test_the_page_that_carried_the_measured_rows_no_longer_does():
     page = (ROOT / "docs/authorization-slice.md").read_text()
     assert not re.search(r"\|\s*`SEC-FIDO-00\d`\s*\|\s*(BOUNDED|MODELLED-ONLY)\s*\|", page)
     assert "assurance-vector.md" in page
+
+
+# ---- the sentence the Definition of done requires -----------------------------
+#
+# Four pages said it in FOUR spellings — "**not** make RS-Key formally verified",
+# "RS-Key is not formally verified", and two more — so nothing could hold it, and
+# deleting all four left every gate green. One spelling now, and the three pages
+# carrying the MOST registered ids are generated, so their generators emit it.
+
+
+def test_a_page_of_claims_without_the_disclaimer_is_refused(tree):
+    page = tree / "docs/store-refinement.md"
+    page.write_text(
+        page.read_text().replace("**RS-Key is not formally verified**", "RS-Key is fine")
+    )
+    reported = findings(tree)
+    assert any("does not say" in f and "store-refinement" in f for f in reported), reported
+
+
+def test_the_bolded_spelling_counts(tree):
+    """Emphasis is stripped before matching, so `**not**` reads the same. Nothing
+    else is normalised: a rule that accepts any paraphrase accepts the paraphrase
+    that drops the word "not"."""
+    page = tree / "docs/store-refinement.md"
+    page.write_text(
+        page.read_text().replace(
+            "**RS-Key is not formally verified**", "RS-Key **is not** formally verified"
+        )
+    )
+    assert findings(tree) == []
+
+
+def test_a_paraphrase_does_not_count(tree):
+    page = tree / "docs/store-refinement.md"
+    page.write_text(
+        page.read_text().replace(
+            "**RS-Key is not formally verified**",
+            "this does not make RS-Key formally verified",
+        )
+    )
+    reported = findings(tree)
+    assert any("does not say" in f and "store-refinement" in f for f in reported), reported
+
+
+def test_the_generated_pages_are_asked_too(tree):
+    """The rule reads `published`, not `corpus`: the three pages naming the most
+    ids are generated whole, and a rule over the hand-written residue would ask
+    the sentence of everyone except the pages a reader most likely reads."""
+    page = tree / "docs/assurance-vector.md"
+    page.write_text(page.read_text().replace("RS-Key is not formally verified", "x"))
+    reported = findings(tree)
+    assert any("assurance-vector" in f and "does not say" in f for f in reported), reported
+
+
+def test_a_page_naming_two_ids_is_not_a_summary(tree):
+    say(tree, "`SEC-FIDO-001` and `SEC-FIDO-002` are both BOUNDED.", page="SECURITY.md")
+    assert findings(tree) == []
+
+
+def test_the_generators_emit_the_sentence_rather_than_a_hand_written_copy():
+    """A copy in the page and not in the generator is one `--write` from gone —
+    and three copies of the paragraph would be three places to drop it from, so
+    the three generators emit the ONE in `claims_gate`."""
+    for gate in ("evidence_gate.py", "matrix_gate.py", "platform_gate.py"):
+        source = (ROOT / "scripts" / gate).read_text(encoding="utf-8")
+        assert "claims_gate.DISCLAIMER_PARAGRAPH" in source, gate
+        assert "RS-Key is not formally verified" not in source, f"{gate} keeps a copy"
+    assert claims_gate.DISCLAIMER in claims_gate.DISCLAIMER_PARAGRAPH.lower()
+
+
+def test_a_disclaimer_derivation_that_went_blind_is_not_a_clean_tree(tree):
+    """The floor's own arm. It shipped as a global for one revision and this
+    mutant SURVIVED — a case can only reach a global by patching it, which is
+    patching the thing under test."""
+    reported = findings(tree, disclaimer_floor=10_000)
+    assert any("owe the disclaimer" in f for f in reported), reported
+
+
+def test_the_disclaimer_floor_is_under_the_shipped_count():
+    pages = [
+        rel
+        for rel, text in claims_gate.published(ROOT)
+        if rel.endswith(".md")
+        and len(set(claims_gate.ID.findall(text))) >= claims_gate.DISCLAIMER_IDS
+    ]
+    assert len(pages) >= claims_gate.DISCLAIMER_FLOOR, pages
+
+
+# ---- what an independent review broke, and what closed it --------------------
+#
+# The first version scoped WORDS to a sentence and IDS to the lines that sentence
+# touched, and took the union of the named ids' statuses. A reviewer broke the
+# headline claim in one line, with plain English and no trick spelling, and the
+# five cases of `test_a_status_no_row_holds_is_refused` went with it: re-typed the
+# way a hard-wrapping author writes, all five passed. Measured on this corpus,
+# 14 978 of 29 403 prose lines are 50-95 columns, so whether a false claim was
+# caught depended on where the editor wrapped.
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "The authorization slice closes on `SEC-FIDO-001`.\nIt is PROVEN on hardware.",
+        "The store slice leaves `SEC-STORE-005` where it was.\nIt is BOUNDED today.",
+        "We re-ran `SEC-FIDO-007` on the bench.\nIt is MEASURED on an RP2350 A4 board.",
+        "`SEC-FIDO-001` is the authorization property.\nIt is PROVEN on hardware.",
+    ],
+)
+def test_a_line_break_does_not_hide_a_false_claim(tree, sentence):
+    say(tree, sentence)
+    reported = findings(tree)
+    assert any("is not a copy of anything" in f for f in reported), reported
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "`SEC-FIDO-001` is MODELLED-ONLY and `SEC-STORE-005` is BOUNDED.",
+        "`SEC-FIDO-001` and `SEC-FIDO-007` are both BOUNDED.",
+    ],
+)
+def test_two_ids_do_not_lend_each_other_their_statuses(tree, sentence):
+    """The union bug: A18 above has BOTH halves backwards and scored two `held`
+    true copies. Attribution is to the nearest id that PRECEDES the word."""
+    say(tree, sentence)
+    reported = findings(tree)
+    assert any("is not a copy of anything" in f for f in reported), reported
+
+
+def test_a_list_after_a_claim_does_not_steal_it(tree):
+    """And the reason attribution prefers a PRECEDING id: nearest-in-either-
+    direction let the first name of a following list take a word that is about
+    the id before it, two characters away."""
+    say(
+        tree,
+        "`SEC-STORE-002` rises to BOUNDED. `SEC-STORE-001`, `SEC-STORE-003`,"
+        " `SEC-STORE-004`, `SEC-STORE-005` and `SEC-STORE-006` stay MODELLED-ONLY."
+        "\n\n**RS-Key is not formally verified.**",
+        page="README.md",
+    )
+    assert findings(tree) == []
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "`SEC-FIDO-001` is PRO**VEN** on hardware.",
+        "`SEC-FIDO-001` is PRO\u200bVEN on hardware.",
+        "`SEC\u2011FIDO\u2011001` is PROVEN on hardware.",
+        "`SEC-FIDO-001` is PROVEN on hard-\nware.",
+    ],
+)
+def test_a_spelling_that_renders_the_same_reads_the_same(tree, spelling):
+    """Emphasis, a zero-width space and the non-ASCII hyphens all render
+    identically to what they hide, and each walked a literal `PROVEN` past the
+    first version."""
+    say(tree, spelling)
+    reported = findings(tree)
+    assert any("is not a copy of anything" in f for f in reported), reported
+
+
+def test_the_corpus_reaches_the_changelog(tree):
+    """`run_count_gate.scanned` was the first corpus and left 1018 tracked files
+    out, `CHANGELOG.md` among them — and `CHANGELOG.md` carried "the other three
+    store properties stay MODELLED-ONLY" over a family of six. The run-count
+    carve-out's reason does not transfer: it is about a COST staying its
+    release's, and a status was wrong the day it was typed."""
+    say(tree, "`SEC-FIDO-001` is PROVEN on hardware.", page="CHANGELOG.md")
+    reported = findings(tree)
+    assert any("CHANGELOG.md" in f and "PROVEN" in f for f in reported), reported
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "<!-- Generated by scripts/no_such_gate.py --write -->",
+        "<!-- Generated by scripts/evidence_gate.py --write -->",
+        "The tables here are Generated by scripts/evidence_gate.py --write.",
+    ],
+)
+def test_a_page_cannot_exempt_itself_by_saying_it_is_generated(tree, header):
+    """Three passes at exit 0 on the first version: a script that does not exist,
+    a real script over a page it does not write, and the phrase in ordinary
+    prose. The exempt set is derived from each generator's own `ARTIFACT` and
+    `GENERATED_BY` pair, so only the page a script really writes is exempt."""
+    page = tree / "docs/threat-model.md"
+    page.write_text(header + "\n" + page.read_text() + "\n\n`SEC-FIDO-001` is PROVEN.\n")
+    reported = findings(tree)
+    assert any("threat-model" in f and "PROVEN" in f for f in reported), reported
+
+
+def test_the_generated_page_roster_is_the_generators_own():
+    pages = claims_gate.generated_pages(ROOT)
+    assert pages == {
+        "docs/assurance-vector.md": "Generated by scripts/evidence_gate.py --write",
+        "docs/assurance-matrix.md": "Generated by scripts/matrix_gate.py --write",
+        "docs/platform-assumptions.md": "Generated by scripts/platform_gate.py --write",
+    }, pages
+
+
+def test_a_registered_exemption_that_stopped_matching_is_a_finding(tree):
+    """An exemption exempts a FRAGMENT, and one that no longer occurs hides
+    whatever moved into its place."""
+    (page, fragment) = next(iter(claims_gate.SCOPED))
+    target = tree / page
+    target.write_text(target.read_text().replace(fragment, "gone", 1))
+    reported = findings(tree)
+    assert any("occurs 0 time(s)" in f for f in reported), reported
+
+
+def test_a_registered_exemption_copied_twice_is_a_finding(tree):
+    (page, fragment) = next(iter(claims_gate.SCOPED))
+    target = tree / page
+    target.write_text(target.read_text() + "\n\n" + fragment + "\n")
+    reported = findings(tree)
+    assert any("occurs 2 time(s)" in f for f in reported), reported
+
+
+def test_every_registered_exemption_carries_a_reason():
+    for key, reason in claims_gate.SCOPED.items():
+        assert len(reason.split()) >= 8, key
+
+
+@pytest.mark.parametrize(
+    "floor", ["CLAIM_FLOOR", "CORPUS_FLOOR", "DISCLAIMER_FLOOR"]
+)
+def test_a_floor_tracks_the_tree_rather_than_sitting_at_zero(floor):
+    """Lowering a floor was UNCAUGHT: the cases that drive each one pass their own
+    value, so the constant they ship with binds nothing, and
+    `test_the_shipped_corpus_is_over_its_floor` only gets easier as the floor
+    drops. Held between half the measurement and the measurement, so 0 fails and
+    an over-raise fails too."""
+    measured = {
+        "CLAIM_FLOOR": _measure_held(),
+        "CORPUS_FLOOR": len(claims_gate.corpus(ROOT)),
+        "DISCLAIMER_FLOOR": _measure_owed(),
+    }[floor]
+    value = getattr(claims_gate, floor)
+    assert measured // 2 <= value <= measured, (floor, value, measured)
+
+
+def _measure_held():
+    summary = claims_gate.audit(ROOT)[1]
+    return int(re.search(r"(\d+) hand-written", summary).group(1))
+
+
+def _measure_owed():
+    summary = claims_gate.audit(ROOT)[1]
+    return int(re.search(r"(\d+) page\(s\) carrying", summary).group(1))

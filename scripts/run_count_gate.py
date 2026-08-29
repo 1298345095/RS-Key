@@ -193,7 +193,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 42
+SCOPE_CEILING = 41
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -451,8 +451,8 @@ SCOPED = {
         "names all seven rows it\nwould blind",
     ): "how many `floors.txt` rows carry a fourth column, a property of that file",
     # Reached by widening a published unit into the vocabulary the shape scan
-    # already enumerates: `71 entries` is the `71-entry` roster, which is the
-    # sentence a commit in this series had to hand-correct from 69.
+    # already enumerates: `72 entries` is the roster, a sentence two commits in
+    # this series have now had to hand-correct — 69 -> 71 -> 72.
     (
         "formal/README.md",
         "**30 of 30 mutants are caught",
@@ -461,21 +461,18 @@ SCOPED = {
     "claim, and the generated roster line carries the same 30",
     (
         "formal/README.md",
-        "`AccessCodeRemovalNeedsTheCode` | 71 states |",
-    ): "one mutant's own state count in the seam mutation table, which is a coincidence "
-    "of value with the co-mutant roster and not a copy of it — a table cell that moves "
-    "when the model does, never when the roster does",
-    (
-        "formal/README.md",
         "`NoAuthWhenBlocked` | 30 states |",
     ): "the same coincidence in the lattice table, against the phase-2 baseline this "
     "time — again a state count of one configuration and no roster figure at all",
     (
         "formal/README.md",
-        "**71 entries: 67 executable patches killed",
+        "**72 entries: 67 executable patches killed",
     ): "the co-mutant roster restated where its composition is broken down, which the "
-    "generated line beside it does not give — and the copy that read 69 until a commit "
-    "in this series re-measured it, which is why it is registered rather than trusted",
+    "generated line beside it does not give — and the copy that read 69, then 71, "
+    "until each of two commits in this series re-measured it. The second time the "
+    "roster grew and nothing said so: the registration held the sentence and the "
+    "sentence had stopped being true, which is the exact half a registered "
+    "fragment cannot check",
     (
         "formal/README.md",
         "`ok — 191 configuration(s)` and exited 0",

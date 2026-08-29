@@ -95,6 +95,7 @@ import tomllib
 
 import assurance_gate
 import comutate
+import claims_gate
 import gate_lines
 import platform_gate
 import scope_gate
@@ -925,6 +926,8 @@ def render(root, rows=None):
         f"<!-- {GENERATED_BY} — do not edit by hand -->",
         "",
         "# Assurance vector",
+        "",
+        claims_gate.DISCLAIMER_PARAGRAPH,
         "",
         "One word per property mixes questions that move independently. Roadmap"
         " §4.1 argues it; the first closed slice measured it. That slice took"
