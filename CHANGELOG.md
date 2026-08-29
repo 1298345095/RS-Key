@@ -171,6 +171,21 @@ and to the statuses it quotes.
 
 ### Changed
 
+- **The present/decided bitmap arithmetic has one definition and a theorem about
+  it.** `fid >> 3` and `1 << (fid & 7)` were spelled out at five sites —
+  `present_bit`, `decided_bit`, `mark_present`, `mark_absent`, and a fifth copy
+  inside `scan`'s closure, which cannot borrow `self` — so the arithmetic could
+  drift at one site and leave any assertion about the other four passing. All
+  five now call one `const fn slot(fid) -> (usize, u8)`.
+
+  What that buys is stage 5A п.5 of the formal programme: the aliasing clauses
+  `store_refinement_kani.rs` proves are drawn from `0..FID_LIMIT`, and under
+  `cfg(kani)` that limit is 24 of 65 536 bits. A `const _: () = assert!` beside
+  `slot` now enumerates all 65 536 FIDs and states that its two halves recompose
+  `fid` — i.e. `slot` is injective, which IS "a put never aliases another file",
+  over the whole shipped domain and in the shrunk arm too. Behaviour-preserving;
+  the bump is for the five call sites, not for a change the image makes.
+
 - **`Fs` carried a boot-scan flag that nothing read, so it recorded nothing.**
   `over_cap` was set by `scan` when the backend held more dynamic-eligible keys
   than `MAX_DYNAMIC_FILES`, and it replaced a `debug_assert!` for the stated

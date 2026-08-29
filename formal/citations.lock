@@ -50,13 +50,13 @@ crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/state.rs	169-179	/// Wheth
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/state.rs	329-335	/// The channel [`Self::channel`] held when that handshake ran — defence in	pub mse_cid: u32,
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/state.rs	357-361	/// Transport channel of the request being dispatched — the CTAPHID CID, or 0	pub channel: u32,
 crates/rsk-fido/src/vendor_tests.rs	crates/rsk-sdk/src/presence.rs	92-92	fn uv_available(&self) -> bool {	fn uv_available(&self) -> bool {
-crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	156-158	fn known_absent(&self, fid: u16) -> bool {	}
-crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	474-494	pub fn put(&mut self, fid: u16, data: &[u8]) -> Result<()> {	}
-crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	534-543	pub fn delete(&mut self, fid: u16) -> Result<()> {	}
-crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	228-228	if fid == EF_META || fid == EF_SCRUB_FILLER {	if fid == EF_META || fid == EF_SCRUB_FILLER {
-crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	714-716	if r.is_none() && self.storage.last_error() {	}
-crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	746-746	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
-crates/rsk-fs/src/store_steps_tests.rs	crates/rsk-fs/src/fs.rs	535-535	let meta = self.meta_delete(fid);	let meta = self.meta_delete(fid);
+crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	184-186	fn known_absent(&self, fid: u16) -> bool {	}
+crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	502-522	pub fn put(&mut self, fid: u16, data: &[u8]) -> Result<()> {	}
+crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	562-571	pub fn delete(&mut self, fid: u16) -> Result<()> {	}
+crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	256-256	if fid == EF_META || fid == EF_SCRUB_FILLER {	if fid == EF_META || fid == EF_SCRUB_FILLER {
+crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	742-744	if r.is_none() && self.storage.last_error() {	}
+crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	774-774	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
+crates/rsk-fs/src/store_steps_tests.rs	crates/rsk-fs/src/fs.rs	563-563	let meta = self.meta_delete(fid);	let meta = self.meta_delete(fid);
 crates/rsk-piv/src/tests.rs	crates/rsk-fido/src/clientpin.rs	764-764	if !matched && ctx.dev.otp_key.is_some() {	if !matched && ctx.dev.otp_key.is_some() {
 crates/rsk-usb/src/secure_pin_kani.rs	crates/rsk-usb/src/secure_pin.rs	96-96	// Force the canonical VERIFY class byte; never honour the host template's CLA.	// Force the canonical VERIFY class byte; never honour the host template's CLA.
 formal/README.md	crates/rsk-devconf/src/lib.rs	265-278	// and `read_enabled_caps` reads empty as "no record" and returns	return Ok(());
@@ -162,20 +162,20 @@ formal/README.md	crates/rsk-fido/src/state.rs	620-626	pub fn expire_stale_sequen
 formal/README.md	crates/rsk-fido/src/u2f.rs	94-94	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());
 formal/README.md	crates/rsk-fido/src/vendor.rs	575-598	fn unlock<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	None => Err(CtapError::InvalidParameter),
 formal/README.md	crates/rsk-fido/src/vendor.rs	936-948	fn backup_finalize<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	.map_err(|_| CtapError::Other)?;
-formal/README.md	crates/rsk-fs/src/fs.rs	175-175	self.decided[i] |= m;	self.decided[i] |= m;
-formal/README.md	crates/rsk-fs/src/fs.rs	223-223	decided[i] |= m;	decided[i] |= m;
-formal/README.md	crates/rsk-fs/src/fs.rs	228-228	if fid == EF_META || fid == EF_SCRUB_FILLER {	if fid == EF_META || fid == EF_SCRUB_FILLER {
-formal/README.md	crates/rsk-fs/src/fs.rs	231-231	if !dynamic.contains(&fid) {	if !dynamic.contains(&fid) {
-formal/README.md	crates/rsk-fs/src/fs.rs	241-243	// key from it. An un-yielded FID is then authoritatively absent — decide the	// full-partition scan. Only a flash READ FAULT can truncate the walk
-formal/README.md	crates/rsk-fs/src/fs.rs	319-319	Ok(self.try_size(fid)?.is_some_and(|n| n > 0))	Ok(self.try_size(fid)?.is_some_and(|n| n > 0))
-formal/README.md	crates/rsk-fs/src/fs.rs	322-325	/// Invoke `f` once per live key in the backend, in a single storage pass.	/// while one `for_each_key` pass is O(items).
-formal/README.md	crates/rsk-fs/src/fs.rs	441-441	if !preserve(fid) && phase_of(fid) == phase && n < batch.len() {	if !preserve(fid) && phase_of(fid) == phase && n < batch.len() {
-formal/README.md	crates/rsk-fs/src/fs.rs	535-537	let meta = self.meta_delete(fid);	self.storage.remove(fid)?;
-formal/README.md	crates/rsk-fs/src/fs.rs	541-541	self.dynamic.retain(|&f| f != fid);	self.dynamic.retain(|&f| f != fid);
-formal/README.md	crates/rsk-fs/src/fs.rs	542-542	meta	meta
-formal/README.md	crates/rsk-fs/src/fs.rs	707-707	let n = if self.known_absent(EF_META) {	let n = if self.known_absent(EF_META) {
-formal/README.md	crates/rsk-fs/src/fs.rs	744-744	// Absent means there is nothing to drop; a FAILED read means we do not	// Absent means there is nothing to drop; a FAILED read means we do not
-formal/README.md	crates/rsk-fs/src/fs.rs	746-746	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
+formal/README.md	crates/rsk-fs/src/fs.rs	203-203	self.decided[i] |= m;	self.decided[i] |= m;
+formal/README.md	crates/rsk-fs/src/fs.rs	251-251	decided[i] |= m;	decided[i] |= m;
+formal/README.md	crates/rsk-fs/src/fs.rs	256-256	if fid == EF_META || fid == EF_SCRUB_FILLER {	if fid == EF_META || fid == EF_SCRUB_FILLER {
+formal/README.md	crates/rsk-fs/src/fs.rs	259-259	if !dynamic.contains(&fid) {	if !dynamic.contains(&fid) {
+formal/README.md	crates/rsk-fs/src/fs.rs	269-271	// key from it. An un-yielded FID is then authoritatively absent — decide the	// full-partition scan. Only a flash READ FAULT can truncate the walk
+formal/README.md	crates/rsk-fs/src/fs.rs	347-347	Ok(self.try_size(fid)?.is_some_and(|n| n > 0))	Ok(self.try_size(fid)?.is_some_and(|n| n > 0))
+formal/README.md	crates/rsk-fs/src/fs.rs	350-353	/// Invoke `f` once per live key in the backend, in a single storage pass.	/// while one `for_each_key` pass is O(items).
+formal/README.md	crates/rsk-fs/src/fs.rs	469-469	if !preserve(fid) && phase_of(fid) == phase && n < batch.len() {	if !preserve(fid) && phase_of(fid) == phase && n < batch.len() {
+formal/README.md	crates/rsk-fs/src/fs.rs	563-565	let meta = self.meta_delete(fid);	self.storage.remove(fid)?;
+formal/README.md	crates/rsk-fs/src/fs.rs	569-569	self.dynamic.retain(|&f| f != fid);	self.dynamic.retain(|&f| f != fid);
+formal/README.md	crates/rsk-fs/src/fs.rs	570-570	meta	meta
+formal/README.md	crates/rsk-fs/src/fs.rs	735-735	let n = if self.known_absent(EF_META) {	let n = if self.known_absent(EF_META) {
+formal/README.md	crates/rsk-fs/src/fs.rs	772-772	// Absent means there is nothing to drop; a FAILED read means we do not	// Absent means there is nothing to drop; a FAILED read means we do not
+formal/README.md	crates/rsk-fs/src/fs.rs	774-774	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
 formal/README.md	crates/rsk-fs/src/lib.rs	26-46	/// Set (`[1]`) once the post-OTP-provisioning at-rest hardening pass has run: the seal	let _ = fs.delete(EF_HARDENED);
 formal/README.md	crates/rsk-fs/src/lib.rs	46-46	let _ = fs.delete(EF_HARDENED);	let _ = fs.delete(EF_HARDENED);
 formal/README.md	crates/rsk-oath/src/lib.rs	330-332	if !self.validated {	}
@@ -260,7 +260,7 @@ formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ccid.rs	354-369	/// Drop the s
 formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ctap.rs	177-181	EF_PIN, EF_RP, MAX_RESIDENT_CREDENTIALS,	let pin_size = fs.size(EF_PIN).and_then(|n| u8::try_from(n).ok());
 formal/RSKeyAppletSeams.tla	crates/rsk-display/src/pin.rs	681-689	let _ = rsk_ui::render_erasing(&mut self.panel);	)
 formal/RSKeyAppletSeams.tla	crates/rsk-fido/src/reset.rs	235-277	/// Whether `fid` is cleared by `authenticatorReset` — every FIDO-owned flash file plus	}
-formal/RSKeyAppletSeams.tla	crates/rsk-fs/src/fs.rs	404-451	/// that is still live and, for PIV, not PIN-bound at rest — or, for OATH, leaves	return Err(Error::MemoryFatal);
+formal/RSKeyAppletSeams.tla	crates/rsk-fs/src/fs.rs	432-479	/// that is still live and, for PIV, not PIN-bound at rest — or, for OATH, leaves	return Err(Error::MemoryFatal);
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	183-191	/// allowed); with a code set, SELECT resets it and VALIDATE/VERIFY PIN	otp_pin_verified: bool,
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	214-215	presence,	validated: true,
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	330-332	if !self.validated {	}
@@ -436,7 +436,7 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	575-598	fn unlock<S:
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	846-846	if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {	if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	941-948	// no MSE handshake — and say what the touch actually authorises.	.map_err(|_| CtapError::Other)?;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	1009-1015	/// `EF_BACKUP_SEALED` marker so the seed can no longer be exported **or** shown as	fs.put(EF_BACKUP_SEALED, &[1]).is_ok()
-formal/RSKeySecurityState.tla	crates/rsk-fs/src/fs.rs	327-330	/// A FID can be yielded MORE THAN ONCE — the log-structured backend walks	/// below does).
+formal/RSKeySecurityState.tla	crates/rsk-fs/src/fs.rs	355-358	/// A FID can be yielded MORE THAN ONCE — the log-structured backend walks	/// below does).
 formal/RSKeySecurityState.tla	crates/rsk-usb/src/ctaphid.rs	757-762	// frames during fast/crypto processing would consume — and then	if up_pending() {
 formal/RSKeySecurityState.tla	firmware/src/main.rs	616-616	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);
 formal/RSKeySecurityState.tla	firmware/src/presence.rs	99-106	/// User presence via BOOTSEL (default) or a dedicated GPIO button.	}
@@ -446,26 +446,26 @@ formal/RSKeySecurityState.tla	firmware/src/worker.rs	528-528	crate::presence::se
 formal/RSKeySecurityState.tla	firmware/src/worker.rs	646-669	/// dirty latch, so the CCID / FIDO2 / U2F / OTP gates all act on the new set	// confirms on an already-held button — so without this the release edge of
 formal/RSKeySecurityState.tla	firmware/src/worker.rs	661-663	// Scope any touch wait this command starts to the OTP transport, so a host	crate::presence::set_wait_scope(crate::presence::SCOPE_OTP);
 formal/RSKeySecurityState.tla	tools/emu/src/device.rs	264-264	/// power cycle restarts (`crate::usb_attach`). One clock, not two, is what stops a	/// power cycle restarts (`crate::usb_attach`). One clock, not two, is what stops a
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	79-79	present: [u8; FID_PRESENT_BYTES],	present: [u8; FID_PRESENT_BYTES],
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	88-88	decided: [u8; FID_PRESENT_BYTES],	decided: [u8; FID_PRESENT_BYTES],
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	156-158	fn known_absent(&self, fid: u16) -> bool {	}
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	172-176	fn mark_present(&mut self, fid: u16) {	}
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	189-195	fn settle<T>(&mut self, fid: u16, r: Option<T>) -> Result<Option<T>> {	}
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	210-249	pub fn scan(&mut self) {	self.scan_truncated = !complete;
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	246-248	if complete {	}
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	256-301	pub fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {	/// [`size`](Self::size), fallible — see [`try_read`](Self::try_read).
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	474-494	pub fn put(&mut self, fid: u16, data: &[u8]) -> Result<()> {	}
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	508-528	/// with no `put`) without its contents ever being present, so gating the meta	/// rather than `known_absent`: an UNKNOWN FID is skipped, not confirmed. This
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	535-535	let meta = self.meta_delete(fid);	let meta = self.meta_delete(fid);
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	535-542	let meta = self.meta_delete(fid);	meta
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	542-542	meta	meta
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	701-727	pub fn meta_add_reserve(&mut self, fid: u16, data: &[u8], reserve: usize) -> Result<()> {	}
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	707-707	let n = if self.known_absent(EF_META) {	let n = if self.known_absent(EF_META) {
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	707-709	let n = if self.known_absent(EF_META) {	} else {
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	714-716	if r.is_none() && self.storage.last_error() {	}
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	724-724	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	737-767	pub fn meta_delete(&mut self, fid: u16) -> Result<()> {	}
-formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	746-746	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	105-105	present: [u8; FID_PRESENT_BYTES],	present: [u8; FID_PRESENT_BYTES],
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	114-114	decided: [u8; FID_PRESENT_BYTES],	decided: [u8; FID_PRESENT_BYTES],
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	184-186	fn known_absent(&self, fid: u16) -> bool {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	200-204	fn mark_present(&mut self, fid: u16) {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	217-223	fn settle<T>(&mut self, fid: u16, r: Option<T>) -> Result<Option<T>> {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	238-277	pub fn scan(&mut self) {	self.scan_truncated = !complete;
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	274-276	if complete {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	284-329	pub fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {	/// [`size`](Self::size), fallible — see [`try_read`](Self::try_read).
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	502-522	pub fn put(&mut self, fid: u16, data: &[u8]) -> Result<()> {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	536-556	/// with no `put`) without its contents ever being present, so gating the meta	/// rather than `known_absent`: an UNKNOWN FID is skipped, not confirmed. This
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	563-563	let meta = self.meta_delete(fid);	let meta = self.meta_delete(fid);
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	563-570	let meta = self.meta_delete(fid);	meta
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	570-570	meta	meta
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	729-755	pub fn meta_add_reserve(&mut self, fid: u16, data: &[u8], reserve: usize) -> Result<()> {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	735-735	let n = if self.known_absent(EF_META) {	let n = if self.known_absent(EF_META) {
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	735-737	let n = if self.known_absent(EF_META) {	} else {
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	742-744	if r.is_none() && self.storage.last_error() {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	752-752	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	765-795	pub fn meta_delete(&mut self, fid: u16) -> Result<()> {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	774-774	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
 formal/RSKeyStore.tla	crates/rsk-fs/src/powercut.rs	43-51	pub fn delete_landed(	}
 formal/RSKeyStore.tla	crates/rsk-fs/src/powercut_model.rs	47-47	fn dead(&self) -> bool;	fn dead(&self) -> bool;
 formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	209-209	#[cfg(not(kani))]	#[cfg(not(kani))]
@@ -492,7 +492,7 @@ formal/TraceSecurity.tla	crates/rsk-fido/src/makecredential.rs	533-551	let alway
 formal/TraceSecurity.tla	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	542-544	if always_uv {	}
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	548-550	if pin_set && req.rk {	}
-formal/comutants.toml	crates/rsk-fs/src/fs.rs	724-724	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
+formal/comutants.toml	crates/rsk-fs/src/fs.rs	752-752	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1198-1205	/// Drop the VALIDATE result on deselect / card reset, so a later session must	}
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1238-1239	self.validated = !code_set;	self.otp_pin_verified = false;
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	258-260	if !putdata::write_authorized(&self.sess, fid) {	}

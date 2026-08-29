@@ -285,16 +285,16 @@ split three ways, and the split is the point.
 | | |
 |---|---|
 | **Equivalent, not a defect** | `ctaphid.rs:420` `\|` → `^` on `(f[5] << 8) \| f[6]` — disjoint bits, the two operators agree |
-| **Fail-safe direction** | `ctaphid.rs:431` `>` → `>=` refuses an exactly-maximum message: stricter, so `NoBufferOverrun` still holds. `fs.rs:175` and `fs.rs:223` `\|=` → `&=` clear *decided* bits, which sends more reads to the reliable backend |
-| **Model-blind** | the dynamic-file registry in `scan` (`fs.rs:228` and `fs.rs:231`, three mutants), `try_has_data`'s zero-length test (`fs.rs:319`), `factory_wipe`'s 64-key batch bound (`fs.rs:441`), the registry retain in `delete` (`fs.rs:541`), and **`meta_delete`'s fault guard (`fs.rs:744`)** |
+| **Fail-safe direction** | `ctaphid.rs:431` `>` → `>=` refuses an exactly-maximum message: stricter, so `NoBufferOverrun` still holds. `fs.rs:203` and `fs.rs:251` `\|=` → `&=` clear *decided* bits, which sends more reads to the reliable backend |
+| **Model-blind** | the dynamic-file registry in `scan` (`fs.rs:256` and `fs.rs:259`, three mutants), `try_has_data`'s zero-length test (`fs.rs:347`), `factory_wipe`'s 64-key batch bound (`fs.rs:469`), the registry retain in `delete` (`fs.rs:569`), and **`meta_delete`'s fault guard (`fs.rs:772`)** |
 
 The last one was worth the exercise on its own. `Fs::meta_add_reserve` refuses a
 FAILED EF_META read and the model carries that as `BugMetaAddDropsOnFault`; its
-sibling `Fs::meta_delete` has the identical guard at `fs.rs:746`, and **nothing
+sibling `Fs::meta_delete` has the identical guard at `fs.rs:774`, and **nothing
 held it at either level**. No test killed it, and `MetaDelete` was modelled as an
 unconditional single write with no read to fail. Worse than a lost delete: the
 mutant caches EF_META as *absent*, and the next `meta_add` legitimately trusts
-`known_absent` and rebuilds the blob from empty (`fs.rs:707`), so the records go
+`known_absent` and rebuilds the blob from empty (`fs.rs:735`), so the records go
 on the write **after** the defect. That is why it is `NoFalseMetaAbsent`,
 SEC-STORE-004, a step recorder — once the cache has lied, the losing write is
 correct code and no state predicate over `meta` can tell the two apart.
@@ -990,7 +990,7 @@ counterexample stays reproducible and the fix stays demonstrably load-bearing.
 `Shipped.cfg` (every switch off) is **RED**, and that is the result, not a
 broken model. Both findings are one class: **the two-phase wipe controls the
 order *between* phases but nothing controls the order *within* a phase.**
-`sweep` batches whatever `for_each_key` yields, and `fs.rs:322-325` documents
+`sweep` batches whatever `for_each_key` yields, and `fs.rs:350-353` documents
 that walk as log-structured *store* order, not FID order; each `force_delete`
 is its own flash write, so a power cut can land between any two of them.
 
@@ -1550,11 +1550,11 @@ seventh, recorded with the fault-disjunct work earlier in this file.)
 
 | Mutation switch | Rebuilds | Target invariant | Caught in |
 |---|---|---|---|
-| `BugDeleteValueBeforeMeta` | `fs.rs:535-537` — the two backend writes reversed, so a torn delete leaves value-gone-meta-alive (`delete_landed`) | `NoOrphanedMetadata` | 54 states |
+| `BugDeleteValueBeforeMeta` | `fs.rs:563-565` — the two backend writes reversed, so a torn delete leaves value-gone-meta-alive (`delete_landed`) | `NoOrphanedMetadata` | 54 states |
 | `BugDeleteMetaOnlyUnderPresent` | the 0x077C databug — `delete` dropping `EF_META` only under `if present_bit`, so a meta-only file keeps its record | `NoOrphanedMetadata` | 55 states |
-| `BugDeleteHidesFaultedDrop` | the shipped tree before `fs.rs:542` — a faulted `meta_delete` swallowed, so the caller hears `Ok` about a record standing over a value that is gone | `NoSilentOrphan` | 61 states |
+| `BugDeleteHidesFaultedDrop` | the shipped tree before `fs.rs:570` — a faulted `meta_delete` swallowed, so the caller hears `Ok` about a record standing over a value that is gone | `NoSilentOrphan` | 61 states |
 | `BugCacheFaultAsAbsent` | audit run-36 — `record` in place of `record_unless_faulted`, caching a faulted read as a decided absence | `NoFalseAbsent` | 23 states |
-| `BugTruncatedScanDecidesAll` | `fs.rs:241-243` — `scan` deciding the whole FID space after a *truncated* walk, so a missed live key reads absent | `NoFalseAbsent` | 24 states |
+| `BugTruncatedScanDecidesAll` | `fs.rs:269-271` — `scan` deciding the whole FID space after a *truncated* walk, so a missed live key reads absent | `NoFalseAbsent` | 24 states |
 | `BugMetaAddDropsOnFault` | the 0x077C databug's meta half — a faulted `EF_META` read rebuilt from empty, dropping every other record | `NoRecordLostToMetaWrite` | 51 states |
 
 `Store.cfg` is **GREEN, exhaustive** over 364 distinct states at depth 6 in
@@ -2370,7 +2370,7 @@ State 2  MetaAdd("a")        meta = [a |-> TRUE,  b |-> FALSE]
 The cache says `EF_META` is absent while `b`'s record stands. Nothing in
 `TypeOK` or the four invariants forbids that state, and from it `MetaAdd` does
 exactly what the shipped code does — trusts the cache and rebuilds the blob from
-empty (`fs.rs:707`), losing `b`. This is SEC-STORE-004's damage arriving from a
+empty (`fs.rs:735`), losing `b`. This is SEC-STORE-004's damage arriving from a
 STATE rather than from the step that made the cache lie, and the model had no
 way to say the cache is honest. One conjunct fixes it:
 
@@ -2911,7 +2911,7 @@ abstractions producing traces the firmware cannot follow.
   cryptographically dead. The reset snapshot's `snap.seed` *does* make that
   distinction, but only for the backup-marker clause.
 - **The order within a sweep phase is arbitrary.** `for_each_key` yields in
-  flash-ring order (`fs.rs:322-325`), which is *a* fixed order per device state,
+  flash-ring order (`fs.rs:350-353`), which is *a* fixed order per device state,
   not a free choice. Both findings below need only that some reachable ring
   order puts one delete before another.
 - **`DeviceUnlock` is ungated and needs no device lock.** The real vendor

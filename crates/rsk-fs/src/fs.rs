@@ -35,6 +35,32 @@ const FID_PRESENT_BYTES: usize = 3;
 #[cfg(not(kani))]
 const _: () = assert!(((u16::MAX >> 3) as usize) < FID_PRESENT_BYTES);
 
+/// Where `fid` lives in the present/decided maps: byte index and bit mask.
+///
+/// One definition because the theorem below is about THIS function. Spelled out
+/// at each of its five call sites — four helpers plus the copy inside `scan`'s
+/// closure, which cannot borrow `self` — the arithmetic could drift at one site
+/// and leave a compile-time assertion about the other four still passing.
+#[inline]
+const fn slot(fid: u16) -> (usize, u8) {
+    ((fid >> 3) as usize, 1u8 << (fid & 7))
+}
+
+/// And no two FIDs share a bit. [`slot`] is injective because its two halves
+/// RECOMPOSE `fid`, so equal slots force equal FIDs — which is exactly "a put
+/// never aliases another file", over the whole shipped domain rather than the
+/// 24 bits `cfg(kani)` leaves. Enumerated for all 65 536 rather than argued for
+/// a symbolic pair: at this width enumerating is cheaper than reasoning, and it
+/// holds in the shrunk arm too, which is where the proofs cannot look.
+const _: () = {
+    let mut fid: u32 = 0;
+    while fid <= u16::MAX as u32 {
+        let (i, m) = slot(fid as u16);
+        assert!(((i as u32) << 3) | (m.trailing_zeros()) == fid);
+        fid += 1;
+    }
+};
+
 /// Fids one [`Fs::factory_wipe`] pass collects before removing them. Named
 /// because the wrap to a second pass is a code path, and the test that crosses it
 /// has to size its fixture off this rather than off a copy of the number.
@@ -137,13 +163,15 @@ impl<S: Storage> Fs<S> {
     /// [`known_absent`](Self::known_absent).
     #[inline]
     fn present_bit(&self, fid: u16) -> bool {
-        self.present[(fid >> 3) as usize] & (1u8 << (fid & 7)) != 0
+        let (i, m) = slot(fid);
+        self.present[i] & m != 0
     }
 
     /// Is `fid`'s present/absent state confirmed (vs. unknown-until-probed)?
     #[inline]
     fn decided_bit(&self, fid: u16) -> bool {
-        self.decided[(fid >> 3) as usize] & (1u8 << (fid & 7)) != 0
+        let (i, m) = slot(fid);
+        self.decided[i] & m != 0
     }
 
     /// Trustworthy fast-negative test: true only when `fid` is *confirmed*
@@ -170,7 +198,7 @@ impl<S: Storage> Fs<S> {
     /// Mark `fid` known present (sets the authority bit too).
     #[inline]
     fn mark_present(&mut self, fid: u16) {
-        let (i, m) = ((fid >> 3) as usize, 1u8 << (fid & 7));
+        let (i, m) = slot(fid);
         self.present[i] |= m;
         self.decided[i] |= m;
     }
@@ -197,7 +225,7 @@ impl<S: Storage> Fs<S> {
     /// Mark `fid` known absent (sets the authority bit, clears present).
     #[inline]
     fn mark_absent(&mut self, fid: u16) {
-        let (i, m) = ((fid >> 3) as usize, 1u8 << (fid & 7));
+        let (i, m) = slot(fid);
         self.present[i] &= !m;
         self.decided[i] |= m;
     }
@@ -218,7 +246,7 @@ impl<S: Storage> Fs<S> {
         decided.fill(0);
         let complete = self.storage.for_each_key(&mut |fid| {
             // Every enumerated key — dynamic or EF_META — is confirmed present.
-            let (i, m) = ((fid >> 3) as usize, 1u8 << (fid & 7));
+            let (i, m) = slot(fid);
             present[i] |= m;
             decided[i] |= m;
             // Neither is a file: EF_META is the shared metadata record, and the
@@ -826,3 +854,7 @@ mod tests;
 #[cfg(test)]
 #[path = "store_steps_tests.rs"]
 mod store_steps;
+
+#[cfg(test)]
+#[path = "store_domain_tests.rs"]
+mod store_domain;
