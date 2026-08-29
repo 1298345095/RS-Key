@@ -16,6 +16,7 @@ two cases are about the derivation itself rather than about the ledger.
 """
 
 import pathlib
+import subprocess
 import textwrap
 
 import pytest
@@ -86,6 +87,10 @@ class Tree:
         self.write("crates/rsk-app/src/lib.rs", CALLER)
         self.write("crates/rsk-piv/src/keygen.rs", MINTER)
         self.write("assurance/deleters.toml", LEDGER)
+        # `sources` asks git what the tree is, so the fixture must be a checkout
+        # — and one that ignores build output, like the real one.
+        self.write(".gitignore", "target/\n")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
 
     def write(self, rel, text):
         path = self.root / rel
@@ -375,3 +380,34 @@ def test_a_table_nobody_reads_is_refused(tree, capsys):
     path = tree.root / deleter_gate.LEDGER
     path.write_text(path.read_text() + '\n[[nonsense_table]]\nname = "x"\n')
     assert "which nothing reads" in red(tree, capsys)
+
+
+def test_a_second_copy_of_the_tree_is_not_the_tree(tree, capsys):
+    """An agent worktree under `.claude/` is a whole second checkout, and the walk
+    this replaced read every file of it: measured on the real tree, one worktree
+    turned `deleter-gate: ok — 43 call sites` into 19 findings about paths already
+    disposed of under their real names. `git ls-files --exclude-standard` answers
+    what the tree is; a hand-written skip list has to remember each new directory
+    and did not remember this one."""
+    inner = tree.root / ".claude/worktrees/agent-x"
+    tree.write(".claude/worktrees/agent-x/crates/rsk-app/src/lib.rs", CALLER)
+    # A worktree carries its own `.git`, which is exactly why git does not
+    # descend into it and a filesystem walk does.
+    subprocess.run(["git", "init", "-q"], cwd=inner, check=True)
+    assert tree.run() == 0, capsys.readouterr()
+
+
+def test_a_build_directory_is_not_the_tree(tree, capsys):
+    """The half the old list did get right, kept as a case so the new reader owes
+    it too — `target/` is gitignored, which is why git answers the same way."""
+    tree.write("target/debug/build/x/out/lib.rs", CALLER)
+    assert tree.run() == 0, capsys.readouterr()
+
+
+def test_there_is_one_answer_to_what_the_tree_is():
+    """The walk's hand-written skip list is GONE, not kept beside the new reader:
+    a constant nothing reads is a comment with a type, and a second list is a
+    second answer to the question this row got wrong."""
+    source = pathlib.Path(deleter_gate.__file__).read_text(encoding="utf-8")
+    assert "rglob" not in source and "BUILD_DIRS" not in source
+    assert "gate_lines.tree_files" in source

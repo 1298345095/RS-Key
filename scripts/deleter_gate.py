@@ -54,6 +54,8 @@ import re
 import sys
 import tomllib
 
+import gate_lines
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 LEDGER = pathlib.Path("assurance/deleters.toml")
 
@@ -83,8 +85,6 @@ SKIP_DIRS = ("crates/rsk-fs", "fuzz")
 #: with their own `target/`, and a build there drops generated `.rs` under the
 #: checkout, so a roster walking the tree would depend on whether anyone had run
 #: cargo. Matched by path COMPONENT, at any depth.
-BUILD_DIRS = frozenset({"target", "book", ".git", ".direnv", "node_modules"})
-
 #: A cfg-gated source by the convention AGENTS.md states: tests and proofs live
 #: in sibling files hooked with `#[path]`. Derived from the naming rule rather
 #: than listed, so `reset_refinement_kani.rs` — whose `reset.delete` is the
@@ -132,18 +132,25 @@ METADATA = ("drops-head", "none")
 
 
 def sources(root):
-    """Every `.rs` file a delete caller could live in, in a stable order."""
+    """Every `.rs` file a delete caller could live in, in a stable order.
+
+    From `git ls-files` and not from a walk. The hand-written skip list below it
+    got the difference wrong in the direction that stops the row being about the
+    tree: an agent worktree under `.claude/worktrees/` is a whole second copy of
+    the checkout, and this row went RED on 19 sites of a file it had already
+    disposed of once — same path, different prefix. `gate_lines.tree_files` says
+    so in its own docstring, and five gates already read the tree that way.
+    """
     out = []
-    for path in sorted(root.rglob("*.rs")):
-        rel = path.relative_to(root).as_posix()
-        parts = rel.split("/")
-        if BUILD_DIRS.intersection(parts) or parts[0].startswith("result"):
+    for relative in sorted(gate_lines.tree_files(root)):
+        if relative.suffix != ".rs":
             continue
+        rel = relative.as_posix()
         if any(rel == d or rel.startswith(d + "/") for d in SKIP_DIRS):
             continue
-        if CFG_GATED.search(path.name):
+        if CFG_GATED.search(relative.name):
             continue
-        out.append((rel, path))
+        out.append((rel, root / relative))
     return out
 
 
