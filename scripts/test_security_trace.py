@@ -719,3 +719,64 @@ def test_the_shipped_roster_is_the_shipped_module(module):
     # Named because they are the arms whose absence would be read as coverage:
     # the token-less carve-out is UNREACHED by construction.
     assert {"RegisterNdStart", "RegisterNdTouched", "RegisterNdRefused"} <= live
+
+
+# --- what the recording never varies ------------------------------------------
+
+
+def constant_fields():
+    """Every field the committed session gives one value to, over all its events.
+
+    Flattened, because the raw/abstract halves are nested and a conjunct's
+    antecedent lives in one of them.
+    """
+    import json
+
+    rows = [json.loads(line) for line in TRACE.read_text().splitlines() if line.strip()]
+
+    def flat(obj, prefix=""):
+        for key, value in obj.items():
+            if isinstance(value, dict):
+                yield from flat(value, prefix + key + ".")
+            else:
+                yield prefix + key, repr(value)
+
+    seen: dict[str, set[str]] = {}
+    for row in rows:
+        for key, value in flat(row):
+            seen.setdefault(key, set()).add(value)
+    return rows, seen, {k for k, v in seen.items() if len(v) == 1}
+
+
+def test_the_fields_the_recording_never_varies_are_the_registered_ones():
+    """`PLAT-TRACE-001`. A conjunct is checked by the replay only where its
+    antecedent is true somewhere in the recording, so a field with one value is a
+    clause the replay agrees with for free — and the agreement reads exactly like
+    evidence. Two members of the class had rows of their own (`keydev_ram_raw`,
+    `builtin_uv`); this holds the class.
+
+    Both directions on purpose. A field that STARTS varying is good news that has
+    to be recorded, and a field that stops varying is the gap arriving.
+    """
+    rows, seen, constant = constant_fields()
+    assert len(rows) == 40, len(rows)
+    assert (len(seen), len(constant)) == (81, 35), (len(seen), len(constant))
+    # The ones a P0-launch conjunct reads. `token_user_present_raw` and
+    # `soft_lock_raw` are the antecedents of BOTH clauses of
+    # `NoAuthorizationBypass`, which is the flagship row.
+    named = {
+        "pre.soft_lock_raw",
+        "post.soft_lock_raw",
+        "pre.token_user_present_raw",
+        "post.token_user_present_raw",
+        "pre.warm_boot_raw",
+        "post.warm_boot_raw",
+        "pre.persistent_grant_record",
+        "post.persistent_grant_record",
+        "pre.backup_sealed_record",
+        "post.backup_sealed_record",
+        "pre.keydev_ram_raw",
+        "post.keydev_ram_raw",
+        "builtin_uv",
+    }
+    assert named <= constant, sorted(named - constant)

@@ -12,13 +12,21 @@
 //! option IDs — not from `clientpin.rs`.
 //!
 //! The oracle is not a transcription, and the proof of that is the divergence
-//! set: it disagrees with the shipped path on 48 of the 512 cases, all of them
-//! the same shape (an undefined permission bit the spec says to refuse and this
-//! build admits into a token no gate reads). The divergences are held exactly,
-//! so a new one and a repaired one both redden.
+//! set: it disagrees with the shipped path on 48 of the 512 cases on the default
+//! build, all of them the same shape (a permission bit this build implements no
+//! option for, which the spec says to refuse and the code admits into a token no
+//! gate reads). The divergences are held exactly, so a new one and a repaired
+//! one both redden.
+//!
+//! And the set is BUILD-DEPENDENT, which the first version of this file missed:
+//! it wrote the advertised set down as a constant including `lbw`, while §6.4
+//! forbids the `largeBlobs` option beside the CTAP 2.3 extension and
+//! `getinfo.rs` drops the key under `largeblob-ext` — a flavour
+//! `scripts/check.sh` runs. Under it the count is 72, and the extra 24 are a
+//! divergence class the constant version agreed away.
 
 use super::*;
-use crate::consts::EF_PAUTHTOKEN;
+use crate::consts::{EF_PAUTHTOKEN, LARGE_BLOB_EXT};
 use crate::state::{PERM_CM, PERM_LBW, PERM_PCMR};
 
 /// `getPinUvAuthTokenUsingPinWithPermissions`.
@@ -40,8 +48,17 @@ enum Admit {
 /// governing option ID this build advertises in getInfo 0x04. `uvBioEnroll` and
 /// `uvAcfg` are absent, so `be` is never admissible and `acfg` is admissible on
 /// the host-PIN subcommand only — §6.5.5.7.3 maps it to `uvAcfg` there.
+///
+/// `largeBlobs` is read from the BUILD and not written down: §6.4 forbids the
+/// option beside the CTAP 2.3 extension, so `getinfo.rs` drops the key entirely
+/// under `largeblob-ext` and `lbw` stops being a permission this authenticator
+/// implements. A constant here would have been a description of one flavour —
+/// and `scripts/check.sh` runs the other one.
 fn advertised(sub: u64) -> u8 {
-    let common = PERM_MC | PERM_GA | PERM_CM | PERM_LBW; // credMgmt, largeBlobs
+    let mut common = PERM_MC | PERM_GA | PERM_CM; // credMgmt
+    if !LARGE_BLOB_EXT {
+        common |= PERM_LBW; // largeBlobs, absent under the 2.3 extension
+    }
     match sub {
         SUB_PIN => common | PERM_ACFG, // authnrCfg
         _ => common,
@@ -123,10 +140,14 @@ fn fixture() -> (Fs<RamStorage>, SeqRng, FidoState, Platform, UvPad) {
 /// measurement on hardware this change did not have.
 fn is_recorded_divergence(sub: u64, requested: u64) -> bool {
     let r = requested as u8;
-    r & 0x80 != 0
-        && r & PERM_BE == 0
-        && r & PERM_PCMR == 0
-        && (sub == SUB_PIN || r & PERM_ACFG == 0)
+    // What the build has no option for at all, on this subcommand.
+    let unimplemented = !(advertised(sub) | PERM_PCMR);
+    // What `clientpin.rs` actually names: `be`, `acfg` on the built-in-UV path,
+    // and `pcmr` in company. Everything else it admits.
+    let refused = r & PERM_BE != 0
+        || (sub == SUB_UV && r & PERM_ACFG != 0)
+        || (r & PERM_PCMR != 0 && r != PERM_PCMR);
+    r != 0 && r & unimplemented != 0 && !refused
 }
 
 /// Exhaustive over the byte, on both subcommands. `audit` takes its floors as
@@ -166,11 +187,19 @@ fn audit(want_divergences: usize, want_cases: usize) -> (usize, usize) {
     (cases, diverged)
 }
 
-/// The obligation itself. 512 cases, 48 of them the recorded undefined-bit
-/// divergence and 464 exact agreement.
+/// How many of the 512 the two disagree on. Flavour-dependent, because the
+/// permission set the build implements is: under `largeblob-ext` the
+/// `largeBlobs` option goes away and `lbw` joins the undefined bit as something
+/// §6.5.5.7.2 step 2 says to refuse and this code admits. Written as two
+/// measured constants rather than one, because a single number would have been
+/// right about the default build and silently wrong about a flavour the gate
+/// runs.
+const RECORDED_DIVERGENCES: usize = if LARGE_BLOB_EXT { 72 } else { 48 };
+
+/// The obligation itself, over all 512 cases.
 #[test]
 fn every_requestable_permission_byte_is_answered_as_the_requirement_says() {
-    audit(48, 512);
+    audit(RECORDED_DIVERGENCES, 512);
 }
 
 /// `PLAT-MODEL-001` says the model's five subsets are "the set a host can
@@ -200,7 +229,11 @@ fn all_sixteen_subsets_of_the_modelled_permissions_are_obtainable() {
         }
     }
     // The empty projection is reached by the token the model already carries:
-    // consume_after_user_presence leaves largeBlobWrite and nothing else.
+    // consume_after_user_presence leaves largeBlobWrite and nothing else. Under
+    // `largeblob-ext` this very request is one of the recorded divergences —
+    // the build implements no `largeBlobs` option and admits it anyway — which
+    // is why the assertion below is about the PROJECTION and not about the
+    // request being admissible.
     let mut out = [0u8; 256];
     run_with(
         &mut pad,

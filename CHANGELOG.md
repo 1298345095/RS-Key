@@ -45,6 +45,56 @@ and to the statuses it quotes.
 
 ### Added
 
+- **Four of stage 10's eleven platform-assumption categories had a name in the
+  vocabulary and no row anywhere.** `scripts/platform_gate.py`'s `CLASSES`
+  already listed `trng`, `timers`, `multicore-xip` and `display`; nothing used
+  any of them, so "no platform statement without a registry entry" was satisfied
+  over a set that did not contain the entropy source, the clock every timeout
+  rests on, the core-1 pause around flash erase, or the panel. `PLAT-TRNG-001`,
+  `PLAT-TIMER-001`, `PLAT-XIP-001` and `PLAT-DISPLAY-001` are written, each with
+  its owner, its route and its failure direction. The registry is 32 rows over
+  33 derived candidates now, 30 of them pending.
+
+  What they cannot do is force themselves: none of the four derivations produces
+  a hardware peripheral, so all four are hand-written with no `covers`. That is
+  the honest shape and it is also the weakness, and it is said on the page.
+
+  `PLAT-XIP-001` is also a correction. `unsafe:firmware/src/core1.rs` was claimed
+  by `PLAT-TOOLCHAIN-002`, whose statement is about `unsafe` upholding an
+  invariant the compiler cannot check — a different question from whether the
+  silicon pauses core 1 for the whole of a flash erase. The row is separate now
+  and says why.
+
+- **`check.sh` compiled a display image no package ships.** `build firmware
+  (display)` set `LED_KIND=none` and left the flash geometry at the default
+  4 MB, while `nix/firmware.nix` gives `firmware-display` `flashSize = "16M"`
+  and `ledKind = "none"` together. The row builds `FLASH_SIZE=16M` now. The
+  matrix column's own settling question had named this; it is updated to say
+  that the BUILD half is answered and the EVIDENCE half is not — `Display.cfg`,
+  the `rsk-ui`/`rsk-display` host tests and the three co-mutants all still run at
+  the default geometry, and one of them runs in `rsk-fido` with no display
+  feature at all. The three `SEC-DISP-*` cells stay `gap` for that reason.
+
+- **The delete ledger carried the record half of the contract and not the value
+  half.** Stage 5A п.6 of the formal programme asks the `Fs` contract to
+  distinguish three outcomes — "value removed, metadata left", "both removed",
+  "the medium refused" — and to name which each `force_delete` site requires.
+  The three are already typed in `rsk-fs` as `Removal { value, record }`, and
+  `assurance/deleters.toml` already recorded the record half in its `metadata`
+  field. What nothing recorded is that the VERBS differ in the value half:
+  `delete` and `delete_key` skip the backend removal when the present cache
+  reads absent, `force_delete` and `force_delete_halves` do not.
+
+  `scripts/deleter_gate.py` derives that from the verb — not a new field, because
+  a field a caller could set independently of the call it describes is a second
+  copy of the call — and holds one rule on it: a `wipe-sweep` site may not use a
+  conditional verb. The reason is in `force_delete`'s own rustdoc: a
+  re-enumerating wipe reads the backend directly, so a delete that no-ops on a
+  torn-migration false-absent key keeps re-finding it and the wipe does not
+  terminate. Measured: 43 sites, **33 conditional and 10 unconditional**, and all
+  five `wipe-sweep` sites are already on `force_delete_halves` — so the rule is a
+  pin, not a repair.
+
 - **The image has a heap, and until now nothing held that surface.**
   `firmware/src/main.rs` declares `#[global_allocator] static HEAP:
   embedded_alloc::LlffHeap` over 128 KiB — `docs/unsafe.md` site 4 is its
@@ -221,6 +271,44 @@ and to the statuses it quotes.
   the recorded run.
 
 ### Changed
+
+- **An adversarial review of the whole fidelity-debt stage returned CHANGED, and
+  three of its findings are fixed here.**
+
+  *The permission oracle was build-blind.* It wrote the advertised option set
+  down as a constant including `largeBlobs`, while CTAP 2.1 §6.4 forbids that
+  option beside the 2.3 large-blob extension and `getinfo.rs` drops the key
+  under `--features largeblob-ext` — a flavour `scripts/check.sh` runs. Under it
+  `lbw` stops being a permission this authenticator implements, so §6.5.5.7.2
+  step 2 says to refuse it and the code admits it: a whole divergence class the
+  constant agreed away. `advertised()` reads `LARGE_BLOB_EXT` now and the
+  recorded count is two measured numbers, **48** on the default build and **72**
+  under the extension.
+
+  *Six never-varying trace fields had no disposition.* Measured on the committed
+  session: **35 of its 81 fields are constant across all 40 events**, and among
+  them are `soft_lock_raw` and `token_user_present_raw` — the antecedents of BOTH
+  clauses of `NoAuthorizationBypass`. A conjunct whose antecedent is never true
+  in the recording is one the replay agrees with for free, and the agreement
+  reads exactly like evidence. Two members of the class had rows of their own;
+  `PLAT-TRACE-001` holds the class, and a case recomputes the constant set from
+  the trace so it cannot go stale in either direction.
+
+  *A two-armed model constant had no inertness guard.* `assumption_gate` asked
+  "is it read", which an arm that models nothing new satisfies — the defect
+  `fc7491a` shipped and had to delete by hand. It now also asks whether the two
+  branches of that `IF` are the same text. The first version of the new rule was
+  itself green over its own mutation, because it searched `definitions()`, which
+  holds the names a definition references and not its body; driving the mutation
+  is what found that. The limit is driven too and recorded: branches SWAPPED are
+  different text, so an inverted scope constant is caught by nothing here.
+
+  And eight derived counts the new configuration moved, which the previous
+  commit's "five hand-written numbers" understated: two in `formal/README.md`
+  (in the paragraph the commit before it had just repaired), four on
+  `docs/authorization-slice.md`, one in a bundle header, and three in `scripts/`
+  docstrings — one of which was wrong before this session too, at 41 where the
+  derived page says 43.
 
 - **The constant-time row was green over two real defects, and an independent
   review found both.** Its taint was depth-1 — the branch's flag operand had to

@@ -49,8 +49,10 @@ AlwaysUv.cfg                         GREEN   7800000
 \* against the five the model carries. One relying party, because the wide
 \* domain is what is being paid for, and two channels because scopes.txt holds
 \* that minimum for NoAuthorizationBypass, which this configuration checks --
-\* 21 456 020 distinct at depth 45 in 559 s, against 9 472 044 in 142 s for the
-\* same scope narrow. A third is the floor, the same rule as its siblings.
+\* the counts are the results table's, not this comment's. A third of the
+\* measured distinct count is the floor, the same rule as its siblings; the
+\* narrow arm of the same scope was measured at 9 472 044 in 142 s and is not a
+\* recorded row, so it is here rather than there.
 PermWide.cfg                         GREEN   7000000
 Seams.cfg                            GREEN   200
 \* The flash layer (RSKeyStore): a small exhaustive space -- 364 distinct at

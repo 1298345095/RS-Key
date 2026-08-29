@@ -136,6 +136,29 @@ def test_the_entry_point_is_inside_flash():
     assert flash[0] <= entry < flash[1], hex(entry)
 
 
+def test_exactly_one_global_allocator_is_declared():
+    """The other end of the allocator question, over the SOURCE. The symbol rule
+    is a list of spellings and a rule that is a list of spellings is bypassed by
+    one nobody listed; a second `#[global_allocator]` is a different heap
+    whatever its symbols are called. Measured: one, `firmware/src/main.rs`."""
+    declared = [
+        path.relative_to(ROOT)
+        for root_dir in elf_gate.FIRST_PARTY_RUST
+        for path in sorted((ROOT / root_dir).rglob("*.rs"))
+        if elf_gate.GLOBAL_ALLOCATOR.search(path.read_text(errors="replace"))
+    ]
+    assert [str(p) for p in declared] == ["firmware/src/main.rs"], declared
+
+
+def test_the_declaration_pattern_is_anchored_to_the_attribute():
+    """Not to the word: `docs/unsafe.md` and this docstring both say
+    `global_allocator`, and a rule that matched the word would count them."""
+    assert elf_gate.GLOBAL_ALLOCATOR.search("#[global_allocator]\n")
+    assert elf_gate.GLOBAL_ALLOCATOR.search("    #[global_allocator]\n")
+    assert not elf_gate.GLOBAL_ALLOCATOR.search("// a global_allocator lives here")
+    assert not elf_gate.GLOBAL_ALLOCATOR.search("let global_allocator = 1;")
+
+
 def test_the_image_arms_were_driven_by_hand():
     """Recorded, because a case cannot relink the firmware.
 

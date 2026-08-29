@@ -635,7 +635,7 @@ def gate_corpus() -> dict[str, str]:
         "gate_ledger": token_refinement_gate.audit(ROOT)[1],
         "gate_assumption": f"{len(entries)} standing assumption(s) {arms}",
         "gate_matrix": matrix_gate.audit(ROOT)[1],
-        # The per-property vector rows, which is where `cfgs=45 … kani=4` is
+        # The per-property vector rows, which is where `cfgs=46 … kani=4` is
         # counted; `check_generated_readme` is a sibling row's rule, not this one's.
         "gate_registry": "\n".join(assurance_gate.audit(ROOT, False)[1]),
     }

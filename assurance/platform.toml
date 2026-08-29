@@ -431,3 +431,63 @@ status = "pending"
 failure_direction = "coverage: a defect that needs two credentials of one RP — the enumerate/delete interleavings — is outside every configuration"
 covers = ["slice:AS-AUTH-6"]
 supports = ["SEC-FIDO-001", "SEC-FIDO-005"]
+
+# --- the four inventory categories stage 10 names and this file did not hold ---
+# `scripts/platform_gate.py`'s CLASSES vocabulary already had all four names and
+# no row used any of them, so the exit form "no platform statement without an
+# entry" was met over a set that did not contain them. None of the four is
+# DERIVABLE today — the four derivations produce slice ids, model constants,
+# board-only suites and `unsafe` sites, and a hardware peripheral is none of
+# those — so these are hand-written with no `covers`, exactly like the six rows
+# that already are. That is the honest shape and it is also the weakness: a
+# category with no candidate source is a category this page cannot force.
+
+[[assumption]]
+id = "PLAT-TRNG-001"
+class = "trng"
+statement = "The RP2350's ring-oscillator TRNG delivers full-entropy words once its health check passes, so every key, nonce, blinding factor and pinUvAuthToken drawn after boot is unpredictable to a host."
+discharge = "A board measurement of the raw source before whitening, on a known stepping and at the temperature and supply corners the datasheet qualifies — not a statistical test of the whitened output, which passes over a stuck source. The boot health check was raised 25 -> 1000 samples after a stall was measured, so the startup transient is the part that is known and the steady state is the part that is not."
+discharge_owner = "maintainer"
+status = "pending"
+failure_direction = "security, and silently: a degraded source weakens every secret the device mints, and nothing downstream can notice"
+supports = ["SEC-FIDO-003", "SEC-FIDO-008"]
+
+[[assumption]]
+id = "PLAT-TIMER-001"
+class = "timers"
+statement = "`embassy_time::Instant` is monotonic and makes progress, so a timeout measured against it expires."
+discharge = "Reading the RP2350 timer's clock source against the boot configuration the image sets, plus a board run long enough to cross the counter's wrap. Every timeout claim rests on it — the presence window, the pinUvAuthToken's rolling inactivity and absolute caps, and the reset window CTAP 2.1 §6.6 bounds — and so do the three liveness properties, none of which names an assumption today."
+discharge_owner = "maintainer"
+status = "pending"
+failure_direction = "split: a clock that stops turns every timeout into a wedge (availability), and one that jumps forward retires a live grant early (usability). Neither direction opens a gate, which is why this is not a security row"
+supports = ["SEC-FIDO-L01", "SEC-FIDO-L02", "SEC-FIDO-L03"]
+
+[[assumption]]
+id = "PLAT-XIP-001"
+class = "multicore-xip"
+statement = "Core 1 is paused for the whole of every flash erase or program, so no instruction is fetched from XIP while the array is unreadable, and the inter-core FIFO makes progress so the pause is released."
+discharge = "A board measurement: core 1 executing from XIP across a store write, with the pause instrumented. `firmware/src/core1.rs` carries the two `unsafe` sites this rests on and `docs/unsafe.md` justifies them as Rust invariants — which is a different question from whether the silicon behaves as the pause assumes, and that difference is why this row is not `PLAT-TOOLCHAIN-002`'s."
+discharge_owner = "maintainer"
+status = "pending"
+failure_direction = "availability: a fetch from an unreadable array faults the core, which is a hang and not a bypass"
+supports = ["SEC-STORE-002"]
+
+[[assumption]]
+id = "PLAT-DISPLAY-001"
+class = "display"
+statement = "A panel update completes before the firmware treats the card as shown, and the panel's orientation and geometry are the ones the hit test was computed for."
+discharge = "A touch board: photograph the panel at the moment the ceremony arms, and drive each control at the coordinates the hit test claims. `crates/rsk-ui`'s render tests prove what the model would paint and nothing proves the panel painted it; the trusted-display properties are stated over the ceremony, not over the glass."
+discharge_owner = "maintainer"
+status = "pending"
+failure_direction = "security: a card the user did not see, or a control at coordinates the user did not aim at, is a confirmation of an operation nobody read"
+supports = ["SEC-DISP-001", "SEC-DISP-002", "SEC-DISP-003"]
+
+[[assumption]]
+id = "PLAT-TRACE-001"
+class = "model-abstraction"
+statement = "A trace-linked claim rests on the fields the recorded session VARIES; 35 of the committed trace's 81 fields are constant across all 40 events, and a conjunct whose antecedent is one of them was never exercised by the replay."
+discharge = "Sessions that vary them, and there is no substitute: a conjunct is checked by the replay only where its antecedent is true somewhere in the recording. Measured on formal/traces/security-phase4.jsonl — `soft_lock_raw`, `warm_boot_raw`, `token_user_present_raw`, `persistent_grant_record`, `backup_sealed_record`, `seed_encrypted_record` and the four `cm_*_raw` counters are false or fixed in every event, and `token_user_present_raw` together with `soft_lock_raw` are the antecedents of BOTH conjuncts of NoAuthorizationBypass. Two members of this class already had rows of their own — PLAT-MODEL-003 for `keydev_ram_raw` and formal/README.md's paragraph for `builtin_uv` — and the class is what those two are instances of."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a clause the recording never reaches is a clause the replay agrees with for free, and the agreement reads exactly like evidence"
+supports = ["SEC-TRACE-001", "SEC-TRACE-002", "SEC-TRACE-004", "SEC-REF-004"]

@@ -617,9 +617,15 @@ answer three questions, not one — and the flash-geometry half is the same \
 too, which is why they are `gap` here and not `covered`: the ceremony's \
 evidence — `formal/Display.cfg`, the `rsk-ui`/`rsk-display` host tests and the \
 `check.sh` rows that compile the feature — was every bit of it produced at the \
-DEFAULT 4 MB geometry, and no row in the tree builds `--features display` at \
-`FLASH_SIZE=16M`. Either add that row, or say in a `conditional` what the \
-ceremony claim is conditional on."""
+DEFAULT 4 MB geometry. The BUILD half is answered now: `build firmware \
+(display)` sets `FLASH_SIZE=16M` too, so the gate compiles the image this \
+column IS rather than a combination no package ships. The EVIDENCE half is \
+not, and that is what keeps these three at `gap` — `Display.cfg`, the \
+`rsk-ui`/`rsk-display` host tests and the three co-mutants all run at the \
+default geometry, and `BugPadSubstitutesForCard` runs in `rsk-fido` with no \
+display feature at all. Closing it takes evidence produced at this \
+configuration, or a `conditional` saying what the ceremony claim is \
+conditional on."""
 
 [[question]]
 column = "firmware-2mb"

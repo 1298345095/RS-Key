@@ -21,7 +21,7 @@ rehearsals this plans against; [Formal model](formal.md) is the overview. Every 
 the commit this page landed in, with the command named beside it.
 
 One warning belongs at the top rather than at the bottom. `SEC-FIDO-001` leads
-the registry on all four of the evidence columns — 45 configurations, 11 model
+the registry on all four of the evidence columns — 46 configurations, 11 model
 mutants, 11 co-refuted, and 4 Kani harnesses against `SEC-STORE-002`'s three,
 which is the tree's next-best. On the axes this slice is about it is the strongest row there
 is, so the cost of closing it is a **floor and not a price**. The weak-end counterpart is designed alongside it, at the end of this
@@ -157,9 +157,9 @@ B is `formal/RSKeySecurityState.tla`. The invariant is three conjuncts:
    constants the configuration pins.
 
 **Mechanised.** TLC checks the invariant over the whole reachable space of each
-of the 45 configurations that name it (`grep -lw NoAuthorizationBypass
+of the 46 configurations that name it (`grep -lw NoAuthorizationBypass
 formal/*.cfg | wc -l` — `-w`, because the bare `-l` also matches the tier-A
-`NoAuthorizationBypassA` in two more and printed 47). `formal/Shipped.cfg` pins `RPs = {r1, r2}`,
+`NoAuthorizationBypassA` in two more and printed 48). `formal/Shipped.cfg` pins `RPs = {r1, r2}`,
 `Channels = {c1, c2}`, `MaxRetries = 8`, `MismatchLimit = 3`, `MaxClock = 1`,
 `ResetWindow = 0`; the roster as a whole is not one scope, and
 `python3 scripts/scope_gate.py` prints the spread it runs at. The
@@ -305,7 +305,7 @@ ids from this page.
 | `AS-AUTH-1` | `tools/emu` implements the same authorization gates as the firmware, so a recorded session is evidence about the firmware | tool fidelity | a board recording of the same session, compared boundary by boundary | **no** — not a model constant |
 | `AS-AUTH-2` | The build does not ship `always-uv`, so `gate.alwaysUv` is a free state variable rather than pinned true | build configuration | the [matrix](assurance-matrix.md)'s `firmware-always-uv` column, whose settling question already names `SEC-FIDO-001` | **yes, with work** — its *content* is a boolean over `gate.alwaysUv`, which reachable definitions already read (`UvRequired`, `McTokenlessPolicy`, the `mc`/`ga` guards) and `ConfigOp` already flips. A constant pinning it in `Init` and disabling that flip, generated both ways by `gen-configs.sh`, is the same shape `PowerOnClearsScratch2` needed. The obstacle is work, not the gate |
 | `AS-AUTH-3` | A CTAPHID channel id is a routing label the sender writes, so channel ownership is a scoping rule and never an authentication one | threat model | a clause of the [threat model](threat-model.md); `state.rs` states it in prose today | **no** |
-| `AS-AUTH-4` | `PowerOnClearsScratch2` — a real power-on clears the watchdog word the soft lock rides in | platform | the board measurement `assurance/assumptions.toml` already describes | **registered, but not against this slice.** The constant is declared and read only in `RSKeyBootHardening`, and the overlap between the 13 configurations that assign it and the 45 that check `NoAuthorizationBypass` is **zero** (`comm -12` over the two `grep -lw` lists). The soft lock is this slice's clause 3 and the assumption underneath it is the boot module's; borrowing the row without saying so would be the same slice-boundary error this page is written against |
+| `AS-AUTH-4` | `PowerOnClearsScratch2` — a real power-on clears the watchdog word the soft lock rides in | platform | the board measurement `assurance/assumptions.toml` already describes | **registered, but not against this slice.** The constant is declared and read only in `RSKeyBootHardening`, and the overlap between the 13 configurations that assign it and the 46 that check `NoAuthorizationBypass` is **zero** (`comm -12` over the two `grep -lw` lists). The soft lock is this slice's clause 3 and the assumption underneath it is the boot module's; borrowing the row without saying so would be the same slice-boundary error this page is written against |
 | `AS-AUTH-5` | `PermSets`, five of the sixteen subsets, is the set a host can actually obtain | model fidelity | reading the two production sites that mint permissions; it is argued in the module, not measured | **no** |
 | `AS-AUTH-6` | One credential per relying party | model abstraction | the store slice; `MAX_RESIDENT_CREDENTIALS` (`256`) is the shipped cardinality | **no** |
 | `AS-AUTH-7` | Kani/CBMC is sound for the harness's arithmetic and the pinned solver is the one that ran | tool TCB | the pinned toolchain and a recorded tool hash | **no** |
@@ -459,7 +459,7 @@ scattered across logs. A missing field blocks exit.
 A cost taken at the strongest end of the scale is a floor, so the design names
 the other end too. The counterpart is the
 weak end: `SEC-FIDO-007` `RamNeverOutlivesFlashSeed` and `SEC-FIDO-008`
-`NoLiveTokenWithoutPinRecord`, each measured at 3 configurations, 1 model mutant,
+`NoLiveTokenWithoutPinRecord`, each measured at 4 configurations, 1 model mutant,
 0 Kani, 0 fuzz, 0 device tests and 1 production owner
 (`crates/rsk-fido/src/seed.rs` and `crates/rsk-fido/src/clientpin.rs`
 respectively). The co-refuted column read **0** when this was written and reads

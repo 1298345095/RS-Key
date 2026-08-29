@@ -73,6 +73,14 @@ ALLOCATOR = re.compile(
     r"|\bmalloc\b|\bcalloc\b|\brealloc\b|\bfree\b)"
 )
 
+#: The symbol rule above is a list of SPELLINGS, and a rule that is a list of
+#: spellings is bypassed by one nobody listed. This is the other end of the same
+#: question, over the source rather than the image: how many global allocators
+#: the first-party tree declares. One, and a second is a different heap whatever
+#: its symbols are called.
+GLOBAL_ALLOCATOR = re.compile(r"^\s*#\[global_allocator\]", re.M)
+FIRST_PARTY_RUST = ("crates", "firmware")
+
 
 def registry(root: pathlib.Path, findings: list[str]) -> dict:
     doc = tomllib.loads((root / REGISTRY).read_text(encoding="utf-8"))
@@ -224,6 +232,19 @@ def audit(root: pathlib.Path, image=None, linker=None):
             f" {sorted(image['allocator'])} — a second allocator, or a `malloc`"
             " arriving through a dependency, changes what the heap is"
         )
+    declared = [
+        path
+        for root_dir in FIRST_PARTY_RUST
+        for path in sorted((root / root_dir).rglob("*.rs"))
+        if GLOBAL_ALLOCATOR.search(path.read_text(errors="replace"))
+    ]
+    if len(declared) != 1:
+        findings.append(
+            f"{len(declared)} `#[global_allocator]` declaration(s) in the"
+            f" first-party tree {[str(p.relative_to(root)) for p in declared]} —"
+            " the symbol rule above is a list of spellings and cannot see a heap"
+            " that names its own"
+        )
     if undefined:
         findings.append(
             f"{elf}: {len(undefined)} undefined symbol(s) in a fully linked"
@@ -233,7 +254,8 @@ def audit(root: pathlib.Path, image=None, linker=None):
     summary = (
         f"elf-gate: ok — {len(loads)} LOAD segment(s) inside {len(where)}"
         f" {LINKER} region(s), {len(wx)} writable-executable as registered,"
-        f" {len(allocator)} allocator symbol(s), 0 undefined"
+        f" {len(allocator)} allocator symbol(s) from"
+        f" {len(declared)} declaration, 0 undefined"
     )
     return findings, summary
 

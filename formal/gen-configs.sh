@@ -200,8 +200,9 @@ ship_auv=TRUE retries=2 mism=1 emit AlwaysUv.cfg "" FALSE TRUE
 # One relying party, but TWO channels: scopes.txt holds Channels >= 2 for any
 # configuration CHECKING NoAuthorizationBypass, and this one checks it. Measured
 # both ways -- the second channel costs 2.5 % more states and, under the symmetry
-# quotient with no mutant armed, exactly zero more distinct ones (21 456 020 at
-# both), so the floor is satisfied at 559 s against 493 s.
+# quotient with no mutant armed, exactly zero more distinct ones, so the floor is
+# satisfied. The counts are the results table's; the one-channel arm is not a
+# recorded row and cost 493 s.
 wide=TRUE ship_auv=TRUE retries=2 mism=1 rps='{r1}' chans='{c1, c2}' \
   emit PermWide.cfg "" FALSE TRUE
 # The two findings this model produced, kept as regression configurations rather

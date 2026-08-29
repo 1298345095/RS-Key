@@ -230,6 +230,11 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-MODEL-006` | `RamNeverOutlivesFlashSeed` is INERT on the shipped configuration: it  |
 | platform | `PLAT-MODEL-007` | The C-tier reset bridge cannot be reused as bounded evidence for the s |
 | platform | `PLAT-MODEL-002` | One credential per relying party is enough to carry the authorization  |
+| platform | `PLAT-TRNG-001` | The RP2350's ring-oscillator TRNG delivers full-entropy words once its |
+| platform | `PLAT-TIMER-001` | `embassy_time::Instant` is monotonic and makes progress, so a timeout  |
+| platform | `PLAT-XIP-001` | Core 1 is paused for the whole of every flash erase or program, so no  |
+| platform | `PLAT-DISPLAY-001` | A panel update completes before the firmware treats the card as shown, |
+| platform | `PLAT-TRACE-001` | A trace-linked claim rests on the fields the recorded session VARIES;  |
 
 ## Review packet
 
@@ -248,7 +253,7 @@ For the commit that carries this page — which is why no commit is named here: 
 
 | Tier | Command | Taken | Against | Host |
 |---|---|---|---|---|
-| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-29 | `43908b8` | Apple M5 Pro (18 cores) |
-| `safety` | `./formal/run-tlc.sh safety` | 2026-08-29 | `43908b8` | Apple M5 Pro (18 cores) |
+| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-29 | `ab3dfd4` | Apple M5 Pro (18 cores) |
+| `safety` | `./formal/run-tlc.sh safety` | 2026-08-29 | `ab3dfd4` | Apple M5 Pro (18 cores) |
 
 **Raw evidence bundles:** `SEC-FIDO-001`, `SEC-FIDO-007` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`, `SEC-FIDO-007`.

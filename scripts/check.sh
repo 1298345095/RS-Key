@@ -574,7 +574,15 @@ run "partition table fences the store (16M)" partition_table_fences_the_store
 # GPIO16 — the compile_error guard in main.rs enforces this), and before the
 # no-touch build below, which stays the last `-p firmware` build so target/ keeps
 # the no-touch test image (see docs/build.md).
-run "build firmware (display)" env LED_KIND=none cargo build --release -p firmware --features display
+#
+# `FLASH_SIZE=16M` because that is what the SHIPPED flavor is: `nix/firmware.nix`
+# gives `firmware-display` `flashSize = "16M"` and `ledKind = "none"` together,
+# and this row used to compile the display feature at the DEFAULT 4 MB geometry —
+# a combination no published package is. The settling question on that matrix
+# column says so in as many words. It does not make the `SEC-DISP-*` rows
+# `covered`: this compiles the shipped image, and their EVIDENCE is still
+# produced at 4 MB.
+run "build firmware (display)" env LED_KIND=none FLASH_SIZE=16M cargo build --release -p firmware --features display
 # Machine-checked "no size cost for keys without a screen": the display UI crate
 # and its driver stack must be absent from the DEFAULT firmware dependency tree, so
 # a standard key can not pull any of the screen code in.

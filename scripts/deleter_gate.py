@@ -36,6 +36,20 @@ What is checked, and the direction of each:
   falsifiable by the code rather than by a reviewer's memory;
 * the call text at the recorded line must still be that call. A citation whose
   line has moved reports where it went, the way `citation_gate.py` does;
+* the VALUE half of the contract, which the ledger did not carry at all. The
+  three outcomes a caller can get are typed in `rsk-fs` — `Removal { value,
+  record }` — and the verbs differ in the first of them: `delete`/`delete_key`
+  skip the backend removal when the present cache reads absent, `force_delete`
+  and `force_delete_halves` do not. That is DERIVED from the verb, so it is not
+  a second copy of it, and one rule rests on it: a `wipe-sweep` site may not use
+  a conditional verb. The reason is in `force_delete`'s own rustdoc — a
+  re-enumerating wipe reads the backend directly, so a delete that no-ops on a
+  torn-migration false-absent key keeps re-finding it and loops forever. The
+  limit it inherits, said here rather than left to be found: `class` is a
+  hand-written disposition, so relabelling a sweep as `bookkeeping` dodges the
+  rule. `verb` cannot be relabelled — it is held against the call text at the
+  recorded line — but `class` is exactly the kind of judgement this file's last
+  paragraph says no script can check;
 * `metadata = "drops-head"` is allowed only for a crate that actually mints
   EF_META heads, and that set is derived too. The whole metadata axis rests on
   "`rsk-piv` mints the only heads"; a second minter arriving silently is how that
@@ -129,6 +143,16 @@ DISPOSITIONS = {"must-read": "read", "best-effort": "discarded"}
 PHRASE = {"read": "reads", "discarded": "discards"}
 CLASSES = ("wipe-sweep", "secret-or-gate", "metadata", "bookkeeping")
 METADATA = ("drops-head", "none")
+
+#: Whether the verb's backend removal is gated on the present cache. DERIVED
+#: from the verb rather than recorded beside it: a field a caller could set
+#: independently of the call it describes is a second copy of the call.
+REMOVAL = {
+    "delete": "conditional",
+    "delete_key": "conditional",
+    "force_delete": "unconditional",
+    "force_delete_halves": "unconditional",
+}
 
 
 def sources(root):
@@ -333,6 +357,13 @@ def audit(root):
             problems.append(
                 f"{where}: claims to drop an EF_META head from a crate that mints none"
             )
+        if entry["class"] == "wipe-sweep" and REMOVAL.get(entry["verb"]) != "unconditional":
+            problems.append(
+                f"{where}: a wipe sweep on `{entry['verb']}`, whose backend removal"
+                " is skipped when the present cache reads absent — the sweep"
+                " re-enumerates from the backend, so a false-absent key is"
+                " re-found on every pass and the wipe does not terminate"
+            )
     return problems
 
 
@@ -355,7 +386,15 @@ def run(root):
         )
         return 1
     total = len(sites(root))
-    print(f"deleter-gate: ok — {total} call sites, each disposed of")
+    doc = tomllib.loads((root / LEDGER).read_text(encoding="utf-8"))
+    kinds = {k: 0 for k in ("conditional", "unconditional")}
+    for entry in doc.get("site", []):
+        kinds[REMOVAL[entry["verb"]]] = kinds[REMOVAL[entry["verb"]]] + 1
+    print(
+        f"deleter-gate: ok — {total} call sites, each disposed of; "
+        + ", ".join(f"{n} {k}" for k, n in kinds.items())
+        + " backend removal"
+    )
     return 0
 
 

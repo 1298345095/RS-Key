@@ -193,7 +193,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 41
+SCOPE_CEILING = 42
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -254,6 +254,12 @@ GENERATED_ELSEWHERE = {
 #: that is deliberately historical and must NOT track anything.
 SCOPED = {
     # Historical roster figures: the sentence's subject is what the tree WAS.
+    (
+        "docs/authorization-slice.md",
+        '"199 configurations tiered plus 2 exempt" stood in this paragraph',
+    ): "the sentence QUOTES the stale copy it is about — the paragraph's whole "
+    "subject is that a hand-written roster figure went out of date six minutes "
+    "after it was right, and the quotation is the evidence",
     (
         "docs/testing.md",
         "`safety` was 2003 s here",
@@ -502,6 +508,8 @@ TABLE_GROUPS = (
      ("Shipped.cfg",)),
     ("`AlwaysUv.cfg` — AS-AUTH-2's other arm: the build that ships it",
      ("AlwaysUv.cfg",)),
+    ("`PermWide.cfg` — `WidePerms`'s other arm: all sixteen permission subsets",
+     ("PermWide.cfg",)),
     ("`Historical_E76.cfg` — the seed-lead taken back out", ("Historical_E76.cfg",)),
     ("`Historical_E77.cfg` — the grant back in phase 2 **and** the consumer fix out",
      ("Historical_E77.cfg",)),

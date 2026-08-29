@@ -5,8 +5,8 @@
 # of the registry, so that the cost §10 takes from `SEC-FIDO-001` has a second
 # point and stops being one number off the strongest row of fifty-nine.
 #
-# `SEC-FIDO-007` `RamNeverOutlivesFlashSeed`: cfgs=3 mut=1 co=1 kani=0 fuzz=0
-# rust=1 test=0, against the strong row's 45/11/11/4. Same ten groups, same
+# `SEC-FIDO-007` `RamNeverOutlivesFlashSeed`: cfgs=4 mut=1 co=1 kani=0 fuzz=0
+# rust=2 test=0, against the strong row's 46/11/11/4. Same ten groups, same
 # floors, same gate — `scripts/bundle_gate.py` reads the DIRECTORY now, so this
 # file is held to every rule the first one is.
 #

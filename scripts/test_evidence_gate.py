@@ -592,7 +592,7 @@ def test_the_page_is_listed_in_the_docs_nav():
 
 
 def test_a_configuration_that_names_is_not_one_that_asserts(tree):
-    """41 of the 45 naming `NoAuthorizationBypass` are mutants it must fall in."""
+    """43 of the 46 naming `NoAuthorizationBypass` are mutants it must fall in."""
     tree.edit("formal/floors.txt", "Shipped.cfg     GREEN   1", "Shipped.cfg     RED     -")
     assert tree.vector("SEC-T-001")["asserted"] == 0
     assert tree.vector("SEC-T-001")["model"] == 2

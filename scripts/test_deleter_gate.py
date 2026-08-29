@@ -200,6 +200,31 @@ def test_relabelling_instead_of_deciding_is_rejected(tree, capsys):
     assert "while the site discards the answer" in red(tree, capsys)
 
 
+def test_a_wipe_sweep_on_a_conditional_verb_is_rejected(tree, capsys):
+    """The VALUE half of the contract. `delete`/`delete_key` skip the backend
+    removal when the present cache reads absent; a re-enumerating wipe reads the
+    backend directly, so a torn-migration false-absent key is re-found on every
+    pass and the sweep does not terminate. Measured on the real ledger: all five
+    `wipe-sweep` sites are on `force_delete_halves` today, so this rule is a pin
+    rather than a repair."""
+    tree.edit("assurance/deleters.toml", 'class = "secret-or-gate"', 'class = "wipe-sweep"')
+    said = red(tree, capsys)
+    assert "does not terminate" in said, said
+    assert "delete_key" in said, said
+
+
+def test_the_removal_axis_is_derived_from_the_verb(tree, capsys):
+    """And not recorded beside it: a field a caller could set independently of
+    the call it describes is a second copy of the call. Driven by making the
+    derivation wrong — every wipe sweep then reads as conditional."""
+    tree.edit("assurance/deleters.toml", 'class = "secret-or-gate"', 'class = "wipe-sweep"')
+    assert deleter_gate.REMOVAL["delete_key"] == "conditional"
+    assert deleter_gate.REMOVAL["force_delete_halves"] == "unconditional"
+    assert set(deleter_gate.REMOVAL) == set(deleter_gate.VERBS)
+    assert tree.run() == 1
+    capsys.readouterr()
+
+
 def test_a_disposition_with_no_reason_is_rejected(tree, capsys):
     tree.edit("assurance/deleters.toml", 'why = "an index the store rebuilds."', 'why = "   "')
     assert "a disposition with no reason" in red(tree, capsys)

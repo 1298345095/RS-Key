@@ -222,7 +222,7 @@ def expected_verdicts(root):
     Read through `verdict_gate.py`'s own parser rather than a second one: that
     file records how many ways this registry can be read differently from the
     runner that consumes it. Needed because a configuration NAMING an invariant
-    is not a configuration asserting it — 41 of the 45 that name
+    is not a configuration asserting it — 43 of the 46 that name
     `NoAuthorizationBypass` are mutants whose whole purpose is that it falls, and
     counting them as evidence FOR it is §4.1's error inside the page written to
     end it.
