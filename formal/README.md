@@ -3301,8 +3301,10 @@ out of the full-width runs as a discharged bounds check — is a compile-time
 assertion now, and that is the stronger form: it is about the *shipped* width,
 where a proof would only have covered the FIDs a harness enumerated.
 
-`SEC-STORE-002` is `BOUNDED` on the strength of three of these; the other three
-store properties stay `MODELLED-ONLY`.
+`SEC-STORE-002` is `BOUNDED` on the strength of three of these. The other five —
+`SEC-STORE-001`, `SEC-STORE-003`, `SEC-STORE-004`, `SEC-STORE-005` and
+`SEC-STORE-006` — stay `MODELLED-ONLY`; "the other three" stood here and the
+family has six members.
 
 **The obvious way to bridge them was tried, and it is a copy compared to
 itself.** Write the model's per-FID steps as Rust predicates — `Delete(f)`'s

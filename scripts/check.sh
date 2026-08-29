@@ -736,6 +736,16 @@ run "evidence vector"          python scripts/evidence_gate.py
 # comment, a .github/*.json, SECURITY.md and eighteen more, all driven at
 # exit 0. `formal/runs.toml` itself and CHANGELOG.md are the two carve-outs.
 run "published run-counts"     python scripts/run_count_gate.py
+# And what the pages SAY a property IS. Stage 0 п.3 and the last exit of stage 4
+# are one predicate -- a public claim about a registered id is generated, and one
+# written by hand fails on a docs row -- and this file carried no docs row at all,
+# so four false sentences including "`SEC-FIDO-001` ... PROVEN on hardware" in
+# README.md were exit 0 on all eight gates. The CI step `docs.sh check` is
+# `mdbook build` plus a link check and never reads a claim. Not "generated or
+# refused", which would refuse true prose no table replaces: a hand-written
+# status is held to the status the registry HOLDS for the id beside it, so
+# `PROVEN` -- no row's status anywhere -- is refused of every id.
+run "published claims"         python scripts/claims_gate.py
 run "token refinement export" ./scripts/token_refinement.sh --check
 run "token refinement completeness" python scripts/token_refinement_gate.py
 # The two guards above decide whether the gate covers the tree, and neither had

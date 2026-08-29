@@ -48,13 +48,18 @@ Measured with `python3 scripts/assurance_gate.py`, `python3 scripts/matrix_gate.
 
 ## The row as it stands
 
-`python3 scripts/assurance_gate.py`:
+`python3 scripts/assurance_gate.py` prints the three rows this page is about —
+the slice's own `SEC-FIDO-001` and the two candidates for the calibration
+counterpart, `SEC-FIDO-007` and `SEC-FIDO-008` — and
+[`docs/assurance-vector.md`](assurance-vector.md) carries them generated, with
+every column derived on each gate run.
 
-| ID | Status | cfgs | mut | co | kani | fuzz | test | rust |
-|---|---|---|---|---|---|---|---|---|
-| `SEC-FIDO-001` | BOUNDED | 45 | 11 | 11 | 4 | 0 | 0 | 2 |
-| `SEC-FIDO-007` | MODELLED-ONLY | 3 | 1 | 0 | 0 | 0 | 0 | 1 |
-| `SEC-FIDO-008` | MODELLED-ONLY | 3 | 1 | 0 | 0 | 0 | 0 | 1 |
+They are **not** copied here. Three rows of that table stood in this section and
+were right the day they were typed: within the week `e456d50` taught the
+co-refutation credit to read the invariant-named configuration, `SEC-FIDO-007`'s
+and `SEC-FIDO-008`'s `co` moved 0 -> 1, and the copy said 0 with every gate
+green — the status half stayed true, so nothing about it looked stale. That is
+the shape `scripts/claims_gate.py` now refuses outright.
 
 The registry-wide line is 59 properties (2 accepted-risk, 11 bounded, 46
 modelled-only), 28 crates ledgered, 199 configurations tiered plus 2 exempt.
