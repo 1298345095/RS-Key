@@ -672,7 +672,7 @@ run "IBM Plex font data"       python scripts/generate_ui_fonts.py --check
 # pointing at a line that has moved reads as authoritative while being wrong.
 run "bcd bump + CHANGELOG"     python scripts/bcd_gate.py
 run "SPDX headers"             python scripts/spdx_gate.py
-# 203 of the 204 configurations say "do not edit by hand" in their first line,
+# 204 of the 205 configurations say "do not edit by hand" in their first line,
 # and nothing made that true: deleting a whole mutant family left every row
 # green, because run-tlc.sh lists families with `ls` so the tiers shrank with
 # them. This regenerates into a temp tree and diffs.

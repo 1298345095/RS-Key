@@ -270,6 +270,7 @@ def test_the_checkout_derives_what_it_is_measured_at():
     assert set(kinds["model"]) == {
         "model:PowerOnClearsScratch2",
         "model:AlwaysUvShipped",
+        "model:WidePerms",
     }, kinds["model"]
     assert len(kinds["slice"]) >= 8, kinds["slice"]
     assert len(kinds["unsafe"]) >= 7, kinds["unsafe"]

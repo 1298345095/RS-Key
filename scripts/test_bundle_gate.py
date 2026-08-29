@@ -824,7 +824,7 @@ def test_a_disposed_inverse_kill_is_admitted_and_counted_apart(tmp_path, disposi
 @pytest.mark.parametrize(
     "key,old,new",
     [("gate_registry", "kani=4", "kani=99"),
-     ("gate_registry", "cfgs=45", "cfgs=46"),
+     ("gate_registry", "cfgs=46", "cfgs=47"),
      ("gate_ledger", "walk=4", "walk=5"),
      ("gate_assumption", "FALSE=89", "FALSE=88"),
      ("gate_ghost", "24 routes", "25 routes"),

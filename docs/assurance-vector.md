@@ -60,7 +60,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-REF-004` | `R4bEventConsensus` | 2 of 9 | 0 | 2 of 9 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-005` | `NoAuthorizationBypassA` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-006` | `RequiredGateAgreesWithRelation` | 0 of 1 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-001` | `NoAuthorizationBypass` | 3 of 46 | 11 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (9 input(s) newer) | BOUNDED |
+| `SEC-FIDO-001` | `NoAuthorizationBypass` | 3 of 46 | 11 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (54 input(s) newer) | BOUNDED |
 | `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 3 of 40 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | — | BOUNDED |
 | `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 3 of 42 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | — | BOUNDED |
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 3 of 37 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
@@ -69,7 +69,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 0 of 1 | 0 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 3 of 4 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (4 input(s) newer) | MODELLED-ONLY |
+| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 3 of 4 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (7 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 3 of 4 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L01` | `EveryOpQuiesces` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
@@ -164,8 +164,8 @@ Three spellings of "not current", which used to sit on two different pages and i
 
 | Kind | Subject | What is outstanding |
 |---|---|---|
-| bundle | `SEC-FIDO-001` | 9 input(s) newer than `f52b720` |
-| bundle | `SEC-FIDO-007` | 4 input(s) newer than `3e08f75` |
+| bundle | `SEC-FIDO-001` | 54 input(s) newer than `f52b720` |
+| bundle | `SEC-FIDO-007` | 7 input(s) newer than `3e08f75` |
 | bundle | `SEC-ADM-002` | no raw evidence bundle |
 | bundle | `SEC-ADM-004` | no raw evidence bundle |
 | bundle | `SEC-BOOT-001` | no raw evidence bundle |
