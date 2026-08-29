@@ -2591,3 +2591,50 @@ fn an_att_chain_stored_by_a_build_with_a_larger_cap_does_not_fault_the_state_pro
     assert_eq!(decoder.u8().unwrap(), 1);
     assert!(decoder.bool().unwrap(), "the attestation key is present");
 }
+
+/// `vendor::pin_gate` takes the device-PIN branch only when the presence backend
+/// can COLLECT one, and `uv_available()` is false on every backend but the
+/// trusted display (`crates/rsk-sdk/src/presence.rs:92`). `EF_DEVICE_PIN` is not a
+/// display-only record: `is_fido_fid` keeps it, so it survives a reflash from a
+/// display image to a screenless one — and then the branch that would ask for it
+/// cannot run, `EF_PIN` is absent, and the gate falls through to `Ok(())`.
+///
+/// The owner set a device PIN and the second factor silently became "a touch".
+/// The assertion is about the ANSWER, not the status word: an irreversible vendor
+/// operation must not complete.
+#[test]
+fn a_device_pin_no_pad_can_collect_is_not_a_gate_that_may_be_skipped() {
+    let mut fs = Fs::new(RamStorage::new());
+    let mut rng = SeqRng(11);
+    let mut st = FidoState::new();
+    let d = dev();
+    ensure_seed(&d, &mut fs, &mut rng).unwrap();
+    crate::seed::store_att_key(&d, &mut fs, &[3u8; 32]).unwrap();
+    assert!(fs.has_key(EF_ATT_KEY));
+
+    // The display build's record, on a build with no pad. No clientPIN: that is
+    // the configuration the device-PIN branch exists for.
+    crate::clientpin::store_device_pin(&d, &mut fs, b"123456").unwrap();
+    assert!(!fs.has_data(crate::consts::EF_PIN));
+
+    handshake(&mut fs, &mut rng, &mut st);
+    let mut req = [0u8; 64];
+    let mut out = [0u8; 512];
+    let n = one_byte_req(&mut req, VENDOR_ATT_CLEAR);
+    let r = call(
+        &mut fs,
+        &mut rng,
+        &mut st,
+        &mut AlwaysConfirm,
+        &req[..n],
+        &mut out,
+    );
+    assert!(
+        r.is_err(),
+        "an irreversible vendor op completed with a device PIN set and no way to ask for it"
+    );
+    assert!(
+        fs.has_key(EF_ATT_KEY),
+        "the attestation key was destroyed behind a gate nobody could answer"
+    );
+}

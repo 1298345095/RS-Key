@@ -2271,6 +2271,22 @@ and to the statuses it quotes.
 
 ### Security
 
+- **A device PIN the running build could not collect waived the vendor gate
+  entirely.** `vendor::pin_gate` is the PIN factor on every host-driven operation
+  that reveals or replaces device identity — `BACKUP_EXPORT`, `BACKUP_LOAD`,
+  `BACKUP_FINALIZE`, `ATT_IMPORT`, `ATT_CLEAR`, the audit commands, `CONFIG_WRITE`.
+  With no clientPIN it takes the device PIN on the panel, and that branch was
+  guarded by `uv_available()`, which is **false on every presence backend but the
+  trusted display**. `EF_DEVICE_PIN` is not a display-only record — `is_fido_fid`
+  keeps it — so it survives a reflash from a display image to a screenless one,
+  and the gate then fell through to `Ok(())`: the owner had set a PIN and the
+  second factor silently became a touch. Driven before the fix on the shipped
+  code path: `ATT_CLEAR` completed and the org attestation key was destroyed with
+  a device PIN set and no way to ask for it. It answers `CTAP2_ERR_PUAT_REQUIRED`
+  (`0x36`) now — recoverable by reflashing the display image and clearing the PIN,
+  or by a factory reset, which is the restrictive side. `docs/threat-model.md`
+  named only the clientPIN form of this factor and now names both.
+
 - **A record written by an earlier build faulted the firmware on an UNGATED
   command.** `Fs::read` answers the record's FULL length — its own doc comment says
   so — and three sites sliced `buf[..n]` with no clamp. The reachable one is

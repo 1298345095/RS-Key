@@ -563,6 +563,15 @@ pub(crate) fn open_channel_key<S: Storage, R: Rng>(
 /// and FIDO operations work until power-off. No PIN or touch gate — knowing
 /// the 256-bit lock key *is* the authorization, and this runs on every
 /// power-up of a locked device.
+///
+/// The ONE producer of the RAM seed copy, which is the antecedent of the seed
+/// ordering: `lock_engaged` requires the plain record ABSENT, so the copy is
+/// minted only where a wrapped seed stands behind it. The tag was on
+/// `seed::ensure_seed` alone, which owns the CONSEQUENT and takes no
+/// `FidoState` — it can make the right side true and can never falsify the
+/// implication.
+///
+/// Refines `RSKeySecurityState!RamNeverOutlivesFlashSeed` — SEC-FIDO-007.
 fn unlock<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {
     if !ctx.state.mse_ready() {
         return Err(CtapError::NotAllowed);
@@ -769,9 +778,19 @@ fn pin_gate<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> Result<(), Ct
         ctx.state.mark_token_used(ctx.now_ms);
         return Ok(());
     }
-    if crate::clientpin::try_device_pin_is_set(ctx.fs).map_err(|_| CtapError::Other)?
-        && ctx.presence.uv_available()
-    {
+    if crate::clientpin::try_device_pin_is_set(ctx.fs).map_err(|_| CtapError::Other)? {
+        // A device PIN this build cannot COLLECT is still a gate the owner set.
+        // `uv_available()` is false on every backend but the trusted display
+        // (`rsk-sdk/src/presence.rs`), and `EF_DEVICE_PIN` is not a display-only
+        // record — `is_fido_fid` keeps it — so it survives a reflash from a
+        // display image to a screenless one. Falling through here made the second
+        // factor on BACKUP_EXPORT, ATT_IMPORT/CLEAR and the audit commands "a
+        // touch", silently, on a device whose owner had set a PIN. Refused
+        // instead: recoverable by reflashing the display image and clearing the
+        // PIN, or by a factory reset, which is the restrictive side.
+        if !ctx.presence.uv_available() {
+            return Err(CtapError::PuatRequired);
+        }
         return device_pin_gate(ctx);
     }
     Ok(())

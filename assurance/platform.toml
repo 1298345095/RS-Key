@@ -318,6 +318,36 @@ covers = ["slice:AS-AUTH-5"]
 supports = ["SEC-FIDO-001"]
 
 [[assumption]]
+id = "PLAT-MODEL-009"
+class = "model-abstraction"
+statement = "`EF_MINPINLEN`'s FLOOR (byte 0) and its RP-id disclosure list (bytes 2..) are outside `RSKeySecurityState` because neither can admit an operation: the floor is read only where a NEW PIN verifier is written and by `setMinPINLength`'s own monotonic guard, and the list is read only to disclose the floor to a listed RP. A floor that reads too low stores a weaker PIN of the owner's own choosing; it never authorizes a request. Byte 1, `forceChangePin`, is NOT covered by this argument — it refuses token issuance after a correct PIN, and belongs in the model."
+discharge = "A source audit of the `EF_MINPINLEN` read sites, re-run when one is added: `git grep -n 'min_pin_length\\|current_min_pin\\|rp_min_pin_len\\|EF_MINPINLEN' -- crates`, checking that no new site sits on a grant path. The argument holds per BYTE, so a reader of byte 1 is a different question and this row does not cover it."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security: a new reader on a grant path makes an unmodelled record decide an authorization, and no configuration goes red"
+supports = ["SEC-FIDO-001", "SEC-FIDO-003"]
+
+[[assumption]]
+id = "PLAT-MODEL-010"
+class = "model-abstraction"
+statement = "`EF_MINPINLEN`'s `forceChangePin` byte IS a gate and IS missing from the model: `clientpin.rs` refuses `getPinToken` with `PinInvalid` and `getPinUvAuthTokenUsingUvWithPermissions` with `PinPolicyViolation` when it is set, AFTER the PIN has verified. `PinAttemptEnabled` and `PinAttemptPolicy` carry three conjuncts where the code has four, so a defect that waives the pending change is a live token the model cannot see — and one has shipped (bcd 0x09AE)."
+discharge = "Model it: one Boolean `gate.forceChange`, set by the config action, cleared by the change-PIN write, and conjoined into BOTH the guard and the policy — the module's own method for a gate. `BugForceChangeIgnored` dropping the guard conjunct must go RED on `NoAuthorizationBypass`, and the code twin already exists in the suite. Costed against the last thing added to this module rather than guessed — the token-less carve-out, whose before/after distinct states and wall clock `formal/runs.toml` and the generated regions of `formal/README.md` carry; a Boolean that PRUNES should cost strictly less than an action set that widens."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security: the model proves the authorization invariants over a state space with one gate fewer than the firmware has"
+supports = ["SEC-FIDO-001", "SEC-FIDO-003"]
+
+[[assumption]]
+id = "PLAT-MODEL-011"
+class = "model-abstraction"
+statement = "`EF_DEVICE_PIN` is outside `RSKeySecurityState` because the SURFACE it gates is outside it, not because it is inert. It carries a second independent persistent retry ladder, and its host-visible reader is the PIN half of the vendor seed-export / attestation / audit gate — and neither that gate, the MSE channel, nor its `EF_PIN` half is modelled. For the RESET family the omission is sound on its own: it is a phase-2 gate record, phase 2 cannot begin until phase 1 has provably emptied the store, and the seed leads phase 1, so no prefix that drops it leaves a secret it could have gated."
+discharge = "Model the vendor gate itself — MSE readiness plus the two-armed PIN factor — as a stage-4 action; `EF_DEVICE_PIN` then enters as one Boolean inside it, and its ladder can wait for a mutant that needs it. Until then this is an open scope obligation, not a proof."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security: a device PIN the running build cannot collect waived that gate entirely until it was refused instead — the second factor on an irreversible vendor operation became a touch"
+supports = ["SEC-FIDO-004", "SEC-FIDO-006C"]
+
+[[assumption]]
 id = "PLAT-MODEL-008"
 class = "model-abstraction"
 statement = "`DeviceUnlock` is WIDER than the firmware in two directions and both are sound: the model has no device lock, so it does not require the seed to be stored WRAPPED — only a locked device has an `EF_KEY_DEV_ENC` to open — and it omits `AUT_DISABLE`, which only ever CLEARS the RAM copy."

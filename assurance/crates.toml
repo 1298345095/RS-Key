@@ -72,7 +72,7 @@ gap = "ConfigOp/plat in the security model; the config-write pipeline it shares 
 [crate.rsk-display]
 class = "state-partial"
 model = "RSKeyTrustedDisplay"
-gap = "the confirm ceremony (WhatIsConfirmedIsWhatIsShown, decomposed as SEC-DISP-001..003) is modelled; the wait owner and the fourth PIN door stay in RSKeySecurityState. The menus, settings flows and the device-PIN screens are navigation over that same armed-touch chokepoint, not separate security state."
+gap = "the confirm ceremony (WhatIsConfirmedIsWhatIsShown, decomposed as SEC-DISP-001..003) is modelled; the wait owner and the fourth PIN door stay in RSKeySecurityState. The menus and settings flows are navigation over that same armed-touch chokepoint. The device-PIN SCREENS are too, but `EF_DEVICE_PIN` itself is not: it carries a second independent persistent retry ladder that `local_pin_gate` spends, and it is the PIN half of the host-side vendor gate as well — PLAT-MODEL-011 is where that scope obligation lives."
 
 [crate.rsk-ui]
 class = "state-partial"

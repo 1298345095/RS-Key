@@ -365,7 +365,17 @@ seed over an ephemeral encrypted channel (P-256 ECDH → HKDF →
 ChaCha20-Poly1305), and requires (all at once) physical touch, the FIDO
 PIN/UV token when a PIN is set, and the **one-time setup window**: after an
 explicit `finalize`, export is refused until a full reset regenerates a new
-seed. Malware cannot exfiltrate the seed silently or later. Restore re-seals
+seed. Malware cannot exfiltrate the seed silently or later.
+
+The PIN factor has **two** forms and the second is easy to miss: with a clientPIN
+set it is the PIN/UV token; with no clientPIN but a **device PIN** set, the same
+gate collects that PIN on the device's own pad, so a display-flavor key whose
+owner never set a clientPIN is still two-factor. With neither set there is no PIN
+factor and the gate is the encrypted channel plus a touch — which is the state a
+factory-fresh key is in, and the reason `finalize` exists. A device PIN the
+running build cannot collect (the record survives a reflash to a screenless
+image, which has no pad) is **refused**, not waived: an owner who set a PIN does
+not silently drop to a touch. Restore re-seals
 the seed under the *destination* chip's root. The host driving a backup
 necessarily sees the seed plaintext. Do it on a machine you trust.
 Scope: the deterministic identity only (resident passkeys, OpenPGP, PIV are
