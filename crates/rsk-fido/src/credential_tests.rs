@@ -686,22 +686,26 @@ fn a_failed_registration_never_leaves_a_credential_without_its_rp() {
 }
 
 /// The mirror of the case above, and the half it does not assert. A registration
-/// that fails must not leave an EF_RP entry with no credential either: the
-/// comment at `credential.rs` calls that state "invisible but harmless, and
-/// reclaimed by the next `decrement_rp`", and it is not reclaimed by anything.
-/// `decrement_rp` deletes the record at count 0 alone and the count is bumped
-/// once per credential that lands, so an entry left over one that never landed
-/// floors at 1. The slot is then unreusable short of `authenticatorReset`, while
-/// getInfo 0x14 keeps reporting it free.
+/// that fails must leave NOTHING — not the credential the host was told it did
+/// not get, and not an EF_RP entry over one that never landed. `decrement_rp`
+/// deletes the record at count 0 alone and the count is bumped once per credential
+/// that lands, so an entry left over one that never landed floors at 1: the slot
+/// is unreusable short of `authenticatorReset` while `enumerateRPs` and the
+/// Passkeys view both keep listing an RP with nothing in it.
+///
+/// Asserted UNCONDITIONALLY at every failing budget, not inside an
+/// `if has_data(EF_RP)`. The conditional shape passes when the branch is never
+/// entered, and with the rollbacks in place the branch is never entered — the
+/// rule that matters would then be carried rather than checked.
 #[test]
-fn a_failed_registration_never_leaves_an_rp_without_its_credential() {
+fn a_failed_registration_leaves_neither_the_credential_nor_its_rp_entry() {
     let d = dev();
     let rp_hash = sha256(b"example.com");
     let mut out = [0u8; 512];
     let len = credential_create(&SEED, &d, &input(), &rp_hash, &IV, &mut out).unwrap();
 
     let mut saw_partial = false;
-    for budget in 0..6 {
+    for budget in 0..8 {
         let mut fs: Fs<FailWriteAfter> = Fs::new(FailWriteAfter {
             inner: RamStorage::new(),
             budget,
@@ -720,17 +724,93 @@ fn a_failed_registration_never_leaves_an_rp_without_its_credential() {
             continue;
         }
         saw_partial = true;
-        if fs.has_data(EF_RP) {
-            assert!(
-                fs.has_data(EF_CRED),
-                "write budget {budget} left an EF_RP record with no credential — \
-                 the count floors at 1 and the slot never comes back"
-            );
-        }
+        assert!(
+            !fs.has_data(EF_CRED),
+            "write budget {budget} answered an error over a credential that is live"
+        );
+        assert!(
+            !fs.has_data(EF_RP),
+            "write budget {budget} left an EF_RP record with no credential — \
+             the count floors at 1 and the slot never comes back"
+        );
     }
     assert!(
         saw_partial,
         "vacuous: no write budget produced a partial registration"
+    );
+}
+
+/// The rollback's GUARD, which the case above cannot reach: on a RE-registration
+/// of an (rp, user) the store already holds, `bump_rp` raises an existing count
+/// from n to n+1 and creates nothing, so a failure must return it to n and must
+/// NOT delete the record. Dropping `if new_record` entirely left the suite green
+/// and recreated audit run-35's defect — a live discoverable credential with no
+/// EF_RP entry, invisible to `enumerateRPs` and to the Passkeys view while
+/// `getAssertion` authenticates with it happily.
+#[test]
+fn a_failed_re_registration_does_not_delete_the_rp_the_first_one_created() {
+    let d = dev();
+    let rp_hash = sha256(b"example.com");
+    let mut out = [0u8; 512];
+    let len = credential_create(&SEED, &d, &input(), &rp_hash, &IV, &mut out).unwrap();
+
+    // One landed registration, then the same (rp, user) again on a store that
+    // runs out of writes part-way. `new_record` is false on the second call.
+    let mut saw_partial = false;
+    for budget in 0..8 {
+        let mut warm: Fs<FailWriteAfter> = Fs::new(FailWriteAfter {
+            inner: RamStorage::new(),
+            budget: usize::MAX,
+        });
+        credential_store(
+            &SEED,
+            &d,
+            &mut warm,
+            &out[..len],
+            &rp_hash,
+            "example.com",
+            &[0xDE, 0xAD, 0xBE, 0xEF],
+            &[],
+        )
+        .unwrap();
+        assert!(warm.has_data(EF_RP) && warm.has_data(EF_CRED));
+        // The budget belongs to the SECOND call, so the backend is carried over
+        // rather than the `Fs`: `into_storage` is the only way across.
+        let mut fs: Fs<FailWriteAfter> = Fs::new(FailWriteAfter {
+            inner: warm.into_storage().inner,
+            budget,
+        });
+        // A fresh `Fs` has an empty present/decided bitmap, and `credential_store`
+        // reads it to decide `new_record`. Without the scan the second call is a
+        // FIRST registration over a store that already holds one, which is a
+        // different case than the one this test is about — measured: it deleted
+        // the record and the assertion below fired for the wrong reason.
+        fs.scan();
+        if credential_store(
+            &SEED,
+            &d,
+            &mut fs,
+            &out[..len],
+            &rp_hash,
+            "example.com",
+            &[0xDE, 0xAD, 0xBE, 0xEF],
+            &[],
+        )
+        .is_ok()
+        {
+            continue;
+        }
+        saw_partial = true;
+        assert!(
+            fs.has_data(EF_RP),
+            "write budget {budget} deleted the RP record the FIRST registration \
+             created — the credential still there is then unlistable and \
+             undeletable, which is audit run-35"
+        );
+    }
+    assert!(
+        saw_partial,
+        "vacuous: no write budget produced a partial re-registration"
     );
 }
 

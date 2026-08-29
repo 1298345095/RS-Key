@@ -839,13 +839,16 @@ pub fn credential_store<S: Storage>(
         .ok_or(Error::NoMemory)?;
 
     // Order so that any truncation of this non-transactional sequence leaves an RP
-    // entry without a credential — which every fallible step below rolls back,
-    // because nothing reclaims one later — never a credential without an RP entry. The latter is a live
-    // discoverable passkey that `enumerateRPs` and the trusted-display Passkeys view
-    // both walk EF_RP to find, so neither can list or delete it, while `getAssertion`
-    // (which scans EF_CRED) authenticates with it happily. The dedup below sets
-    // `new_record = false` on any later registration of the same (rp, user), so that
-    // state never self-heals (audit run-35).
+    // entry without a credential — never a credential without an RP entry. The
+    // latter is a live discoverable passkey that `enumerateRPs` and the
+    // trusted-display Passkeys view both walk EF_RP to find, so neither can list or
+    // delete it, while `getAssertion` (which scans EF_CRED) authenticates with it
+    // happily. The dedup below sets `new_record = false` on any later registration
+    // of the same (rp, user), so that state never self-heals (audit run-35).
+    //
+    // Each fallible step after the bump rolls it back BEST-EFFORT. Best-effort is
+    // the honest word: the rollback is itself a flash write, so a medium that
+    // refuses the tombstone leaves the entry standing.
     if new_record {
         bump_rp(fs, seed, rp_id_hash, rp_id)?;
     }
@@ -855,11 +858,28 @@ pub fn credential_store<S: Storage>(
     // already stops it being SERVED to the new credential, but leaving it behind
     // costs a flash record per reuse.
     crate::largeblobext::discard(fs, slot);
-    // Roll back here too, not only on the EF_CRED put below: `decrement_rp` drops
-    // the record at count 0 alone, so an entry left over a credential that never
-    // landed floors at 1 and its slot never returns — the comment above says it is
-    // reclaimed and nothing reclaims it.
+    // Roll back here too, not only on the EF_CRED put: `decrement_rp` drops the
+    // record at count 0 alone, so an entry left over a credential that never landed
+    // floors at 1 and its slot never returns. Best-effort, and that is a real
+    // limit — a medium that refuses the tombstone leaves the phantom anyway.
     if let Err(e) = bump_cred_store_state(fs) {
+        if new_record {
+            let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
+        }
+        return Err(e);
+    }
+
+    // A freshly created (or re-registered) credential restarts its per-credential
+    // signature counter: makeCredential reported signCount 0, so the next
+    // operation reports 1. This also clears any stale entry a prior occupant of a
+    // reused slot may have left in the packed EF_CRED_CTR file.
+    //
+    // BEFORE the credential and not after: it was the one fallible step with no
+    // rollback under it, and it fails on the same no-fault route the write above
+    // does, so a failure there answered KEY_STORE_FULL over a credential that
+    // was already live. A counter written for a slot the next line then fails to
+    // fill is inert — the slot's next occupant overwrites it.
+    if let Err(e) = crate::seed::set_cred_sign_counter(fs, slot, 1) {
         if new_record {
             let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
         }
@@ -871,12 +891,6 @@ pub fn credential_store<S: Storage>(
         }
         return Err(e);
     }
-
-    // A freshly created (or re-registered) credential restarts its per-credential
-    // signature counter: makeCredential reported signCount 0, so the next
-    // operation reports 1. This also clears any stale entry a prior occupant of a
-    // reused slot may have left in the packed EF_CRED_CTR file.
-    crate::seed::set_cred_sign_counter(fs, slot, 1)?;
     Ok(())
 }
 

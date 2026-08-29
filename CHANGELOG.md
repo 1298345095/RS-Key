@@ -170,12 +170,30 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   `authenticatorReset`. One of the three fallible steps after the bump rolled it
   back and the first one did not, two lines apart. It needs no flash fault to
   reach: `EF_CRED_STATE` is a NEW dynamic file on a key that has never stored a
-  resident credential, so `Fs::put` answers `NoMemory` at `MAX_DYNAMIC_FILES`.
-  Driven end to end, with every slot so occupied and zero live credentials, getInfo
-  `0x14` reported **256** remaining discoverable credentials while every `rk=true`
-  `makeCredential` for a new RP answered `CTAP2_ERR_KEY_STORE_FULL` (`0x28`) and the
-  owner had nothing to delete. The rollback is now on that step too, and the comment
-  that claimed a reclaim says what actually holds instead.
+  resident credential, so `Fs::put` answers `NoMemory` at `MAX_DYNAMIC_FILES` —
+  driven on a plain backend with no fault injector at all. With all 256 EF_RP slots
+  so occupied and zero live credentials, every `rk=true` `makeCredential` for a new
+  RP answers `CTAP2_ERR_KEY_STORE_FULL` (`0x28`) and the owner has nothing to
+  delete; getInfo `0x14` then reports **256** remaining discoverable credentials
+  once the owner has freed enough dynamic files for `remaining_rk`'s second term to
+  stop binding, and **0** at the moment of exhaustion itself.
+
+  Both other fallible steps after the RP bump are covered in the same change, and
+  the second was found by the review of the first: `set_cred_sign_counter` had no
+  rollback either, and stood AFTER the credential write — so 127 of 256 driven
+  failures left a live discoverable passkey behind while the host was told
+  `KEY_STORE_FULL`. It now runs BEFORE the credential (a counter for a slot nothing
+  fills is inert) and rolls the count back too. The rollbacks are best-effort by
+  construction — each is itself a flash write — and the comment says so rather than
+  claiming every step rolls back.
+
+  Still open, same class, and named here so the next sweep starts from a list: the
+  power-cut window between the RP bump and the credential write; `delete_credential`
+  removing EF_CRED and then answering `NotAllowed` when the EF_RP write fails;
+  `decrement_rp`'s own `let _ = fs.delete(EF_RP + j)`, which leaves the identical
+  phantom while the command answers `Ok`; the trusted-display delete swallowing the
+  same failure; and `largeblobext::discard`, which drops a live credential's large
+  blob before a re-registration that may then fail.
 
 - **`CONFIG_READ` over FIDO reported a record it could not read as an empty one.**
   Found by asking the other spellings of the four fixes above the same question.
