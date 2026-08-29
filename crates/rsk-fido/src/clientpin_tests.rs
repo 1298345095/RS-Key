@@ -2878,3 +2878,9 @@ fn a_min_pin_record_wider_than_this_build_is_left_whole_rather_than_truncated() 
     assert_eq!(n, oversized.len(), "the record kept every RP id it had");
     assert_eq!(&back[..n], &oversized[..], "and kept them unchanged");
 }
+
+// The permission-domain sweep lives in its own file: it is a source obligation
+// of the formal programme (PLAT-MODEL-001), not another clientPIN case, and it
+// needs this module's fixture.
+#[path = "clientpin_perms_tests.rs"]
+mod perms;
