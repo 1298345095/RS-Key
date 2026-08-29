@@ -2537,3 +2537,57 @@ fn a_faulted_dev_conf_probe_over_fido_neither_acks_nor_replaces() {
         }
     }
 }
+
+/// `Fs::read` answers the record's FULL length, not what it copied — the doc
+/// comment says so — and `ATT_STATE` sliced `chain[..n]` with no clamp. The record
+/// it reads is written under a cap that is not constant across builds:
+/// `cert::ATT_CHAIN_MAX` is a `min3` of a store cap, a MAC cap and a RESPONSE cap,
+/// and the response term moves with the PIN/PQC surface — this tree has already
+/// narrowed that cap once. So a key provisioned by a build with the larger cap and
+/// upgraded to one with the smaller has an `EF_ATT_CHAIN` longer than the reader's
+/// buffer, and `ATT_STATE` is UNGATED: no PIN, no touch, no channel.
+///
+/// The assertion is about the ANSWER, not the status word: a device that cannot
+/// hash the chain must still say whether a key is present.
+#[test]
+fn an_att_chain_stored_by_a_build_with_a_larger_cap_does_not_fault_the_state_probe() {
+    let mut fs = Fs::new(RamStorage::new());
+    let mut rng = SeqRng(7);
+    let mut st = FidoState::new();
+    let d = dev();
+    ensure_seed(&d, &mut fs, &mut rng).unwrap();
+
+    // The key has to be there: `att_state` only hashes the chain when one is,
+    // so a probe without it exercises the absent arm and proves nothing. The
+    // first version of this case did exactly that and passed.
+    crate::seed::store_att_key(&d, &mut fs, &[9u8; 32]).unwrap();
+    // One byte past this build's reader. Nothing in the store refuses it:
+    // `ATT_CHAIN_REC_MAX <= MAX_VALUE_BYTES` is asserted at compile time, so the
+    // larger record fits the medium it was written to.
+    let oversized = [0x5Au8; cert::ATT_CHAIN_REC_MAX + 1];
+    fs.put(EF_ATT_CHAIN, &oversized).unwrap();
+
+    let mut req = [0u8; 64];
+    let mut out = [0u8; 512];
+    let n = one_byte_req(&mut req, VENDOR_ATT_STATE);
+    let r = call(
+        &mut fs,
+        &mut rng,
+        &mut st,
+        &mut AlwaysConfirm,
+        &req[..n],
+        &mut out,
+    )
+    .unwrap();
+    // The answer, before the status word: the key is still reported present, and
+    // the chain hash — which this build cannot compute over a record it cannot
+    // hold — is OMITTED rather than published over a prefix.
+    let mut decoder = Decoder::new(&out[..r]);
+    assert_eq!(
+        decoder.map().unwrap(),
+        Some(1),
+        "no chain hash in the answer"
+    );
+    assert_eq!(decoder.u8().unwrap(), 1);
+    assert!(decoder.bool().unwrap(), "the attestation key is present");
+}

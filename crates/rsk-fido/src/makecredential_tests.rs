@@ -2708,3 +2708,26 @@ fn a_faulted_pin_probe_does_not_drop_the_makecredential_uv_gate() {
         "a faulted EF_PIN probe read as 'no PIN configured' and minted the credential"
     );
 }
+
+/// `Fs::read` answers the record's FULL length, so an `EF_EA_RPIDS` list written
+/// under a wider `MAX_EA_RPIDS` reads back longer than this build's buffer and
+/// `buf[..n]` panicked — inside `makeCredential`, before any response. Clamped
+/// rather than refused, and the direction is the whole argument: the entries this
+/// build can hold still match, the ones past its buffer cannot, so a narrowed
+/// allowlist only ever DECLINES type-1 enterprise attestation. Asserted both ways.
+#[test]
+fn an_ea_list_wider_than_this_build_matches_what_it_holds_and_declines_the_rest() {
+    let mut fs = Fs::new(RamStorage::new());
+    let held = sha256(b"held.example");
+    let past = sha256(b"past-the-buffer.example");
+    let mut list = [0u8; 32 * (MAX_EA_RPIDS + 1)];
+    list[..32].copy_from_slice(&held);
+    list[32 * MAX_EA_RPIDS..].copy_from_slice(&past);
+    fs.put(EF_EA_RPIDS, &list).unwrap();
+
+    assert!(rp_eligible_for_vendor_ea(&mut fs, &held));
+    assert!(
+        !rp_eligible_for_vendor_ea(&mut fs, &past),
+        "an entry past the buffer declines; it must never grant"
+    );
+}

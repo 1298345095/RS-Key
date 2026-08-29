@@ -444,7 +444,16 @@ fn att_clear<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {
 fn att_state<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, out: &mut [u8]) -> CtapResult {
     let mut chain = [0u8; cert::ATT_CHAIN_REC_MAX];
     let present = ctx.fs.has_key(EF_ATT_KEY);
-    let n = ctx.fs.read(EF_ATT_CHAIN, &mut chain).unwrap_or(0);
+    // `Fs::read` answers the record's FULL length, so `n` can exceed the buffer:
+    // `cert::ATT_CHAIN_MAX` is a `min3` whose response term moves with the message
+    // surface, and a key provisioned under a larger cap keeps its longer record.
+    // Refused rather than clamped — a hash of a prefix is a wrong answer wearing a
+    // right one — which is `makeCredential`'s reading of the same record.
+    let n = ctx
+        .fs
+        .read(EF_ATT_CHAIN, &mut chain)
+        .filter(|&n| n <= chain.len())
+        .unwrap_or(0);
     encode(out, |e| {
         e.map(if present && n > 0 { 2 } else { 1 })?
             .u8(1)?

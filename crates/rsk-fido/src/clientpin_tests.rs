@@ -2854,3 +2854,27 @@ fn a_faulted_force_change_clear_costs_one_more_pin_change_and_nothing_else() {
         "and it drops the flag alone, keeping the floor and the RP-id list"
     );
 }
+
+/// `Fs::read` answers the record's FULL length, and `EF_MINPINLEN` is
+/// `[min, force, hash*]` under a cap that has moved: a record written by a build
+/// with a wider `MAX_MIN_PIN_RPIDS` reads back longer than this build's buffer.
+/// `&buf[..n]` then panicked — on the changePIN path, AFTER `store_new_pin` has
+/// committed the new PIN, so the host never sees a status word at all.
+///
+/// The answer asserted here is about the DATA: the stored record is untouched,
+/// every RP id still in it. Clamping instead would have written it back shortened.
+#[test]
+fn a_min_pin_record_wider_than_this_build_is_left_whole_rather_than_truncated() {
+    let mut fs = Fs::new(RamStorage::new());
+    let mut oversized = [0xABu8; 2 + 32 * (MAX_MIN_PIN_RPIDS + 1)];
+    oversized[0] = 6;
+    oversized[1] = 1; // forceChangePin set, so the clear has work to do
+    fs.put(EF_MINPINLEN, &oversized).unwrap();
+
+    assert!(clear_force_change(&mut fs).is_ok());
+
+    let mut back = [0u8; 2 + 32 * (MAX_MIN_PIN_RPIDS + 2)];
+    let n = fs.read(EF_MINPINLEN, &mut back).unwrap();
+    assert_eq!(n, oversized.len(), "the record kept every RP id it had");
+    assert_eq!(&back[..n], &oversized[..], "and kept them unchanged");
+}

@@ -477,7 +477,10 @@ fn rp_eligible_for_vendor_ea<S: Storage>(fs: &mut Fs<S>, rp_id_hash: &[u8; 32]) 
         return true;
     }
     let mut buf = [0u8; 32 * MAX_EA_RPIDS];
-    let n = fs.read(EF_EA_RPIDS, &mut buf).unwrap_or(0);
+    // `Fs::read` answers the record's FULL length; a list written under a wider
+    // `MAX_EA_RPIDS` reads back longer than this buffer. Clamped rather than
+    // refused, because a shorter allowlist only ever DECLINES type-1 EA.
+    let n = fs.read(EF_EA_RPIDS, &mut buf).unwrap_or(0).min(buf.len());
     buf[..n].chunks_exact(32).any(|h| h == rp_id_hash)
 }
 

@@ -1014,8 +1014,13 @@ fn clear_force_change<S: Storage>(fs: &mut Fs<S>) -> Result<(), CtapError> {
     // restrictive answer — for one repeat changePIN, onto a third value (§6.5.5.6
     // refuses the current one). Measured: propagating instead reports a FAILED
     // change over the new PIN `store_new_pin` has already committed.
+    // `n <= buf.len()` because `Fs::read` answers the record's FULL length and a
+    // record written under a wider `MAX_MIN_PIN_RPIDS` outlives the narrowing.
+    // Skipped rather than clamped: `&buf[..buf.len()]` would write the record back
+    // shortened, dropping RP ids the owner set. Leaving the flag costs one more
+    // PIN change, which is the restrictive side this site already chose.
     if let Some(n) = fs.read(EF_MINPINLEN, &mut buf)
-        && n >= 2
+        && (2..=buf.len()).contains(&n)
         && buf[1] != 0
     {
         buf[1] = 0;

@@ -2248,6 +2248,28 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Security
 
+- **A record written by an earlier build faulted the firmware on an UNGATED
+  command.** `Fs::read` answers the record's FULL length — its own doc comment says
+  so — and three sites sliced `buf[..n]` with no clamp. The reachable one is
+  `ATT_STATE`, which takes no PIN, no touch and no channel: `cert::ATT_CHAIN_MAX` is
+  a `min3` over a store cap, a MAC cap and a CTAPHID response cap, and `ab8bcfc`
+  took it from **4069 to 2132** in this same unreleased series. A key provisioned
+  with an attestation chain under the old cap therefore holds an `EF_ATT_CHAIN`
+  record longer than the new build's 2141-byte buffer, and the first `ATT_STATE`
+  after the upgrade panicked — measured, `range end index 2142 out of range for
+  slice of length 2141`. `ATT_STATE` now reports the key present and OMITS the chain
+  hash it cannot compute, rather than publishing one over a prefix.
+
+  The other two are the same shape and not reachable on any build shipped so far,
+  because their writers cap what their readers hold: `clear_force_change` on the
+  changePIN path (a wider `MAX_MIN_PIN_RPIDS` record — the panic lands AFTER the new
+  PIN is committed, so no status word reaches the host; the record is now left whole
+  rather than written back shortened, which is what a clamp would have done), and
+  the type-1 enterprise-attestation allowlist (a wider `MAX_EA_RPIDS` list — clamped,
+  because a shorter allowlist only ever declines). `u2f.rs` already clamped this
+  record and its comment names the class; three siblings were missed. Every
+  `Fs::read`-then-slice site in the tree was re-swept: 15 sites, 12 already clamped.
+
 - **One faulted probe replayed the credential-store tag, and a platform holding the
   replayed value kept a stale cache.** `encCredStoreState` (getInfo `0x1E`) is a
   128-bit tag a platform compares for equality to decide whether to re-enumerate
