@@ -331,11 +331,34 @@ supports = ["SEC-FIDO-001", "SEC-FIDO-003"]
 [[assumption]]
 id = "PLAT-MODEL-010"
 class = "model-abstraction"
-statement = "`EF_MINPINLEN`'s `forceChangePin` byte IS a gate and IS missing from the model: `clientpin.rs` refuses `getPinToken` with `PinInvalid` and `getPinUvAuthTokenUsingUvWithPermissions` with `PinPolicyViolation` when it is set, AFTER the PIN has verified. `PinAttemptEnabled` and `PinAttemptPolicy` carry three conjuncts where the code has four, so a defect that waives the pending change is a live token the model cannot see — and one has shipped (bcd 0x09AE)."
-discharge = "Model it: one Boolean `gate.forceChange`, set by the config action, cleared by the change-PIN write, and conjoined into BOTH the guard and the policy — the module's own method for a gate. `BugForceChangeIgnored` dropping the guard conjunct must go RED on `NoAuthorizationBypass`, and the code twin already exists in the suite. Costed against the last thing added to this module rather than guessed — the token-less carve-out, whose before/after distinct states and wall clock `formal/runs.toml` and the generated regions of `formal/README.md` carry; a Boolean that PRUNES should cost strictly less than an action set that widens."
+statement = "`EF_MINPINLEN`'s `forceChangePin` byte IS a gate: `clientpin.rs` refuses `getPinToken` with `PinInvalid` and both permissions-based doors with `PinPolicyViolation` when it is set, AFTER the PIN has verified. `PinAttemptEnabled` and `PinAttemptPolicy` carried three conjuncts where the code has four, so a defect that waives the pending change was a live token the model could not see — and one has shipped (bcd 0x09AE)."
+discharge = "Modelled, and THREE of the four sentences the route this replaces wrote were wrong — each found by review, none by a gate. `gate.forceChange` is set by ConfigOp (config.rs:483 refuses it without a PIN) and cleared by changePIN. It is NOT cleared by setPIN: `store_new_pin` (clientpin.rs:945-969) touches no EF_MINPINLEN byte, and the route's `cleared by both PIN writes (store_new_pin, clientpin.rs:1260)` was wrong twice over — :1260 is inside `store_local_pin`, the panel flow, which this module has no action for. Setting the flag also ENDS the session token and the persistent grant (config.rs:500-503); the first model had them `UNCHANGED`, which is the shipped tree carrying its own defect at the third of three sibling sites. The route also promised the code twin `already exists in the suite`; it did not, and was built here (formal/comutants.toml [BugForceChangeIgnored], phase2_count 30 -> 31) and killed. What held: `BugForceChangeIgnored` drops the guard and goes RED on `NoAuthorizationBypass` at depth 8 in both configurations, and the counterexample is a token ISSUED over a standing gate, not a refusal wearing another code. ForceChange.cfg is GREEN over 106 956 959 states, 10 765 176 distinct, depth 46, 178 s."
 discharge_owner = "contributor"
-status = "pending"
+status = "discharged"
+evidence = ["formal/RSKeySecurityState.tla", "formal/ForceChange.cfg", "formal/comutants.toml"]
+revalidated_by = "a new reader or writer of EF_MINPINLEN[1]: the model carries the flag at the two get_pin_token doors, the changePIN clear and the reset sweep, and `git grep -n 'force_change_pending\\|clear_force_change' -- crates` is the list it is held to — a fourth site, or a second clear, unsettles it"
 failure_direction = "security: the model proves the authorization invariants over a state space with one gate fewer than the firmware has"
+# WHAT IS STILL NARROWER, said here rather than left to be discovered. (1) The
+# configurations the tiers are about run with `ForceChangeModelled = FALSE`, so
+# Shipped.cfg still explores the space without the flag — registered as a
+# coverage assumption with both arms run, not as an omission. (2) No clause names
+# the record, so a torn reset that drops it early is unobserved; `snap` has no
+# field for it, which is reset.rs:207-214's own admission one layer out. (3) The
+# changePIN refusal of the CURRENT PIN (clientpin.rs:294-303) is not modelled —
+# the module has no PIN VALUE to compare. (3b) The refusal is a DISABLED ACTION
+# here, where the firmware refuses only after the ladder has spent a try, read
+# the counter back and REFILLED it (clientpin.rs:740-816, pinned by
+# clientpin_tests.rs:1249-1251) — so a refused-but-verified getPinToken has two
+# EF_PIN writes in the code and no position at all in this model. (4) The
+# BUILT-IN UV door (`getPinUvAuthTokenUsingUvWithPermissions`,
+# clientpin.rs:493-495) carries the same refusal in the firmware and has no
+# action in this module at all — `grep -n builtin RSKeySecurityState.tla` finds
+# one comment and no transition — so the flag is modelled at the two
+# get_pin_token doors, the changePIN clear and the reset sweep, and the third
+# door is out of scope here rather than covered. (5) The PANEL's own clear
+# (clientpin.rs:1260) is the same kind of gap: `store_local_pin` has no action.
+covers = ["model:ForceChangeModelled"]
+discharges = ["ForceChangeModelled"]
 supports = ["SEC-FIDO-001", "SEC-FIDO-003"]
 
 [[assumption]]

@@ -54,6 +54,13 @@ AlwaysUv.cfg                         GREEN   7800000
 \* narrow arm of the same scope was measured at 9 472 044 in 142 s and is not a
 \* recorded row, so it is here rather than there.
 PermWide.cfg                         GREEN   7000000
+\* `ForceChangeModelled`'s other arm: EF_MINPINLEN[1], the forced-PIN-change
+\* flag, which the module did not carry at all until PLAT-MODEL-010 measured the
+\* gap. PermWide.cfg's constants for the same reason -- the question is the gate,
+\* not the ladder -- and alwaysUv ON because with no PIN there is nothing to
+\* pend. A third of the measured 11 977 584 distinct states is the floor, the
+\* same rule as its siblings.
+ForceChange.cfg                      GREEN   4000000
 Seams.cfg                            GREEN   200
 \* The flash layer (RSKeyStore): a small exhaustive space -- 364 distinct at
 \* depth 6 -- so its floor is set near a third, the same rule as its siblings.

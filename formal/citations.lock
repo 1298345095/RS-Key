@@ -345,26 +345,35 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	35-35	pub(crate) 
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	188-190	if ctx.fs.try_has_data(EF_PIN).map_err(|_| CtapError::Other)? {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	217-221	// No PIN was set, so no `pcmr` grant can be outstanding — except one a build	let res = store_new_pin(ctx, &padded);
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	240-281	// An over-long padded new PIN is a policy violation (see `set_pin`).	// The verify migrated any legacy PIN-wrapped seed; the seed itself is
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	294-303	if force_change_pending(ctx) {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	305-309	// verifier lands: a power cut the other way round would leave the old holder's	let res = store_new_pin(ctx, &padded);
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	310-310	padded.zeroize();	padded.zeroize();
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	314-314	clear_force_change(ctx.fs)?;	clear_force_change(ctx.fs)?;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	316-316	ctx.state.needs_power_cycle = false;	ctx.state.needs_power_cycle = false;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	321-398	fn get_pin_token<S: Storage, R: Rng>(	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	346-349	if ctx.state.needs_power_cycle {	let mut shared = [0u8; 64];
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	380-386	if force_change_pending(ctx) {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	391-395	PERM_MC | PERM_GA	let res = issue_token(ctx, proto, secret, permissions, req.rp_id, out);
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	414-419	// persistent token and stops there — it neither mints nor begins using a	} else {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	421-434	// §6.5.5.7.3 steps 13/14 are an either/or, and their Note says which one	ctx.state.paut.token
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	493-495	if force_change_pending(ctx) {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	742-742	return Err(CtapError::PinBlocked);	return Err(CtapError::PinBlocked);
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	745-811	ctx.fs	// one-shot at-rest lap has already run by now, so re-arm it or that copy stays
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	778-778	// A YubiKey 5.7.4 drops any outstanding pinUvAuthToken here too, through	// A YubiKey 5.7.4 drops any outstanding pinUvAuthToken here too, through
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	786-786	if retries == 0 {	if retries == 0 {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	787-792	// The transition into the hard lockout (later attempts are turned	ctx.state.new_pin_mismatches += 1;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	805-806	ctx.state.new_pin_mismatches = 0;	ctx.fs
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	945-969	fn store_new_pin<S: Storage, R: Rng>(	ctx.state.needs_power_cycle = false;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1118-1122	/// at zero is a hard block — but deliberately omits the CTAP-session side effects	/// opens no faster path to grind the PIN than USB already does. The caller
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1124-1130	pub fn spend_and_verify_local_pin<S: Storage>(	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1158-1160	return LocalPin::Blocked;	if n != PIN_FILE_LEN || pin_data[0] == 0 {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	1260-1260	let _ = clear_force_change(fs);	let _ = clear_force_change(fs);
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	244-244	|| ctx.state.paut.permissions & PERM_ACFG == 0	|| ctx.state.paut.permissions & PERM_ACFG == 0
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	427-428	.map_err(|_| CtapError::Other)?;	ctx.state.clear_keydev_dec();
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	483-483	if force_change && !pin_set {	if force_change && !pin_set {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	483-503	if force_change && !pin_set {	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/config.rs	500-503	if force {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/consts.rs	397-397	/// display honors a reset only this long after power-up, so the wipe takes a	/// display honors a reset only this long after power-up, so the wipe takes a
@@ -408,6 +417,7 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	124-128	return if com
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	145-149	/// The two flash shapes of the device seed: the plain record, and the soft lock's	pub const FIDO_SEED_FIDS: [u16; 2] = [EF_KEY_DEV.get(), EF_KEY_DEV_ENC.get()];
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	182-225	/// The FIDO records that *gate* the applet rather than being the secret itself.	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	187-224	/// `EF_BACKUP_SEALED` is a gate of the same shape as OATH's access code: it is	)
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	223-223	EF_PIN | EF_DEVICE_PIN | EF_ALWAYS_UV | EF_MINPINLEN | EF_BACKUP_SEALED	EF_PIN | EF_DEVICE_PIN | EF_ALWAYS_UV | EF_MINPINLEN | EF_BACKUP_SEALED
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	227-232	/// CTAP 2.1 §6.6: a reset is honored only within [`RESET_WINDOW_MS`] of power-up,	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	231-232	fn in_reset_window<S: Storage, R: Rng>(ctx: &Ctx<S, R>) -> bool {	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
@@ -490,6 +500,9 @@ formal/TraceSecurity.tla	crates/rsk-fido/src/clientpin.rs	612-612	ctx.presence.u
 formal/TraceSecurity.tla	crates/rsk-fido/src/config.rs	315-315	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
 formal/TraceSecurity.tla	crates/rsk-fido/src/makecredential.rs	533-551	let always_uv = crate::config::always_uv_enabled(ctx.fs);	Ok(UvOutcome::NONE)
 formal/TraceSecurity.tla	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/comutants.toml	crates/rsk-fido/src/clientpin.rs	493-495	if force_change_pending(ctx) {	}
+formal/comutants.toml	crates/rsk-fido/src/clientpin_tests.rs	1239-1239	assert_eq!(	assert_eq!(
+formal/comutants.toml	crates/rsk-fido/src/clientpin_tests.rs	1303-1303	assert_eq!(	assert_eq!(
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	542-544	if always_uv {	}
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	548-550	if pin_set && req.rk {	}
 formal/comutants.toml	crates/rsk-fs/src/fs.rs	752-752	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;

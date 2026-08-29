@@ -32,7 +32,7 @@ pending_floor = 0
 # 28 until the token-less makeCredential bridge. The count is an EQUALITY and not
 # a floor, so it moves only with the `Mut_*` roster itself — the two additions are
 # BugUvNotRqdIgnoresRk and BugTokenlessIgnoresAlwaysUv, batch 6 below.
-phase2_count = 30
+phase2_count = 31
 
 # ---- batch 1: the token/PIN family and the two write orders -----------------
 
@@ -1444,3 +1444,23 @@ replace = """
 slice = ["cargo", "test", "-p", "rsk-fido"]
 expect = "killed"
 note = "the other half, §6.1.2 steps 6.2/6.4: alwaysUv with no way to verify refuses whatever `rk` says. Dropped, a token-less request falls through to `Ok(UvOutcome::NONE)` and alwaysUv is served on the touch alone. `crates/rsk-fido/src/makecredential.rs:542-544`. Two switches and not one because a single widened guard cannot say which half was load-bearing — the same split TraceSecurity draws with MutateUvNotRqd / MutateAlwaysUvArm. Two host tests fall, both reporting `Ok(802)` against `Err(PuatRequired)`, so this one is served and not merely mis-refused either."
+
+# ---- batch 7: the gate the module did not carry ----------------------------
+
+[comutant.BugForceChangeIgnored]
+status = "patch"
+file = "crates/rsk-fido/src/clientpin.rs"
+find = """
+    if force_change_pending(ctx) {
+        return Err(if req.subcommand == CP_GET_PIN_TOKEN {
+            CtapError::PinInvalid
+        } else {
+            CtapError::PinPolicyViolation
+        });
+    }
+"""
+replace = """
+"""
+slice = ["cargo", "test", "-p", "rsk-fido"]
+expect = "killed"
+note = "EF_MINPINLEN[1], and the only mutant here whose MODEL half had to be built before the code half could be compared: `RSKeySecurityState` carried three conjuncts where `clientpin.rs` has four, so until `gate.forceChange` existed there was nothing for this patch to be the twin of (PLAT-MODEL-010). The direction was read at both levels rather than taken from the colour. TLC: setPIN, a token with `acfg`, ConfigOp sets the flag, and GetPinToken fires AGAIN at depth 8 — a token ISSUED over a standing gate, not a refusal wearing another code. The host tests fall the same way and were read rather than counted: FOUR fall, and both named ones report `Ok(52)` — a 52-byte token response SERVED — against `Err(PinInvalid)` (`forced_pin_change_blocks_tokens_until_change_pin`, crates/rsk-fido/src/clientpin_tests.rs:1239) and `Err(PinPolicyViolation)` (`forced_pin_change_0x09_is_policy_violation`, crates/rsk-fido/src/clientpin_tests.rs:1303). The other two are the faulted-probe twins of the same door. The UV door at crates/rsk-fido/src/clientpin.rs:493-495 is a SECOND site this patch leaves standing, so the kill is attributed to the PIN doors alone."

@@ -25,7 +25,8 @@ BUGS=(BugResetGatesFirst BugCredBeforeRp BugTokenSurvivesPinChange
       BugPanelCancelable BugUnscopedOtpCancel BugLocalPinKeepsToken
       BugSetPinOverExisting BugHostPreemptsLocalWait BugLocalPinIgnoresBudget
       BugPpuatIsAGate BugPinWriteBeforeRevoke
-      BugUvNotRqdIgnoresRk BugTokenlessIgnoresAlwaysUv)
+      BugUvNotRqdIgnoresRk BugTokenlessIgnoresAlwaysUv
+      BugForceChangeIgnored)
 
 # Mutants whose defect the shipped seed-lead makes unreachable: they rebuild a
 # pre-0x08BF ordering bug, so their configuration must be the pre-0x08BF tree.
@@ -79,6 +80,7 @@ target_inv() {
     # was ever issued, so neither is NoTokenAfterInvalidation.
     BugUvNotRqdIgnoresRk)       echo NoAuthorizationBypass ;;
     BugTokenlessIgnoresAlwaysUv) echo NoAuthorizationBypass ;;
+    BugForceChangeIgnored)      echo NoAuthorizationBypass ;;
   esac
 }
 
@@ -154,6 +156,9 @@ emit() { # $1 = cfg, $2 = bug switch (""), $3 = sweep fix, $4 = ppuat fix
     echo "    ResetWindow = 0"
     echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     echo "    WidePerms = ${wide:-FALSE}"
+    if [ "$on" = BugForceChangeIgnored ] || [ "${force_ch:-}" = TRUE ]
+    then echo "    ForceChangeModelled = TRUE"
+    else echo "    ForceChangeModelled = FALSE"; fi
     for b in "${BUGS[@]}"; do
       if [ "$b" = "$on" ] || { [ -n "$on" ] && [ "$b" = "$(companion_bug "$on")" ]; }
       then echo "    $b = TRUE"; else echo "    $b = FALSE"; fi
@@ -205,6 +210,17 @@ ship_auv=TRUE retries=2 mism=1 emit AlwaysUv.cfg "" FALSE TRUE
 # recorded row and cost 493 s.
 wide=TRUE ship_auv=TRUE retries=2 mism=1 rps='{r1}' chans='{c1, c2}' \
   emit PermWide.cfg "" FALSE TRUE
+# EF_MINPINLEN[1] -- the gate PLAT-MODEL-010 measured missing. Its own pair for
+# the same reason `WidePerms` has one: the flag is reachable from every PIN-set
+# state, so carrying it in Shipped.cfg would be a second copy of the space that
+# configuration's row in formal/README.md already pays for. The constants are
+# PermWide.cfg's. alwaysUv is ON to keep the pair comparable with that arm and
+# for no reason of this gate's own -- `AlwaysUvShipped` does not decide whether a
+# PIN exists, and an earlier draft of this comment claimed it did. The mutant
+# drops the guard and must go RED on NoAuthorizationBypass -- a token issued over
+# a gate the firmware holds.
+force_ch=TRUE ship_auv=TRUE retries=2 mism=1 rps='{r1}' chans='{c1, c2}' \
+  emit ForceChange.cfg "" FALSE TRUE
 # The two findings this model produced, kept as regression configurations rather
 # than deleted: each is the tree with exactly the shipped fix taken back out.
 emit Historical_E76.cfg BugSeedDoesNotLead FALSE TRUE
@@ -269,6 +285,7 @@ emit_live() { # $1 = cfg, $2 = liveness bug switch (""), $3 = "full" for the
     echo "    ResetWindow = 0"
     echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     echo "    WidePerms = FALSE"
+    echo "    ForceChangeModelled = FALSE"
     for b in "${BUGS[@]}"; do echo "    $b = FALSE"; done
     for b in "${LIVE_BUGS[@]}" "${SHAPE_BUGS[@]}"; do
       if [ "$b" = "$on" ]; then echo "    $b = TRUE"; else echo "    $b = FALSE"; fi
@@ -300,6 +317,7 @@ emit_shape() { # $1 = cfg, $2 = switch ("")
     echo "    ResetWindow = 0"
     echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     echo "    WidePerms = FALSE"
+    echo "    ForceChangeModelled = FALSE"
     for b in "${BUGS[@]}" "${LIVE_BUGS[@]}"; do echo "    $b = FALSE"; done
     for b in "${SHAPE_BUGS[@]}"; do
       if [ "$b" = "$on" ]; then echo "    $b = TRUE"; else echo "    $b = FALSE"; fi
@@ -782,6 +800,7 @@ emit_security_trace() { # cfg, beta, alpha, outcome, R4b, uvNotRqd, resetWindow,
     echo "    ResetWindow = 0"
     echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     echo "    WidePerms = FALSE"
+    echo "    ForceChangeModelled = FALSE"
     for b in "${BUGS[@]}" "${LIVE_BUGS[@]}" "${SHAPE_BUGS[@]}"; do
       echo "    $b = FALSE"
     done
@@ -842,6 +861,7 @@ emit_token_refinement() { # cfg, gamma mutant, outcome mutant, state|outcome
     echo "    ResetWindow = 0"
     echo "    AlwaysUvShipped = ${ship_auv:-FALSE}"
     echo "    WidePerms = FALSE"
+    echo "    ForceChangeModelled = FALSE"
     for b in "${BUGS[@]}" "${LIVE_BUGS[@]}" "${SHAPE_BUGS[@]}"; do
       echo "    $b = FALSE"
     done

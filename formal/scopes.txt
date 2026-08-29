@@ -91,8 +91,11 @@ TraceSecurity          AlwaysUvShipped        -   -
 \* arms differ by, and it is 5 against 16. Listed so a reader of the scope
 \* record is not left thinking a minimum was measured for it.
 RSKeySecurityState     WidePerms              -   -
+RSKeySecurityState     ForceChangeModelled    -   -
 RSKeyTokenRefinement   WidePerms              -   -
+RSKeyTokenRefinement   ForceChangeModelled    -   -
 TraceSecurity          WidePerms              -   -
+TraceSecurity          ForceChangeModelled    -   -
 
 \* --- tiers whose properties these minima were not measured against ----------
 \* The refinement tier runs the smallest scope that still has a token; the trace

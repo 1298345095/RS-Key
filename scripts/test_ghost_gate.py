@@ -291,12 +291,20 @@ def test_a_route_two_calls_out_from_an_action_is_inherited(tmp_path):
     root = tree(tmp_path)
     path = root / ghost_gate.MODULE
     text = path.read_text()
+    # Both anchors are ASSERTED, not hoped for: the first was
+    # `PinAttempt(correct) ==` and stopped matching the day the definition took a
+    # second parameter — `str.replace` returns the string unchanged, so the case
+    # went on running against a fixture it had not patched and failed two edits
+    # later with a KeyError that said nothing about why.
+    anchor = "PinAttempt(correct, policy) =="
+    assert text.count(anchor) == 1, anchor
     text = text.replace(
-        "PinAttempt(correct) ==",
+        anchor,
         'InnerLeak ==\n    viol\' = viol \\cup {"NoAuthorizationBypass"}\n\n'
-        "OuterLeak ==\n    InnerLeak\n\nPinAttempt(correct) ==",
+        "OuterLeak ==\n    InnerLeak\n\n" + anchor,
         1,
     )
+    assert text.count("StopUsingToken ==\n") == 1
     text = text.replace("StopUsingToken ==\n", "StopUsingToken ==\n    /\\ OuterLeak\n", 1)
     path.write_text(text)
     assert "InnerLeak/literal" in ghost_gate.derive(root)["StopUsingToken"]["routes"]

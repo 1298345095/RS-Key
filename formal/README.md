@@ -687,32 +687,33 @@ a nineteenth field stops the crate compiling — driven, and the compiler answer
 | 4 | `BugConsumeKeepsMcGa` | `NoAuthorizationBypass` | RED | **co-refuted** |
 | 5 | `BugCredBeforeRp` | `NoUnmanageableCredential` | RED | **co-refuted** |
 | 6 | `BugDeleteRpBeforeCred` | `NoUnmanageableCredential` | RED | **co-refuted** |
-| 7 | `BugHostPreemptsLocalWait` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 8 | `BugLocalPinIgnoresBudget` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 9 | `BugLocalPinKeepsToken` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
-| 10 | `BugNoConsumeAfterUp` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 11 | `BugNoDropStaleCancelAtEntry` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
-| 12 | `BugNoTouchRequired` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 13 | `BugPanelCancelable` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
-| 14 | `BugPinWriteBeforeRevoke` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
-| 15 | `BugPpuatIsAGate` | `NoAccessibleSecretWithoutGate` | RED | **co-refuted** |
-| 16 | `BugResetGatesFirst` | `ResetNeverWeakensSurvivingState` | RED | **co-refuted** |
-| 17 | `BugSeedDoesNotLead` | `NoUnmanageableCredential` | RED | **co-refuted** |
-| 18 | `BugSetPinKeepsPpuat` | `NoTokenAfterInvalidation` | RED | **unreachable** |
-| 19 | `BugSetPinOverExisting` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 20 | `BugSoftLockLostOnWarmReset` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 21 | `BugStateResetAfterWipe` | `ResetNeverWeakensSurvivingState` | RED | **co-refuted** |
-| 22 | `BugStopUsingKeepsPerms` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
-| 23 | `BugTokenSurvivesPinChange` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
-| 24 | `BugTokenlessIgnoresAlwaysUv` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 25 | `BugTouchNotSpent` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
-| 26 | `BugUnscopedCancel` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
-| 27 | `BugUnscopedOtpCancel` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
-| 28 | `BugUvNotRqdIgnoresRk` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 29 | `BugWarmResetReopensWindow` | `NoAuthorizationBypass` | RED | **co-refuted** |
-| 30 | `BugWrongPinKeepsToken` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
+| 7 | `BugForceChangeIgnored` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 8 | `BugHostPreemptsLocalWait` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 9 | `BugLocalPinIgnoresBudget` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 10 | `BugLocalPinKeepsToken` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
+| 11 | `BugNoConsumeAfterUp` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 12 | `BugNoDropStaleCancelAtEntry` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
+| 13 | `BugNoTouchRequired` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 14 | `BugPanelCancelable` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
+| 15 | `BugPinWriteBeforeRevoke` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
+| 16 | `BugPpuatIsAGate` | `NoAccessibleSecretWithoutGate` | RED | **co-refuted** |
+| 17 | `BugResetGatesFirst` | `ResetNeverWeakensSurvivingState` | RED | **co-refuted** |
+| 18 | `BugSeedDoesNotLead` | `NoUnmanageableCredential` | RED | **co-refuted** |
+| 19 | `BugSetPinKeepsPpuat` | `NoTokenAfterInvalidation` | RED | **unreachable** |
+| 20 | `BugSetPinOverExisting` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 21 | `BugSoftLockLostOnWarmReset` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 22 | `BugStateResetAfterWipe` | `ResetNeverWeakensSurvivingState` | RED | **co-refuted** |
+| 23 | `BugStopUsingKeepsPerms` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
+| 24 | `BugTokenSurvivesPinChange` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
+| 25 | `BugTokenlessIgnoresAlwaysUv` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 26 | `BugTouchNotSpent` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
+| 27 | `BugUnscopedCancel` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
+| 28 | `BugUnscopedOtpCancel` | `NoCrossTransportTouchConsumption` | RED | **co-refuted** |
+| 29 | `BugUvNotRqdIgnoresRk` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 30 | `BugWarmResetReopensWindow` | `NoAuthorizationBypass` | RED | **co-refuted** |
+| 31 | `BugWrongPinKeepsToken` | `NoTokenAfterInvalidation` | RED | **co-refuted** |
 
-**Measured phase-2 fidelity:** 28/30 code-level kills; 2 unreachable by construction; 0 open gaps; 0 pending.
+**Measured phase-2 fidelity:** 29/31 code-level kills; 2 unreachable by construction; 0 open gaps; 0 pending.
 <!-- phase2-comutants:end -->
 
 That last one is not a formality. `NoAccessibleSecretWithoutGate` was repaired
@@ -2510,7 +2511,7 @@ memory at the 4 GB default *after* its state search completes, which had left
 `./run-tlc.sh all` reporting a red row for a property that is true.
 
 **5. The configurations against their generator** (`scripts/config_gen_gate.py`,
-the `generated TLC configs` row). 204 of the 205 `.cfg` files open with
+the `generated TLC configs` row). 207 of the 208 `.cfg` files open with
 "Generated by formal/gen-configs.sh -- do not edit by hand", and until that row
 nothing made the sentence true. Two edits were silent, and the first was
 measured by a reviewer, not imagined: **delete all three
@@ -2526,7 +2527,7 @@ describes. Falsified through the row itself, exit codes taken with no pipe:
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `204 generated configuration(s) reproduce byte-for-byte, 1 hand-written` | 0 |
+| the tree as it stands | `207 generated configuration(s) reproduce byte-for-byte, 1 hand-written` | 0 |
 | one `BootCarryMut_*.cfg` deleted | `… writes it and formal/ does not have it` | **1** |
 | `MaxWeak = 2` → `1` inside one generated file | `differs … line 5: generator writes '    MaxWeak = 2', the tree has '    MaxWeak = 1'` | **1** |
 | the same edit made in the *generator* instead | 13 rows `differs …` — every `Boot*` configuration | **1** |
@@ -2638,7 +2639,7 @@ to itself.
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `204 configuration(s) held to 61 entries (25 wildcard families covering 168), 6 ratchets, 1 exempt` | 0 |
+| the tree as it stands | `207 configuration(s) held to 62 entries (25 wildcard families covering 170), 6 ratchets, 1 exempt` | 0 |
 | `SeamMut_*.cfg` `RED` → `GREEN` | `… requires GREEN, but the configuration switches BugAdminOpensKeyOps on and so owes RED` | **1** |
 | the `SeamSolo_*.cfg` row deleted | `no verdict entry in formal/floors.txt and no registered exemption` | **1** |
 | a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 14 configuration(s) first `` | **1** |
@@ -2784,7 +2785,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-REF-004` | `R4bEventConsensus` | MODELLED-ONLY | `TraceSecurity` | — | 0 | 0 | 0 | 0 | 0 | 0 |
 | `SEC-REF-005` | `NoAuthorizationBypassA` | MODELLED-ONLY | `RSKeyTokenGate` | — | 0 | 0 | 0 | 0 | 0 | 0 |
 | `SEC-REF-006` | `RequiredGateAgreesWithRelation` | MODELLED-ONLY | `RSKeyTokenGate` | — | 0 | 0 | 0 | 0 | 0 | 0 |
-| `SEC-FIDO-001` | `NoAuthorizationBypass` | BOUNDED | `RSKeySecurityState` | — | 2 | 11 | 11 | 4 | 0 | 0 |
+| `SEC-FIDO-001` | `NoAuthorizationBypass` | BOUNDED | `RSKeySecurityState` | — | 2 | 12 | 12 | 4 | 0 | 0 |
 | `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | BOUNDED | `RSKeySecurityState` | — | 2 | 5 | 5 | 2 | 0 | 0 |
 | `SEC-FIDO-003` | `NoTokenAfterInvalidation` | BOUNDED | `RSKeySecurityState` | — | 3 | 7 | 6 | 2 | 1 | 0 |
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | MODELLED-ONLY | `RSKeySecurityState` | `RSKeyStore` | 2 | 2 | 2 | 0 | 0 | 0 |

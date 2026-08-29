@@ -47,3 +47,14 @@ discharged_by = "Both arms run. FALSE in every configuration the tiers are about
 # why the arm exists rather than an argument, and why it is a separate
 # configuration: measured, widening Shipped.cfg's own scope costs x4.16 wall.
 risk = "coverage"
+
+[[assumption]]
+constant = "ForceChangeModelled"
+statement = "`gate.forceChange` — EF_MINPINLEN[1], the forced-PIN-change flag — is a gate the module can leave out of the configurations the tiers are about, because a state it can only PRUNE reaches no violation the tiers would otherwise see."
+discharged_by = "Both arms run. FALSE in every configuration the tiers are about, TRUE in ForceChange.cfg — which sets the flag from authenticatorConfig and checks the whole invariant set — and in the two configurations of `BugForceChangeIgnored`, whose defect is unreachable on the FALSE arm by construction. The FALSE arm is an ARGUMENT and is written as one: adding a record field that is constant FALSE for a whole run is a bijection on reachable states, so the arm can add no behaviour. The argument is then CHECKED, and not by this sentence: the safety tier re-run after the constant landed carries the same states, the same distinct count and the same depth for `Shipped.cfg`, `AlwaysUv.cfg` and `PermWide.cfg` as the record taken before it existed. Those numbers live in `formal/runs.toml` and in the generated results table, which is where they are read off — an earlier draft of this sentence claimed the measurement in the past tense before any run had finished, and a review caught it by comparing file times. PLAT-MODEL-010 is the row this closes: `crates/rsk-fido/src/clientpin.rs:380-386` refuses token issuance after the PIN has verified, and the module carried three conjuncts where the code has four."
+# Which way it fails: COVERAGE. The flag only ever DISABLES an issuing door, so a
+# configuration that cannot set it explores a superset of the token-issuing
+# behaviours -- it can hide no break, only pay for states that prove nothing. The
+# arm exists rather than an argument because the flag is reachable from every
+# PIN-set state, and Shipped.cfg already pays 77 563 872 distinct states.
+risk = "coverage"

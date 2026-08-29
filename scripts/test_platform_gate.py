@@ -271,6 +271,7 @@ def test_the_checkout_derives_what_it_is_measured_at():
         "model:PowerOnClearsScratch2",
         "model:AlwaysUvShipped",
         "model:WidePerms",
+        "model:ForceChangeModelled",
     }, kinds["model"]
     assert len(kinds["slice"]) >= 8, kinds["slice"]
     assert len(kinds["unsafe"]) >= 7, kinds["unsafe"]

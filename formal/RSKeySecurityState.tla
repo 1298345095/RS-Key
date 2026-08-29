@@ -43,7 +43,16 @@ CONSTANTS
     \* A SCOPE, and the other arm of an assumption that was argued and never run.
     \* Registered in assurance/assumptions.toml; FALSE everywhere the tiers are
     \* about, TRUE in PermWide.cfg alone. See PermSets.
-    WidePerms
+    WidePerms,
+    \* THE SECOND SCOPE OF THE SAME SHAPE. `gate.forceChange` is EF_MINPINLEN[1],
+    \* a gate the module did not carry at all (PLAT-MODEL-010). FALSE leaves the
+    \* flag FALSE for a whole run, so every configuration the tiers are about
+    \* explores the state space it explored before. TRUE in ForceChange.cfg and in
+    \* the two configurations of BugForceChangeIgnored, on the PermWide.cfg
+    \* precedent: a gate reachable from every PIN-set state is a second copy of
+    \* the space Shipped.cfg already pays for, and that count belongs to a
+    \* generated region rather than to this comment.
+    ForceChangeModelled
 
 (* Mutation switches. All FALSE is the shipped tree. Each rebuilds one real  *)
 (* defect; `formal/README.md` maps every switch to its commit or audit id.   *)
@@ -82,7 +91,8 @@ CONSTANTS
     \* names which half was load-bearing -- the split TraceSecurity's own
     \* MutateUvNotRqd / MutateAlwaysUvArm already make one layer out.
     BugUvNotRqdIgnoresRk,         \* makecredential.rs:548-550 makeCredUvNotRqd
-    BugTokenlessIgnoresAlwaysUv   \* makecredential.rs:542-544 the alwaysUv arm
+    BugTokenlessIgnoresAlwaysUv,  \* makecredential.rs:542-544 the alwaysUv arm
+    BugForceChangeIgnored         \* clientpin.rs:380-386
 
 (* Mutation switches for the LIVENESS properties. Kept apart from the set above *)
 (* because they break no invariant -- a wedge is a perfectly safe state -- so    *)
@@ -179,7 +189,8 @@ InvNames == { "NoAuthorizationBypass",
 
 VARIABLES
     pin,    \* EF_PIN:  [set, retries, everSet]                (clientpin.rs:35)
-    \* The gate records: [ppuat, ppuatStale, alwaysUv, backupSealed].
+    \* The gate records: [ppuat, ppuatStale, alwaysUv, backupSealed,
+    \* forceChange].
     \* `backupSealed` is EF_BACKUP_SEALED and it runs the other way round from
     \* the rest: its ABSENCE is the permissive state (reset.rs:187-224), so what
     \* a torn wipe can re-open is a window the owner had closed.
@@ -237,7 +248,7 @@ NoSnap == [seen |-> FALSE, pin |-> FALSE, auv |-> FALSE, surv |-> {},
 TypeOK ==
     /\ pin   \in [set: BOOLEAN, retries: 0..MaxRetries, everSet: BOOLEAN]
     /\ gate  \in [ppuat: BOOLEAN, ppuatStale: BOOLEAN, alwaysUv: BOOLEAN,
-                  backupSealed: BOOLEAN]
+                  backupSealed: BOOLEAN, forceChange: BOOLEAN]
     /\ store \in [cred: SUBSET RPs, rpent: SUBSET RPs, seed: BOOLEAN]
     /\ lock  \in [soft: BOOLEAN, mism: 0..MismatchLimit,
                   policyMism: 0..MismatchLimit]
@@ -262,7 +273,8 @@ Init ==
     \* alwaysUv's COMPILED default, not a state choice: `--features always-uv`
     \* is what the device comes up on and what a reset restores it to.
     /\ gate  = [ppuat |-> FALSE, ppuatStale |-> FALSE,
-                alwaysUv |-> AlwaysUvShipped, backupSealed |-> FALSE]
+                alwaysUv |-> AlwaysUvShipped, backupSealed |-> FALSE,
+                forceChange |-> FALSE]
     /\ store = [cred |-> {}, rpent |-> {}, seed |-> TRUE]
     /\ lock  = [soft |-> FALSE, mism |-> 0, policyMism |-> 0]
     /\ tok   = [live |-> FALSE, perms |-> {}, rp |-> NoRp]
@@ -630,11 +642,35 @@ PinAttemptEnabled == pin.set /\ pin.retries > 0 /\ ~lock.soft
 \* reset -- which is the whole point of ctap.rs:354-361.
 PinAttemptPolicy == pin.set /\ pin.retries > 0 /\ lock.policyMism < MismatchLimit
 
+\* EF_MINPINLEN[1], the forced-PIN-change flag, and it is a GATE: while it stands
+\* all three token doors refuse AFTER the PIN has verified. Two are this module's
+\* -- both subcommands of get_pin_token, clientpin.rs:380-386 -- and the third is
+\* the built-in-UV door at crates/rsk-fido/src/clientpin.rs:493-495, which has no
+\* action here at all, so neither the guard nor its switch models it.
+\*
+\* WHO CLEARS IT, read rather than assumed. changePIN does (clientpin.rs:314) and
+\* the PANEL's own set/change does (clientpin.rs:1260, inside store_local_pin --
+\* a flow this module has no action for). The host setPIN does NOT: store_new_pin
+\* touches no EF_MINPINLEN byte, so a PIN established over a standing flag leaves
+\* it standing. A first draft cleared it in SetPinWrite, which was a transition
+\* with no code behind it, and review found that, not a gate.
+\*
+\* setMinPINLength sets it over a PIN that exists and, in the SAME branch, ends
+\* the session token and the persistent grant (config.rs:483-503). The module
+\* carried three conjuncts where the code has four until PLAT-MODEL-010 measured
+\* the gap, and a defect that waives the pending change is a live token.
+TokenIssuanceGuard  == IF BugForceChangeIgnored THEN TRUE ELSE ~gate.forceChange
+TokenIssuancePolicy == ~gate.forceChange
+
 \* clientpin.rs:745-811. The lockout ladder: spend, read back, compare.
-PinAttempt(correct) ==
+\* `policy` is the SECOND refusal, and it belongs to the issuing doors rather
+\* than to the ladder: the forced-change check runs after the verify, costs no
+\* retry, and the change door -- which is how the flag is cleared -- must not
+\* carry it. Folding it into PinAttemptPolicy would refuse the only way out.
+PinAttempt(correct, policy) ==
     /\ Idle
     /\ PinAttemptEnabled
-    /\ viol' = IF PinAttemptPolicy THEN viol
+    /\ viol' = IF PinAttemptPolicy /\ policy THEN viol
                                    ELSE viol \cup {"NoAuthorizationBypass"}
     /\ IF correct
          THEN \* clientpin.rs:805-806 reset the budget and the mismatch batch.
@@ -656,7 +692,8 @@ PinAttempt(correct) ==
 \* session token (clientpin.rs:421-434) and resets the credMgmt cursor
 \* (state.rs:525-539).
 GetPinToken(ps, r) ==
-    /\ PinAttempt(TRUE)
+    /\ PinAttempt(TRUE, TokenIssuancePolicy)
+    /\ TokenIssuanceGuard
     /\ ps \in PermSets
     /\ r \in RPs \cup {NoRp}
     /\ tok'  = [live |-> TRUE, perms |-> ps, rp |-> r]
@@ -671,7 +708,7 @@ GetPinToken(ps, r) ==
 \* model used to say the token was untouched here, which is the tree as it stood
 \* BEFORE that landed; BugWrongPinKeepsToken is that tree.
 WrongPin ==
-    /\ PinAttempt(FALSE)
+    /\ PinAttempt(FALSE, TRUE)
     /\ tok'  = IF BugWrongPinKeepsToken
                  THEN tok ELSE [live |-> FALSE, perms |-> {}, rp |-> NoRp]
     /\ plat' = [plat EXCEPT !.verifies = IF BugWrongPinKeepsToken
@@ -687,7 +724,8 @@ WrongPin ==
 \* token, a flash record that outlives the power cycle (clientpin.rs:414-419,
 \* seed.rs:302-313). Holding it IS the grant (credmgmt.rs:249-266).
 MintPpuat ==
-    /\ PinAttempt(TRUE)
+    /\ PinAttempt(TRUE, TokenIssuancePolicy)
+    /\ TokenIssuanceGuard
     /\ gate' = [gate EXCEPT !.ppuat = TRUE, !.ppuatStale = FALSE]
     /\ UNCHANGED << store, tok, plat, pres, walk, sys, op, snap, upSpent,
                     ram >>
@@ -808,12 +846,16 @@ SetPinWrite ==
                                           ELSE viol \cup {"NoTokenAfterInvalidation"}
     /\ pin' = [set |-> TRUE, retries |-> MaxRetries, everSet |-> TRUE]
     /\ lock' = [lock EXCEPT !.soft = FALSE, !.mism = 0, !.policyMism = 0]
+    \* AND IT DOES NOT CLEAR THE FORCED-CHANGE FLAG. `store_new_pin`
+    \* (clientpin.rs:945-969) touches no EF_MINPINLEN byte and `set_pin` does not
+    \* either, so a PIN established over a standing flag leaves it standing --
+    \* changePIN is the only host way out. A first draft cleared it here.
     /\ op' = IF BugPinWriteBeforeRevoke THEN [op EXCEPT !.step = 1] ELSE NoOp
     /\ snap' = NoSnap
     /\ UNCHANGED << gate, store, tok, plat, pres, walk, sys, upSpent, ram >>
 
 ChangePinStart == \* clientpin.rs:240-281: gates, then spend-and-verify.
-    /\ PinAttempt(TRUE)
+    /\ PinAttempt(TRUE, TRUE)
     /\ op' = [kind |-> "chpin", t |-> Fido, rp |-> NoRp, step |-> 0]
     /\ UNCHANGED << gate, store, tok, plat, pres, walk, sys, snap, upSpent,
                     ram >>
@@ -838,9 +880,13 @@ ChangePinWrite == \* clientpin.rs:310 store_new_pin
                                           ELSE viol \cup {"NoTokenAfterInvalidation"}
     /\ pin' = [pin EXCEPT !.retries = MaxRetries, !.everSet = TRUE]
     /\ lock' = [lock EXCEPT !.soft = FALSE, !.mism = 0, !.policyMism = 0]
+    \* clientpin.rs:314 -- and clientpin.rs:294-303 refuses the CURRENT PIN under
+    \* a pending change, so the flag can only be cleared by a value that differs.
+    \* That refusal is not modelled: the module has no PIN value to compare.
+    /\ gate' = [gate EXCEPT !.forceChange = FALSE]
     /\ op' = [op EXCEPT !.step = IF BugPinWriteBeforeRevoke THEN 1 ELSE 2]
     /\ snap' = NoSnap
-    /\ UNCHANGED << gate, store, tok, plat, pres, walk, sys, upSpent, ram >>
+    /\ UNCHANGED << store, tok, plat, pres, walk, sys, upSpent, ram >>
 
 \* clientpin.rs:316 resetPinUvAuthToken -- RAM only, and it must end every
 \* session credential the old PIN authorized (state.rs:525-539).
@@ -1055,10 +1101,27 @@ ConfigOp ==
     /\ Idle
     /\ ConfigGuard
     /\ viol' = IF ConfigPolicy THEN viol ELSE viol \cup TokenBypass
-    /\ gate' = [gate EXCEPT !.alwaysUv = ~gate.alwaysUv]
+    \* TWO authenticatorConfig subcommands over one gate: toggleAlwaysUv, and
+    \* setMinPINLength's forced-change byte, which config.rs:483 refuses unless a
+    \* PIN exists. A choice inside the action rather than a second action, so the
+    \* refinement's one `UseAcfg`/`Authorized` clause keeps covering both.
+    /\ \/ /\ gate' = [gate EXCEPT !.alwaysUv = ~gate.alwaysUv]
+          /\ UNCHANGED << tok, plat, walk >>
+       \* config.rs:500-503: the forced-change branch calls
+       \* reset_pin_uv_auth_token AND clear_ppuat, so it ENDS the session token,
+       \* the credMgmt cursor and the persistent grant before refusing to issue
+       \* anything new. Modelled as the two sibling PIN sites already are -- the
+       \* module carried BugSetPinKeepsPpuat and BugChangePinKeepsPpuat and had
+       \* nothing at all for the third. Found by review over `UNCHANGED tok`.
+       \/ /\ ForceChangeModelled
+          /\ pin.set /\ ~gate.forceChange
+          /\ gate' = [gate EXCEPT !.forceChange = TRUE, !.ppuat = FALSE,
+                                   !.ppuatStale = FALSE]
+          /\ tok'  = [live |-> FALSE, perms |-> {}, rp |-> NoRp]
+          /\ plat' = [plat EXCEPT !.verifies = FALSE, !.revoked = TRUE]
+          /\ walk' = [open |-> FALSE, chan |-> NoChan]
     /\ snap' = NoSnap
-    /\ UNCHANGED << pin, store, lock, tok, plat, pres, walk, sys, op, upSpent,
-                    ram >>
+    /\ UNCHANGED << pin, store, lock, pres, sys, op, upSpent, ram >>
 
 (***************************************************************************)
 (* Vendor BACKUP_FINALIZE -- vendor.rs:941-948, and its on-device twin      *)
@@ -1302,7 +1365,7 @@ SecretsLive == store.seed \/ store.cred # {} \/ store.rpent # {} \/ SealedIsASec
 \* writes [1]/[0]) -- there is a record for the sweep to delete exactly when the
 \* two differ. Identical where the build does not ship it, which is every
 \* configuration but AlwaysUv.cfg.
-GatesLive   == pin.set \/ gate.alwaysUv # AlwaysUvShipped
+GatesLive   == pin.set \/ gate.alwaysUv # AlwaysUvShipped \/ gate.forceChange
                        \/ PpuatIsAGate \/ SealedIsAGate
 
 \* reset.rs:67-79 -- the seed goes in its own force_delete AHEAD of the batch, so
@@ -1380,6 +1443,13 @@ ResetSweepGates ==
                                   /\ UNCHANGED pin)
                  \/ (SealedIsAGate /\ gate' = [gate EXCEPT !.backupSealed = FALSE]
                                     /\ UNCHANGED pin)
+                 \* reset.rs:223 puts EF_MINPINLEN in this phase, and :207-214
+                 \* says out loud that the list is five records and the clauses
+                 \* are three. This disjunct buys the PHASE ORDER for the fourth;
+                 \* no clause names it, so a torn reset that drops it early is
+                 \* still unobserved -- `snap` has no field for it.
+                 \/ (gate.forceChange /\ gate' = [gate EXCEPT !.forceChange = FALSE]
+                                      /\ UNCHANGED pin)
               /\ UNCHANGED op
          ELSE /\ op' = [op EXCEPT !.step = IF BugResetGatesFirst THEN 1 ELSE 3]
               /\ UNCHANGED << pin, gate >>
