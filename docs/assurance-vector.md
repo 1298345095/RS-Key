@@ -33,7 +33,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 - **30 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
 - **10 of 59** are checked by a configuration that ACCEPTS a recorded session, and **10** by one that must REFUSE a negative one.
 - **11 of 59** carry at least one Kani harness named after them. That is all `BOUNDED` keys on — a harness NAME, not the `#[kani::proof]` attribute, not a bound, not a `cfg` — so it points at the bundle's method table and is never the proof itself.
-- Rows carrying a dated raw evidence bundle: **1 of 59**; of those, still ahead of every input they are about: **0**.
+- Rows carrying a dated raw evidence bundle: **2 of 59**; of those, still ahead of every input they are about: **1**.
 - No property is claimed on more than **10** built image(s) of the configuration ledger; every other column is a gap or out of scope.
 
 ## What a release may not say
@@ -44,7 +44,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 - that the model-checked properties hold on *the firmware* — they hold on the images the scope axis names, and `docs/assurance-matrix.md` carries the rest of that row.
 - that the reconstructed `v1` column is an independent check on the registry's word. It reads the two derivations `assurance_gate.py` already forces that word from, so its disagreement set is empty on every input that gate accepts: it records that the scalar is a projection, and cannot discover that it is not.
 - that any property was measured on a board — **no** row carries a hardware result. A bundle claiming one without a board revision is refused rather than published, and every obligation of the platform registry is still `pending`.
-- that 58 of the rows are current — they carry no evidence date at all, so nothing here says when they were last true.
+- that 57 of the rows are current — they carry no evidence date at all, so nothing here says when they were last true.
 
 ## The vector
 
@@ -67,7 +67,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 0 of 1 | 0 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 2 of 3 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 2 of 3 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` fresh | MODELLED-ONLY |
 | `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 2 of 3 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L01` | `EveryOpQuiesces` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
@@ -178,7 +178,6 @@ Three spellings of "not current", which used to sit on two different pages and i
 | bundle | `SEC-FIDO-006A` | no raw evidence bundle |
 | bundle | `SEC-FIDO-006B` | no raw evidence bundle |
 | bundle | `SEC-FIDO-006C` | no raw evidence bundle |
-| bundle | `SEC-FIDO-007` | no raw evidence bundle |
 | bundle | `SEC-FIDO-008` | no raw evidence bundle |
 | bundle | `SEC-LAT-001` | no raw evidence bundle |
 | bundle | `SEC-LAT-002` | no raw evidence bundle |
@@ -212,12 +211,18 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-TOOL-001` | A green `tools/emu` run is a protocol result, not a device result: the |
 | platform | `PLAT-TOOL-002` | `tools/emu` implements the same authorization gates as the firmware, s |
 | platform | `PLAT-TOOL-003` | Kani/CBMC is sound for the arithmetic its harnesses bound, and the sol |
+| platform | `PLAT-TOOL-004` | TLC is sound for the finite configurations it checks, and the verdict  |
 | platform | `PLAT-TOOLCHAIN-001` | The compiler on the path is the pinned rustc and its output is what th |
 | platform | `PLAT-TOOLCHAIN-002` | Every `unsafe` in the first-party tree upholds an invariant the compil |
 | platform | `PLAT-CRYPTO-001` | The HMAC-SHA-256 under `pinUvAuthProtocol` is correct as a MAC; the ha |
 | platform | `PLAT-BUILD-002` | `ea-conformance-rpid`'s enterprise-attestation allowlist is a conforma |
 | platform | `PLAT-THREAT-001` | A CTAPHID channel id is a routing label the sender writes, so channel  |
 | platform | `PLAT-MODEL-001` | `PermSets` — five of the sixteen permission subsets — is the set a hos |
+| platform | `PLAT-MODEL-003` | The model's `ram` is `FidoState::keydev_dec.is_some()` and nothing els |
+| platform | `PLAT-MODEL-004` | One `store.seed` boolean stands for two flash records, so the soft-loc |
+| platform | `PLAT-MODEL-005` | `DeviceUnlock`'s `store.seed` conjunct is what makes `RamNeverOutlives |
+| platform | `PLAT-MODEL-006` | `RamNeverOutlivesFlashSeed` is INERT on the shipped configuration: it  |
+| platform | `PLAT-MODEL-007` | The C-tier reset bridge cannot be reused as bounded evidence for the s |
 | platform | `PLAT-MODEL-002` | One credential per relying party is enough to carry the authorization  |
 
 ## Review packet
@@ -240,4 +245,4 @@ For the commit that carries this page — which is why no commit is named here: 
 | `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-29 | `162c56c` | Apple M5 Pro (18 cores) |
 | `safety` | `./formal/run-tlc.sh safety` | 2026-08-29 | `162c56c` | Apple M5 Pro (18 cores) |
 
-**Raw evidence bundles:** `SEC-FIDO-001` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`.
+**Raw evidence bundles:** `SEC-FIDO-001`, `SEC-FIDO-007` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`.

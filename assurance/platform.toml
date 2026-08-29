@@ -78,7 +78,11 @@ discharge_owner = "maintainer"
 status = "pending"
 failure_direction = "security: a plaintext seed readable over the bootloader's mass-storage interface"
 depends_on = ["PLAT-ROM-002"]
-covers = ["board-only:54_sram_residue"]
+# `slice:AS-RAM-6` and not a row of its own: the slice's assumption IS this
+# statement — a copy the code can no longer reach satisfies the seed-ordering
+# invariant whatever the memory holds — and a second entry would be two answers
+# about one measurement.
+covers = ["board-only:54_sram_residue", "slice:AS-RAM-6"]
 supports = ["SEC-FIDO-007"]
 
 # ---- Flash, OTP and the input path -------------------------------------------
@@ -183,6 +187,42 @@ supports = [
 ]
 
 [[assumption]]
+id = "PLAT-TOOL-004"
+class = "tool-tcb"
+statement = "TLC is sound for the finite configurations it checks, and the verdict recorded for a configuration is the verdict that run produced."
+discharge = "A pinned checker and a recorded run. `tlaplus` 1.7.4 IS pinned by flake.lock and `formal/run-tlc.sh` records the jar's sha256 prefix, which is the half `PLAT-TOOL-003` does not have for cargo-kani; `formal/runs.toml` keeps each tier's own TLC lines beside the runner's, and `scripts/run_count_gate.py` holds one against the other. What is NOT dischargeable by any of that is the soundness of the checker itself, which is why this row exists rather than being folded into the run record."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: every MODELLED-ONLY row, and the model half of every BOUNDED one, rests on a checker nothing in this registry named"
+# Found by building the calibration counterpart of §10: the registry had acquired
+# a tool-TCB row for the prover the ONE bounded slice uses and none for the one
+# every model-checked row in the tree rests on. The asymmetry is the finding.
+covers = ["slice:AS-RAM-7"]
+# The P0-launch tranche by name. The dependency is universal over rows with a
+# configuration — `assurance_gate`'s `cfgs` column is that roster — and copying
+# fifty ids here would be a second, rotting copy of a derived set; this names the
+# tranche the programme is about, the way PLAT-TOOL-003 names the bounded rows.
+supports = [
+  "SEC-FIDO-001",
+  "SEC-FIDO-002",
+  "SEC-FIDO-003",
+  "SEC-FIDO-004",
+  "SEC-FIDO-005",
+  "SEC-FIDO-006",
+  "SEC-FIDO-006A",
+  "SEC-FIDO-006B",
+  "SEC-FIDO-006C",
+  "SEC-FIDO-007",
+  "SEC-FIDO-008",
+  "SEC-STORE-001",
+  "SEC-STORE-002",
+  "SEC-STORE-003",
+  "SEC-STORE-004",
+  "SEC-STORE-005",
+  "SEC-STORE-006",
+]
+
+[[assumption]]
 id = "PLAT-TOOLCHAIN-001"
 class = "toolchain"
 statement = "The compiler on the path is the pinned rustc and its output is what the proofs are about; Kani proves over MIR, not over the emitted image."
@@ -190,7 +230,11 @@ discharge = "Stage 11's source-to-binary work. Nothing in the tree bridges MIR t
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a miscompilation is invisible to every proof this tree runs"
-covers = ["slice:TCB-1"]
+# `AS-RAM-4` is the same statement at one site: the model writes `ram' = FALSE`
+# outright and the code's equivalent is a drop-and-replace plus an exhaustive
+# destructuring `Drop`, and nothing here covers what the emitted image does with
+# either.
+covers = ["slice:TCB-1", "slice:AS-RAM-4"]
 
 [[assumption]]
 id = "PLAT-TOOLCHAIN-002"
@@ -272,6 +316,63 @@ status = "pending"
 failure_direction = "coverage: an obtainable subset outside the five is a permission combination no configuration ever runs"
 covers = ["slice:AS-AUTH-5"]
 supports = ["SEC-FIDO-001"]
+
+[[assumption]]
+id = "PLAT-MODEL-003"
+class = "model-abstraction"
+statement = "The model's `ram` is `FidoState::keydev_dec.is_some()` and nothing else in the tree is a second copy of the seed the model would have to see."
+discharge = "A recorded session that performs a vendor UNLOCK. The projection is written once — `crates/rsk-device/src/ctap.rs` maps the field into `keydev_ram_raw`, and `formal/TraceSecurity.tla`'s R4aRawRefinesB equates it with `ram` at every boundary — so the comparison exists; what is missing is a session in which it is ever TRUE. Measured: `keydev_ram_raw` is false in all 40 pre and all 40 post snapshots of formal/traces/security-phase4.jsonl, so the true arm has never run."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the refinement's `ram` half is carried rather than checked, and a second RAM copy the projection does not see would be invisible to it"
+refines = ["PLAT-TOOL-002"]
+covers = ["slice:AS-RAM-1"]
+supports = ["SEC-FIDO-007", "SEC-TRACE-001"]
+
+[[assumption]]
+id = "PLAT-MODEL-004"
+class = "model-abstraction"
+statement = "One `store.seed` boolean stands for two flash records, so the soft-locked device — `EF_KEY_DEV_ENC` present, `EF_KEY_DEV` gone — is a state the seed invariants cannot tell from an unlocked one."
+discharge = "A second model variable, or a proof that the collapse preserves the invariants that read it. The code keeps the two apart already: `crates/rsk-fido/src/seed.rs` defines the lock as exactly `has_key(EF_KEY_DEV_ENC) && !has_key(EF_KEY_DEV)`, and `crates/rsk-fido/src/reset_assurance.rs` carries `owner_seed` and `owner_locked_seed` as separate fields; `formal/TraceSecurity.tla` is where they merge."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the locked state is the one where the RAM copy is the only readable seed, which is exactly where SEC-FIDO-007 has content"
+covers = ["slice:AS-RAM-2"]
+supports = ["SEC-FIDO-007", "SEC-FIDO-006"]
+
+[[assumption]]
+id = "PLAT-MODEL-005"
+class = "model-abstraction"
+statement = "`DeviceUnlock`'s `store.seed` conjunct is what makes `RamNeverOutlivesFlashSeed` true, and the production unlock has no such conjunct — it gates on `mse_ready`, a 32-byte lock key and `lock_engaged`, which requires the PLAIN record ABSENT."
+discharge = "A boolean model constant pinning the conjunct, emitted both ways by `formal/gen-configs.sh` — the shape `AlwaysUvShipped` already has — after which this row moves to `assurance/assumptions.toml` and stops being one of these. It is the only row of this set that could join the first registry, and the obstacle is writing the constant, not the gate. By construction the FALSE arm goes RED: `Idle and no flash seed and no RAM copy` is reachable through ResetAborts once ResetSweepSecrets has deleted the record."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security: if the production unlock can mint the RAM copy with no live flash seed, the invariant is true of the model and false of the firmware"
+depends_on = ["PLAT-MODEL-004"]
+covers = ["slice:AS-RAM-3"]
+supports = ["SEC-FIDO-007"]
+
+[[assumption]]
+id = "PLAT-MODEL-006"
+class = "model-abstraction"
+statement = "`RamNeverOutlivesFlashSeed` is INERT on the shipped configuration: it has no falsifying reachable state by construction, so its GREEN carries no information beyond PLAT-MODEL-005's guard."
+discharge = "Not by a run — by a second reset producer. `formal/README.md` records the measurement: dropping SeedReachable's `ram` disjunct leaves the state set identical and flips no verdict, and two of the three `ram' = FALSE` assignments are dead. The page names what would make it bite — `Fs::factory_wipe`, the second reset path, still unmodelled — if its reboot were ever separated from the wipe."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a GREEN nobody can turn red is a check that cannot fail, and everything that cites it inherits that"
+covers = ["slice:AS-RAM-5"]
+supports = ["SEC-FIDO-007"]
+
+[[assumption]]
+id = "PLAT-MODEL-007"
+class = "model-abstraction"
+statement = "The C-tier reset bridge cannot be reused as bounded evidence for the seed-ordering invariant: it is deliberately WIDER and admits the state the invariant forbids."
+discharge = "Either a conjunct added to `crates/rsk-fido/src/reset_assurance.rs`'s `well_formed` — which changes what the four SEC-FIDO-006 harnesses prove and is stage 4's call — or a harness of this property's own. Today `well_formed` constrains `volatile.owner_seed` only while a reset is in progress, and `crates/rsk-fido/src/reset_refinement_kani.rs` draws it as a free `kani::any()` beside an equally free persistent seed, so all four harnesses run over states where the RAM copy outlives the flash record."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: `kani = 0` on this property is CORRECT rather than merely unfilled, and a reader who takes the neighbouring harnesses for coverage of it is wrong"
+covers = ["slice:AS-RAM-8"]
+supports = ["SEC-FIDO-007", "SEC-FIDO-006"]
 
 [[assumption]]
 id = "PLAT-MODEL-002"
