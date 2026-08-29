@@ -602,6 +602,20 @@ slice = ["cargo", "test", "-p", "rsk-fs"]
 expect = "killed"
 note = "audit run-36: the cache is written on a FAULT, so one transient backend error becomes a decided absence for the rest of the boot and every gate that reads has_data opens. `record_unless_faulted` is `settle` since 0x0995, which owns both halves — what may be cached and what may be returned — so the patch keeps the Err and poisons only the cache, or it would model two defects at once."
 
+[comutant.BugMetaWriteTearsBlob]
+status = "unreachable"
+evidence = """this switch denies a BACKEND assumption, not a line of `rsk-fs`, so
+there is no production statement to patch: the shipped arm of the failing
+metadata write leaves `meta` untouched BECAUSE `sequential-storage`'s append is
+old-or-new per item, and a torn rewrite therefore leaves the previous blob
+readable. Nothing in `crates/rsk-fs` decides that; `crates/rsk-store` inherits it
+from the medium, and `assurance/platform.toml` PLAT-FLASH-001 is where the claim
+lives — pending, owed to the maintainer, dischargeable only by a real supply cut
+on a board. What the model row buys is that the assumption is now DENIABLE:
+StoreSolo_BugMetaWriteTearsBlob.cfg goes RED on NoRecordLostToMetaWrite in 58
+distinct states, so the prose has a configuration that contradicts it instead of
+being a sentence no run can reach."""
+
 [comutant.BugMetaDeleteDropsOnFault]
 status = "patch"
 file = "crates/rsk-fs/src/fs.rs"

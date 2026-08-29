@@ -29,8 +29,8 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 ## What a release may say
 
 - **53 of 59** security properties are ASSERTED by at least one finite TLA+ configuration whose recorded verdict is GREEN, and hold exhaustively over that configuration's constants.
-- **40 of 59** carry a model mutant whose code twin `formal/comutants.toml` records as patched into the real tree and killed. That verdict is re-driven by the weekly `comutate run`, not by the gate that writes this page.
-- **30 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
+- **41 of 59** carry a model mutant whose code twin `formal/comutants.toml` records as patched into the real tree and killed. That verdict is re-driven by the weekly `comutate run`, not by the gate that writes this page.
+- **31 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
 - **10 of 59** are checked by a configuration that ACCEPTS a recorded session, and **10** by one that must REFUSE a negative one.
 - **11 of 59** carry at least one Kani harness named after them. That is all `BOUNDED` keys on — a harness NAME, not the `#[kani::proof]` attribute, not a bound, not a `cfg` — so it points at the bundle's method table and is never the proof itself.
 - Rows carrying a dated raw evidence bundle: **2 of 59**; of those, still ahead of every input they are about: **1**.
@@ -82,12 +82,12 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-SEAM-004` | `ReselectPreservesAccessStatus` | 2 of 18 | 1 | 1 of 2 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-SEAM-005` | `ExemptRefusalPreservesStatus` | 2 of 19 | 2 | 1 of 2 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-SEAM-006` | `AccessCodeRemovalNeedsTheCode` | 2 of 18 | 1 | 1 of 2 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-001` | `NoOrphanedMetadata` | 2 of 11 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-002` | `NoFalseAbsent` | 2 of 11 | 2 | 0 of 0 | 3 | 0 | 4 | 0 | — | BOUNDED |
-| `SEC-STORE-003` | `NoRecordLostToMetaWrite` | 2 of 11 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-004` | `NoFalseMetaAbsent` | 2 of 10 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-005` | `CacheHonest` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-006` | `NoSilentOrphan` | 2 of 10 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-001` | `NoOrphanedMetadata` | 2 of 12 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-002` | `NoFalseAbsent` | 2 of 12 | 2 | 0 of 0 | 3 | 0 | 4 | 0 | — | BOUNDED |
+| `SEC-STORE-003` | `NoRecordLostToMetaWrite` | 2 of 13 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-004` | `NoFalseMetaAbsent` | 2 of 11 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-005` | `CacheHonest` | 2 of 4 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-006` | `NoSilentOrphan` | 2 of 11 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-LAT-001` | `NoAuthWhenBlocked` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-LAT-002` | `WrongAttemptIsCharged` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-LAT-003` | `BudgetRisesOnlyWithItsSecret` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |

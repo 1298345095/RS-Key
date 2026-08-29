@@ -88,7 +88,18 @@ CONSTANTS
     \* fs.rs:746 -- `meta_delete` refuses a FAILED EF_META read (MemoryFatal)
     \* rather than caching it as absence. The switch caches it, and the damage is
     \* the write AFTER: `meta_add` trusts `known_absent` and rebuilds from empty.
-    BugMetaDeleteDropsOnFault
+    BugMetaDeleteDropsOnFault,
+    \* fs.rs:724 -- `self.storage.write(EF_META, &out[..w])?` REFUSES: the blob on
+    \* flash is whatever the backend left, `mark_present` is not reached, and the
+    \* caller is told. The model faulted the metadata READ in two places and never
+    \* the WRITE, so the one step that can lose every record at once was the only
+    \* one with no failing arm at all (stage 2 п.1). The shipped arm leaves `meta`
+    \* untouched, which is a CLAIM about the backend and not a fact: it holds only
+    \* because an append is old-or-new per item. The switch denies that assumption
+    \* -- a torn rewrite keeps the record it was adding and loses the rest -- so
+    \* `PLAT-FLASH-001` gains a row that goes red when it is false, instead of
+    \* being prose no configuration can contradict.
+    BugMetaWriteTearsBlob
 
 \* Two VALUES so an overwrite is observable. `NoVal` is the absent sentinel --
 \* distinct from both stored values, so "reads back absent" and "reads back v1"
@@ -179,6 +190,19 @@ MetaAdd(f) ==
                THEN {"NoRecordLostToMetaWrite"} ELSE {})
        /\ UNCHANGED << val, present, decided, dead >>
     \/ /\ BugMetaAddDropsOnFault
+       /\ meta' = [g \in Fids |-> g = f]
+       /\ metaAbsent' = FALSE
+       /\ viol' = viol \cup
+            (IF \E g \in Fids : (g # f) /\ meta[g]
+               THEN {"NoRecordLostToMetaWrite"} ELSE {})
+       /\ UNCHANGED << val, present, decided, dead >>
+    \* The WRITE refuses (fs.rs:724). Nothing on flash changed, `mark_present` is
+    \* not reached, and the caller has the error -- so the honest model of it is a
+    \* step that changes nothing yet is REACHABLE, which is what makes the switch
+    \* below the denial of an assumption rather than a new action.
+    \/ /\ ~BugMetaWriteTearsBlob
+       /\ UNCHANGED << val, meta, present, decided, dead, metaAbsent, viol >>
+    \/ /\ BugMetaWriteTearsBlob
        /\ meta' = [g \in Fids |-> g = f]
        /\ metaAbsent' = FALSE
        /\ viol' = viol \cup

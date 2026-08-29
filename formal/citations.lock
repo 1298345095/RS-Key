@@ -462,6 +462,7 @@ formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	701-727	pub fn meta_add_reserve(&m
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	707-707	let n = if self.known_absent(EF_META) {	let n = if self.known_absent(EF_META) {
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	707-709	let n = if self.known_absent(EF_META) {	} else {
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	714-716	if r.is_none() && self.storage.last_error() {	}
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	724-724	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	737-767	pub fn meta_delete(&mut self, fid: u16) -> Result<()> {	}
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	746-746	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
 formal/RSKeyStore.tla	crates/rsk-fs/src/powercut.rs	43-51	pub fn delete_landed(	}
