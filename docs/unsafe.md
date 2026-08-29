@@ -191,7 +191,7 @@ issued by the routine that is at that moment generating and storing a key.
 
 ## RSA assembly FFI (`crates/rsk-rsa/src/lib.rs`)
 
-### 16–18. The modexp / CRT-sign calls
+### 17–19. The modexp / CRT-sign calls
 
 On-card RSA key generation needs hundreds of modular exponentiations over
 1024–2048-bit candidates. The pure-Rust path was ~7× too slow on the
@@ -210,7 +210,7 @@ all host tests exercise the same API safely.
 
 ## Flash wiper (`rsk-wipe/src/main.rs`)
 
-### 19–20. Raw flash erase/program in a critical section
+### 20–21. Raw flash erase/program in a critical section
 
 The wiper's entire job is to erase the flash the firmware lives on, from a
 RAM-resident image. It calls the ROM flash-erase/program routines inside
