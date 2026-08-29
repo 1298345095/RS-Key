@@ -824,9 +824,9 @@ def test_a_disposed_inverse_kill_is_admitted_and_counted_apart(tmp_path, disposi
 @pytest.mark.parametrize(
     "key,old,new",
     [("gate_registry", "kani=4", "kani=99"),
-     ("gate_registry", "cfgs=46", "cfgs=47"),
+     ("gate_registry", "cfgs=49", "cfgs=50"),
      ("gate_ledger", "walk=4", "walk=5"),
-     ("gate_assumption", "FALSE=89", "FALSE=88"),
+     ("gate_assumption", "FALSE=91", "FALSE=90"),
      ("gate_ghost", "24 routes", "25 routes"),
      ("gate_matrix", "1240 cells", "1241 cells")],
 )
@@ -836,9 +836,16 @@ def test_a_transcribed_gate_line_that_the_gate_does_not_derive(tmp_path, key, ol
     `assurance-gate` at EXIT=0, because `REQUIRED["result"]` names no field and
     the group is held only by a leaf floor of 18.
 
-    `FALSE=88` is the arm that found a real one: the bundle said 88 and the tree
-    has held 89 `AlwaysUvShipped = FALSE` configurations at every commit from
-    `58df09d` to HEAD, so the number was wrong the day it was typed.
+    `FALSE=88` was the arm that found a real one: the bundle said 88 and the tree
+    held 89 `AlwaysUvShipped = FALSE` configurations at every commit from
+    `58df09d` onwards, so the number was wrong the day it was typed.
+
+    The two moving arms are typed here as well, and that is the cost of holding a
+    transcription by mutating it: `cfgs=46` and `FALSE=89` both went stale the
+    day the EF_MINPINLEN[1] gate added three configurations, and these cases went
+    RED for the right reason — the bundle had been corrected and the case had
+    not. A count in a test parameter is a third copy; what keeps it honest is
+    that it fails loudly rather than passing over a bundle nobody re-derived.
     """
     root = tree(tmp_path)
 

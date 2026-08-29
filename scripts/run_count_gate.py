@@ -193,7 +193,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 42
+SCOPE_CEILING = 41
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -254,12 +254,6 @@ GENERATED_ELSEWHERE = {
 #: that is deliberately historical and must NOT track anything.
 SCOPED = {
     # Historical roster figures: the sentence's subject is what the tree WAS.
-    (
-        "docs/authorization-slice.md",
-        '"199 configurations tiered plus 2 exempt" stood in this paragraph',
-    ): "the sentence QUOTES the stale copy it is about — the paragraph's whole "
-    "subject is that a hand-written roster figure went out of date six minutes "
-    "after it was right, and the quotation is the evidence",
     (
         "docs/testing.md",
         "`safety` was 2003 s here",
@@ -461,18 +455,20 @@ SCOPED = {
     # this series have now had to hand-correct — 69 -> 71 -> 72.
     (
         "formal/README.md",
-        "**30 of 30 mutants are caught",
+        "**31 of 31 mutants are caught",
     ): "the phase-2 baseline said as what it counts rather than as rows, in the sentence "
     "arguing that each mutant is caught by the invariant NAMING it — the ratio is the "
     "claim, and the generated roster line carries the same 30",
     (
         "formal/README.md",
-        "`NoAuthWhenBlocked` | 30 states |",
-    ): "the same coincidence in the lattice table, against the phase-2 baseline this "
-    "time — again a state count of one configuration and no roster figure at all",
+        "`NoStatusAfterARefusedAuth` | 73 states |",
+    ): "a coincidence and not a copy: the co-mutant roster is 73 entries and this is "
+    "the state count of one lattice configuration. The pair that went before it was "
+    "`30 of 30 mutants` against `30 states`, which the roster growing to 31 dissolved "
+    "— so this registration is the same shape and will dissolve the same way",
     (
         "formal/README.md",
-        "**72 entries: 67 executable patches killed",
+        "**73 entries: 68 executable patches killed",
     ): "the co-mutant roster restated where its composition is broken down, which the "
     "generated line beside it does not give — and the copy that read 69, then 71, "
     "until each of two commits in this series re-measured it. The second time the "
@@ -510,6 +506,9 @@ TABLE_GROUPS = (
      ("AlwaysUv.cfg",)),
     ("`PermWide.cfg` — `WidePerms`'s other arm: all sixteen permission subsets",
      ("PermWide.cfg",)),
+    ("`ForceChange.cfg` — `ForceChangeModelled`'s other arm: EF_MINPINLEN[1], the"
+     " forced-PIN-change gate",
+     ("ForceChange.cfg",)),
     ("`Historical_E76.cfg` — the seed-lead taken back out", ("Historical_E76.cfg",)),
     ("`Historical_E77.cfg` — the grant back in phase 2 **and** the consumer fix out",
      ("Historical_E77.cfg",)),
