@@ -262,7 +262,7 @@ gate_ghost = "ghost-gate: 21 actions record NoAuthorizationBypass over 24 routes
 gate_ledger = "token-refinement-gate: walk=4 softlock=12 window=2 sites owned, beside volatile=10 persistent=12 outcomes=7"
 gate_assumption = "assumption-gate: 2 standing assumptions; AlwaysUvShipped TRUE=1 cfg, FALSE=89 cfgs"
 gate_matrix = "matrix-gate: 40 P0-family properties x 31 configurations = 1240 cells (37 covered, 139 equivalent, 0 conditional, 106 out-of-scope, 958 gap) — UNCHANGED by this slice, and the reason is recorded in the firmware-always-uv settling question"
-gate_registry = "assurance-gate: SEC-FIDO-001 BOUNDED, cfgs=45 mut=11 co=11 kani=4 fuzz=0 rust=2 test=0"
+gate_registry = "assurance-gate: SEC-FIDO-001 BOUNDED, cfgs=46 mut=11 co=11 kani=4 fuzz=0 rust=2 test=0 — `cfgs` grew by one when PermWide.cfg was added, which is a new configuration CHECKING the invariant and not new evidence about it; the freshness axis carries what that costs"
 
 # ---- 6. Raw artifact or log --------------------------------------------------
 

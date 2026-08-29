@@ -85,6 +85,14 @@ RSKeyBootHardening     PowerOnClearsScratch2  -   -
 RSKeySecurityState     AlwaysUvShipped        -   -
 RSKeyTokenRefinement   AlwaysUvShipped        -   -
 TraceSecurity          AlwaysUvShipped        -   -
+\* Not a size either: a two-armed standing assumption about the permission
+\* domain, registered in assurance/assumptions.toml. The number that WOULD be a
+\* scope -- how many of the sixteen subsets the model builds -- is what the two
+\* arms differ by, and it is 5 against 16. Listed so a reader of the scope
+\* record is not left thinking a minimum was measured for it.
+RSKeySecurityState     WidePerms              -   -
+RSKeyTokenRefinement   WidePerms              -   -
+TraceSecurity          WidePerms              -   -
 
 \* --- tiers whose properties these minima were not measured against ----------
 \* The refinement tier runs the smallest scope that still has a token; the trace

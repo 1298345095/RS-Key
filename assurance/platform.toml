@@ -309,12 +309,13 @@ supports = ["SEC-FIDO-001", "SEC-FIDO-002", "SEC-TRANS-001"]
 [[assumption]]
 id = "PLAT-MODEL-001"
 class = "model-abstraction"
-statement = "`PermSets` — five of the sixteen permission subsets — is the set a host can actually obtain."
-discharge = "Reading the two production sites that mint permissions. It is argued in the module today, not measured, and stage 2 п.7 owns the choice between symmetry, a wider finite domain and a separate source obligation."
+statement = "`PermSets`'s five subsets are a SCOPE and not a description: a host can obtain all sixteen, and the missing eleven are covered by `WidePerms`'s other arm rather than by the claim that they cannot arise."
+discharge = "Two halves, and stage 2 п.7's choice between symmetry, a wider finite domain and a separate source obligation is answered by taking the last two. (1) The domain: `WidePerms = TRUE` in PermWide.cfg draws `ps` from `SUBSET Perms` and checks the whole invariant set -- GREEN, so the eleven reach no violation at that scope. Symmetry was not taken: `ConfigGuard` names `\"acfg\"` and `OpGuard` is called with `\"mc\"`/`\"ga\"`, so a permutation of `Perms` is not a symmetry of this spec, and the wide arm made the question moot at a measured 493 s. (2) The alphabet: `be`, `lbw` and `pcmr` are not elements of `Perms` at all and the 0x09/0x06 admission rules over them are cross-bit, so no widening of a four-element `Perms` can express them -- that half is a source obligation, the exhaustive 512-case sweep in crates/rsk-fido/src/clientpin_perms_tests.rs, which also measured the 48 cases where the shipped path and CTAP 2.1 §6.5.5.7.2 disagree."
 discharge_owner = "contributor"
 status = "pending"
-failure_direction = "coverage: an obtainable subset outside the five is a permission combination no configuration ever runs"
-covers = ["slice:AS-AUTH-5"]
+failure_direction = "coverage: an obtainable subset outside the wide arm's scope is a permission combination no configuration runs"
+covers = ["slice:AS-AUTH-5", "model:WidePerms"]
+discharges = ["WidePerms"]
 supports = ["SEC-FIDO-001"]
 
 [[assumption]]

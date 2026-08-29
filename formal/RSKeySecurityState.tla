@@ -39,7 +39,11 @@ CONSTANTS
     \* decides what the device comes up on and what a reset restores. Registered
     \* in assurance/assumptions.toml as AS-AUTH-2, and assigned both ways -- FALSE
     \* by every configuration the shipped image is about, TRUE by AlwaysUv.cfg.
-    AlwaysUvShipped
+    AlwaysUvShipped,
+    \* A SCOPE, and the other arm of an assumption that was argued and never run.
+    \* Registered in assurance/assumptions.toml; FALSE everywhere the tiers are
+    \* about, TRUE in PermWide.cfg alone. See PermSets.
+    WidePerms
 
 (* Mutation switches. All FALSE is the shipped tree. Each rebuilds one real  *)
 (* defect; `formal/README.md` maps every switch to its commit or audit id.   *)
@@ -138,12 +142,29 @@ NoChan == "nochan"
 \* liveness check is not sound under symmetry.
 Symm == Permutations(RPs) \cup Permutations(Channels)
 
-(* PERM_* bits, state.rs:22-28. Restricted to the sets a host actually asks  *)
-(* for, which keeps the token's value space at 5 instead of 16: getPinToken  *)
-(* 0x05 grants exactly {mc,ga} (clientpin.rs:391-395), and                   *)
+(* PERM_* bits, state.rs:22-28. Five of the sixteen subsets, and the comment *)
+(* here used to say they were "the sets a host actually asks for". Measured  *)
+(* since, by driving client_pin over all 256 requestable permission bytes    *)
+(* (clientpin_perms_tests.rs): ALL SIXTEEN are obtainable. 0x09 refuses `be` *)
+(* and a `pcmr` travelling with anything else, and nothing else -- so        *)
+(* {mc,cm}, {mc,acfg}, {ga} and eight more are one request away. The five    *)
+(* are an under-approximation of eleven subsets, not a description.          *)
+(*                                                                           *)
+(* The wide domain is affordable but NOT in a shipped-scope configuration.   *)
+(* Measured on AlwaysUv.cfg's own constants: 5 -> 16 costs x4.16 wall        *)
+(* (527 s -> 2194 s) and x2.48 distinct states, which projects Shipped.cfg   *)
+(* to ~7754 s and the safety tier past its CI ceiling. At one relying party  *)
+(* it costs 559 s against that scope's own 142 s, and that is PermWide.cfg,  *)
+(* which keeps two channels because scopes.txt holds that minimum for the    *)
+(* invariant it checks. Every wide run came back GREEN: the eleven missing   *)
+(* subsets reach no violation at any of the three scopes measured.           *)
+(*                                                                           *)
+(* getPinToken 0x05 grants exactly {mc,ga} (clientpin.rs:391-395), and       *)
 (* consume_after_user_presence leaves {} (lbw only, state.rs:568).           *)
 Perms    == {"mc", "ga", "cm", "acfg"}
-PermSets == { {}, {"mc","ga"}, {"cm"}, {"acfg"}, {"ga","acfg"} }
+PermSets == IF WidePerms
+              THEN SUBSET Perms
+              ELSE { {}, {"mc","ga"}, {"cm"}, {"acfg"}, {"ga","acfg"} }
 
 Decisions == {"none", "confirm", "cancel", "timeout"}
 OpKinds   == {"none", "assert", "register", "register-nd", "reset", "chpin",

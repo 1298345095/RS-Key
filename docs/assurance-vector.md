@@ -60,17 +60,17 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-REF-004` | `R4bEventConsensus` | 2 of 9 | 0 | 2 of 9 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-005` | `NoAuthorizationBypassA` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-006` | `RequiredGateAgreesWithRelation` | 0 of 1 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-001` | `NoAuthorizationBypass` | 2 of 45 | 11 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (8 input(s) newer) | BOUNDED |
-| `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 2 of 39 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | — | BOUNDED |
-| `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 2 of 41 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | — | BOUNDED |
-| `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 2 of 36 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-005` | `NoUnmanageableCredential` | 2 of 37 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 2 of 37 | 2 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
+| `SEC-FIDO-001` | `NoAuthorizationBypass` | 3 of 46 | 11 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (9 input(s) newer) | BOUNDED |
+| `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 3 of 40 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | — | BOUNDED |
+| `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 3 of 42 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | — | BOUNDED |
+| `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 3 of 37 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-FIDO-005` | `NoUnmanageableCredential` | 3 of 38 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 3 of 38 | 2 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 0 of 1 | 0 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 2 of 3 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (3 input(s) newer) | MODELLED-ONLY |
-| `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 2 of 3 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 3 of 4 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (4 input(s) newer) | MODELLED-ONLY |
+| `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 3 of 4 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L01` | `EveryOpQuiesces` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L02` | `EveryWaitReleases` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
@@ -164,8 +164,8 @@ Three spellings of "not current", which used to sit on two different pages and i
 
 | Kind | Subject | What is outstanding |
 |---|---|---|
-| bundle | `SEC-FIDO-001` | 8 input(s) newer than `f52b720` |
-| bundle | `SEC-FIDO-007` | 3 input(s) newer than `3e08f75` |
+| bundle | `SEC-FIDO-001` | 9 input(s) newer than `f52b720` |
+| bundle | `SEC-FIDO-007` | 4 input(s) newer than `3e08f75` |
 | bundle | `SEC-ADM-002` | no raw evidence bundle |
 | bundle | `SEC-ADM-004` | no raw evidence bundle |
 | bundle | `SEC-BOOT-001` | no raw evidence bundle |
@@ -220,7 +220,7 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-CRYPTO-001` | The HMAC-SHA-256 under `pinUvAuthProtocol` is correct as a MAC; the ha |
 | platform | `PLAT-BUILD-002` | `ea-conformance-rpid`'s enterprise-attestation allowlist is a conforma |
 | platform | `PLAT-THREAT-001` | A CTAPHID channel id is a routing label the sender writes, so channel  |
-| platform | `PLAT-MODEL-001` | `PermSets` — five of the sixteen permission subsets — is the set a hos |
+| platform | `PLAT-MODEL-001` | `PermSets`'s five subsets are a SCOPE and not a description: a host ca |
 | platform | `PLAT-MODEL-009` | `EF_MINPINLEN`'s FLOOR (byte 0) and its RP-id disclosure list (bytes 2 |
 | platform | `PLAT-MODEL-010` | `EF_MINPINLEN`'s `forceChangePin` byte IS a gate and IS missing from t |
 | platform | `PLAT-MODEL-011` | `EF_DEVICE_PIN` is outside `RSKeySecurityState` because the SURFACE it |

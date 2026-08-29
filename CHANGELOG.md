@@ -45,6 +45,33 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The model's five permission subsets were a scope claiming to be a
+  description, and both halves of stage 2 п.7 now answer for it.** `PermSets`
+  carried five of the sixteen subsets of its four permission elements with a
+  comment calling them "the sets a host actually asks for". Measured by driving
+  `client_pin` over all 256 requestable permission bytes on both
+  permission-bearing subcommands: all sixteen are obtainable.
+
+  `WidePerms` is now a Boolean model constant registered in
+  `assurance/assumptions.toml`, `FALSE` in every configuration the tiers are
+  about and `TRUE` in the new `PermWide.cfg`, which draws the token's permission
+  set from `SUBSET Perms` and checks the whole invariant set. It came back GREEN:
+  the eleven subsets the model never built reach no violation.
+
+  It is a separate configuration rather than a widening of `Shipped.cfg` because
+  the price was measured rather than guessed. On `AlwaysUv.cfg`'s own constants
+  the wide domain costs **×4.16 wall** (527 s → 2194 s) and ×2.48 distinct
+  states, which projects `Shipped.cfg` to roughly 7754 s and the safety tier past
+  its CI ceiling. At one relying party and the two channels `formal/scopes.txt`
+  requires for the invariant it checks, the same question costs **559 s**.
+  Symmetry over permutations of `Perms` was not taken: `ConfigGuard` names
+  `acfg` and `OpGuard` is called with `mc` and `ga`, so a permutation is not a
+  symmetry of this spec.
+
+  The half no widening can do is the three bits outside the model's alphabet —
+  `be`, `lbw` and `pcmr`, whose admission rules are cross-bit — and that is the
+  512-case sweep already in `crates/rsk-fido/src/clientpin_perms_tests.rs`.
+
 - **The constant-time audit is now read out of the shipped ELF, not asserted in
   prose.** `docs/ct-audit.md` says the canonical comparator's inlined copies
   "lower to a loop whose only branch is governed by the *public* length counter"

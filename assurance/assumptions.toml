@@ -36,3 +36,14 @@ discharged_by = "The build itself: `firmware/Cargo.toml`'s default feature set, 
 # token for every makeCredential and getAssertion, so the arm the shipped tree
 # does not take is the stricter one — a coverage question, not a security one.
 risk = "coverage"
+
+[[assumption]]
+constant = "WidePerms"
+statement = "The five permission subsets `PermSets` carries are enough: the eleven a host can also obtain reach no state the five do not."
+discharged_by = "Both arms run. FALSE in every configuration the tiers are about, TRUE in PermWide.cfg, which draws `ps` from all sixteen subsets of `Perms` and checks the whole invariant set. The narrow arm was never a description of the code and is no longer claimed to be one: driving `client_pin` over all 256 requestable permission bytes on both permission-bearing subcommands (crates/rsk-fido/src/clientpin_perms_tests.rs) obtains ALL SIXTEEN, because 0x09 refuses only `be` and a `pcmr` travelling with company. What the wide arm discharges is the consequence, not the premise."
+# Which way it fails: COVERAGE, and only coverage. A subset the model never
+# builds is a permission combination no configuration runs -- it cannot make an
+# invariant hold that would otherwise break, it can only hide a break. That is
+# why the arm exists rather than an argument, and why it is a separate
+# configuration: measured, widening Shipped.cfg's own scope costs x4.16 wall.
+risk = "coverage"

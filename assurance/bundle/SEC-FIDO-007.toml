@@ -361,7 +361,7 @@ gate_ghost = "ghost-gate: 21 actions record NoAuthorizationBypass over 24 routes
 gate_ledger = "token-refinement-gate: GREEN keys=2 api=11 volatile=10/9 persistent=12/4 outcomes=7/6 walk=4 softlock=12 window=2 testonly=1 — the ledger owns the token axes, not the seed ones, so none of the fourteen owners this bundle enumerates is in it"
 gate_assumption = "assumption-gate: 2 standing assumptions; AlwaysUvShipped TRUE=1 FALSE=89, PowerOnClearsScratch2 TRUE=9 FALSE=4. AlwaysUvShipped is the one whose BOTH arms check this property"
 gate_matrix = "matrix-gate: 40 P0-family properties × 31 build configurations = 1240 cells (37 covered, 139 equivalent, 0 conditional, 106 out-of-scope, 958 gap) — UNCHANGED by this bundle: a model check and a host-test slice read no board preset and no flash geometry, so nothing here settles a cell"
-gate_registry = "assurance-gate: SEC-FIDO-007 MODELLED-ONLY, cfgs=3 mut=1 co=1 kani=0 fuzz=0 rust=2 test=0 — `rust` moved 1 -> 2 when the ONE producer of the antecedent, `vendor.rs::unlock`, was tagged; it had carried only the consequent`s owner"
+gate_registry = "assurance-gate: SEC-FIDO-007 MODELLED-ONLY, cfgs=4 mut=1 co=1 kani=0 fuzz=0 rust=2 test=0 — `rust` moved 1 -> 2 when the ONE producer of the antecedent, `vendor.rs::unlock`, was tagged; it had carried only the consequent`s owner; `cfgs` grew by one when PermWide.cfg was added, a new configuration CHECKING the invariant rather than new evidence about it"
 
 # ---- 6. Raw artifact or log --------------------------------------------------
 
