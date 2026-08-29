@@ -160,6 +160,23 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **A registration that failed part-way left an RP entry that nothing ever
+  reclaimed, and its discoverable-credential slot with it.** `credential_store`
+  writes an EF_RP entry before the credential so a truncated sequence leaves the
+  harmless half; the code said that half was "reclaimed by the next
+  `decrement_rp`", and it is not. `decrement_rp` deletes the record at count 0
+  alone and the count rises once per credential that lands, so an entry left over
+  one that never landed floors at 1 — the RP keeps a slot with nothing in it until
+  `authenticatorReset`. One of the three fallible steps after the bump rolled it
+  back and the first one did not, two lines apart. It needs no flash fault to
+  reach: `EF_CRED_STATE` is a NEW dynamic file on a key that has never stored a
+  resident credential, so `Fs::put` answers `NoMemory` at `MAX_DYNAMIC_FILES`.
+  Driven end to end, with every slot so occupied and zero live credentials, getInfo
+  `0x14` reported **256** remaining discoverable credentials while every `rk=true`
+  `makeCredential` for a new RP answered `CTAP2_ERR_KEY_STORE_FULL` (`0x28`) and the
+  owner had nothing to delete. The rollback is now on that step too, and the comment
+  that claimed a reclaim says what actually holds instead.
+
 - **`CONFIG_READ` over FIDO reported a record it could not read as an empty one.**
   Found by asking the other spellings of the four fixes above the same question.
   Both targets are the baseline a host read-modify-writes: `rsk hw` and `rsk led`

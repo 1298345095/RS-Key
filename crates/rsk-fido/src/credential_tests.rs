@@ -685,6 +685,55 @@ fn a_failed_registration_never_leaves_a_credential_without_its_rp() {
     );
 }
 
+/// The mirror of the case above, and the half it does not assert. A registration
+/// that fails must not leave an EF_RP entry with no credential either: the
+/// comment at `credential.rs` calls that state "invisible but harmless, and
+/// reclaimed by the next `decrement_rp`", and it is not reclaimed by anything.
+/// `decrement_rp` deletes the record at count 0 alone and the count is bumped
+/// once per credential that lands, so an entry left over one that never landed
+/// floors at 1. The slot is then unreusable short of `authenticatorReset`, while
+/// getInfo 0x14 keeps reporting it free.
+#[test]
+fn a_failed_registration_never_leaves_an_rp_without_its_credential() {
+    let d = dev();
+    let rp_hash = sha256(b"example.com");
+    let mut out = [0u8; 512];
+    let len = credential_create(&SEED, &d, &input(), &rp_hash, &IV, &mut out).unwrap();
+
+    let mut saw_partial = false;
+    for budget in 0..6 {
+        let mut fs: Fs<FailWriteAfter> = Fs::new(FailWriteAfter {
+            inner: RamStorage::new(),
+            budget,
+        });
+        let r = credential_store(
+            &SEED,
+            &d,
+            &mut fs,
+            &out[..len],
+            &rp_hash,
+            "example.com",
+            &[0xDE, 0xAD, 0xBE, 0xEF],
+            &[],
+        );
+        if r.is_ok() {
+            continue;
+        }
+        saw_partial = true;
+        if fs.has_data(EF_RP) {
+            assert!(
+                fs.has_data(EF_CRED),
+                "write budget {budget} left an EF_RP record with no credential — \
+                 the count floors at 1 and the slot never comes back"
+            );
+        }
+    }
+    assert!(
+        saw_partial,
+        "vacuous: no write budget produced a partial registration"
+    );
+}
+
 /// The consequence `Fs::present_slots` answers for: `credential_store` writes the
 /// first slot the bitmap calls free without re-reading it, so after a boot scan a
 /// read fault cut short it minted straight over a live discoverable credential.
