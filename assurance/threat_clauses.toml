@@ -373,8 +373,8 @@ serve"""
 
 [[untraced]]
 id = "SEC-FIDO-007"
-owner = "contributor"
-verdict = "missing-clause"
+owner = "maintainer"
+verdict = "would-overclaim"
 why = """
 it was SOURCED to TM-ZEROIZATION and that link was linkage, not coverage — the \
 clause states one rule, that RAM key material is wiped when its use ends, and \

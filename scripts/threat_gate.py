@@ -88,7 +88,22 @@ REF = re.compile(rf"^{re.escape(str(DOC))}#([A-Z][A-Z0-9-]*)$")
 PATH_SOURCE = re.compile(r"^([A-Za-z0-9_./-]+\.(?:md|toml|tla|rs|py|sh))(?: — .*)?$")
 
 KINDS = ("defence", "context")
-VERDICTS = ("missing-clause", "defends-nothing")
+#: What a P0-family row with no clause IS. Three, and the third arrived because
+#: two of these rows had a `verdict` that contradicted their own `why`:
+#: `missing-clause` says WRITE the clause, and `SEC-FIDO-007`'s why argues at
+#: length that writing one would be worse — `formal/README.md` records the
+#: invariant as inert on the shipped tree, so a clause would be a threat model
+#: stronger than its firmware, the one direction this page may not be wrong in.
+#: A register whose verdict column disagrees with its own reasoning is the
+#: verdict column this file exists to replace.
+VERDICTS = ("missing-clause", "defends-nothing", "would-overclaim")
+
+#: The two verdicts that are DECISIONS rather than deferrals, and so are the
+#: maintainer's. `missing-clause` is a page standing behind code that already
+#: defends the threat and a contributor can close it by writing the clause;
+#: saying a P0-family property defends nothing, or that its clause may never be
+#: written, is not that.
+MAINTAINER_VERDICTS = ("defends-nothing", "would-overclaim")
 
 #: Floors AT today's counts, in the shape the rest of `scripts/` uses them: a
 #: derivation that finds nothing satisfies every rule below over an empty roster.
@@ -450,6 +465,13 @@ def check_untraced(
                 f"{pid}: untraced and owed by {entry.get('owner')!r}, which is not"
                 f" one of {sorted(OWNERS)} — this is a register of obligations, and"
                 " an obligation nobody owns is a wish with a verdict column"
+            )
+        if entry.get("verdict") in MAINTAINER_VERDICTS and entry.get("owner") != "maintainer":
+            problems.append(
+                f"{pid}: verdict {entry.get('verdict')!r} owed by"
+                f" {entry.get('owner')!r} — that verdict is a DECISION about what"
+                " this project will never claim, not a piece of work a"
+                " contributor can finish, and only the maintainer makes it"
             )
         if stray := sorted(set(entry) - set(UNTRACED_FIELDS)):
             problems.append(

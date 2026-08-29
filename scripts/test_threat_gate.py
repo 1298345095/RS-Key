@@ -853,3 +853,42 @@ def test_check_sh_runs_this_gate():
     text = (threat_gate.ROOT / "scripts/check.sh").read_text()
     assert gate_lines.runs(text, "scripts/threat_gate.py"), "check.sh does not run it"
     assert 'run "threat-model traceability" python scripts/threat_gate.py' in text
+
+
+# ---- the verdict column may not disagree with its own `why` -------------------
+#
+# Two rows had a `verdict` that argued against their own reasoning:
+# `missing-clause` says WRITE the clause, and `SEC-FIDO-007`'s `why` argues at
+# length that writing one would be a threat model stronger than its firmware.
+# `would-overclaim` is that third answer, and it is the maintainer's for the same
+# reason `defends-nothing` is: it decides what this project will never claim.
+
+
+def test_the_third_verdict_is_the_maintainers(tree):
+    edit(tree, threat_gate.CLAUSES, 'verdict = "missing-clause"', 'verdict = "would-overclaim"')
+    found = problems(tree)
+    assert any("is a DECISION about what" in p for p in found), found
+
+
+def test_the_third_verdict_with_its_owner_is_accepted(tree):
+    edit(tree, threat_gate.CLAUSES, 'verdict = "missing-clause"', 'verdict = "would-overclaim"')
+    edit(tree, threat_gate.CLAUSES, 'owner = "contributor"', 'owner = "maintainer"')
+    assert problems(tree) == []
+
+
+def test_the_maintainer_verdicts_are_a_subset_of_the_vocabulary():
+    """A word in one roster and not the other is a rule nothing can reach."""
+    assert set(threat_gate.MAINTAINER_VERDICTS) <= set(threat_gate.VERDICTS)
+
+
+def test_the_shipped_register_obeys_the_owner_rule():
+    """Asserted over the SHIPPED file, not only over the fixture: the rule was
+    added because a shipped row broke it."""
+    import tomllib
+
+    doc = tomllib.loads(
+        (threat_gate.ROOT / threat_gate.CLAUSES).read_text(encoding="utf-8")
+    )
+    for entry in doc.get("untraced", []):
+        if entry.get("verdict") in threat_gate.MAINTAINER_VERDICTS:
+            assert entry.get("owner") == "maintainer", entry.get("id")
