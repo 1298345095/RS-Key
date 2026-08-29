@@ -559,6 +559,10 @@ run "sealed image retires its unsigned IMAGE_DEF" release_image_retires_its_unsi
 # the Python gates would audit the no-touch binary and say nothing about the one
 # that ships.
 run "constant-time sites in the image" python scripts/ct_gate.py
+# Same window and the same reason: segments, the memory map, the vector table
+# and the allocator surface of the DEFAULT image, before the three builds below
+# overwrite it with another profile's.
+run "image segments and allocator" python scripts/elf_gate.py
 # The 16 MB geometry is the one that broke: the store used to end at the top of
 # the XIP window, where the bootrom's RP2350-E10 absolute block lives, and
 # `picotool partition create` refuses a table claiming it — a build the release

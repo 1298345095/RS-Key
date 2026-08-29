@@ -45,6 +45,30 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The image has a heap, and until now nothing held that surface.**
+  `firmware/src/main.rs` declares `#[global_allocator] static HEAP:
+  embedded_alloc::LlffHeap` over 128 KiB — `docs/unsafe.md` site 4 is its
+  initialisation — so AGENTS.md's "no_std, no alloc" is a rule about new code and
+  not a description of the tree. A second allocator, or a `malloc` arriving
+  through a dependency, was invisible.
+
+  `scripts/elf_gate.py` + `assurance/image.toml` + the `check.sh` row `image
+  segments and allocator` close stage 11A's ELF-segment and allocator/FFI works
+  for the DEFAULT profile: every LOAD segment's run AND load address inside a
+  `firmware/memory.x` region, none of them overlapping the KV store the partition
+  table fences from BOOTSEL and nothing fenced from the linker, the vector table
+  at the FLASH origin, the entry point inside FLASH, exactly the registered
+  writable-executable segment, exactly the registered allocator symbols, and no
+  undefined symbol in a fully linked image.
+
+  Measured on the shipped image: 5 LOAD segments over 4 regions, 1
+  writable-executable (`.data`, deliberately — it carries the routines that must
+  not run from XIP flash, and a blanket "no W+X" rule would be red on a correct
+  image), 3 allocator symbols, 0 undefined. The row sits beside the constant-time
+  one and for the same reason: the 16 MB, display and no-touch builds below
+  overwrite that path. The other profiles are a named gap in the registry, not a
+  silent one.
+
 - **The model's five permission subsets were a scope claiming to be a
   description, and both halves of stage 2 п.7 now answer for it.** `PermSets`
   carried five of the sixteen subsets of its four permission elements with a
