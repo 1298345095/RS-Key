@@ -29,11 +29,29 @@ just built:
   consumes its flags carries the enclosing applet's frame instead. Measured, that
   arm came back 0 violations, EXIT=0 — a check that could not fail, over the
   defect it was written for.
-* **The caller set is derived, not listed.** The first-party functions that
-  inline a site are read out of the same chains and held against
-  `assurance/ct_sites.toml` BOTH WAYS: a surface that stops routing through the
-  comparator disappears from the ELF and reddens, and a new one that appears
-  owes the registry a line saying which protocol operation it is.
+
+  The trace is TRANSITIVE, and that is the second thing this shipped wrong. A
+  depth-1 rule — the flag operand's own definition must BE a load — is defeated
+  by one arithmetic step, and an independent review drove it: `if diff & 0x80 !=
+  0 { return false; }` inside the comparator lowers to `orrs` / `sxtb` / `cmp` /
+  `bgt`, a real secret-dependent early exit, and the depth-1 rule reported zero.
+  The mutant that WAS caught was caught only because LLVM folded it back into a
+  compare of two loads — a property of the optimiser, not of the rule.
+* **The caller set is derived, not listed.** EVERY first-party frame the chains
+  name — not just the outermost — is held against `assurance/ct_sites.toml` BOTH
+  WAYS: a surface that stops routing through the comparator disappears from the
+  ELF and reddens, and a new one that appears owes the registry a line saying
+  which protocol operation it is.
+
+  "Every frame" and not "the outermost" is the third thing this shipped wrong,
+  and it was the headline claim. Keyed on the outermost frame, a bypass added
+  BESIDE a surviving `ct_eq` call in the same enclosing function is invisible:
+  the review reproduced the page's own Medium finding — `rsk-otp`'s `cmd_update`
+  moved back to a slice `!=` over the 6-byte access code while `cmd_configure`
+  kept the comparator — and the row stayed EXIT=0 with the page still listing
+  "OTP slot configure/update access code" as a surface that routes through it.
+  With every frame registered, `cmd_update` leaving the chains is a stale entry
+  and the row goes red.
 
 Two things it deliberately does NOT do. It does not print instruction counts or
 addresses into the page: both move on any unrelated code change, and a generated
@@ -71,6 +89,7 @@ generated today", so that arm stays green and is a check that cannot fail.
 
 from __future__ import annotations
 
+import collections
 import pathlib
 import re
 import subprocess
@@ -141,6 +160,23 @@ FLAG_SETTING = FLAG_ONLY | {
     "bics", "movs", "mvns", "lsls", "lsrs", "asrs", "rors", "rrxs", "muls",
 }
 LOAD = re.compile(r"^ldr(b|h|sb|sh|d)?$")
+
+#: Data-processing mnemonics that carry a VALUE from their sources into their
+#: destination, so a taint passes through them. Enumerated rather than
+#: complemented: a mnemonic nobody listed stops the trace, which is the
+#: under-reporting direction and the one a floor can still catch.
+TRANSPARENT = {
+    "mov", "movs", "mvn", "mvns", "uxtb", "uxth", "sxtb", "sxth", "rev", "rev16",
+    "revsh", "rbit", "clz", "and", "ands", "orr", "orrs", "orn", "orns", "eor",
+    "eors", "bic", "bics", "add", "adds", "adc", "adcs", "sub", "subs", "sbc",
+    "sbcs", "rsb", "rsbs", "lsl", "lsls", "lsr", "lsrs", "asr", "asrs", "ror",
+    "rors", "mul", "muls", "mla", "mls", "ubfx", "sbfx", "bfi", "bfc",
+}
+
+#: How many data-processing steps a taint may pass through. Four, because the
+#: measured defect is two (`orrs` then `sxtb`) and the cost of one more level is
+#: a walk, not a solve.
+TAINT_DEPTH = 4
 REGISTER = re.compile(r"\b(r\d+|sl|fp|ip|sp|lr|pc)\b")
 
 #: The address base a load reads from, if the operand list has one.
@@ -168,6 +204,7 @@ STORE = re.compile(r"^str(b|h|d)?$")
 #: Measured on this tree: 39 attributed runs, 26 conditional branches examined.
 RUN_FLOOR = 30
 BRANCH_FLOOR = 20
+REASONED_FLOOR = 15
 
 
 def demangle(symbol: str) -> str:
@@ -206,9 +243,17 @@ def unescape(name: str) -> str:
     return name
 
 
-def registry(root: pathlib.Path, findings: list[str]):
-    """The hand-written half: sites and the surface each caller stands for."""
-    doc = tomllib.loads((root / REGISTRY).read_text(encoding="utf-8"))
+def registry(root: pathlib.Path, findings: list[str], text: str | None = None):
+    """The hand-written half: sites and the surface each caller stands for.
+
+    `text` is the registry, handed in so a case can mutate it without writing to
+    the working tree — the first version of the table did write, and a review
+    pointed out that an interrupt during `pytest (gate scripts)` would leave a
+    tracked file modified.
+    """
+    doc = tomllib.loads(
+        (root / REGISTRY).read_text(encoding="utf-8") if text is None else text
+    )
     for key in sorted(set(doc) - {"site", "caller"}):
         findings.append(
             f"{REGISTRY}: top-level `{key}` — the file holds `[[site]]` and"
@@ -327,13 +372,49 @@ def walk_back(stream, index, want, limit=64):
 
 
 def last_definition(stream, index, register):
-    """The nearest instruction before `index` that wrote `register`."""
-    for addr, mnemonic, operands, chain in walk_back(stream, index, None):
+    """(position, instruction) of the nearest write to `register` before `index`."""
+    frame = stream[index][3][-1] if stream[index][3] else None
+    for step in range(index - 1, max(-1, index - 65), -1):
+        addr, mnemonic, operands, chain = stream[step]
+        if (chain[-1] if chain else None) != frame:
+            return None
         if mnemonic in FLAG_ONLY or BARRIER.match(mnemonic):
             continue
         written = REGISTER.search(operands.split(",")[0]) if operands else None
         if written and written.group(1) == register:
-            return addr, mnemonic, operands, chain
+            return step, stream[step]
+    return None
+
+
+def buffer_load(stream, index, register, depth=TAINT_DEPTH, seen=None):
+    """The buffer load `register` at `index` ultimately reads, if any.
+
+    Transitive: a value that reaches a compare through `orrs` and `sxtb` came
+    from the load all the same, and a rule that only accepts a load as the
+    IMMEDIATE definition is defeated by one arithmetic step.
+    """
+    found = last_definition(stream, index, register)
+    if found is None:
+        return None
+    where, (addr, mnemonic, operands, chain) = found
+    if LOAD.match(mnemonic):
+        base = BASE.search(operands)
+        if base and base.group(1) == "pc":
+            return None  # a literal pool holds constants, never a buffer
+        if reload_of_a_store(stream, where):
+            return None
+        return addr, mnemonic, operands, chain
+    if depth <= 0 or mnemonic not in TRANSPARENT:
+        return None
+    seen = set() if seen is None else seen
+    if where in seen:
+        return None
+    seen.add(where)
+    tail = operands.split(",", 1)[1] if "," in operands else ""
+    for source in REGISTER.findall(tail):
+        deeper = buffer_load(stream, where, source, depth - 1, seen)
+        if deeper:
+            return deeper
     return None
 
 
@@ -347,13 +428,13 @@ def flag_setter(mnemonic):
     return None
 
 
-def reload_of_a_store(stream, load):
-    """Whether `load` reads back an address this frame already wrote."""
+def reload_of_a_store(stream, index):
+    """Whether the load at `index` reads back an address this frame already wrote."""
+    load = stream[index]
     address = ADDRESS.search(load[2])
     if not address:
         return False
     frame = load[3][-1] if load[3] else None
-    index = next(i for i, step in enumerate(stream) if step[0] == load[0])
     for step in range(index - 1, max(-1, index - 64), -1):
         addr, mnemonic, operands, chain = stream[step]
         if (chain[-1] if chain else None) != frame:
@@ -386,9 +467,16 @@ def governing(stream, index):
     return out
 
 
-def secret_branches(stream, symbols):
-    """Conditional branches whose flags trace to a byte a registered site loaded."""
+def secret_branches(stream, symbols, asked=None):
+    """Conditional branches whose flags trace to a byte a registered site loaded.
+
+    `asked` collects the branches the rule actually REASONED about, as opposed to
+    the ones it merely walked past: a review measured that 20 of the shipped
+    image's 26 in-site branches are excused before the buffer question is put,
+    so a floor on branches SEEN says less than it looks.
+    """
     out = []
+    asked = set() if asked is None else asked
     for index, (addr, mnemonic, operands, _) in enumerate(stream):
         if CBZ.match(mnemonic):
             candidates = [(mnemonic, operands.split(",")[0].strip())]
@@ -400,22 +488,22 @@ def secret_branches(stream, symbols):
             ]
         else:
             continue
+        reasoned = False
         for source, register in candidates:
             found = REGISTER.search(register)
             name = found.group(1) if found else None
-            defined = last_definition(stream, index, name) if name else None
-            if not defined or not LOAD.match(defined[1]):
-                continue
-            base = BASE.search(defined[2])
-            if base and base.group(1) == "pc":
-                continue  # a literal pool holds constants, never a buffer
-            if reload_of_a_store(stream, defined):
+            if name and last_definition(stream, index, name):
+                reasoned = True
+            defined = buffer_load(stream, index, name) if name else None
+            if not defined:
                 continue
             site = next((s for s in symbols if s in defined[3]), None)
             if site is None:
                 continue
             out.append((site, addr, mnemonic, source, f"{defined[1]} {defined[2]}"))
             break
+        if reasoned:
+            asked.add(addr)
     return out
 
 
@@ -429,7 +517,8 @@ def observe(root: pathlib.Path, sites, lines=None):
     lines = disassembly(root) if lines is None else lines
     stream = list(instructions(lines))
     by_site = {entry["symbol"]: name for name, entry in sites.items()}
-    tainted = secret_branches(stream, set(by_site))
+    asked: set[int] = set()
+    tainted = secret_branches(stream, set(by_site), asked)
     out = {}
     for name, entry in sorted(sites.items()):
         found = runs(stream, entry["symbol"])
@@ -439,35 +528,56 @@ def observe(root: pathlib.Path, sites, lines=None):
                 1 for _, mnemonic, _, _ in run
                 if CBZ.match(mnemonic) or COND_BRANCH.match(mnemonic)
             )
-            # The OUTERMOST first-party frame, not every one: the chain also
-            # names the per-crate forwarders and the `core` adapters the loop is
-            # built from, and a roster of those describes the compiler rather
-            # than the protocol.
-            outer = [f for f in run[0][3] if f != entry["symbol"] and FIRST_PARTY.match(f)]
-            if outer:
-                callers.add(outer[-1])
+            # EVERY first-party frame, including the per-crate forwarders: a
+            # roster of outermost frames alone cannot see a bypass added BESIDE
+            # a surviving call in the same enclosing function, which is exactly
+            # the finding docs/ct-audit.md records twice.
+            callers.update(
+                f for f in run[0][3] if f != entry["symbol"] and FIRST_PARTY.match(f)
+            )
         violations = [v[1:] for v in tainted if by_site[v[0]] == name]
-        out[name] = (violations, len(found), branches, callers)
+        reasoned = sum(
+            1 for run in found for addr, _, _, _ in run if addr in asked
+        )
+        out[name] = (violations, len(found), branches, callers, reasoned)
     return out
 
 
-def toolchain() -> str:
-    version = subprocess.run(
-        ["rustc", "-vV"], capture_output=True, text=True, check=True
+PRODUCER = re.compile(r"DW_AT_producer\s*:\s*(?:\(indirect string.*?\):\s*)?(.+)$", re.M)
+
+
+def toolchain(root: pathlib.Path, elf: pathlib.Path) -> str:
+    """What compiled THIS image, out of its own DWARF.
+
+    Not `rustc -vV`: a review pointed out that reads the compiler on the path,
+    which is the one that would build the image and not the one that did.
+    """
+    out = subprocess.run(
+        ["arm-none-eabi-readelf", "--debug-dump=info", str(root / elf)],
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
-    release = re.search(r"^release: (\S+)$", version, re.M)
-    commit = re.search(r"^commit-hash: (\S+)$", version, re.M)
-    return f"rustc {release.group(1) if release else '?'} ({commit.group(1)[:9] if commit else '?'})"
+    names = collections.Counter(m.group(1).strip() for m in PRODUCER.finditer(out))
+    if not names:
+        return "unknown"
+    # The MAJORITY producer, because the image is not built by one compiler: a
+    # prebuilt `cortex-m` asm blob carries a 2021 nightly's string, and picking
+    # the first name alphabetically published that one as "built by".
+    # `scripts/elf_gate.py` holds the whole set; this line names the one that
+    # compiled the sites.
+    return names.most_common(1)[0][0]
 
 
-def body(sites, callers, seen) -> list[str]:
+def body(root, sites, callers, seen) -> list[str]:
     """The region, and it prints NO count and NO address on purpose."""
     out = [
         f"<!-- {REGION}:start -->",
         REGION_HEADER,
         "",
         f"Read out of `{ELF}` with `{OBJDUMP} -d -l --inlines`, built by"
-        f" {toolchain()}. A site's verdict is `constant-time` when no conditional"
+        f" {toolchain(root, ELF)}. A site's verdict is `constant-time` when no"
+        " conditional"
         " branch inside any address run the inline chain attributes to it reads"
         " flags set from a buffer load; the callers are the first-party frames"
         " those chains name, so a surface that stops routing through the site"
@@ -477,7 +587,7 @@ def body(sites, callers, seen) -> list[str]:
         "|---|---|---|---|",
     ]
     for name, entry in sorted(sites.items()):
-        violations, _, _, found = seen[name]
+        violations, _, _, found, _ = seen[name]
         verdict = "SECRET-DEPENDENT" if violations else "constant-time"
         surfaces = ", ".join(
             f"{callers.get(symbol, symbol)}" for symbol in sorted(found)
@@ -497,10 +607,16 @@ def render(root: pathlib.Path, sites, callers, seen) -> str:
     tail = text.find(end)
     if head == -1 or tail == -1 or tail < head:
         raise ValueError(f"{PAGE} needs exactly one {REGION!r} marker pair")
-    return text[:head] + "\n".join(body(sites, callers, seen)) + text[tail + len(end) :]
+    return text[:head] + "\n".join(body(root, sites, callers, seen)) + text[tail + len(end) :]
 
 
-def audit(root: pathlib.Path, run_floor=RUN_FLOOR, branch_floor=BRANCH_FLOOR, lines=None):
+def audit(
+    root: pathlib.Path,
+    run_floor=RUN_FLOOR,
+    branch_floor=BRANCH_FLOOR,
+    reasoned_floor=REASONED_FLOOR,
+    lines=None,
+):
     findings: list[str] = []
     sites, callers = registry(root, findings)
     if findings:
@@ -511,9 +627,11 @@ def audit(root: pathlib.Path, run_floor=RUN_FLOOR, branch_floor=BRANCH_FLOOR, li
         return [f"{ELF}: {error}"], ""
 
     total_runs = total_branches = 0
-    for name, (violations, found, branches, inlined) in sorted(seen.items()):
+    total_reasoned = 0
+    for name, (violations, found, branches, inlined, reasoned) in sorted(seen.items()):
         total_runs += found
         total_branches += branches
+        total_reasoned += reasoned
         symbol = sites[name]["symbol"]
         if not found:
             findings.append(
@@ -531,7 +649,7 @@ def audit(root: pathlib.Path, run_floor=RUN_FLOOR, branch_floor=BRANCH_FLOOR, li
                 f"{name}: `{symbol}` inlines it and no `[[caller]]` says which"
                 " protocol surface that is"
             )
-    for symbol in sorted(set(callers) - {s for _, _, _, c in seen.values() for s in c}):
+    for symbol in sorted(set(callers) - {s for row in seen.values() for s in row[3]}):
         findings.append(
             f"{REGISTRY}: `{symbol}` is registered as a caller and inlines no"
             " site in the image — the surface stopped routing through it, or the"
@@ -550,6 +668,16 @@ def audit(root: pathlib.Path, run_floor=RUN_FLOOR, branch_floor=BRANCH_FLOOR, li
             f"{total_branches} conditional branch(es) examined, under the"
             f" measured {branch_floor} — a rule that reads no branch cannot fail"
         )
+    # The floor that says something the one above cannot: a branch the rule
+    # WALKED PAST is not a branch it decided. Measured, most of the shipped
+    # image's in-site branches are reloads of the barrier's own spill, so a
+    # change that made every one of them look like a reload would satisfy the
+    # count above while reasoning about nothing.
+    if total_reasoned < reasoned_floor:
+        findings.append(
+            f"{total_reasoned} branch(es) traced to a definition, under the"
+            f" measured {reasoned_floor} — the rule stopped putting the question"
+        )
 
     try:
         want = render(root, sites, callers, seen)
@@ -564,8 +692,9 @@ def audit(root: pathlib.Path, run_floor=RUN_FLOOR, branch_floor=BRANCH_FLOOR, li
 
     summary = (
         f"ct-gate: ok — {len(sites)} constant-time site(s) over {total_runs}"
-        f" attributed run(s), {total_branches} conditional branch(es) examined,"
-        f" 0 secret-dependent, {len(callers)} surface(s) registered"
+        f" attributed run(s), {total_branches} conditional branch(es) examined"
+        f" and {total_reasoned} traced to a definition, 0 secret-dependent,"
+        f" {len(callers)} surface(s) registered"
     )
     return findings, summary
 

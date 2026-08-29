@@ -222,6 +222,31 @@ and to the statuses it quotes.
 
 ### Changed
 
+- **The constant-time row was green over two real defects, and an independent
+  review found both.** Its taint was depth-1 — the branch's flag operand had to
+  be a load ITSELF — so `if diff & 0x80 != 0 { return false; }` inside `ct_eq`,
+  which lowers to `orrs` / `sxtb` / `cmp` / `bgt`, reported zero and exited 0.
+  The mutant that WAS caught was caught only because LLVM folded it back into a
+  compare of two loads: a property of the optimiser, not of the rule. The trace
+  is now transitive through data-processing instructions, bounded at four steps,
+  and that arm reports **32** violations.
+
+  And its caller half keyed on the OUTERMOST frame, so a bypass added BESIDE a
+  surviving call in the same enclosing function was invisible: the review
+  reproduced this page's own Medium finding — `rsk-otp`'s `cmd_update` back to a
+  slice `!=` over the access code with `cmd_configure` untouched — and the row
+  stayed green with the page still listing the surface as routing through the
+  comparator. EVERY first-party frame is registered now, 28 of them, and that arm
+  reddens naming `cmd_update`.
+
+  Three smaller corrections from the same review: the page said "built by" the
+  compiler on the PATH rather than the one in the image's DWARF; a third floor
+  counts branches the rule actually TRACED, because most in-site branches were
+  excused before the buffer question was put; and the mutation table wrote
+  `assurance/ct_sites.toml` from a case and read whichever firmware `target/`
+  happened to hold. The table now touches neither, and runs in 3.8 s instead of
+  36 s.
+
 - **The present/decided bitmap arithmetic has one definition and a theorem about
   it.** `fid >> 3` and `1 << (fid & 7)` were spelled out at five sites —
   `present_bit`, `decided_bit`, `mark_present`, `mark_absent`, and a fifth copy
