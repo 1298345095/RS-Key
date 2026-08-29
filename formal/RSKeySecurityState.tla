@@ -56,10 +56,10 @@ CONSTANTS
     BugUnscopedCancel,            \* crates/rsk-device/src/presence.rs:118-122
     BugTouchNotSpent,             \* crates/rsk-device/src/presence.rs:203-211,226
     BugSoftLockLostOnWarmReset,   \* ctap.rs:354-361   PinLock across sys_reset
-    BugWarmResetReopensWindow,    \* reset.rs:215-216  in_reset_window
+    BugWarmResetReopensWindow,    \* reset.rs:231-232  in_reset_window
     BugCmWalkIgnoresChannel,      \* state.rs:169-180  may_walk_rps
     BugDeleteRpBeforeCred,        \* credmgmt.rs:665-673 deleteCredential order
-    BugBackupSealedNotAGate,      \* reset.rs:187-208 is_fido_gate_fid (run-36)
+    BugBackupSealedNotAGate,      \* reset.rs:187-224 is_fido_gate_fid (run-36)
     BugConsumeKeepsMcGa,          \* state.rs:566-571  a narrowed 6.5.5.7 triad
     BugNoDropStaleCancelAtEntry,  \* crates/rsk-device/src/presence.rs:195-196
     BugWrongPinKeepsToken,        \* clientpin.rs:786  the pre-E38 tree
@@ -68,10 +68,10 @@ CONSTANTS
     BugStateResetAfterWipe,       \* reset.rs:63-66 ctx.state.reset() ordering
     BugPanelCancelable,           \* the panel's half of request_cancel's scope test
     BugUnscopedOtpCancel,         \* crates/rsk-device/src/presence.rs:127
-    BugLocalPinKeepsToken,        \* crates/rsk-display/src/gates.rs:146
+    BugLocalPinKeepsToken,        \* crates/rsk-display/src/gates.rs:149
     BugSetPinOverExisting,        \* clientpin.rs:188-190 setPIN over a live PIN
     BugHostPreemptsLocalWait,     \* the button's owner, taken by a host command
-    BugLocalPinIgnoresBudget,     \* crates/rsk-display/src/gates.rs:126-128
+    BugLocalPinIgnoresBudget,     \* crates/rsk-display/src/gates.rs:129-131
     BugPpuatIsAGate,              \* eab4b5c: EF_PAUTHTOKEN in the deferred phase
     BugPinWriteBeforeRevoke,      \* clientpin.rs:217-221, :300-304 -- the order
     \* The two halves of the token-less carve-out, one switch each, so a RED
@@ -160,9 +160,9 @@ VARIABLES
     pin,    \* EF_PIN:  [set, retries, everSet]                (clientpin.rs:35)
     \* The gate records: [ppuat, ppuatStale, alwaysUv, backupSealed].
     \* `backupSealed` is EF_BACKUP_SEALED and it runs the other way round from
-    \* the rest: its ABSENCE is the permissive state (reset.rs:187-208), so what
+    \* the rest: its ABSENCE is the permissive state (reset.rs:187-224), so what
     \* a torn wipe can re-open is a window the owner had closed.
-    gate,   \*                                                 (reset.rs:182-209)
+    gate,   \*                                                 (reset.rs:182-225)
     \* The secrets: [cred, rpent, seed]. `cred` and `rpent` are the records that
     \* still OPEN, not the records that still occupy a slot: every credential box,
     \* rpId box and EF_RP domain is sealed under the seed, and `credential_load` /
@@ -170,7 +170,7 @@ VARIABLES
     \* deleting the seed empties both here while the flash records remain, which
     \* is exactly what the shipped wipe buys and the only thing these invariants
     \* can be about -- an unopenable record is neither usable nor manageable.
-    store,  \*                                                  (reset.rs:219-261)
+    store,  \*                                                  (reset.rs:235-277)
     lock,   \* the soft lock: [soft, mism, policyMism]         (state.rs:285-293)
     tok,    \* device-side session token: [live, perms, rp]    (state.rs:248-262)
     plat,   \* the platform's copy: [held, verifies, revoked]  (ghost + wire)
@@ -673,7 +673,7 @@ MintPpuat ==
 
 (***************************************************************************)
 (* THE PANEL'S PIN PAD IS A FOURTH DOOR ONTO EF_PIN.                       *)
-(* crates/rsk-display/src/gates.rs:114-200 (`local_pin_gate`).             *)
+(* crates/rsk-display/src/gates.rs:117-203 (`local_pin_gate`).             *)
 (***************************************************************************)
 
 \* It spends the SAME persistent retry counter the wire path spends -- a correct
@@ -700,9 +700,10 @@ LocalPinEnabled == Idle /\ LocalPinGuard
 \* performed locally, and over USB that check ends the host's outstanding
 \* pinUvAuthToken (clientpin.rs:786) -- so it must here too, or the panel is a
 \* door the revocation rule does not cover. `ends_host_token`
-\* (crates/rsk-display/src/gates.rs:139-146) is the Rust's own test and it is
-\* deliberately narrow in two ways the model reproduces: the FIDO scope only (the
-\* device PIN is no CTAP credential, and EF_DEVICE_PIN is not modelled), and only
+\* (crates/rsk-display/src/gates.rs:142-149) is the Rust's own test and it is
+\* deliberately narrow in two ways the model reproduces: the FIDO scope only (a
+\* device-PIN failure has no clientPIN token to invalidate, because that branch
+\* runs only where EF_PIN is absent, and EF_DEVICE_PIN is not modelled), and only
 \* with budget left to spend, because a `Blocked` verdict reached at zero was
 \* turned away before any compare -- which `LocalPinEnabled` already excludes.
 \*
@@ -1039,12 +1040,12 @@ ConfigOp ==
                     ram >>
 
 (***************************************************************************)
-(* Vendor BACKUP_FINALIZE -- vendor.rs:922-929, and its on-device twin      *)
-(* mark_backup_sealed (vendor.rs:990-996).                                  *)
+(* Vendor BACKUP_FINALIZE -- vendor.rs:941-948, and its on-device twin      *)
+(* mark_backup_sealed (vendor.rs:1009-1015).                                  *)
 (***************************************************************************)
 
 \* Writing EF_BACKUP_SEALED closes the one-time seed-export window: after it,
-\* BACKUP_EXPORT refuses (vendor.rs:827) and the display's recovery-phrase
+\* BACKUP_EXPORT refuses (vendor.rs:846) and the display's recovery-phrase
 \* reveal is gone, until a reset reopens the window. Modelled UNGATED -- the
 \* real one carries the PIN half and a deliberate hold -- which widens only the
 \* states the marker can be SET in, never the states it can be LOST in, and it
@@ -1056,7 +1057,7 @@ BackupFinalize ==
     /\ UNCHANGED << pin, store, lock, tok, plat, pres, walk, sys, op, snap,
                     upSpent, viol, ram >>
 
-\* Vendor UNLOCK (vendor.rs:566-589): the host presents the 32-byte lock key over
+\* Vendor UNLOCK (vendor.rs:575-598): the host presents the 32-byte lock key over
 \* the MSE channel, the wrapped seed on flash decrypts, and `state.keydev_dec`
 \* holds it until power-off. No PIN and no touch -- knowing the lock key IS the
 \* authorization -- so this is not modelled as a gate, only as the one door
@@ -1172,7 +1173,7 @@ DeleteCredWriteB ==
 (* order WITHIN a phase is not controlled and is modelled as arbitrary.     *)
 (***************************************************************************)
 
-\* reset.rs:211-216. A warm boot CLOSES the window rather than opening one:
+\* reset.rs:227-232. A warm boot CLOSES the window rather than opening one:
 \* sys_reset is host-requestable ungated, so a window the host can restart at
 \* will is no window at all. Modelled on a button build, where
 \* presence.shows_confirm() is FALSE and the window therefore applies.
@@ -1257,7 +1258,7 @@ ResetConfirmed ==
     /\ UNCHANGED << pin, gate, lock, pres, sys >>
 
 \* Which phase EF_BACKUP_SEALED belongs to is the audit run-36 class fix itself
-\* (reset.rs:187-208): it is in the GATE set, so the marker outlives the seed it
+\* (reset.rs:187-224): it is in the GATE set, so the marker outlives the seed it
 \* protects. BugBackupSealedNotAGate moves it back into phase 1, where it sat.
 SealedIsAGate == ~BugBackupSealedNotAGate /\ gate.backupSealed
 SealedIsASecret == BugBackupSealedNotAGate /\ gate.backupSealed
@@ -1437,7 +1438,7 @@ PowerCut ==
 
 \* A host-requestable warm reset (SCB::sys_reset -- vendor 0x1F P1=0, the
 \* rescue twin, the phy config-write auto-reboot). ctap.rs:354-361 carries the
-\* PinLock across it; reset.rs:216 makes it CLOSE the reset window.
+\* PinLock across it; reset.rs:232 makes it CLOSE the reset window.
 WarmReset ==
     /\ VolatileCleared
     /\ BootEnsuresSeed                 \* sys_reset re-enters main: same boot path

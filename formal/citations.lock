@@ -49,6 +49,7 @@ crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/makecredential.rs	518-521	
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/state.rs	169-179	/// Whether `channel` may take the next leg of the RP walk: it opened it, and	self.channel == channel && self.cred_counter <= self.cred_total
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/state.rs	329-335	/// The channel [`Self::channel`] held when that handshake ran — defence in	pub mse_cid: u32,
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/state.rs	357-361	/// Transport channel of the request being dispatched — the CTAPHID CID, or 0	pub channel: u32,
+crates/rsk-fido/src/vendor_tests.rs	crates/rsk-sdk/src/presence.rs	92-92	fn uv_available(&self) -> bool {	fn uv_available(&self) -> bool {
 crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	156-158	fn known_absent(&self, fid: u16) -> bool {	}
 crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	474-494	pub fn put(&mut self, fid: u16, data: &[u8]) -> Result<()> {	}
 crates/rsk-fs/src/store_assurance.rs	crates/rsk-fs/src/fs.rs	534-543	pub fn delete(&mut self, fid: u16) -> Result<()> {	}
@@ -74,9 +75,9 @@ formal/README.md	crates/rsk-device/src/presence.rs	195-196	// this wait starts c
 formal/README.md	crates/rsk-device/src/presence.rs	196-196	arb.set_cancel_requested(false);	arb.set_cancel_requested(false);
 formal/README.md	crates/rsk-device/src/presence.rs	215-216	if board.now_us().wrapping_sub(start) >= timeout_us {	break Outcome::Timeout;
 formal/README.md	crates/rsk-device/src/presence.rs	230-230	arb.set_up_pending(false);	arb.set_up_pending(false);
-formal/README.md	crates/rsk-display/src/gates.rs	114-200	pub(super) fn local_pin_gate(&mut self, scope: PinScope) -> bool {	}
-formal/README.md	crates/rsk-display/src/gates.rs	126-128	PinScope::Device => rsk_fido::passkeys::device_pin_retries_left(&mut fs),	};
-formal/README.md	crates/rsk-display/src/gates.rs	139-146	let mut pin = [0u8; 64];	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);
+formal/README.md	crates/rsk-display/src/gates.rs	117-203	pub(super) fn local_pin_gate(&mut self, scope: PinScope) -> bool {	}
+formal/README.md	crates/rsk-display/src/gates.rs	129-131	PinScope::Device => rsk_fido::passkeys::device_pin_retries_left(&mut fs),	};
+formal/README.md	crates/rsk-display/src/gates.rs	142-149	let mut pin = [0u8; 64];	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);
 formal/README.md	crates/rsk-display/src/power.rs	55-65	pub(super) fn armed_touch(&mut self) -> Option<rsk_ui::Point> {	}
 formal/README.md	crates/rsk-display/src/presence.rs	45-48	let saved = self.hooks.led_status();	self.hooks.set_up_pending(true);
 formal/README.md	crates/rsk-display/src/presence.rs	120-124	let mut last_num: u16 = 0;	// no signature is ever produced without the deliberate on-screen hold.
@@ -137,11 +138,11 @@ formal/README.md	crates/rsk-fido/src/reset.rs	97-143	/// One phase of the reset 
 formal/README.md	crates/rsk-fido/src/reset.rs	116-116	if pred(fid) && n < keys.len() && !keys[..n].contains(&fid) {	if pred(fid) && n < keys.len() && !keys[..n].contains(&fid) {
 formal/README.md	crates/rsk-fido/src/reset.rs	124-128	return if complete {	};
 formal/README.md	crates/rsk-fido/src/reset.rs	131-131	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
-formal/README.md	crates/rsk-fido/src/reset.rs	182-209	/// The FIDO records that *gate* the applet rather than being the secret itself.	}
-formal/README.md	crates/rsk-fido/src/reset.rs	187-208	/// `EF_BACKUP_SEALED` is a gate of the same shape as OATH's access code: it is	)
-formal/README.md	crates/rsk-fido/src/reset.rs	211-217	/// CTAP 2.1 §6.6: a reset is honored only within [`RESET_WINDOW_MS`] of power-up,	}
-formal/README.md	crates/rsk-fido/src/reset.rs	216-216	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
-formal/README.md	crates/rsk-fido/src/reset.rs	263-271	/// Whether `fid` survives an on-device **factory reset** (the trusted-display	fid == EF_ATT_KEY.get() || fid == EF_ATT_CHAIN
+formal/README.md	crates/rsk-fido/src/reset.rs	182-225	/// The FIDO records that *gate* the applet rather than being the secret itself.	}
+formal/README.md	crates/rsk-fido/src/reset.rs	187-224	/// `EF_BACKUP_SEALED` is a gate of the same shape as OATH's access code: it is	)
+formal/README.md	crates/rsk-fido/src/reset.rs	227-233	/// CTAP 2.1 §6.6: a reset is honored only within [`RESET_WINDOW_MS`] of power-up,	}
+formal/README.md	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/README.md	crates/rsk-fido/src/reset.rs	279-287	/// Whether `fid` survives an on-device **factory reset** (the trusted-display	fid == EF_ATT_KEY.get() || fid == EF_ATT_CHAIN
 formal/README.md	crates/rsk-fido/src/seed.rs	323-324	r.map(|()| tok)	}
 formal/README.md	crates/rsk-fido/src/state.rs	33-51	/// State carried between `getAssertion` and `getNextAssertion` when resident	pub slots: [u16; MAX_ASSERTION_CREDS],
 formal/README.md	crates/rsk-fido/src/state.rs	169-180	/// Whether `channel` may take the next leg of the RP walk: it opened it, and	}
@@ -159,8 +160,8 @@ formal/README.md	crates/rsk-fido/src/state.rs	552-553	self.paut.in_use = false;	
 formal/README.md	crates/rsk-fido/src/state.rs	596-609	/// Expire an in-use token once its usage timer has run out (CTAP 2.1	}
 formal/README.md	crates/rsk-fido/src/state.rs	620-626	pub fn expire_stale_sequences(&mut self, now_ms: u64) {	}
 formal/README.md	crates/rsk-fido/src/u2f.rs	94-94	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());
-formal/README.md	crates/rsk-fido/src/vendor.rs	566-589	fn unlock<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	None => Err(CtapError::InvalidParameter),
-formal/README.md	crates/rsk-fido/src/vendor.rs	917-929	fn backup_finalize<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	.map_err(|_| CtapError::Other)?;
+formal/README.md	crates/rsk-fido/src/vendor.rs	575-598	fn unlock<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	None => Err(CtapError::InvalidParameter),
+formal/README.md	crates/rsk-fido/src/vendor.rs	936-948	fn backup_finalize<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	.map_err(|_| CtapError::Other)?;
 formal/README.md	crates/rsk-fs/src/fs.rs	175-175	self.decided[i] |= m;	self.decided[i] |= m;
 formal/README.md	crates/rsk-fs/src/fs.rs	223-223	decided[i] |= m;	decided[i] |= m;
 formal/README.md	crates/rsk-fs/src/fs.rs	228-228	if fid == EF_META || fid == EF_SCRUB_FILLER {	if fid == EF_META || fid == EF_SCRUB_FILLER {
@@ -258,7 +259,7 @@ formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ccid.rs	310-319	#[cfg(not(feat
 formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ccid.rs	354-369	/// Drop the selected applet's security status on an ICC power transition, so a	self.disp.reset_card(&mut applets, &mut *fsb);
 formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ctap.rs	177-181	EF_PIN, EF_RP, MAX_RESIDENT_CREDENTIALS,	let pin_size = fs.size(EF_PIN).and_then(|n| u8::try_from(n).ok());
 formal/RSKeyAppletSeams.tla	crates/rsk-display/src/pin.rs	681-689	let _ = rsk_ui::render_erasing(&mut self.panel);	)
-formal/RSKeyAppletSeams.tla	crates/rsk-fido/src/reset.rs	219-261	/// Whether `fid` is cleared by `authenticatorReset` — every FIDO-owned flash file plus	}
+formal/RSKeyAppletSeams.tla	crates/rsk-fido/src/reset.rs	235-277	/// Whether `fid` is cleared by `authenticatorReset` — every FIDO-owned flash file plus	}
 formal/RSKeyAppletSeams.tla	crates/rsk-fs/src/fs.rs	404-451	/// that is still live and, for PIV, not PIN-bound at rest — or, for OATH, leaves	return Err(Error::MemoryFatal);
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	183-191	/// allowed); with a code set, SELECT resets it and VALIDATE/VERIFY PIN	otp_pin_verified: bool,
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	214-215	presence,	validated: true,
@@ -334,10 +335,10 @@ formal/RSKeySecurityState.tla	crates/rsk-device/src/presence.rs	212-214	if arb.c
 formal/RSKeySecurityState.tla	crates/rsk-device/src/presence.rs	215-216	if board.now_us().wrapping_sub(start) >= timeout_us {	break Outcome::Timeout;
 formal/RSKeySecurityState.tla	crates/rsk-device/src/presence.rs	215-217	if board.now_us().wrapping_sub(start) >= timeout_us {	}
 formal/RSKeySecurityState.tla	crates/rsk-device/src/presence.rs	226-226	}	}
-formal/RSKeySecurityState.tla	crates/rsk-display/src/gates.rs	114-200	pub(super) fn local_pin_gate(&mut self, scope: PinScope) -> bool {	}
-formal/RSKeySecurityState.tla	crates/rsk-display/src/gates.rs	126-128	PinScope::Device => rsk_fido::passkeys::device_pin_retries_left(&mut fs),	};
-formal/RSKeySecurityState.tla	crates/rsk-display/src/gates.rs	139-146	let mut pin = [0u8; 64];	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);
-formal/RSKeySecurityState.tla	crates/rsk-display/src/gates.rs	146-146	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);
+formal/RSKeySecurityState.tla	crates/rsk-display/src/gates.rs	117-203	pub(super) fn local_pin_gate(&mut self, scope: PinScope) -> bool {	}
+formal/RSKeySecurityState.tla	crates/rsk-display/src/gates.rs	129-131	PinScope::Device => rsk_fido::passkeys::device_pin_retries_left(&mut fs),	};
+formal/RSKeySecurityState.tla	crates/rsk-display/src/gates.rs	142-149	let mut pin = [0u8; 64];	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);
+formal/RSKeySecurityState.tla	crates/rsk-display/src/gates.rs	149-149	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);
 formal/RSKeySecurityState.tla	crates/rsk-display/src/lib.rs	193-199	/// Minimum time an on-device modal that yields to the host stays open before a queued	pub const UI_YIELD_FLOOR_MS: u64 = 2_500;
 formal/RSKeySecurityState.tla	crates/rsk-display/src/presence.rs	45-48	let saved = self.hooks.led_status();	self.hooks.set_up_pending(true);
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/clientpin.rs	35-35	pub(crate) const PIN_FILE_LEN: usize = 35; // retries(1) + len(1) + format(1) + verifier(32)	pub(crate) const PIN_FILE_LEN: usize = 35; // retries(1) + len(1) + format(1) + verifier(32)
@@ -405,12 +406,12 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	83-83	orphaned |= swe
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	84-84	ensure_seed(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?;	ensure_seed(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	124-128	return if complete {	};
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	145-149	/// The two flash shapes of the device seed: the plain record, and the soft lock's	pub const FIDO_SEED_FIDS: [u16; 2] = [EF_KEY_DEV.get(), EF_KEY_DEV_ENC.get()];
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	182-209	/// The FIDO records that *gate* the applet rather than being the secret itself.	}
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	187-208	/// `EF_BACKUP_SEALED` is a gate of the same shape as OATH's access code: it is	)
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	211-216	/// CTAP 2.1 §6.6: a reset is honored only within [`RESET_WINDOW_MS`] of power-up,	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	215-216	fn in_reset_window<S: Storage, R: Rng>(ctx: &Ctx<S, R>) -> bool {	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	216-216	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	219-261	/// Whether `fid` is cleared by `authenticatorReset` — every FIDO-owned flash file plus	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	182-225	/// The FIDO records that *gate* the applet rather than being the secret itself.	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	187-224	/// `EF_BACKUP_SEALED` is a gate of the same shape as OATH's access code: it is	)
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	227-232	/// CTAP 2.1 §6.6: a reset is honored only within [`RESET_WINDOW_MS`] of power-up,	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	231-232	fn in_reset_window<S: Storage, R: Rng>(ctx: &Ctx<S, R>) -> bool {	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	235-277	/// Whether `fid` is cleared by `authenticatorReset` — every FIDO-owned flash file plus	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/seed.rs	302-313	pub fn load_ppuat<S: Storage>(dev: &Device, fs: &mut Fs<S>) -> Option<[u8; 32]> {	) -> Result<[u8; 32]> {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	22-28	pub const PERM_MC: u8 = 0x01; // makeCredential	pub const PERM_PCMR: u8 = 0x40; // per-credential-management read-only
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	109-109	pub struct CredMgmtState {	pub struct CredMgmtState {
@@ -431,10 +432,10 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	568-568	/// CTAP 2.2 
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	584-599	pub fn retire_sequences_except(&mut self, cmd: u8) {	/// Refines `RSKeySecurityState!NoTokenAfterInvalidation` — SEC-FIDO-003.
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	657-663	pub(crate) fn puat_subcommand_msg(buf: &mut [u8], cmd: u8, subcommand: u8, params: &[u8]) -> usize {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	666-668	fn drop(&mut self) {	// until someone decides whether it is a secret. Nothing else would catch a
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	566-589	fn unlock<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	None => Err(CtapError::InvalidParameter),
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	827-827	if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {	if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	922-929	// no MSE handshake — and say what the touch actually authorises.	.map_err(|_| CtapError::Other)?;
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	990-996	/// `EF_BACKUP_SEALED` marker so the seed can no longer be exported **or** shown as	fs.put(EF_BACKUP_SEALED, &[1]).is_ok()
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	575-598	fn unlock<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapResult {	None => Err(CtapError::InvalidParameter),
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	846-846	if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {	if try_backup_sealed(ctx.fs).map_err(|_| CtapError::Other)? {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	941-948	// no MSE handshake — and say what the touch actually authorises.	.map_err(|_| CtapError::Other)?;
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	1009-1015	/// `EF_BACKUP_SEALED` marker so the seed can no longer be exported **or** shown as	fs.put(EF_BACKUP_SEALED, &[1]).is_ok()
 formal/RSKeySecurityState.tla	crates/rsk-fs/src/fs.rs	327-330	/// A FID can be yielded MORE THAN ONCE — the log-structured backend walks	/// below does).
 formal/RSKeySecurityState.tla	crates/rsk-usb/src/ctaphid.rs	757-762	// frames during fast/crypto processing would consume — and then	if up_pending() {
 formal/RSKeySecurityState.tla	firmware/src/main.rs	616-616	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);
@@ -488,9 +489,10 @@ formal/RSKeyTrustedDisplay.tla	crates/rsk-ui/src/lib.rs	248-256	/// Refines `RSK
 formal/TraceSecurity.tla	crates/rsk-fido/src/clientpin.rs	612-612	ctx.presence.uv_available() && ctx.fs.has_data(EF_PIN)	ctx.presence.uv_available() && ctx.fs.has_data(EF_PIN)
 formal/TraceSecurity.tla	crates/rsk-fido/src/config.rs	315-315	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
 formal/TraceSecurity.tla	crates/rsk-fido/src/makecredential.rs	533-551	let always_uv = crate::config::always_uv_enabled(ctx.fs);	Ok(UvOutcome::NONE)
-formal/TraceSecurity.tla	crates/rsk-fido/src/reset.rs	216-216	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/TraceSecurity.tla	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	542-544	if always_uv {	}
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	548-550	if pin_set && req.rk {	}
+formal/comutants.toml	crates/rsk-fs/src/fs.rs	724-724	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1198-1205	/// Drop the VALIDATE result on deselect / card reset, so a later session must	}
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1238-1239	self.validated = !code_set;	self.otp_pin_verified = false;
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	258-260	if !putdata::write_authorized(&self.sess, fid) {	}
@@ -519,5 +521,5 @@ scripts/comutate.py	firmware/src/main.rs	625-626	// device provisioned OTP-first
 scripts/security_trace.py	crates/rsk-fido/src/clientpin.rs	136-136	match req.subcommand {	match req.subcommand {
 scripts/security_trace.py	crates/rsk-fido/src/config.rs	248-248	ctx.state.mark_token_used(ctx.now_ms);	ctx.state.mark_token_used(ctx.now_ms);
 scripts/security_trace.py	crates/rsk-fido/src/consts.rs	400-400	pub const RESET_WINDOW_MS: u64 = 10_000;	pub const RESET_WINDOW_MS: u64 = 10_000;
-scripts/security_trace.py	crates/rsk-fido/src/reset.rs	216-216	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+scripts/security_trace.py	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 scripts/trace_map.py	crates/rsk-sdk/src/applet.rs	387-387	let reselect = self.current == Some(i);	let reselect = self.current == Some(i);

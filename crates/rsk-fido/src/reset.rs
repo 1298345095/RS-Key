@@ -201,6 +201,22 @@ pub fn is_fido_gate_fid(fid: u16) -> bool {
     is_fido_gate_record(fid)
 }
 
+/// The gate records: what the SECOND sweep phase covers, so a record in this list
+/// survives every power-cut prefix that leaves a credential behind. The three
+/// clause tags sit here because three members are exactly what the three clauses
+/// are about — `EF_PIN`, `EF_ALWAYS_UV`, `EF_BACKUP_SEALED`.
+///
+/// **The list is FIVE and the clauses are three.** `EF_DEVICE_PIN` and
+/// `EF_MINPINLEN` are in the phase and in no clause, and that is a model gap
+/// rather than a property of this function: the reset argument covers them —
+/// phase 2 cannot begin until phase 1 has provably emptied the store, and the
+/// seed leads phase 1 — but no invariant names them, so nothing here is refined
+/// by a tag. Read the three tags as "these three of the five", never as a list
+/// of what this predicate is for.
+///
+/// Refines `RSKeySecurityState!ResetKeepsThePinGate` — SEC-FIDO-006A.
+/// Refines `RSKeySecurityState!ResetKeepsTheAlwaysUvGate` — SEC-FIDO-006B.
+/// Refines `RSKeySecurityState!ResetKeepsTheBackupSeal` — SEC-FIDO-006C.
 fn is_fido_gate_record(fid: u16) -> bool {
     matches!(
         fid,

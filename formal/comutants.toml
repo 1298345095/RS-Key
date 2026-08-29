@@ -604,17 +604,21 @@ note = "audit run-36: the cache is written on a FAULT, so one transient backend 
 
 [comutant.BugMetaWriteTearsBlob]
 status = "unreachable"
-evidence = """this switch denies a BACKEND assumption, not a line of `rsk-fs`, so
-there is no production statement to patch: the shipped arm of the failing
-metadata write leaves `meta` untouched BECAUSE `sequential-storage`'s append is
-old-or-new per item, and a torn rewrite therefore leaves the previous blob
-readable. Nothing in `crates/rsk-fs` decides that; `crates/rsk-store` inherits it
-from the medium, and `assurance/platform.toml` PLAT-FLASH-001 is where the claim
-lives — pending, owed to the maintainer, dischargeable only by a real supply cut
-on a board. What the model row buys is that the assumption is now DENIABLE:
-StoreSolo_BugMetaWriteTearsBlob.cfg goes RED on NoRecordLostToMetaWrite in 58
-distinct states, so the prose has a configuration that contradicts it instead of
-being a sentence no run can reach."""
+evidence = """the switch denies a BACKEND assumption, and no `Storage` in this
+tree can tear a write. Enumerated: every fault backend in
+`crates/rsk-fs/src/storage.rs` — `MetaStuck`, `ProbeStuck`, `RemoveStuck`,
+`TruncatedWalk` — delegates `write` to `RamStorage::write`, which inserts and
+answers `Ok(())` and cannot fail, and so does every local backend in
+`fs_tests.rs`. The one write-failing medium in the tree,
+`crates/rsk-openpgp/src/dying_storage.rs`, refuses ATOMICALLY — before writing —
+so it drives `crates/rsk-fs/src/fs.rs:724`'s `?` and cannot leave a partial
+blob. So there IS a
+line of `rsk-fs` that decides what a failed metadata write costs, and there is no
+way to make one TEAR: the assumption belongs to the medium, and
+`assurance/platform.toml` PLAT-FLASH-001 is where it lives, pending, owed to a
+supply cut on a board. What the model row buys is that the assumption became
+DENIABLE — `StoreSolo_BugMetaWriteTearsBlob.cfg` goes RED on
+`NoRecordLostToMetaWrite` — rather than prose no configuration can reach."""
 
 [comutant.BugMetaDeleteDropsOnFault]
 status = "patch"

@@ -78,6 +78,7 @@ import re
 import sys
 import tomllib
 
+import claims_gate
 import gate_lines
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -591,6 +592,8 @@ def render(root, registered=None):
         f"<!-- {GENERATED_BY} — do not edit by hand -->",
         "",
         "# Platform assumptions",
+        "",
+        claims_gate.DISCLAIMER_PARAGRAPH,
         "",
         "The assumptions no model constant can carry. `assurance/assumptions.toml`"
         " holds the other kind — a Boolean TLA constant a configuration assigns"

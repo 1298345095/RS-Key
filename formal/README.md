@@ -94,12 +94,12 @@ match more than one file in the tree.
 
 | Invariant | What it asserts here | The Rust construct that owns it |
 |---|---|---|
-| `NoAuthorizationBypass` | No protected operation completes without the live authorization its own gate requires | `crates/rsk-fido/src/`: `getassertion.rs:384-387` · `makecredential.rs:518-521` · `config.rs:243-245` · `credmgmt.rs:278` · retry ladder `clientpin.rs:726-811` · soft lock `state.rs:285-293` + `crates/rsk-device/src/ctap.rs:234-241` · reset window `reset.rs:211-217` · walk owner `state.rs:169-180`, `credmgmt.rs:339` |
+| `NoAuthorizationBypass` | No protected operation completes without the live authorization its own gate requires | `crates/rsk-fido/src/`: `getassertion.rs:384-387` · `makecredential.rs:518-521` · `config.rs:243-245` · `credmgmt.rs:278` · retry ladder `clientpin.rs:726-811` · soft lock `state.rs:285-293` + `crates/rsk-device/src/ctap.rs:234-241` · reset window `reset.rs:227-233` · walk owner `state.rs:169-180`, `credmgmt.rs:339` |
 | `NoCrossTransportTouchConsumption` | A presence decision produced for one transport is never applied to another — neither a confirm nor a cancel | `crates/rsk-device/src/presence.rs`: `Arbiter::pending_for` · `::request_cancel` / `::cancel_otp_wait` (the scope guards) · `ButtonWait::wait` (the `spent` latch). `firmware/src/presence.rs` keeps only the board half. **The stale-cancel drop that carries this property is the one at the wait's ENTRY.** The exit clear cannot substitute for it — a cancel latched by a dispatch that never entered `wait` is never seen by the exit — see "The cancel that no wait was open for" |
 | `NoTokenAfterInvalidation` | A grant invalidated by a PIN change, PIN set, reset, `stopUsingPinUvAuthToken` or power cycle never authorizes again | `crates/rsk-fido/src/`: `state.rs:488-502` (`reset_pin_uv_auth_token`) · `state.rs:547-562` (`stop_using_token`) · `state.rs:596-609` (`expire_stale_token`) · `clientpin.rs:305-316` · `seed.rs:323-324` (`clear_ppuat`) |
-| `NoAccessibleSecretWithoutGate` | No live secret is reachable while the gate record that protects it is gone | `crates/rsk-fido/src/`: `reset.rs:182-209` (`is_fido_gate_fid`) · `reset.rs:57-79` (phase order) · `credmgmt.rs:249-266` (`authorized_by_ppuat`) · `clientpin.rs:217-221`, `:827-831` |
+| `NoAccessibleSecretWithoutGate` | No live secret is reachable while the gate record that protects it is gone | `crates/rsk-fido/src/`: `reset.rs:182-225` (`is_fido_gate_fid`) · `reset.rs:57-79` (phase order) · `credmgmt.rs:249-266` (`authorized_by_ppuat`) · `clientpin.rs:217-221`, `:827-831` |
 | `NoUnmanageableCredential` | Every live credential is reachable by the management surface (its `EF_RP` entry exists) | `crates/rsk-fido/src/`: `credential.rs:814-836` (registration write order) · `credmgmt.rs:658-713` (`delete_credential` / `decrement_rp`) · `passkeys.rs:90-152` (`for_each_rp`, the `EF_RP` walk the display lists from) |
-| `ResetNeverWeakensSurvivingState` | No prefix of an `authenticatorReset` — torn or complete — leaves a surviving usable secret whose gate has already gone, where "surviving" counts the RAM copy of the seed as well as the flash record | `crates/rsk-fido/src/`: `reset.rs:36-95` (`reset`, session then seed then two phases) · `reset.rs:63-66` (`ctx.state.reset()` ahead of every flash write) · `reset.rs:97-143` (`sweep`, and the `Err` at `:124-128` that leaves the device running) · `reset.rs:182-209` (`is_fido_gate_fid`, incl. `EF_BACKUP_SEALED`) · `reset.rs:263-271` (`survives_factory_reset`) · `crates/rsk-fido/src/lib.rs:104-108` (`Ctx::load_keydev`, the RAM copy that wins) · `state.rs:426-436` (`FidoState::reset`, what drops it). Shipped twin for its third clause: `reset_tests.rs::a_torn_reset_never_unseals_a_surviving_seed` |
+| `ResetNeverWeakensSurvivingState` | No prefix of an `authenticatorReset` — torn or complete — leaves a surviving usable secret whose gate has already gone, where "surviving" counts the RAM copy of the seed as well as the flash record | `crates/rsk-fido/src/`: `reset.rs:36-95` (`reset`, session then seed then two phases) · `reset.rs:63-66` (`ctx.state.reset()` ahead of every flash write) · `reset.rs:97-143` (`sweep`, and the `Err` at `:124-128` that leaves the device running) · `reset.rs:182-225` (`is_fido_gate_fid`, incl. `EF_BACKUP_SEALED`) · `reset.rs:279-287` (`survives_factory_reset`) · `crates/rsk-fido/src/lib.rs:104-108` (`Ctx::load_keydev`, the RAM copy that wins) · `state.rs:426-436` (`FidoState::reset`, what drops it). Shipped twin for its third clause: `reset_tests.rs::a_torn_reset_never_unseals_a_surviving_seed` |
 
 ### Two more that are not among the six, and three clauses that now have names
 
@@ -135,7 +135,7 @@ the state a reset was handed against the state the reset produced, which the
 steady-state form cannot see.
 
 `EF_BACKUP_SEALED` is the one gate here that reads backwards: its **absence** is
-the permissive state (`reset.rs:187-208`), so what a torn wipe can do is
+the permissive state (`reset.rs:187-224`), so what a torn wipe can do is
 *re-open* the one-time seed-export window over a seed it did not manage to
 destroy. That is the audit run-36 class fix, and it is the third clause of
 `ResetNeverWeakensSurvivingState`, not of the steady-state invariant — on a
@@ -198,7 +198,7 @@ says how deep TLC had to go to find it, roughly.
 | Mutation switch | Removes | Target invariant | Caught in |
 |---|---|---|---|
 | `BugResetGatesFirst` | `reset.rs:82-83` phase order | `ResetNeverWeakensSurvivingState` | 2 352 states |
-| `BugBackupSealedNotAGate` | `reset.rs:187-208` — `EF_BACKUP_SEALED` back in phase 1 (audit run-36) | `ResetNeverWeakensSurvivingState` | 2 347 states |
+| `BugBackupSealedNotAGate` | `reset.rs:187-224` — `EF_BACKUP_SEALED` back in phase 1 (audit run-36) | `ResetNeverWeakensSurvivingState` | 2 347 states |
 | `BugCredBeforeRp` | `credential.rs:817-836` write order | `NoUnmanageableCredential` | 820 states |
 | `BugDeleteRpBeforeCred` | `credmgmt.rs:665-673` — `decrement_rp` ahead of the `EF_CRED` delete | `NoUnmanageableCredential` | 111 503 states |
 | `BugTokenSurvivesPinChange` | `clientpin.rs:316` | `NoTokenAfterInvalidation` | 15 299 states |
@@ -209,7 +209,7 @@ says how deep TLC had to go to find it, roughly.
 | `BugUnscopedCancel` | `Arbiter::request_cancel`'s scope check | `NoCrossTransportTouchConsumption` | 127 states |
 | `BugTouchNotSpent` | `ButtonWait::wait`'s `spent` latch | `NoCrossTransportTouchConsumption` | 5 717 states |
 | `BugSoftLockLostOnWarmReset` | `ctap.rs:234-241` `PinLock` carry | `NoAuthorizationBypass` | 4 993 states |
-| `BugWarmResetReopensWindow` | `reset.rs:216` `!warm_boot` | `NoAuthorizationBypass` | 126 states |
+| `BugWarmResetReopensWindow` | `reset.rs:232` `!warm_boot` | `NoAuthorizationBypass` | 126 states |
 | `BugCmWalkIgnoresChannel` | `state.rs:173` channel equality | `NoAuthorizationBypass` | 1 242 states |
 | `BugSeedDoesNotLead` | `reset.rs:67-79` / `fs.rs`'s `first` — the pre-0x08BF wipe | `NoUnmanageableCredential` | 55 765 states |
 | `BugWrongPinKeepsToken` | `clientpin.rs:786` — the pre-E38 tree, a mismatch that keeps the token | `NoTokenAfterInvalidation` | 623 states |
@@ -218,11 +218,11 @@ says how deep TLC had to go to find it, roughly.
 | `BugStateResetAfterWipe` | `reset.rs:63-66` — `ctx.state.reset()` moved back behind the flash work, which is the regression E76's own review caught | `ResetNeverWeakensSurvivingState` | 38 880 states |
 | `BugPanelCancelable` | the panel half of `request_cancel`'s scope test (`crates/rsk-device/src/presence.rs:118-122`) — E45's ruling | `NoCrossTransportTouchConsumption` | 230 states |
 | `BugHostPreemptsLocalWait` | the button's owner, at **all four** `*Start` sites — the name is the case it was found on, a host command opening a wait over a live on-panel ceremony | `NoAuthorizationBypass` | 46 states |
-| `BugLocalPinIgnoresBudget` | the pad honouring the exhausted `EF_PIN` counter (`crates/rsk-display/src/gates.rs:126-128`) | `NoAuthorizationBypass` | 10 370 states |
+| `BugLocalPinIgnoresBudget` | the pad honouring the exhausted `EF_PIN` counter (`crates/rsk-display/src/gates.rs:129-131`) | `NoAuthorizationBypass` | 10 370 states |
 | `BugPpuatIsAGate` | `eab4b5c` — `EF_PAUTHTOKEN` back in the deferred phase, where a torn wipe strands a grant with no PIN | `NoAccessibleSecretWithoutGate` | 218 421 states |
 | `BugPinWriteBeforeRevoke` | `clientpin.rs:217-221` / `:305-309` — the new verifier landing before the persistent grant is revoked, at both PIN flows | `NoTokenAfterInvalidation` | 5 296 states |
 | `BugUnscopedOtpCancel` | `cancel_otp_wait`'s own scope test (`crates/rsk-device/src/presence.rs:126-137`) — the second writer of the same cancel flag | `NoCrossTransportTouchConsumption` | 237 states |
-| `BugLocalPinKeepsToken` | `ends_host_token` (`crates/rsk-display/src/gates.rs:139-146`) — E66, the panel's PIN pad as a fourth door | `NoTokenAfterInvalidation` | 1 662 states |
+| `BugLocalPinKeepsToken` | `ends_host_token` (`crates/rsk-display/src/gates.rs:142-149`) — E66, the panel's PIN pad as a fourth door | `NoTokenAfterInvalidation` | 1 662 states |
 | `BugSetPinOverExisting` | `clientpin.rs:188-190` — setPIN refusing to overwrite a live PIN | `NoAuthorizationBypass` | 741 states |
 
 And the three that break a **liveness** property rather than an invariant. They
@@ -1093,7 +1093,7 @@ separately:
 
 - **The RAM copy.** `ram` is `state.keydev_dec` (`state.rs:338-340`);
   `SeedReachable == store.seed \/ ram` is what "the owner's seed is still
-  reachable" means; `DeviceUnlock` is the vendor `UNLOCK` (`vendor.rs:566-589`)
+  reachable" means; `DeviceUnlock` is the vendor `UNLOCK` (`vendor.rs:575-598`)
   that is its only door. `KeepOpen` / `KeepSurv` move the wipe's own claim — that
   what a tear leaves behind is undecryptable — from the flash delete to the
   moment the **last** copy dies.
@@ -1307,13 +1307,13 @@ test — the narrow mistake somebody could make while keeping the CCID half — 
 falls in 238 states.
 
 **E66 — the on-panel PIN pad is a fourth PIN door.** `local_pin_gate`
-(`crates/rsk-display/src/gates.rs:114-200`) spends the **same** persistent
+(`crates/rsk-display/src/gates.rs:117-203`) spends the **same** persistent
 `EF_PIN` retry counter the wire path spends, because
 `spend_and_verify_local_pin` is `spend_and_verify_pin_at(EF_PIN, ..)`
 (`crates/rsk-fido/src/clientpin.rs:1124-1130`). A clientPIN refused there is
 changePIN's failed old-PIN check performed locally, so it must end the host's
 outstanding grant exactly as `clientpin.rs:786` does. `ends_host_token`
-(`crates/rsk-display/src/gates.rs:139-146`) is the Rust's own test and it is
+(`crates/rsk-display/src/gates.rs:142-149`) is the Rust's own test and it is
 deliberately narrow twice over: the FIDO scope only, and only with budget left,
 because a `Blocked` verdict at zero was turned away before any compare.
 `BugLocalPinKeepsToken` is the door that does not close: 1 604 states.
@@ -1332,8 +1332,13 @@ only thing keeping the two apart is its own scope test, in a different function.
 `BugUnscopedOtpCancel` removes that one: 237 states.
 
 Three things are **not** modelled and are named rather than implied. The device
-PIN (`EF_DEVICE_PIN`) is a separate flash record with its own budget and it
-gates every on-panel flow that reveals a secret; none of that is here. The
+PIN (`EF_DEVICE_PIN`) is a separate flash record with its own persistent retry
+budget, and it gates two surfaces rather than one: on-panel flows that are
+irreversible (a factory reset and the BOOTSEL drop reveal nothing), and — over
+USB — the PIN half of `vendor::pin_gate`, which is the second factor on
+`BACKUP_EXPORT`, `ATT_IMPORT`/`ATT_CLEAR`, the audit commands and `CONFIG_WRITE`.
+None of that is here, and `assurance/platform.toml` PLAT-MODEL-011 is the scope
+obligation that says so where a gate can read it. The
 display **build** is not modelled either — `presence.shows_confirm()` stays
 FALSE, so the reset window still applies where a display build bypasses it
 (`reset.rs:37`), and `ButtonWait`'s `spent` latch stays where that build
@@ -1754,7 +1759,7 @@ so the kill measured a defence in depth rather than the modelled defect. It now
 widens both layers, and `put_data_c4_refuses_a_user_status` drives the command
 so the outer gate is asserted too.
 
-The live roster is **71 entries: 67 executable patches killed, four unreachable
+The live roster is **72 entries: 67 executable patches killed, five unreachable
 with recorded evidence, zero gaps.**
 
 ## The sixth module — `RSKeyAdminSurface.tla`
@@ -1860,7 +1865,8 @@ the ceremony is modal and single-threaded, so "the card's content" is honestly
 one bit here; the day a second painter can reach the glass mid-ceremony, that
 abstraction is the first thing to attack. The PIN pad's own arithmetic is the
 security module's fourth door; the menus and settings flows are navigation over
-the same armed-touch chokepoint, not separate security state; and the screens'
+the same armed-touch chokepoint — the device PIN itself is not, since it carries
+its own persistent ladder and gates a host surface too (PLAT-MODEL-011); and the screens'
 rendering geometry (paint == hit-test) is `rsk-ui`'s reviewed, tested territory.
 
 ## The eighth module — `RSKeyBootHardening.tla`
@@ -2161,7 +2167,7 @@ The reset window is the second gate and the same shape one level up. A reset
 outside `RESET_WINDOW_MS` is refused, and refusing it changes nothing — so over
 an already-emptied store it has the exact raw footprint of a second *successful*
 wipe, and the mapper read the refusal that ends `27_reset_window` as one for as
-long as it existed. `now_ms` is what separates them (`reset.rs:216`) and
+long as it existed. `now_ms` is what separates them (`reset.rs:232`) and
 `ResetGateRefuses` is `~InResetWindowGuard`, the predicate the model already
 gates `ResetStart` on, read for its answer instead of its enabling.
 
@@ -2783,10 +2789,10 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | MODELLED-ONLY | `RSKeySecurityState` | `RSKeyStore` | 2 | 2 | 2 | 0 | 0 | 0 |
 | `SEC-FIDO-005` | `NoUnmanageableCredential` | MODELLED-ONLY | `RSKeySecurityState` | `RSKeyStore` | 3 | 3 | 3 | 0 | 0 | 0 |
 | `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | BOUNDED | `RSKeySecurityState` | — | 3 | 3 | 2 | 1 | 1 | 1 |
-| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | BOUNDED | `RSKeySecurityState` | — | 0 | 1 | 1 | 1 | 1 | 1 |
-| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | BOUNDED | `RSKeySecurityState` | — | 0 | 1 | 1 | 1 | 1 | 1 |
-| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | BOUNDED | `RSKeySecurityState` | — | 0 | 1 | 0 | 1 | 1 | 1 |
-| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | MODELLED-ONLY | `RSKeySecurityState` | — | 1 | 1 | 1 | 0 | 0 | 0 |
+| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | BOUNDED | `RSKeySecurityState` | — | 1 | 1 | 1 | 1 | 1 | 1 |
+| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | BOUNDED | `RSKeySecurityState` | — | 1 | 1 | 1 | 1 | 1 | 1 |
+| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | BOUNDED | `RSKeySecurityState` | — | 1 | 1 | 0 | 1 | 1 | 1 |
+| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | MODELLED-ONLY | `RSKeySecurityState` | — | 2 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | MODELLED-ONLY | `RSKeySecurityState` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | MODELLED-ONLY | `RSKeySecurityState` | — | 0 | 1 | 0 | 0 | 0 | 0 |
 | `SEC-FIDO-L01` | `EveryOpQuiesces` | MODELLED-ONLY | `RSKeySecurityState` | — | 0 | 1 | 0 | 0 | 0 | 0 |
@@ -2841,7 +2847,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `rsk-crypto` | pure | `crates/rsk-crypto/src/base64url_kani.rs`<br>`fuzz/fuzz_targets/aes_gcm.rs`<br>`fuzz/fuzz_targets/chachapoly.rs` | — |
 | `rsk-devconf` | state-partial | `RSKeyAdminSurface` | the enabled-set lifecycle is modelled (mask writes, the lock-code-only write, the clamp as a construction). This crate DOES touch flash — it owns EF_DEV_CONF end to end (validate, merge onto the stored record, trim to cap, put) and the DEV_CONF_DIRTY latch the composition roots drain to reload their cached mask; who may drive a write is the four callers' gate, not this crate's. The TLV codec itself — well-formedness, merge widths, the two-parsers refusal — is single-step and carried by the crate's tests; still zero Kani proofs. |
 | `rsk-device` | state-partial | `RSKeySecurityState` | presence arbitration is modelled and Kani-proved; capability gating is RSKeyAdminSurface. Dispatcher selection/reset semantics are RSKeyAppletSeams; the remaining fast-path wiring is single-dispatch glue rather than a separately modelled state machine. |
-| `rsk-display` | state-partial | `RSKeyTrustedDisplay` | the confirm ceremony (WhatIsConfirmedIsWhatIsShown, decomposed as SEC-DISP-001..003) is modelled; the wait owner and the fourth PIN door stay in RSKeySecurityState. The menus, settings flows and the device-PIN screens are navigation over that same armed-touch chokepoint, not separate security state. |
+| `rsk-display` | state-partial | `RSKeyTrustedDisplay` | the confirm ceremony (WhatIsConfirmedIsWhatIsShown, decomposed as SEC-DISP-001..003) is modelled; the wait owner and the fourth PIN door stay in RSKeySecurityState. The menus and settings flows are navigation over that same armed-touch chokepoint. The device-PIN SCREENS are too, but `EF_DEVICE_PIN` itself is not: it carries a second independent persistent retry ladder that `local_pin_gate` spends, and it is the PIN half of the host-side vendor gate as well — PLAT-MODEL-011 is where that scope obligation lives. |
 | `rsk-ec` | pure | `crates/rsk-ec/src/tests.rs`<br>`crates/rsk-ec/src/key_tests.rs`<br>`crates/rsk-ec/src/key_x25519_tests.rs`<br>`crates/rsk-ec/src/key_bp_kat.rs`<br>`crates/rsk-ec/src/curve_tests.rs`<br>`crates/rsk-ec/src/pubdo_tests.rs` | — |
 | `rsk-fido` | state-modelled | `RSKeySecurityState` | — |
 | `rsk-fs` | state-partial | `RSKeyStore` | the committed store, the delete write-order and the present-cache soundness are modelled (M3 lifted powercut_model.rs to TLA+ and ties R0p to it); phase 6 composes the FIDO reset projection with delete_landed and the real byte-cuttable Fs stack. Values are still two opaque tokens, so a content-corrupting defect is out of reach, and Fs::factory_wipe's two-phase sweep remains the security module's ordering (SeedLeadsTheWipe), not this one's. |
@@ -2896,7 +2902,7 @@ abstractions producing traces the firmware cannot follow.
   not permit; `PowerCut` reaches the same flash states and is the realistic
   interrupter.
 - **`BackupFinalize` is ungated.** The real `BACKUP_FINALIZE` carries the PIN
-  half of the gate and a deliberate hold (`vendor.rs:917-929`). Widening where
+  half of the gate and a deliberate hold (`vendor.rs:936-948`). Widening where
   the marker can be **set** never widens where it can be **lost**, and the loss
   is what the invariant is about.
 - **A regenerated seed still opens the credentials made under the old one.**
@@ -2909,7 +2915,7 @@ abstractions producing traces the firmware cannot follow.
   not a free choice. Both findings below need only that some reachable ring
   order puts one delete before another.
 - **`DeviceUnlock` is ungated and needs no device lock.** The real vendor
-  `UNLOCK` (`vendor.rs:566-589`) requires the seed to be stored *wrapped* — only
+  `UNLOCK` (`vendor.rs:575-598`) requires the seed to be stored *wrapped* — only
   a soft-locked device has an `EF_KEY_DEV_ENC` to open — and the host to present
   the 32-byte lock key. The model requires only a live flash seed. It also omits
   `AUT_DISABLE` (`config.rs:427-428`), which only ever *clears* the RAM copy.

@@ -641,6 +641,22 @@ def gate_corpus() -> dict[str, str]:
     }
 
 
+def registry_line(corpus: str, subject: str) -> str:
+    """The one `gate_registry` line about `subject`, not the whole roster.
+
+    Found by a bundle going stale under this rule with the row GREEN. The corpus
+    for `gate_registry` is every property's vector joined by newlines, so a pair
+    like `rust=1` was compared against ALL of them — and `rust=1` is true of
+    thirty other rows, so a bundle whose own property had moved to `rust=2`
+    transcribed the old number and passed. The rule read "some property has this"
+    where it meant "this property has this".
+    """
+    for line in corpus.splitlines():
+        if subject and subject in line:
+            return line
+    return corpus
+
+
 def gate_transcriptions(bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """Every number in a transcribed `[result]` gate line is that gate's own.
 
@@ -669,6 +685,8 @@ def gate_transcriptions(bundle: pathlib.Path, doc: dict, findings: list[str]) ->
             )
             continue
         claim, derived = str(result[key]), corpus[key]
+        if key == "gate_registry":
+            derived = registry_line(derived, str(doc.get("property", {}).get("id", "")))
         # Both rules below compare the numbers a line HAS, so a line with none
         # satisfies them: `gate_registry = "assurance-gate: all good"` clears the
         # roster, the leaf floor and the non-answer rule, and transcribes nothing.

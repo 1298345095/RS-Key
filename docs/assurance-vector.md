@@ -4,6 +4,8 @@
 
 # Assurance vector
 
+**RS-Key is not formally verified.** This page is generated from the registry and reports what evidence exists, not that a whole-system theorem does. The Definition of done keeps this sentence a requirement until one exists, and `scripts/claims_gate.py` holds every page naming three or more registered properties to it. What is out of scope and what is accepted: [limitations](limitations.md) and the [threat model](threat-model.md).
+
 One word per property mixes questions that move independently. Roadmap §4.1 argues it; the first closed slice measured it. That slice took `SEC-FIDO-001` from one Kani harness to four and landed the first mutant in this tree ever to redden a proof — and its `status` would have read `BOUNDED` either way, because the word is derived from a harness *name*.
 
 So the axes are printed apart. Every one is derived from the tree on every gate run by `scripts/evidence_gate.py`, which also regenerates this page and refuses a stale copy of it.
@@ -218,6 +220,9 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-BUILD-002` | `ea-conformance-rpid`'s enterprise-attestation allowlist is a conforma |
 | platform | `PLAT-THREAT-001` | A CTAPHID channel id is a routing label the sender writes, so channel  |
 | platform | `PLAT-MODEL-001` | `PermSets` — five of the sixteen permission subsets — is the set a hos |
+| platform | `PLAT-MODEL-009` | `EF_MINPINLEN`'s FLOOR (byte 0) and its RP-id disclosure list (bytes 2 |
+| platform | `PLAT-MODEL-010` | `EF_MINPINLEN`'s `forceChangePin` byte IS a gate and IS missing from t |
+| platform | `PLAT-MODEL-011` | `EF_DEVICE_PIN` is outside `RSKeySecurityState` because the SURFACE it |
 | platform | `PLAT-MODEL-003` | The model's `ram` is `FidoState::keydev_dec.is_some()` and nothing els |
 | platform | `PLAT-MODEL-004` | One `store.seed` boolean stands for two flash records, so the soft-loc |
 | platform | `PLAT-MODEL-005` | `DeviceUnlock`'s `store.seed` conjunct is what makes `RamNeverOutlives |

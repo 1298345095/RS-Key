@@ -1033,3 +1033,29 @@ def test_main_prints_a_summary_and_reports_findings(tmp_path, capsys, monkeypatc
     monkeypatch.setattr(bundle_gate, "ROOT", root)
     assert bundle_gate.main() == 1
     assert "direction" in capsys.readouterr().err
+
+
+def test_a_transcribed_registry_count_is_this_property_s(tmp_path):
+    """The corpus for `gate_registry` is EVERY property's vector joined, so a pair
+    was compared against all of them: `rust=1` is true of thirty other rows, and a
+    bundle whose own property had moved to `rust=2` kept the old number at exit 0.
+    Found by a real move, not invented — tagging the producer of `SEC-FIDO-007`'s
+    antecedent took its `rust` column up and this row stayed green."""
+    root = tree(tmp_path)
+    bundle = root / bundle_gate.BUNDLE
+    doc = tomllib.loads(bundle.read_text())
+    line = doc["result"]["gate_registry"]
+    # A count that is real SOMEWHERE in the roster and wrong for this property.
+    doc["result"]["gate_registry"] = re.sub(r"\bkani=\d+", "kani=1", line)
+    bundle.write_text(dump(doc))
+    reported = findings(root)
+    assert any("gate_registry" in p and "kani=1" in p for p in reported), reported
+
+
+def test_the_registry_line_picked_is_the_subject_s():
+    corpus = "  SEC-FIDO-001 A rust=2\n  SEC-FIDO-007 B rust=9\n"
+    assert "rust=9" in bundle_gate.registry_line(corpus, "SEC-FIDO-007")
+    assert "rust=2" in bundle_gate.registry_line(corpus, "SEC-FIDO-001")
+    # No subject, or one the roster does not carry: the whole corpus, which is
+    # the previous behaviour and refuses nothing extra.
+    assert bundle_gate.registry_line(corpus, "SEC-NOPE-999") == corpus

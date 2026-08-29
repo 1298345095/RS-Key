@@ -89,16 +89,14 @@ CONSTANTS
     \* rather than caching it as absence. The switch caches it, and the damage is
     \* the write AFTER: `meta_add` trusts `known_absent` and rebuilds from empty.
     BugMetaDeleteDropsOnFault,
-    \* fs.rs:724 -- `self.storage.write(EF_META, &out[..w])?` REFUSES: the blob on
-    \* flash is whatever the backend left, `mark_present` is not reached, and the
-    \* caller is told. The model faulted the metadata READ in two places and never
-    \* the WRITE, so the one step that can lose every record at once was the only
-    \* one with no failing arm at all (stage 2 п.1). The shipped arm leaves `meta`
-    \* untouched, which is a CLAIM about the backend and not a fact: it holds only
-    \* because an append is old-or-new per item. The switch denies that assumption
-    \* -- a torn rewrite keeps the record it was adding and loses the rest -- so
-    \* `PLAT-FLASH-001` gains a row that goes red when it is false, instead of
-    \* being prose no configuration can contradict.
+    \* fs.rs:724 -- `self.storage.write(EF_META, &out[..w])?`. The model faulted the
+    \* metadata READ in two places and never the WRITE, so the one step that can
+    \* lose every record at once was the only one with no failing arm (stage 2 п.1).
+    \* A failed write leaves `meta` untouched, which is a CLAIM about the backend
+    \* and not a fact: it holds only because an append is old-or-new per item. This
+    \* switch denies that -- the blob afterwards is an ARBITRARY subset -- so
+    \* `PLAT-FLASH-001` gains a row that goes red when it is false, instead of being
+    \* prose no configuration can contradict.
     BugMetaWriteTearsBlob
 
 \* Two VALUES so an overwrite is observable. `NoVal` is the absent sentinel --
@@ -196,19 +194,28 @@ MetaAdd(f) ==
             (IF \E g \in Fids : (g # f) /\ meta[g]
                THEN {"NoRecordLostToMetaWrite"} ELSE {})
        /\ UNCHANGED << val, present, decided, dead >>
-    \* The WRITE refuses (fs.rs:724). Nothing on flash changed, `mark_present` is
-    \* not reached, and the caller has the error -- so the honest model of it is a
-    \* step that changes nothing yet is REACHABLE, which is what makes the switch
-    \* below the denial of an assumption rather than a new action.
-    \/ /\ ~BugMetaWriteTearsBlob
-       /\ UNCHANGED << val, meta, present, decided, dead, metaAbsent, viol >>
+    \* THE WRITE ITSELF TEARS (fs.rs:724). The shipped arm of a failed write is a
+    \* STUTTER -- nothing on flash moved, `mark_present` is not reached, the caller
+    \* has the error -- and a stutter is what `[][Next]_vars` already admits, so it
+    \* is not written as a disjunct. What is written is the denial: the backend is
+    \* not old-or-new per item, so the readable blob afterwards is an arbitrary
+    \* subset of what was there plus what was being added.
+    \*
+    \* Two things separate this from `BugMetaAddDropsOnFault`, and the first draft
+    \* had NEITHER -- its arm was that switch's arm character for character, so the
+    \* two induced the same relation and the "new" mutant was a second name for one
+    \* behaviour. (1) `metaAbsent` is UNCHANGED, because a write that failed never
+    \* reaches `mark_present`; the sibling sets it FALSE because its write
+    \* SUCCEEDED over a blob it had rebuilt from empty. (2) the survivors are an
+    \* arbitrary subset rather than exactly `{f}`: a torn append has no reason to
+    \* land the record it was adding.
     \/ /\ BugMetaWriteTearsBlob
-       /\ meta' = [g \in Fids |-> g = f]
-       /\ metaAbsent' = FALSE
-       /\ viol' = viol \cup
-            (IF \E g \in Fids : (g # f) /\ meta[g]
-               THEN {"NoRecordLostToMetaWrite"} ELSE {})
-       /\ UNCHANGED << val, present, decided, dead >>
+       /\ \E torn \in SUBSET Fids :
+            /\ meta' = [g \in Fids |-> g \in torn]
+            /\ viol' = viol \cup
+                 (IF \E g \in Fids : meta[g] /\ ~(g \in torn)
+                    THEN {"NoRecordLostToMetaWrite"} ELSE {})
+       /\ UNCHANGED << val, present, decided, dead, metaAbsent >>
 
 \* `Fs::meta_delete` (fs.rs:737-767): drop `fid`'s record, and clear EF_META
 \* once the last one goes. A FAILED read of EF_META must refuse (fs.rs:746) --
@@ -392,7 +399,7 @@ NoRecordLostToMetaWrite == "NoRecordLostToMetaWrite" \notin viol
 \* has lied -- no state predicate over `meta` can tell the two apart.
 \*
 \* One over `metaAbsent` AND `meta` can, and `CacheHonest` below is it: measured,
-\* it reddens BugMetaDeleteDropsOnFault in the same 42 distinct states this ghost
+\* it reddens BugMetaDeleteDropsOnFault in the same 58 distinct states this ghost
 \* does. So the two are the same defect at different moments -- this names the
 \* losing WRITE, that names the state the cache is left in -- and the sentence
 \* above is true only of a predicate over `meta` alone.

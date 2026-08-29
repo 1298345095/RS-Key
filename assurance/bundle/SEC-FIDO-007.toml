@@ -68,7 +68,7 @@ threat_clause_reading = "the anchor is topical and not the claim: TM-ZEROIZATION
 # file and returns FILE NAMES, so the column counts files that MENTION it, not
 # sites that own it — and a second tag in an already-counted file adds nothing.
 # The `Refines` regex belongs to a different function, which only validates.
-owners_tagged = ["crates/rsk-fido/src/seed.rs:571 seed::ensure_seed"]
+owners_tagged = ["crates/rsk-fido/src/seed.rs:571 seed::ensure_seed", "crates/rsk-fido/src/vendor.rs::unlock — the producer, tagged after this bundle measured that it was not"]
 # AND THE TAG IS ON THE CONSEQUENT. `grep -c keydev_dec crates/rsk-fido/src/seed.rs`
 # is 0, and `ensure_seed` takes no `FidoState` at all, so it structurally cannot
 # touch the antecedent: it writes `EF_KEY_DEV`, which is `store.seed`. It can
@@ -361,7 +361,7 @@ gate_ghost = "ghost-gate: 21 actions record NoAuthorizationBypass over 24 routes
 gate_ledger = "token-refinement-gate: GREEN keys=2 api=11 volatile=10/9 persistent=12/4 outcomes=7/6 walk=4 softlock=12 window=2 testonly=1 — the ledger owns the token axes, not the seed ones, so none of the fourteen owners this bundle enumerates is in it"
 gate_assumption = "assumption-gate: 2 standing assumptions; AlwaysUvShipped TRUE=1 FALSE=89, PowerOnClearsScratch2 TRUE=9 FALSE=4. AlwaysUvShipped is the one whose BOTH arms check this property"
 gate_matrix = "matrix-gate: 40 P0-family properties × 31 build configurations = 1240 cells (37 covered, 139 equivalent, 0 conditional, 106 out-of-scope, 958 gap) — UNCHANGED by this bundle: a model check and a host-test slice read no board preset and no flash geometry, so nothing here settles a cell"
-gate_registry = "assurance-gate: SEC-FIDO-007 MODELLED-ONLY, cfgs=3 mut=1 co=1 kani=0 fuzz=0 rust=1 test=0"
+gate_registry = "assurance-gate: SEC-FIDO-007 MODELLED-ONLY, cfgs=3 mut=1 co=1 kani=0 fuzz=0 rust=2 test=0 — `rust` moved 1 -> 2 when the ONE producer of the antecedent, `vendor.rs::unlock`, was tagged; it had carried only the consequent`s owner"
 
 # ---- 6. Raw artifact or log --------------------------------------------------
 
