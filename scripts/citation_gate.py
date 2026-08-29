@@ -186,9 +186,14 @@ PAGES = (
 #: not Rust and each has its own reason. `CHANGELOG.md` cites the tree as it
 #: stood at each entry, so its citations MUST be allowed to rot; this guard's own
 #: fixtures, and `scripts/citation_gate.py` itself, quote the rotted examples they
-#: exist to describe; the two `assurance/*.toml` files and two `docs/` pages cite
-#: in prose and are read by nobody but a person. Named limits, not oversights —
-#: see "Limits" above.
+#: exist to describe; the `assurance/` registries and two `docs/` pages cite in
+#: prose and are read by nobody but a person. Named limits, not oversights — see
+#: "Limits" above. That last one has GROWN and the sentence used to say "the two
+#: `assurance/*.toml` files": the tree now has the two registries, the evidence
+#: bundles and twelve board records, and a rough count over them is 62 distinct
+#: `file:line` citations that nothing resolves. Many are bare names, which this
+#: gate refuses on a page that must write a repo path, so widening to the
+#: directory is a repair of those first and not a flag flip.
 CODE_ROOTS = ("crates/", "firmware/", "fuzz/", "tools/", "rsk-wipe/")
 
 #: Below this the derivation found nothing and every code page silently went

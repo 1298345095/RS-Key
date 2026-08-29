@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 RS-Key contributors
+#
+# THE ROW THAT LOST ITS RECORD, and the reason this schema exists. A run WAS
+# taken -- tests/54_sram_residue.py:48 carries it in prose -- and it cannot
+# discharge the row.
+#
+# The first version of this record got its own `expected` BACKWARDS, which is
+# the finding: it made "the written pattern does not come back" the PASS clause,
+# and that is the script's INCONCLUSIVE clause. Read tests/54_sram_residue.py
+# :362-371 -- `writeback_reads_back` returning TRUE is what licenses the verdict,
+# because a dump that is all zeros and a picoboot that only answers zeros look
+# identical, and the pattern coming back is what separates them. Written before
+# the run and still wrong; the value of writing it early is that review can read
+# it, not that it is right by construction.
+assumption = "PLAT-MEM-001"
+method = """`python tests/54_sram_residue.py control`: dump main SRAM through picoboot after a drop to BOOTSEL, check the RAM-resident code and table windows the ELF pins, and -- on an all-zero dump -- write a 256-byte pattern at 0x2001_0000 through picoboot and read it straight back. `residue` is the second half and needs a key on-card first; it hunts a factor of an RSA-2048 modulus per ELF region."""
+boot_config = """The image whose ELF the region map is taken from, with secure boot off so the board can be reflashed afterwards, and the picotool version recorded: the claim belongs to a boot configuration, not to the firmware."""
+expected = """Main SRAM does not survive the drop. PASS = every byte of the dump is zero AND the written pattern reads straight back, which is the script's `settled` (exit 3) -- both halves, because zeros alone have two causes and the writeback separates them. FAIL = the pattern, or any non-zero live region, which puts an unwrapped seed inside reach of anyone who can hold BOOTSEL. INCONCLUSIVE = zeros with a writeback that does NOT read back (exit 2), or a short dump: picoboot is not serving SRAM and nothing found or not found in it would mean anything."""
+outcome = "planned"
+board = ""
+stepping = ""
+firmware_sha256 = ""
+first_boot_capture = ""
+actual = ""
+note = """A run on 2026-08-05 reached the good outcome as its own script defines it -- all 520 KiB of the dump zero, 4 KiB of `.text` byte-exact, and the pattern read straight back, which is `settled`, exit 3. It is NOT recorded as a pass here and the row stays `pending`, for two reasons. Nobody kept the sha256 of the image it ran on, so no later reader can tell which firmware was in flash. And `settled` is exit 3 by design -- "SETTLED without the scan, so `--expect` cannot apply" -- so the residue scan never ran and neither `present` nor `absent` was ever measured. Re-run, keep the hash and the capture, and do not promote the prose."""

@@ -7,9 +7,13 @@ claims to be — the message is asserted, never the count, because a red run who
 reason nobody read proves as little as one that cannot go red. Then the real
 checkout closes the other direction.
 
-**35 mutations of `platform_gate.py` driven, 35 killed, 0 survivors.** The first
+**Every rule broken at least once, and the count is not the claim.** The first
 table was 30/30 and an adversarial review broke four of its rules with the suite
-green — the model floor zeroed (the other three derivations had a floor case and
+green; the second was 47 and a review of the board-record rules broke EIGHT more
+— a whole vocabulary, a `fullmatch` loosened to `search`, and three loops each
+pinned by one field of three or five. Those eight have a case apiece below, and
+the lesson is the count itself: a table that reports a total says nothing about
+which rule the next mutation will walk through — the model floor zeroed (the other three derivations had a floor case and
 that one did not), the design-page list narrowed, `BOARD_REVISION` loosened to
 the bare part number, and two vocabularies widened by a member. Each has its case
 here now, and the pattern is the one this programme keeps meeting: the table was
@@ -165,6 +169,35 @@ covers = ["unsafe:crates/rsk-a/src/lib.rs", "unsafe:firmware/src/main.rs"]
 """
 
 
+#: The one maintainer-owned hardware row of the fixture, and so the one that
+#: owes a record. Written in the PLANNED shape: the plan half filled, the result
+#: half empty, which is what a row nobody can discharge here must look like.
+BOARD_RECORD = """\
+assumption = "PLAT-FLASH-001"
+method = "A supply cut at a controlled offset into a store write."
+boot_config = "The default image, 4 MB."
+expected = "Old-or-refused at every offset. PASS = no plausible wrong value."
+outcome = "planned"
+board = ""
+stepping = ""
+firmware_sha256 = ""
+first_boot_capture = ""
+actual = ""
+"""
+
+#: The same record after a run: every result field filled, and the registry row
+#: is expected to have moved with it.
+BOARD_PASS = BOARD_RECORD.replace(
+    'outcome = "planned"', 'outcome = "pass"'
+).replace('board = ""', 'board = "Waveshare RP2350 Zero"').replace(
+    'stepping = ""', 'stepping = "RP2350 A4"'
+).replace(
+    'firmware_sha256 = ""', 'firmware_sha256 = "' + "0" * 63 + '1"'
+).replace(
+    'first_boot_capture = ""', 'first_boot_capture = "assurance/board/flash-cut.log"'
+).replace('actual = ""', 'actual = "Old-or-refused at all 64 offsets."')
+
+
 class Tree:
     """A checkout shaped like this one, small enough to break one rule at a time."""
 
@@ -174,6 +207,15 @@ class Tree:
         self.write("assurance/properties.toml", PROPERTIES)
         self.write("assurance/bundle/SEC-T-001.toml", BUNDLE)
         self.write("assurance/platform.toml", REGISTRY)
+        self.write("assurance/board/PLAT-FLASH-001.toml", BOARD_RECORD)
+        # The SECOND maintainer-owned row, and its class is not a silicon class.
+        # It is here because keying the obligation on `HARDWARE_CLASSES` was the
+        # first version and left this exact shape unobliged — a `tool-fidelity`
+        # row whose route reads "a board recording of the same session".
+        self.write(
+            "assurance/board/PLAT-TOOL-001.toml",
+            BOARD_RECORD.replace("PLAT-FLASH-001", "PLAT-TOOL-001"),
+        )
         self.write("docs/authorization-slice.md", DESIGN_PAGE)
         self.write("tests/emu.py", EMU_SHIM)
         self.write("scripts/usbip-guest.sh", USBIP_GUEST)
@@ -207,11 +249,23 @@ class Tree:
     def git(self, *args):
         subprocess.run(["git", "-C", str(self.root), *args], check=True, capture_output=True)
 
+    def commit(self, message="a state of the tree"):
+        """A real commit, because `check_expected_predates` reads history and a
+        fixture that only ever `git add`s has none to read."""
+        self.git("add", "-A")
+        self.git(
+            "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+            "commit", "-q", "-m", message,
+        )
+
     def regenerate(self):
         self.write("docs/platform-assumptions.md", platform_gate.render(self.root))
 
-    def problems(self):
-        return platform_gate.audit(self.root)[0]
+    def problems(self, board_floor=2):
+        """`board_floor` is a PARAMETER, the way this tree's other floors are:
+        the fixture carries two maintainer-owned rows and the checkout twelve,
+        and a floor hard-coded to the checkout's number reddens every case."""
+        return platform_gate.audit(self.root, board_floor)[0]
 
 
 @pytest.fixture
@@ -578,8 +632,8 @@ def test_the_entry_point_exits_nonzero_on_a_finding(tmp_path):
     finds a problem and returns 0 is one `check.sh` steps straight over."""
     tree = Tree(tmp_path)
     tree.edit("assurance/platform.toml", '"slice:AS-T-1"', '"slice:AS-T-404"')
-    assert platform_gate.run(tree.root) == 1
-    assert platform_gate.run(Tree(tmp_path / "clean").root) == 0
+    assert platform_gate.run(tree.root, board_floor=2) == 1
+    assert platform_gate.run(Tree(tmp_path / "clean").root, board_floor=2) == 0
 
 
 # --- the spellings the review drove past the first version ---------------------
@@ -726,3 +780,282 @@ def test_a_board_result_owes_a_capture_not_just_a_file_that_exists(tree):
     )
     tree.regenerate()
     assert tree.problems() == []
+
+
+# --- the raw record a hardware measurement leaves behind (stage 2 п.9) --------
+#
+# The registry already obliged a stepping and an artifact PATH; what it could not
+# say was what has to be IN the artifact, so a discharge could cite any file that
+# exists. These cases hold the field split in both directions: the plan half must
+# be written before the board is powered, and the result half must not.
+
+
+def test_a_maintainer_hardware_row_without_a_record_is_a_finding(tree):
+    (tree.root / "assurance/board/PLAT-FLASH-001.toml").unlink()
+    assert only(tree.problems(), "with no assurance/board/PLAT-FLASH-001.toml")
+
+
+def test_a_record_filed_under_another_name_is_a_finding(tree):
+    (tree.root / "assurance/board/PLAT-FLASH-001.toml").rename(
+        tree.root / "assurance/board/PLAT-OTHER-001.toml"
+    )
+    problems = tree.problems()
+    assert only(problems, "names assumption 'PLAT-FLASH-001'")
+    # And the row it was owed to is still owed one: a misfiled record is not a
+    # record, which is the half a name check alone would leave open.
+    assert only(problems, "with no assurance/board/PLAT-FLASH-001.toml")
+
+
+def test_a_record_for_no_registry_row_is_a_finding(tree):
+    tree.write(
+        "assurance/board/PLAT-GHOST-001.toml",
+        BOARD_RECORD.replace("PLAT-FLASH-001", "PLAT-GHOST-001"),
+    )
+    assert only(tree.problems(), "PLAT-GHOST-001 is not an entry of")
+
+
+def test_a_missing_plan_field_is_a_finding(tree):
+    tree.edit("assurance/board/PLAT-FLASH-001.toml",
+              'expected = "Old-or-refused at every offset. PASS = no plausible wrong value."',
+              'expected = ""')
+    assert only(tree.problems(), "no `expected`")
+
+
+def test_a_field_outside_the_record_schema_is_a_finding(tree):
+    tree.append("assurance/board/PLAT-FLASH-001.toml", 'verdict = "looked fine"\n')
+    assert only(tree.problems(), "`verdict` is not a field of a board record")
+
+
+def test_an_outcome_outside_the_vocabulary_is_a_finding(tree):
+    tree.edit("assurance/board/PLAT-FLASH-001.toml",
+              'outcome = "planned"', 'outcome = "looked ok"')
+    assert only(tree.problems(), "outcome 'looked ok' is not one of")
+
+
+def test_a_result_field_on_a_planned_run_is_a_finding(tree):
+    """The direction that matters: an expected value can be written before the
+    board is powered and a measured one cannot, so a filled `actual` under
+    `planned` is a number nothing took."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml",
+              'actual = ""', 'actual = "old-or-refused, I am sure"')
+    assert only(tree.problems(), "outcome 'planned' with `actual` filled")
+
+
+def test_a_pass_with_an_empty_result_field_is_a_finding(tree):
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace('first_boot_capture = "assurance/board/flash-cut.log"',
+                                  'first_boot_capture = ""'))
+    tree.edit("assurance/platform.toml",
+              '''id = "PLAT-FLASH-001"
+class = "flash"
+statement = "The tear model is the one the store assumes."
+discharge = "A recorded PASS on a throwaway board."
+discharge_owner = "maintainer"
+status = "pending"''',
+              '''id = "PLAT-FLASH-001"
+class = "flash"
+statement = "The tear model is the one the store assumes."
+discharge = "A recorded PASS on a throwaway board."
+discharge_owner = "maintainer"
+status = "discharged"
+evidence = ["assurance/board/PLAT-FLASH-001.toml"]
+revalidated_by = "a new board revision"
+board_revision = "RP2350 A4"''')
+    tree.regenerate()
+    assert only(tree.problems(), "outcome 'pass' with no `first_boot_capture`")
+
+
+def test_a_pass_whose_firmware_hash_is_not_a_hash_is_a_finding(tree):
+    """PLAT-MEM-001 is the row that lost exactly this field: a 2026-08-05 run
+    whose result is in prose and whose image nobody can name."""
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace("0" * 63 + "1", "the release build, I think"))
+    problems = tree.problems()
+    assert only(problems, "firmware_sha256 is not a sha256")
+
+
+def test_a_pass_under_a_pending_row_is_a_finding(tree):
+    """The reverse direction, and the one the registry alone cannot see: a run
+    that was taken and a status that never moved reads like no run at all."""
+    tree.write("assurance/board/PLAT-FLASH-001.toml", BOARD_PASS)
+    assert only(tree.problems(), "outcome 'pass' under a 'pending' row")
+
+
+def test_a_planned_record_under_a_discharged_row_is_a_finding(tree):
+    tree.edit("assurance/platform.toml",
+              '''discharge = "A recorded PASS on a throwaway board."
+discharge_owner = "maintainer"
+status = "pending"''',
+              '''discharge = "A recorded PASS on a throwaway board."
+discharge_owner = "maintainer"
+status = "discharged"
+evidence = ["assurance/board/PLAT-FLASH-001.toml"]
+revalidated_by = "a new board revision"
+board_revision = "RP2350 A4"''')
+    tree.regenerate()
+    assert only(tree.problems(), "outcome 'planned' under a 'discharged' row")
+
+
+def test_a_pass_whose_stepping_is_prose_is_a_finding(tree):
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace('stepping = "RP2350 A4"',
+                                  'stepping = "a red Pico 2 I had lying around"'))
+    assert only(tree.problems(), "names no RP2350 stepping")
+
+
+# --- what the first review of THIS rule found ---------------------------------
+#
+# Eight of its rules could be deleted or narrowed with the suite still green, and
+# two of the five "plan" fields could never be reported at all. The cases below
+# are one per surviving mutation, driven; the rules they hold were rewritten in
+# the same diff. The review's own list is the docstring of each.
+
+
+@pytest.mark.parametrize("field", platform_gate.BOARD_PLAN_FIELDS)
+def test_every_plan_field_is_pinned(tree, field):
+    """M15: the loop was pinned by ONE case on `expected`, so narrowing it to
+    `("expected",)` left `method` and `boot_config` unheld."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml",
+              f'{field} = "', f'{field} = ""\nunused_{field} = "')
+    assert only(tree.problems(), f"no `{field}`")
+
+
+@pytest.mark.parametrize("field", platform_gate.BOARD_RESULT_FIELDS)
+def test_every_result_field_is_refused_on_a_planned_run(tree, field):
+    """M4: pinned by ONE case on `actual`, so four of the five could be filled
+    before the run with the suite green."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", f'{field} = ""',
+              f'{field} = "written before anything ran"')
+    assert only(tree.problems(), f"outcome 'planned' with `{field}` filled")
+
+
+@pytest.mark.parametrize("field", platform_gate.BOARD_RESULT_FIELDS)
+def test_every_result_field_is_required_on_a_run_that_happened(tree, field):
+    """M5: pinned by ONE case on `first_boot_capture`."""
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace(f'{field} = "', f'{field} = ""\nunused_{field} = "'))
+    assert only(tree.problems(), f"outcome 'pass' with no `{field}`")
+
+
+def test_a_fail_may_not_sit_under_a_pending_row(tree):
+    """M2: `OUTCOME_STATUS`'s second entry had no case at all, so deleting
+    `"fail": "refuted"` left a recorded FAILURE under a `pending` row green."""
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace('outcome = "pass"', 'outcome = "fail"'))
+    assert only(tree.problems(), "outcome 'fail' under a 'pending' row")
+
+
+def test_an_inconclusive_run_still_owes_its_result_fields(tree):
+    """The third outcome, which no case exercised either: a run that happened
+    and settled nothing still happened ON something."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml",
+              'outcome = "planned"', 'outcome = "inconclusive"')
+    problems = tree.problems()
+    assert only(problems, "outcome 'inconclusive' with no `board`")
+    assert only(problems, "outcome 'inconclusive' with no `firmware_sha256`")
+
+
+def test_a_hash_inside_a_sentence_is_not_a_hash(tree):
+    """M16: `fullmatch` -> `search` was the loosening this repo already measured
+    once on `BOARD_REVISION`, and no case held it here."""
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace("0" * 63 + "1",
+                                  "the release build " + "0" * 63 + "1 I think"))
+    assert only(tree.problems(), "firmware_sha256 is not a sha256")
+
+
+def test_a_stepping_smuggled_into_another_field_is_a_finding(tree):
+    """The review put a whole board result through `boot_config` and `note` while
+    every rule about result fields read `""`. A stepping lives in one field."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml",
+              'boot_config = "The default image, 4 MB."',
+              'boot_config = "The default image, 4 MB, on the RP2350 A2 board."')
+    assert only(tree.problems(), "`boot_config` names a stepping")
+
+
+def test_a_note_is_read_like_every_other_field(tree):
+    """`note` had no rule at all: "Ran it, RP2350 A2, PASSED" on a planned record
+    was exit 0."""
+    tree.append("assurance/board/PLAT-FLASH-001.toml",
+                'note = "Ran it on the RP2350 A4, passed at every offset."\n')
+    assert only(tree.problems(), "`note` names a stepping")
+
+
+@pytest.mark.parametrize("value", ("42", "[]", "false", '["", ""]'))
+def test_a_plan_field_that_is_not_text_is_a_finding(tree, value):
+    """`str(record.get(key, ""))` made `str([])` == "[]" a filled field. Four
+    types measured green before the rule read the type."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml",
+              'expected = "Old-or-refused at every offset. PASS = no plausible wrong value."',
+              f"expected = {value}")
+    assert only(tree.problems(), "`expected` is")
+
+
+def test_a_capture_that_is_not_in_the_tree_is_a_finding(tree):
+    """A complete false discharge passed: `first_boot_capture` was any non-empty
+    string and no path was resolved."""
+    tree.write("assurance/board/PLAT-FLASH-001.toml", BOARD_PASS)
+    assert only(tree.problems(), "is not a file in the tree beside this record")
+
+
+def test_a_record_may_not_be_its_own_capture(tree):
+    """`check_evidence`'s `assurance/board/` rule is satisfied by the record
+    itself, so without this the artifact requirement is circular."""
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace('first_boot_capture = "assurance/board/flash-cut.log"',
+                                  'first_boot_capture = "assurance/board/PLAT-FLASH-001.toml"'))
+    assert only(tree.problems(), "is not a file in the tree beside this record")
+
+
+def test_an_expected_written_in_the_same_commit_as_the_result_is_a_finding(tree):
+    """The whole plan/result split is a convention until history says otherwise:
+    one commit can create the record with `expected` and `actual` together,
+    `expected` written to match what the board did."""
+    tree.write("assurance/board/flash-cut.log", "a capture\n")
+    tree.write("assurance/board/PLAT-FLASH-001.toml", BOARD_PASS)
+    tree.commit("a result and its expectation, at once")
+    assert only(tree.problems(), "no committed version of this record carries")
+
+
+def test_an_expected_committed_before_the_run_is_accepted(tree):
+    """The other direction, so the rule is not simply 'no result ever passes'."""
+    tree.commit("the plan")
+    tree.write("assurance/board/flash-cut.log", "a capture\n")
+    tree.write("assurance/board/PLAT-FLASH-001.toml", BOARD_PASS)
+    tree.commit("the run")
+    assert not only(tree.problems(), "no committed version of this record carries")
+
+
+def test_the_record_vocabulary_is_ratcheted():
+    """M6/M10: widening `BOARD_OUTCOMES` or the sha alphabet moves the
+    vocabulary with no rule deleted and no case red."""
+    assert platform_gate.BOARD_OUTCOMES == {"planned", "pass", "fail", "inconclusive"}
+    assert platform_gate.BOARD_PLAN_FIELDS == ("method", "boot_config", "expected")
+    assert platform_gate.BOARD_RESULT_FIELDS == (
+        "board", "stepping", "firmware_sha256", "first_boot_capture", "actual"
+    )
+    assert platform_gate.BOARD_SHA.pattern == r"[0-9a-f]{64}"
+    assert set(platform_gate.OUTCOME_STATUS) == {"pass", "fail"}
+
+
+def test_the_obligation_and_the_page_count_the_same_rows():
+    """The first version obliged 9 rows while the page it generates told the
+    reader 12 routes end at a board. One expression now."""
+    registered = platform_gate.entries(ROOT, [])
+    owed = platform_gate.board_rows(registered)
+    assert len(owed) == 12, sorted(owed)
+    page = (ROOT / "docs/platform-assumptions.md").read_text()
+    assert f"discharge {len(owed)} of these rows" in page
+
+
+def test_a_board_row_deleted_with_its_record_is_a_finding(tree):
+    """The review deleted four rows, each WITH its record, at exit 0: they cover
+    nothing and nothing depends on them, so only a floor sees them go."""
+    row = tree.root / "assurance/platform.toml"
+    text = row.read_text()
+    start = text.index('[[assumption]]\nid = "PLAT-FLASH-001"')
+    end = text.index("[[assumption]]", start + 1)
+    row.write_text(text[:start] + text[end:])
+    (tree.root / "assurance/board/PLAT-FLASH-001.toml").unlink()
+    tree.regenerate()
+    assert only(tree.problems(), "below the floor of")

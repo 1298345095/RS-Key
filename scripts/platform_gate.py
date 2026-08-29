@@ -27,10 +27,11 @@ The classes differ in how they are DISCHARGED, which is the other half: a model
 constant is discharged by a TLC run, an entry here by a board measurement, a
 vendor erratum, a source audit or an accepted risk with an owner. Nothing here
 can be discharged by anything this repository runs, and on the day it is written
-**one of eighteen entries is discharged**. The registry says so rather than
-looking populated.
+**two of thirty-three entries are discharged**. The registry says so rather
+than looking populated, and the numbers here are the two the generated page
+prints, so a status that moves has to move both.
 
-Six rules, and the first is the one that earns the file:
+Seven rules, and the first is the one that earns the file:
 
 * **candidates are DERIVED, and every one is claimed.** Four derivations, each
   floored where its source exists and it found nothing:
@@ -75,6 +76,7 @@ switched off. It goes in when a real pair arrives.
 import ast
 import pathlib
 import re
+import subprocess
 import sys
 import tomllib
 
@@ -91,9 +93,10 @@ ARTIFACT = pathlib.Path("docs/platform-assumptions.md")
 EMU_SHIM = pathlib.Path("tests/emu.py")
 USBIP_GUEST = pathlib.Path("scripts/usbip-guest.sh")
 UNSAFE_PAGE = pathlib.Path("docs/unsafe.md")
-#: Where a raw board result lands. Empty, and that is the state it is meant to
-#: report: a discharge naming a stepping must cite something from here, or any
-#: file in the tree that happens to exist stands in for a measurement.
+#: Where a raw board result lands, and where every maintainer-owned row's RECORD
+#: lives whether or not the run has happened: a discharge naming a stepping must
+#: cite something from here, or any file in the tree that happens to exist stands
+#: in for a measurement. See [`check_board_records`] for what a record must say.
 BOARD_EVIDENCE = "assurance/board/"
 
 #: Stage 10's inventory's eleven categories, plus the six the closed slice's own
@@ -475,6 +478,249 @@ def check_links(name, entry, ids, properties, constants, findings):
         )
 
 
+#: `assurance/board/<ID>.toml`: the raw record a hardware measurement leaves
+#: behind, and the reason it is a FILE rather than three more sentences in the
+#: registry. Stage 2 п.9 asks for the board, the stepping, the boot
+#: configuration, the firmware hash, the cut method, the first-boot capture and
+#: BOTH values -- and the split below is what makes the file worth writing before
+#: the run: the PLAN half is knowable in advance and the RESULT half is not, so
+#: `expected` is pinned where it cannot be back-filled from what the board did.
+#:
+#: WHO OWES ONE is `discharge_owner == "maintainer"` and nothing else. Keying it
+#: on [`HARDWARE_CLASSES`] was the first version and the review refused it with
+#: this module's own words: the `CLASSES` comment above already records that the
+#: class "is deliberately NOT what decides whether a row is a board result",
+#: because a `tool-fidelity` row whose route reads "a board recording of the same
+#: session" is a board result. Measured on the first version: 9 rows owed a
+#: record while [`render`] told the reader 12 routes end at a board, and renaming
+#: one row's class to `toolchain` deleted its obligation. Both numbers come from
+#: the same expression now.
+BOARD_PLAN_FIELDS = ("method", "boot_config", "expected")
+BOARD_RESULT_FIELDS = ("board", "stepping", "firmware_sha256",
+                       "first_boot_capture", "actual")
+#: Read like any other field -- `note` had no rule at all in the first version,
+#: and a review put "Ran it, RP2350 A2, sha 0xdeadbeef, PASSED" in it on a
+#: `planned` record at exit 0.
+BOARD_OPTIONAL_FIELDS = ("note",)
+BOARD_KEYED_FIELDS = ("assumption", "outcome")
+BOARD_OUTCOMES = {"planned", "pass", "fail", "inconclusive"}
+
+#: Which registry status each outcome may sit under, in BOTH directions. The
+#: reverse direction is the one that has actually gone wrong here: a run that was
+#: taken and whose status never moved reads, from the registry alone, exactly
+#: like a run nobody took -- PLAT-MEM-001 is that shape today, and its record
+#: says so rather than promoting itself.
+OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}
+
+BOARD_SHA = re.compile(r"[0-9a-f]{64}")
+
+
+#: Below this the obligation lost a row rather than discharging one. Four of the
+#: twelve `covers` nothing and are `depends_on` by nothing, so a review deleted
+#: each of them WITH its record and the gate stayed green — the derivations do not
+#: produce a candidate for "the timer is monotonic", and nothing else anchored
+#: them. A floor is the smallest thing that makes the deletion a diff; what would
+#: make it a derivation is stage 10's inventory, which is not this file's.
+BOARD_ROW_FLOOR = 12
+
+
+def board_rows(ids):
+    """The rows whose route ends at a board: `discharge_owner == "maintainer"`.
+
+    One expression, called by both the obligation and the generated page, so the
+    two cannot print different numbers about the same question.
+    """
+    return {n for n, e in ids.items() if e.get("discharge_owner") == "maintainer"}
+
+
+def _text(record, key):
+    """A field's value, or None if it is not a string at all.
+
+    `str(record.get(key, ""))` was the first version and `str([])` is `"[]"`,
+    which is not empty -- so `expected = []`, `expected = 42` and
+    `expected = false` all satisfied "the half that must be written before the
+    board is powered". Measured, all three at exit 0.
+    """
+    value = record.get(key)
+    return value.strip() if isinstance(value, str) else None
+
+
+def check_board_records(root, ids, findings, floor=None):
+    """Every maintainer-owned row has a record, and it is complete FOR ITS OUTCOME.
+
+    Not complete in general: a planned record must carry the plan half and must
+    NOT carry the result half, because a result field filled before the run is a
+    value nothing measured. And a stepping may appear only in `stepping` -- the
+    review smuggled a whole board result through `boot_config` and `note` while
+    every rule about result fields read `""`.
+    """
+    owed = board_rows(ids)
+    floor = BOARD_ROW_FLOOR if floor is None else floor
+    if len(owed) < floor:
+        findings.append(
+            f"{len(owed)} maintainer-owned row(s), below the floor of"
+            f" {floor} — a row deleted with its record takes its"
+            " obligation with it, and no derivation produces these candidates"
+        )
+    seen = set()
+    for path in sorted((root / BOARD_EVIDENCE).glob("*.toml")):
+        rel = path.relative_to(root)
+        try:
+            record = _toml(path)
+        except (OSError, tomllib.TOMLDecodeError) as error:
+            findings.append(f"{rel}: {error}")
+            continue
+        name = _text(record, "assumption") or ""
+        if path.stem != name:
+            findings.append(
+                f"{rel}: names assumption {name!r} — the file is addressed by its"
+                " row and a record filed under another name is read for neither"
+            )
+            continue
+        seen.add(name)
+        if name not in ids:
+            findings.append(f"{rel}: {name} is not an entry of {REGISTRY}")
+            continue
+        allowed = set(
+            BOARD_PLAN_FIELDS + BOARD_RESULT_FIELDS
+            + BOARD_OPTIONAL_FIELDS + BOARD_KEYED_FIELDS
+        )
+        for key in sorted(set(record) - allowed):
+            findings.append(f"{rel}: `{key}` is not a field of a board record")
+        for key in sorted(set(record) & allowed):
+            if _text(record, key) is None:
+                findings.append(
+                    f"{rel}: `{key}` is {type(record[key]).__name__} and not text —"
+                    " a field read through `str()` is satisfied by an empty list"
+                )
+        outcome = _text(record, "outcome")
+        if outcome not in BOARD_OUTCOMES:
+            findings.append(
+                f"{rel}: outcome {outcome!r} is not one of {sorted(BOARD_OUTCOMES)}"
+            )
+            continue
+        for key in BOARD_PLAN_FIELDS:
+            if not _text(record, key):
+                findings.append(
+                    f"{rel}: no `{key}` — the half of the record that is knowable"
+                    " before the board is powered is the half that must be written"
+                    " before it is"
+                )
+        # A stepping is a RESULT, so it may live in one field and no other. This
+        # is the rule that makes the plan/result split about substance rather
+        # than about which key a sentence was typed under.
+        for key in sorted(set(record) & allowed - {"stepping"}):
+            value = _text(record, key) or ""
+            if BOARD_REVISION.search(value):
+                findings.append(
+                    f"{rel}: `{key}` names a stepping — a board revision belongs"
+                    " in `stepping`, where the outcome rules can see it, and"
+                    " nowhere else"
+                )
+        filled = [k for k in BOARD_RESULT_FIELDS if _text(record, k)]
+        if outcome == "planned":
+            for key in filled:
+                findings.append(
+                    f"{rel}: outcome 'planned' with `{key}` filled — a result"
+                    " field on a run that has not happened is a value nothing"
+                    " measured"
+                )
+        else:
+            for key in BOARD_RESULT_FIELDS:
+                if key not in filled:
+                    findings.append(f"{rel}: outcome {outcome!r} with no `{key}`")
+            if "stepping" in filled and not names_a_stepping(_text(record, "stepping")):
+                findings.append(
+                    f"{rel}: stepping {record.get('stepping')!r} names no RP2350"
+                    " stepping"
+                )
+            if not BOARD_SHA.fullmatch(_text(record, "firmware_sha256") or ""):
+                findings.append(
+                    f"{rel}: firmware_sha256 is not a sha256 — the image a board"
+                    " result is about is the one field that cannot be recovered"
+                    " later, and PLAT-MEM-001 is the row that lost it. Whole"
+                    " value: a hash INSIDE a sentence is a sentence"
+                )
+            capture = _text(record, "first_boot_capture") or ""
+            if capture and (not (root / capture).is_file() or capture == str(rel)):
+                findings.append(
+                    f"{rel}: first_boot_capture {capture!r} is not a file in the"
+                    " tree beside this record — a record that is its own evidence"
+                    " is the `met by README.md` rule one layer in"
+                )
+            check_expected_predates(root, rel, record, findings)
+        want = OUTCOME_STATUS.get(outcome)
+        status = ids[name].get("status")
+        if want and status != want:
+            findings.append(
+                f"{rel}: outcome {outcome!r} under a {status!r} row — {REGISTRY}"
+                f" must read {want!r} or the measurement was taken and nothing moved"
+            )
+        if not want and status in ("discharged", "refuted"):
+            findings.append(
+                f"{rel}: outcome {outcome!r} under a {status!r} row — the status"
+                " moved on a record that does not carry the run behind it"
+            )
+    for name in sorted(owed - seen):
+        findings.append(
+            f"{name}: maintainer-owned {ids[name].get('class')} row with no"
+            f" {BOARD_EVIDENCE}{name}.toml — the expected value has to be on"
+            " record before the board is read, not after"
+        )
+
+
+def board_outcome(root, name):
+    """One record's outcome for the generated page, or why it has none.
+
+    Reported rather than counted: `render` printed the obligation and not what
+    the records say, so nine `planned` files and nine PASSes read the same on the
+    page the reader is pointed at.
+    """
+    path = root / BOARD_EVIDENCE / f"{name}.toml"
+    if not path.is_file():
+        return "**no record**"
+    try:
+        return str(_toml(path).get("outcome", "")).strip() or "**no outcome**"
+    except (OSError, tomllib.TOMLDecodeError):
+        return "**unreadable**"
+
+
+def check_expected_predates(root, rel, record, findings):
+    """`expected` was committed BEFORE the run, in a version that had no result.
+
+    Without this the whole plan/result split is a convention: one commit can
+    create the record with `expected` and `actual` together, `expected` written
+    to match what the board did. Read out of git rather than asserted, because
+    the tree cannot tell the two orders apart and history can.
+    """
+    done = subprocess.run(
+        ["git", "-C", str(root), "log", "--format=%H", "--", str(rel)],
+        capture_output=True, text=True,
+    )
+    if done.returncode != 0:
+        findings.append(f"{rel}: git log exited {done.returncode}")
+        return
+    want = _text(record, "expected")
+    for commit in done.stdout.split():
+        blob = subprocess.run(
+            ["git", "-C", str(root), "show", f"{commit}:{rel}"],
+            capture_output=True, text=True,
+        )
+        if blob.returncode != 0:
+            continue
+        try:
+            older = tomllib.loads(blob.stdout)
+        except tomllib.TOMLDecodeError:
+            continue
+        if _text(older, "outcome") == "planned" and _text(older, "expected") == want:
+            return
+    findings.append(
+        f"{rel}: no committed version of this record carries this `expected`"
+        " with outcome 'planned' — a result whose expectation was written in the"
+        " same commit is an expectation written after the fact"
+    )
+
+
 def check_bundles(root, ids, findings):
     """A bundle's assumption is registered, and its own `registered` field says so.
 
@@ -506,7 +752,7 @@ def check_bundles(root, ids, findings):
                 )
 
 
-def audit(root):
+def audit(root, board_floor=None):
     """(findings, one-line summary) for the registry, its candidates and its page."""
     root = pathlib.Path(root)
     findings = []
@@ -552,6 +798,7 @@ def audit(root):
         )
 
     check_bundles(root, registered, findings)
+    check_board_records(root, registered, findings, board_floor)
 
     try:
         want = render(root, registered)
@@ -585,7 +832,7 @@ def render(root, registered=None):
     rows = sorted(registered.items())
     pending = [n for n, e in rows if e.get("status") == "pending"]
     discharged = [n for n, e in rows if e.get("status") == "discharged"]
-    board = [n for n, e in rows if e.get("discharge_owner") == "maintainer"]
+    board = sorted(board_rows(dict(rows)))
     out = [
         "<!-- SPDX-License-Identifier: AGPL-3.0-only -->",
         "<!-- Copyright (C) 2026 RS-Key contributors -->",
@@ -615,6 +862,18 @@ def render(root, registered=None):
         " stepping it was taken on, any row naming a stepping must name a real"
         f" one, and a row naming one owes a capture under `{BOARD_EVIDENCE}` —"
         " because a rule met by any file that merely exists is met by a README.",
+        "",
+        f"Each of those {len(board)} owes a RECORD as well —"
+        f" `{BOARD_EVIDENCE}<id>.toml` — split into the half that is knowable"
+        " before the board is powered (`method`, `boot_config`, `expected`) and"
+        " the half that is not (`board`, `stepping`, `firmware_sha256`,"
+        " `first_boot_capture`, `actual`). A result field on a run that has not"
+        " happened is refused, and so is an `expected` first committed in the"
+        " same commit as its result. What they say today:",
+        "",
+        "| record | outcome |",
+        "|---|---|",
+        *(f"| `{name}` | {board_outcome(root, name)} |" for name in board),
         "",
         f"The candidates are DERIVED — {len(found)} of them, from the slice"
         " bundles and design pages, the model registry, the suites no runner in"
@@ -676,12 +935,12 @@ def render(root, registered=None):
     return "\n".join(out)
 
 
-def run(root, write=False):
+def run(root, write=False, board_floor=None):
     if write:
         (root / ARTIFACT).write_text(render(root), encoding="utf-8")
         print(f"platform-gate: wrote {ARTIFACT}")
         return 0
-    findings, summary = audit(root)
+    findings, summary = audit(root, board_floor)
     if findings:
         print("platform-gate:", file=sys.stderr)
         for finding in findings:

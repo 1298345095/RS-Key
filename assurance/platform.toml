@@ -19,12 +19,13 @@
 # DERIVED by scripts/platform_gate.py from four sources and printed, never
 # stored — the same rule properties.toml states, for the same reason.
 #
-# Read the `status` column first. **One of eighteen is discharged**, and the one
-# that is was discharged by reading a manifest. Nothing here is evidence about
-# anything yet; every row is an obligation with an owner and a named route, and
-# eight of the routes end at a board this repository must not touch — the eight
-# whose `discharge_owner` is `maintainer`, which is the count the generated page
-# derives rather than a number written here twice.
+# Read the `status` column first. **Two of thirty-three are discharged**, and
+# both were discharged by reading — a manifest, and a model against the code it
+# abstracts. Nothing here is evidence about a board yet; every other row is an
+# obligation with an owner and a named route, and the routes that end at a board
+# this repository must not touch are exactly the rows whose `discharge_owner` is
+# `maintainer` — a count the generated page derives, and the same expression that
+# decides which rows owe a record under `assurance/board/`.
 
 # ---- Reset and the boot ROM --------------------------------------------------
 
@@ -73,7 +74,7 @@ supports = ["SEC-ADM-001"]
 id = "PLAT-MEM-001"
 class = "memory"
 statement = "SRAM does not survive the drop to BOOTSEL, so a seed unwrapped in RAM is not readable through the bootloader."
-discharge = "The measurement exists and its artifact does not. tests/54_sram_residue.py:48 records `control` + `residue --expect present` run on 2026-08-05, Waveshare RP2350 Zero, silicon A4, secure boot off — 520 KiB of SRAM zero and the written pattern read straight back, which is this statement in the same direction. What is missing is the raw capture under assurance/board/, and until it is there this row is pending on an artifact, not on a board."
+discharge = "A re-run of `python tests/54_sram_residue.py control`, keeping what the 2026-08-05 run did not. That run reached the good outcome — tests/54_sram_residue.py:48 — and cannot discharge this row for two reasons, both in assurance/board/PLAT-MEM-001.toml: nobody kept the sha256 of the image it ran on, and the outcome it reached is the script`s `settled` (exit 3), which is defined as SETTLED WITHOUT THE SCAN, so `residue` never ran and neither `present` nor `absent` was measured. The earlier wording of this route said the only thing missing was the capture; that was wrong on both counts."
 discharge_owner = "maintainer"
 status = "pending"
 failure_direction = "security: a plaintext seed readable over the bootloader's mass-storage interface"

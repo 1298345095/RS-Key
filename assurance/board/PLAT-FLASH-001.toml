@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 RS-Key contributors
+#
+# The store's crash-consistency envelope rests on this and on nothing else: a
+# torn program leaves the old record or a detectably bad one, never a plausible
+# wrong one. It is the row that blocks stage 5's exit.
+#
+# The first version of this record claimed the script sweeps offsets. It does
+# not: tests/29_reset_power_cut.py takes ONE delay (`RSK_POWER_CUT_DELAY_MS`,
+# default 25 ms) and performs ONE cut per run, and its assertions are about the
+# post-cut getInfo, the old credential refusing without a gate, the backup state
+# and the owner seed -- it never reads a store record back and classifies it.
+# So the sweep is part of the METHOD a person has to perform, not something the
+# script does, and the classification is a second instrument this row still owes.
+assumption = "PLAT-FLASH-001"
+method = """`python tests/29_reset_power_cut.py` against a throwaway board with a REAL supply cut -- not `picotool reboot` and not a watchdog reset, neither of which stops the flash array mid-program. One run is one cut at one delay, so the sweep is the operator's: repeat over `RSK_POWER_CUT_DELAY_MS` across the program window, and record every delay tried, including the ones that landed outside it."""
+boot_config = """The DEFAULT image with its partition table applied, on a 4 MB board. The 16 MB geometry is a separate cell of docs/assurance-matrix.md and a 4 MB run does not cover it."""
+expected = """Every interrupted write leaves the record readable as the OLD value or refused as corrupt. PASS = old-or-refused at every delay tried, with the delays listed. FAIL = one record that reads back as a well-formed value nobody wrote, which falsifies the store model outright. INCONCLUSIVE = no delay landed inside the program window, which the script cannot tell you on its own -- it asserts about the device after the cut, not about the record's bytes, so classifying the record is a second instrument this row still owes."""
+outcome = "planned"
+board = ""
+stepping = ""
+firmware_sha256 = ""
+first_boot_capture = ""
+actual = ""
