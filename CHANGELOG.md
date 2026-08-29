@@ -45,6 +45,44 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The constant-time audit is now read out of the shipped ELF, not asserted in
+  prose.** `docs/ct-audit.md` says the canonical comparator's inlined copies
+  "lower to a loop whose only branch is governed by the *public* length counter"
+  and that every PIN/MAC/verifier surface routes through it. Both were true when
+  somebody disassembled the image once; nothing re-read it afterwards, and the
+  page's own "42 candidate sites were examined" describes a table that has never
+  existed in any revision of the file — the only table there has three rows, the
+  three fixed findings.
+
+  `scripts/ct_gate.py` + `assurance/ct_sites.toml` + the new `check.sh` row
+  `constant-time sites in the image` replace the first sentence with a rule over
+  `arm-none-eabi-objdump -d -l --inlines`: for every conditional branch in
+  `.text`, the flag-setter it reads is found and each of that instruction's
+  operands is traced to its last definition; a definition that is a load from a
+  buffer, whose own DWARF inline chain names a registered site, is a
+  secret-dependent branch. The second sentence becomes a derived table: the
+  first-party frames those chains name are held against the registry both ways,
+  so a surface that stops routing through the comparator reddens — which is the
+  direction that matters, because the finding this page records twice is a
+  compare that BYPASSED it.
+
+  Driven through the row's own command after a rebuild: the shipped tree reports
+  **0 secret-dependent branches over 39 attributed runs and 26 conditional
+  branches**, exit 0; with `if diff != 0 { return false; }` compiled back into
+  `ct_eq`'s accumulate loop, **27 over 60 runs**, exit 1, each naming its own
+  `cmp` of two byte loads. `crates/rsk-crypto/src/mac.rs` restored
+  byte-identical and the control re-run green.
+
+  Two rules the first version got wrong, both found by reading which assertion
+  fell rather than the colour: matching `cmp` exactly missed the loop's
+  `cmp.w fp, #32`, landed the walk-back on the secret `eors`, and reported the
+  shipped comparator as secret-dependent — the inverse of the truth; and
+  restricting the search to branches *inside* the site's own address runs missed
+  the early-exit mutant entirely, because the secret `cmp` is the last
+  instruction the site's chain covers and the back edge carries the enclosing
+  applet's frame. The taint hangs on the load, not on the branch. Host-only: no
+  image line moves.
+
 - **More than half of the fallible-probe conversion was held by no test, and the
   count was worse than the review said.** Reverting each converted guard on its own
   and running the owning crate's whole suite: **11 killed, 27 survived** — a diff

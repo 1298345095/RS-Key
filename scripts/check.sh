@@ -554,6 +554,11 @@ run "firmware stack floor"     firmware_stack_floor
 run "no debug vendor command in the image" debug_vendor_commands_absent
 run "partition table fences the store" partition_table_fences_the_store
 run "sealed image retires its unsigned IMAGE_DEF" release_image_retires_its_unsigned_image_def
+# Reads the image the row above just sealed, and it has to be HERE: the 16 MB,
+# display and no-touch builds below overwrite this path, so the same row run with
+# the Python gates would audit the no-touch binary and say nothing about the one
+# that ships.
+run "constant-time sites in the image" python scripts/ct_gate.py
 # The 16 MB geometry is the one that broke: the store used to end at the top of
 # the XIP window, where the bootrom's RP2350-E10 absolute block lives, and
 # `picotool partition create` refuses a table claiming it — a build the release
