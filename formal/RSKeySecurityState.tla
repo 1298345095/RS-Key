@@ -42,7 +42,7 @@ CONSTANTS
     AlwaysUvShipped,
     \* A SCOPE, and the other arm of an assumption that was argued and never run.
     \* Registered in assurance/assumptions.toml; FALSE everywhere the tiers are
-    \* about, TRUE in PermWide.cfg alone. See PermSets.
+    \* about, TRUE in PermWide.cfg and in its mutant family. See PermSets.
     WidePerms,
     \* THE SECOND SCOPE OF THE SAME SHAPE. `gate.forceChange` is EF_MINPINLEN[1],
     \* a gate the module did not carry at all (PLAT-MODEL-010). FALSE leaves the
@@ -166,8 +166,8 @@ Symm == Permutations(RPs) \cup Permutations(Channels)
 (* to ~7754 s and the safety tier past its CI ceiling. At one relying party  *)
 (* it costs 559 s against that scope's own 142 s, and that is PermWide.cfg,  *)
 (* which keeps two channels because scopes.txt holds that minimum for the    *)
-(* invariant it checks. Every wide run came back GREEN: the eleven missing   *)
-(* subsets reach no violation at any of the three scopes measured.           *)
+(* invariant it checks. Every wide BASELINE run came back GREEN: the         *)
+(* eleven missing subsets reach no violation at the three scopes measured.   *)
 (*                                                                           *)
 (* getPinToken 0x05 grants exactly {mc,ga} (clientpin.rs:391-395), and       *)
 (* consume_after_user_presence leaves {} (lbw only, state.rs:568).           *)

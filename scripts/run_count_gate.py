@@ -512,6 +512,8 @@ TABLE_GROUPS = (
      ("AlwaysUv.cfg",)),
     ("`PermWide.cfg` — `WidePerms`'s other arm: all sixteen permission subsets",
      ("PermWide.cfg",)),
+    ("`PermWideMut_*.cfg` — and what says that arm's observers can fail",
+     ("PermWideMut_*.cfg",)),
     ("`ForceChange.cfg` — `ForceChangeModelled`'s other arm: EF_MINPINLEN[1], the"
      " forced-PIN-change gate",
      ("ForceChange.cfg",)),

@@ -198,6 +198,21 @@ Historical_*.cfg                     RED     -
 Mut_*.cfg                            RED     -
 Solo_*.cfg                           RED     -
 SoloClause_*.cfg                     RED     -
+\* The wide permission domain's own falsifiability. `PermWide.cfg` came back
+\* GREEN and nothing in the tree could make that arm RED -- which says a run
+\* finished, not that it watched anything. Each of these arms ONE switch at that
+\* configuration's own constants, solo-style, and solo is not a preference here:
+\* the runner derives the expected reason only where a single switch is armed,
+\* and scripts/verdict_gate.py otherwise falls back to a TWIN search that would
+\* find the NARROW `Solo_` sibling of the same switch and attribute a run at this
+\* scope to a run at that one. The BootCarryMut_* row below records the same
+\* reasoning for the same shape. There is deliberately no narrow twin at these
+\* constants: both arms would be RED, a RED row gets no floor, and nothing in
+\* the tree would compare them. What the family buys is that the wide arm's
+\* observers can fail -- NOT that the widening is load-bearing; no switch in the
+\* roster is killed only under it, and PLAT-MODEL-001 records why the alphabet,
+\* not the domain, is the route to the stronger claim.
+PermWideMut_*.cfg                    RED     -
 SeamMut_*.cfg                        RED     -
 SeamSolo_*.cfg                       RED     -
 StoreMut_*.cfg                       RED     -

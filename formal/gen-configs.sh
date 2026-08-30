@@ -112,6 +112,14 @@ ALL_INV=(NoAuthorizationBypass NoCrossTransportTouchConsumption
 # move verdicts that are the record of which invariant names which defect. Each
 # gets its own Solo config against the mutant that falsifies it.
 EXTRA_INV=(RamNeverOutlivesFlashSeed NoLiveTokenWithoutPinRecord)
+
+# The three conjuncts of ResetNeverWeakensSurvivingState, declared here because
+# `emit`'s `clauses` knob names them and the SoloClause_* loop below reuses the
+# same array -- one roster, so a fourth clause cannot land in one and not the
+# other. NOT in ALL_INV: that would put them in every unarmed configuration and
+# move the fallback list of every armed one.
+CLAUSE_INV=(ResetKeepsThePinGate ResetKeepsTheAlwaysUvGate ResetKeepsTheBackupSeal)
+
 extra_mutant() {
   # ctx.state.reset() moved back behind the flash work leaves the RAM seed
   # standing past the flash delete AND a live token past EF_PIN's deletion.
@@ -179,6 +187,16 @@ emit() { # $1 = cfg, $2 = bug switch (""), $3 = sweep fix, $4 = ppuat fix
       for i in "${ALL_INV[@]}"; do [ "$i" = "$t" ] || echo "    $i"; done
     else
       for i in "${ALL_INV[@]}" "${EXTRA_INV[@]}"; do echo "    $i"; done
+      # The clauses of ResetNeverWeakensSurvivingState, on the ONE configuration
+      # that asks for them: every green exhaustive run of the parent checks all
+      # three, but the gate that reads INVARIANTS lines saw them named only by
+      # their own RED SoloClause_* rows and reported each asserted by nothing.
+      # LAST in the block, for the reason emit_store appends CacheHonest last:
+      # TLC reports the first violated invariant, so a name ahead of the others
+      # would re-attribute verdicts already in formal/runs.toml.
+      if [ "${clauses:-0}" = 1 ]; then
+        for i in "${CLAUSE_INV[@]}"; do echo "    $i"; done
+      fi
     fi
     echo "SYMMETRY Symm"
   } > "$out"
@@ -189,7 +207,23 @@ emit() { # $1 = cfg, $2 = bug switch (""), $3 = sweep fix, $4 = ppuat fix
 # verbatim at 0x08C0, so it is ON; `FixSweepDropsCredsBeforeRpEntries` is a
 # counterfactual the tree did NOT take -- 0x08BF made the seed lead the wipe
 # instead, which is the default (`BugSeedDoesNotLead = FALSE`), so it is OFF.
-emit Shipped.cfg "" FALSE TRUE
+#
+# `clauses=1` HERE and on no other baseline, and the choice is a measurement.
+# The three reset clauses are conjuncts of an invariant all four baselines check
+# and pass, so naming them adds no logical content anywhere -- but on the arms
+# that ship alwaysUv, ResetKeepsTheAlwaysUvGate cannot fail at all: EF_ALWAYS_UV
+# exists only as an OVERRIDE of the compiled default, so ResetSweepGates' own
+# `gate.alwaysUv # AlwaysUvShipped` guard can never take the gate from TRUE to
+# FALSE, and ConfigOp -- the only other writer -- clears `snap` in the same step
+# the clause's antecedent reads. Recording the clause as asserted there would be
+# recording a row that cannot go red. This is the one green baseline on the
+# FALSE arm, which is also the arm its own SoloClause mutant reddens on.
+# Naming them makes the assertion VISIBLE, not stronger: `SeedReachable`'s
+# `ram` disjunct is inert on the shipped tree -- RamNeverOutlivesFlashSeed is
+# what says so -- and it stands in the antecedent of the first two clauses,
+# so on this configuration they read on the flash record alone (README, the
+# SeedReachable restatement).
+clauses=1 emit Shipped.cfg "" FALSE TRUE
 # AS-AUTH-2's OTHER ARM. `--features always-uv` is a build fact the shipped image
 # does not carry, and an assumption no run can vary is an axiom -- so the whole
 # invariant set runs once with alwaysUv as the compiled default. Reduced retry
@@ -210,6 +244,41 @@ ship_auv=TRUE retries=2 mism=1 emit AlwaysUv.cfg "" FALSE TRUE
 # recorded row and cost 493 s.
 wide=TRUE ship_auv=TRUE retries=2 mism=1 rps='{r1}' chans='{c1, c2}' \
   emit PermWide.cfg "" FALSE TRUE
+# AND WHAT SAYS THAT GREEN OBSERVED ANYTHING. Until these, no mutant ran at
+# `WidePerms = TRUE` at all: the wide arm was a pass with no red beside it, which
+# is a run that finished rather than a run that watched. The switches below are
+# chosen for what each one argues and not to make up a family:
+#
+#   BugStopUsingKeepsPerms  is the UNIQUE switch that keeps only the permission
+#                           SET across an invalidation (`!.live = FALSE` and the
+#                           perms left standing), so the permission domain is the
+#                           whole defence for it -- every other token-survival
+#                           switch keeps `live` too and breaks the invariant
+#                           whatever the domain is;
+#   BugConsumeKeepsMcGa     arms on the model's ONE exact set equality over
+#                           `tok.perms`, so it is what says the widening did not
+#                           make the narrow witness unreachable.
+#
+# Between them they cover both of the only perms-valued invariant clauses.
+# SOLO-style, and that is not a preference: the runner derives the expected
+# reason only where exactly ONE switch is armed, and verdict_gate.check_reasons
+# falls back to a TWIN SEARCH for a configuration that is not solo -- which would
+# find the NARROW `Solo_*` twin of the same switch and attribute a run at this
+# scope to a run at that one. floors.txt's BootCarryMut_* rows record the same
+# reasoning for the same shape. No narrow twins at these constants either: both
+# arms would be RED, floors.txt gives a RED row no floor, and nothing in the tree
+# would compare them.
+#
+# THE HONEST LIMIT: no switch in the roster can be killed ONLY under the wide
+# arm, so this family proves the wide arm's observers are FALSIFIABLE -- not that
+# the widening is load-bearing. A `Perms` ALPHABET change is the only route to
+# the stronger claim, and assurance/platform.toml's PLAT-MODEL-001 already
+# records why that is a source obligation rather than a wider finite domain.
+PERM_WIDE_BUGS=(BugStopUsingKeepsPerms BugConsumeKeepsMcGa)
+for b in "${PERM_WIDE_BUGS[@]}"; do
+  SOLO=1 wide=TRUE ship_auv=TRUE retries=2 mism=1 rps='{r1}' chans='{c1, c2}' \
+    emit "PermWideMut_$b.cfg" "$b" FALSE TRUE
+done
 # EF_MINPINLEN[1] -- the gate PLAT-MODEL-010 measured missing. Its own pair for
 # the same reason `WidePerms` has one: the flag is reachable from every PIN-set
 # state, so carrying it in Shipped.cfg would be a second copy of the space that
@@ -247,8 +316,8 @@ done
 # four reset-family mutants reported ResetNeverWeakensSurvivingState on its THIRD
 # clause -- which fires at depth 8 where the other two need 16 and 18, so it
 # always got there first and two thirds of the invariant had no owner on record.
-# The grid behind these three lines is in formal/README.md.
-CLAUSE_INV=(ResetKeepsThePinGate ResetKeepsTheAlwaysUvGate ResetKeepsTheBackupSeal)
+# The grid behind these three lines is in formal/README.md. `CLAUSE_INV` is
+# declared beside ALL_INV above, because `emit`'s `clauses` knob reads it too.
 clause_mutant() {
   case "$1" in
     # The phase order is the ONLY owner of the first two clauses.

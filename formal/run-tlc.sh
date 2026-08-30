@@ -266,6 +266,7 @@ list_safety() {
   echo Shipped.cfg              # the tree as it stands -- expected GREEN
   echo AlwaysUv.cfg             # AS-AUTH-2's other arm: the build that ships it
   echo PermWide.cfg             # WidePerms's other arm: all 16 permission subsets
+  ls PermWideMut_*.cfg          # …and what says that arm can go red at all
   echo ForceChange.cfg          # ForceChangeModelled's other arm: EF_MINPINLEN[1]
   echo Historical_E76.cfg       # each shipped fix taken back out, so the
   echo Historical_E77.cfg       # counterexample it closed stays reproducible
