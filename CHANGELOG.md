@@ -45,6 +45,41 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The two applet-policy properties with no threat behind them have one.**
+  `SEC-POL-003` (a key surviving a change of its slot's algorithm attribute) and
+  `SEC-POL-006` (a Yubico OTP's replay position) were `[[untraced]]`
+  `missing-clause` findings: the page stated neither threat in any form, so both
+  read as "against the threat model" and named nothing.
+  `docs/threat-model.md` gains `TM-HOST-ALGO-CHANGE` and `TM-HOST-OTP-REPLAY`
+  under the hostile-host section, `FLOOR_CLAUSES` moves 48 → 50 and
+  `CEILING_UNTRACED` 3 → 1 in the same diff, and the finding register is down to
+  the one row whose verdict says the clause may never be written at all.
+
+  **Both clauses were verified against the code before they were written, and
+  they are weaker for it in ten places.** Three sentences never reached the draft:
+  an at-rest erase (the store's append-only caveat already governs that), an
+  unconditional "a counter never repeats", and a rule that would have covered
+  `TERMINATE DF`, whose sweep runs in flash-ring order and can leave a key beside
+  a cleared attribute when it fails partway. Seven more were weakened when an
+  independent review read the same code again — and that is the finding worth
+  keeping, because every one of the seven had already been checked once. The
+  attribute is read at operation time for the RSA-versus-EC byte and nothing more,
+  so the curve and the modulus size come from the stored blob and only a
+  *within-family* change goes undetected; a cross-family one leaves the blob
+  unparseable and the operation fails. The two-step RSA generate reads the
+  attribute when it starts the prime search and not again when it stores the key,
+  which the applet does not close and the worker's one-command-at-a-time dispatch
+  does. On the OTP side: a freshly configured slot persists its counter on the
+  first press with no session wrap; of the eight paths that write the counter only
+  two advance it, and one of those two is open-coded beside the module that owns
+  the step; the cold-boot bump skips a slot whose sealed read faults and
+  discards a re-seal the store refuses; and the residual list is six, not
+  four — the sixth is the swap above, which the review of these very clauses
+  found.
+  All of it is named in the clauses rather than rounded away, because a threat
+  model stronger than its firmware is the one direction this page may not be
+  wrong in.
+
 - **Four of stage 10's eleven platform-assumption categories had a name in the
   vocabulary and no row anywhere.** `scripts/platform_gate.py`'s `CLASSES`
   already listed `trng`, `timers`, `multicore-xip` and `display`; nothing used

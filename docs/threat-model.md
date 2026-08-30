@@ -111,6 +111,94 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   rather than that it does not exist. The harmless direction is not free either:
   an `EF_RP` entry that outlives its credential keeps a count nothing reconciles,
   so it goes on listing an rp with no passkeys behind it until the next reset.
+- **A key must not outlive the algorithm attribute it was made under.** An
+  OpenPGP slot's algorithm attribute is one `PUT DATA` away for anyone holding
+  PW3, and the card reads that record again at the moment of every *private-key*
+  operation: `PSO:CDS`, the asymmetric arm of `PSO:DECIPHER` and `INTERNAL
+  AUTHENTICATE` take one byte of it to decide whether the slot is RSA or EC before
+  they touch the key. The symmetric arms read no attribute at all: a
+  `PSO:DECIPHER` body opening `0x02` and every `PSO:ENCIPHER` route to
+  `EF_AES_KEY` and have returned before that read, so nothing below is about
+  them. Only that byte — the curve and the modulus size come from the stored blob
+  itself — so what an attribute change *under* a surviving key does depends on
+  which way it goes.
+  Across the families it is caught by accident: the old blob does not parse as the
+  new algorithm and the operation fails. Within a family nothing catches it, and
+  that is the case worth stating. Swap Ed25519 for P-256, or RSA-2048 for
+  RSA-4096, and the card goes on signing and deciphering with the old key while
+  `GET DATA` publishes the new parameters over it — a slot whose published
+  description no longer describes the secret behind it. So what the device owes
+  here is a deletion and not a validation: a `PUT DATA` of `C1`/`C2`/`C3` that
+  resolves to an attribute different from the one the slot already holds drops
+  that slot's private key and the stored public key it would go on serving
+  *first* — whenever the store reports the slot present — and only then writes the
+  new value. A key the present cache reads absent while the backend still holds it
+  is not dropped, and the attribute goes in over it. Every probe on that path is
+  fallible on purpose: an unreadable attribute, an unreadable key slot, or a drop
+  the store refused each answer `6581` **without writing the attribute**, rather
+  than skipping an invalidation the card could not prove unnecessary. And the
+  internal EF the attribute lives in is not addressable — `PUT DATA` answers
+  `6B00` to it even under PW3 — so the `C1`/`C2`/`C3` tags are the only door.
+  **Scope: the attribute write.** A write that resolves to the attribute already
+  in force is not a change and keeps the key, and an absent attribute reads as the
+  RSA-2048 default on both sides of that comparison. Three things this does NOT
+  claim. The fingerprint DOs are outside the drop, so a slot goes on publishing
+  the old key's fingerprint in `C5` until something overwrites it. `TERMINATE DF`
+  sweeps attributes and keys in flash-ring order, so a factory reset that fails
+  partway can leave a key beside a cleared attribute, and what it owes there is
+  the `6581` it returns rather than an order. And the binding at the other end —
+  `GENERATE` and `IMPORT` reading the slot's attribute as they mint or take the
+  key — is one command for every arm but the two-step RSA generate, which reads
+  the attribute when it starts the prime search and does not read it again when it
+  stores the key. Nothing in the applet closes that window; what closes it is the
+  worker dispatching one command at a time.
+- **A Yubico OTP the host watched being typed must not validate twice.** The OTP
+  applet types its ticket as keystrokes into whatever has focus, so a hostile host
+  reads every OTP the key emits; what stops one being replayed is not secrecy but
+  position. Among the fields each press of a Yubico-OTP slot encrypts into its
+  ticket is a *pair* — the slot's persisted 15-bit use counter and a one-byte RAM
+  session counter — and the protocol's replay rule is that a validation server
+  rejects any OTP whose pair does not exceed the last pair it saw for that public
+  id. The pair is therefore the defence, and the rule is that a press emits the
+  pair the slot holds and then moves it: the session counter on every press, and
+  the persisted use counter whenever the session counter wraps past 255. One press
+  does not read that way — the first on a freshly configured slot, whose stored
+  zero is written up to one *before* the ticket is built, so what it types is the
+  moved value and not the zero it held. The two paths that ADVANCE the persisted
+  half are that press and the boot-time bump, and the step that can reach the
+  15-bit ceiling comes from one module for both, so the ceiling cannot be enforced
+  two different ways. The first-press `0 → 1` write sits beside it in `ticket.rs`
+  and cannot reach the ceiling. `UPDATE` and the boot seal migration carry a
+  slot's record forward and leave the counter alone. `SWAP` leaves the stored
+  counter alone too — but it moves the record to the *other* slot index, and the
+  RAM half travels with it, because the pair belongs to the public id inside the
+  record and not to the slot number that record happens to sit at. Because the
+  session counter lives in RAM and comes back at zero, a *cold* boot advances the
+  persisted counter of every plain Yubico-OTP slot it can read and re-seal and
+  that still has room to advance — never a HOTP, short or static slot, and never
+  one already at the ceiling — before USB is up and any press can be served, which
+  is what keeps one power cycle's pairs out of the next one's.
+  **Six residuals, and the rule above hides none of them.** A host-requested warm
+  reset is ungated and does not advance the counter — deliberately, since bumping
+  on every reboot a host can ask for would let it walk the 15-bit counter to the
+  ceiling — so the session counter restarts at zero over an unchanged use counter
+  and the current power cycle's pairs are typed again. At that ceiling neither
+  path advances anything and the key goes on typing, so the pair repeats every
+  256 presses. Both counter writes are best-effort and neither answer is read: the
+  ticket is typed whether or not the store took the new value, and a boot bump the
+  store refuses is dropped. So is the boot *read* — a slot whose sealed read
+  faults is skipped by the bump entirely, which is the faulted-read clause above
+  wearing this applet's clothes. And position is not monotone across
+  re-provisioning: `CONFIGURE` writes a fresh record with a zeroed counter, gated
+  by the slot access code whenever the existing slot reads back. And the move that
+  carries the pair is not atomic: `SWAP` writes the two records one after the
+  other and swaps the RAM halves only once both are through, with nothing to undo
+  a step that failed. A refused second write answers `6581` with the first already
+  landed; a refused delete is not read at all. Either way one public id is left in
+  two slots with only one of the two session halves its own, and the other slot
+  can then type a position that id has already typed this power cycle — which a
+  plain `ykman otp swap` reaches unauthenticated, an unprotected slot's stored
+  access code being all-zero.
 - **Device config is UNGATED on the default build.** The shipped default is the
   full-ykman/YubiKey-compatible admin surface: a hostile USB host can silently
   rewrite the DeviceInfo / enabled-applications / USB identity — over CCID

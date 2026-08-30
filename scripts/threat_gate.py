@@ -107,18 +107,22 @@ MAINTAINER_VERDICTS = ("defends-nothing", "would-overclaim")
 
 #: Floors AT today's counts, in the shape the rest of `scripts/` uses them: a
 #: derivation that finds nothing satisfies every rule below over an empty roster.
-#: 48 clauses is the page as it stands and 40 the P0 family as the tranches stand;
+#: 50 clauses is the page as it stands and 40 the P0 family as the tranches stand;
 #: shrinking either for real is a deliberate edit here, in the same diff.
-FLOOR_CLAUSES = 48
+FLOOR_CLAUSES = 50
 FLOOR_P0 = 40
 #: The untraced list is a finding register, and a finding register that grows
 #: silently is a hatch. Raising this is the deliberate admission that another
-#: property has no threat behind it — and it is held EQUAL rather than as an upper
-#: bound, so closing one is a deliberate edit too. Three of the five were closed
-#: at once by `TM-HOST-READ-FAULT`, which is what left it at two, and both
-#: survivors were P0b until the counterpoint read the third: a link is not
-#: coverage, and SEC-FIDO-007 came BACK here for it.
-CEILING_UNTRACED = 3
+#: property has no threat behind it. THIS row holds it as a strict upper bound;
+#: what holds it EQUAL, so that closing one is a deliberate edit too, is a
+#: DIFFERENT gate row — `test_threat_gate.py`'s ratchet case, under
+#: `pytest (gate scripts)` and not `threat-model traceability`. Three of the five
+#: were closed at once by `TM-HOST-READ-FAULT`, which is what left it at two, and
+#: both survivors were P0b until the counterpoint read the third: a link is not
+#: coverage, and SEC-FIDO-007 came BACK here for it. The two P0b survivors are
+#: closed now, one clause each — `TM-HOST-ALGO-CHANGE` and `TM-HOST-OTP-REPLAY` —
+#: which leaves only the row whose verdict says the clause may never be written.
+CEILING_UNTRACED = 1
 #: A `why` shorter than this is a shrug with a verdict column. Same floor and
 #: same reason as `matrix_gate.FLOOR_WORDS`, borrowed rather than re-picked.
 FLOOR_WORDS = matrix_gate.FLOOR_WORDS

@@ -205,6 +205,30 @@ def test_the_shipped_ratchets_are_this_trees_counts():
     assert threat_gate.CEILING_UNTRACED == len(untraced)
 
 
+#: Clauses whose bodies are locked past their first line, and how many pins each
+#: carries. A pin inside a clause is VOLUNTARY — nothing derives it the way an
+#: `[[untraced]]` `why` or a `PLAT-…` hand-off does — so measured, deleting every
+#: pin of both applet-policy clauses leaves the traceability row and this file at
+#: exit 0, with 530 and 648 words of body rewritable again. A floor and not an
+#: equality: another lock is an improvement and must not read as a regression.
+FLOOR_PINS = {"TM-HOST-ALGO-CHANGE": 2, "TM-HOST-OTP-REPLAY": 3}
+
+
+def test_the_voluntarily_pinned_clauses_still_carry_their_pins():
+    """The hole inside the hole `rests_on` closes.
+
+    `where` locks a clause's first line and a pin locks a sentence under it — but
+    an undemanded pin is itself deletable at exit 0, which leaves the body free
+    text again by exactly the edit the pin was written to refuse. Both clauses
+    here were reviewed into their current wording (the drop is conditional, the
+    residual count is six), and it is those sentences the pins hold.
+    """
+    clauses = threat_gate.load(threat_gate.ROOT, threat_gate.CLAUSES)["clause"]
+    pins = {c["id"]: len(c.get("rests_on", [])) for c in clauses}
+    for cid, floor in FLOOR_PINS.items():
+        assert pins.get(cid, 0) >= floor, (cid, pins.get(cid, 0), floor)
+
+
 def test_a_new_bullet_is_a_clause_nobody_classified(tree):
     edit(
         tree,

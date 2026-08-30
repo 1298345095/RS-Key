@@ -350,7 +350,7 @@ id = "SEC-POL-003"
 name = "AttributeChangeInvalidatesTheKey"
 status = "MODELLED-ONLY"
 statement = "Changing an OpenPGP slot's algorithm attribute invalidates the old private/public key pair before the new attribute becomes visible."
-source = ["OpenPGP Card 3.4 §4.4.3.12"]
+source = ["OpenPGP Card 3.4 §4.4.3.12", "docs/threat-model.md#TM-HOST-ALGO-CHANGE"]
 
 [[property]]
 id = "SEC-POL-004"
@@ -371,7 +371,7 @@ id = "SEC-POL-006"
 name = "OtpCounterNeverRepeats"
 status = "MODELLED-ONLY"
 statement = "Every emitted counter-based Yubico OTP advances the combined persisted-use and RAM-session replay position before the next output can reuse it."
-source = ["Yubico OTP USB protocol"]
+source = ["Yubico OTP USB protocol", "docs/threat-model.md#TM-HOST-OTP-REPLAY"]
 
 # ---- RSKeyAdminSurface — the mask, its carve-out, the rescue gate -----------
 
