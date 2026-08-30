@@ -646,3 +646,57 @@ def test_the_shipped_proof_half_names_a_harness_that_exists():
         harness = entry["proof"][entry["proof"].index("--harness") + 1]
         assert f"fn {harness}(" in names, (bug, harness)
         assert entry["proof_names"] in names, (bug, entry["proof_names"])
+
+
+def test_a_companion_pair_credits_the_subject_and_not_the_companion(tree):
+    """The pair `armed_subject` exists for, and the shape that cost `SEC-FIDO-006C`
+    its evidence on the very commit that drove its code twin.
+
+    A configuration named after the INVARIANT rather than the bug is invisible to
+    the filename half, and the armed-alone condition refused it because the
+    shipped tree makes the defect unreachable without its companion. So the
+    clause read `co = 0` while its own mutant's code twin was killed.
+    """
+    (tree / "formal" / "gen-configs.sh").write_text(
+        "companion_bug() {\n  case \"$1\" in\n"
+        "    BugAlpha) echo BugGamma ;;\n    *) echo \"\" ;;\n  esac\n}\n"
+    )
+    (tree / "formal" / "SoloClause_BazHolds.cfg").write_text(
+        "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n    BugGamma = TRUE\n"
+        "INVARIANTS\n    TypeOK\n    BazHolds\n"
+    )
+    comutate.companions.cache_clear()
+    assert comutate.solo_invariants(tree, "BugAlpha") == ["FooHolds", "BazHolds"]
+    # And never the other way round: crediting the companion would give it an
+    # invariant it does not break, which is what the armed-alone rule was for.
+    # `FooHolds` is its own `Solo_BugGamma.cfg`, read by filename; `BazHolds` is
+    # the clause config's and must not reach it.
+    assert comutate.solo_invariants(tree, "BugGamma") == ["FooHolds"]
+
+
+def test_two_real_defects_still_attribute_nothing(tree):
+    """The rule is the COMPANION relation, not "two is fine". A configuration
+    arming two unrelated defects says which one fired, not which property either
+    breaks — and the generator is what decides which pairs are companions."""
+    (tree / "formal" / "gen-configs.sh").write_text(
+        "companion_bug() {\n  case \"$1\" in\n    *) echo \"\" ;;\n  esac\n}\n"
+    )
+    (tree / "formal" / "SoloClause_BazHolds.cfg").write_text(
+        "SPECIFICATION Spec\nCONSTANTS\n    BugAlpha = TRUE\n    BugGamma = TRUE\n"
+        "INVARIANTS\n    TypeOK\n    BazHolds\n"
+    )
+    comutate.companions.cache_clear()
+    assert comutate.solo_invariants(tree, "BugAlpha") == ["FooHolds"]
+    assert comutate.solo_invariants(tree, "BugGamma") == ["FooHolds"]
+
+
+def test_the_companion_table_comes_from_the_generator(tree):
+    """Derived, not restated: a third pair is added in `gen-configs.sh` and this
+    reads it there. A copy in `scripts/` is the shape this tree keeps finding
+    rotted, and the real table has exactly the two arms the generator carries."""
+    comutate.companions.cache_clear()
+    assert comutate.companions(comutate.ROOT) == {
+        "BugBackupSealedNotAGate": "BugSeedDoesNotLead",
+        "BugSetPinKeepsPpuat": "BugPpuatIsAGate",
+    }
+    comutate.companions.cache_clear()

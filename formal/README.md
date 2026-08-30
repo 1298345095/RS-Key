@@ -2802,7 +2802,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | BOUNDED | `RSKeySecurityState` | — | 3 | 3 | 3 | 1 | 1 | 1 |
 | `SEC-FIDO-006A` | `ResetKeepsThePinGate` | BOUNDED | `RSKeySecurityState` | — | 1 | 1 | 1 | 1 | 1 | 1 |
 | `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | BOUNDED | `RSKeySecurityState` | — | 1 | 1 | 1 | 1 | 1 | 1 |
-| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | BOUNDED | `RSKeySecurityState` | — | 1 | 1 | 0 | 1 | 1 | 1 |
+| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | BOUNDED | `RSKeySecurityState` | — | 1 | 1 | 1 | 1 | 1 | 1 |
 | `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | MODELLED-ONLY | `RSKeySecurityState` | — | 2 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | MODELLED-ONLY | `RSKeySecurityState` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | MODELLED-ONLY | `RSKeySecurityState` | — | 0 | 1 | 0 | 0 | 0 | 0 |

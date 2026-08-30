@@ -85,6 +85,7 @@ and full Kani tiers (minutes-per-harness belongs in the weekly row, and the
 sequence proofs' own falsifiability is measured by their own table).
 """
 
+import functools
 import pathlib
 import re
 import shutil
@@ -239,19 +240,71 @@ def solo_invariants(root: pathlib.Path, bug: str, index=None) -> list[str]:
     asks about every bug — the 67 killed entries against 201 configurations is
     13 000 parses if each call rescans, and this runs inside a gate row.
 
-    One asymmetry, stated rather than left to be found: the armed-alone condition
-    is the INDEX's, so the filename half accepts what the index refuses. Both
-    two-armed configurations (`Solo_BugSetPinKeepsPpuat.cfg`,
-    `Solo_BugBackupSealedNotAGate.cfg`) are still read by name. Not live — both
-    bugs are `status = "unreachable"`, so neither reaches the column — and the
-    filename is a deliberate statement about which bug the file is for, which the
-    index has no way to make.
+    One asymmetry, and it stopped being harmless: the subject rule is the INDEX's,
+    so the filename half accepts what the index would refuse. Both two-armed
+    configurations (`Solo_BugSetPinKeepsPpuat.cfg`,
+    `Solo_BugBackupSealedNotAGate.cfg`) are read by name, and this comment used to
+    say that was "not live — both bugs are `status = unreachable`, so neither
+    reaches the column". One of them stopped being unreachable and the sentence
+    stayed. The index reads the pair now too, through [`armed_subject`] — which is
+    what the filename half was quietly doing all along. The difference is that the
+    index also reaches a configuration named after the INVARIANT, and that is
+    where `SEC-FIDO-006C`'s evidence had been sitting unread.
     """
     if index is None:
         index = solo_index(root)
     named = solo_invariant(root, bug)
     out = [named] if named else []
     return out + [inv for inv in index.get(bug, []) if inv != named]
+
+
+#: `companion_bug`'s case arms in `formal/gen-configs.sh`. A companion is a
+#: REACHABILITY aid and not a second defect: the shipped tree makes the mutant's
+#: own defect unreachable, so its configuration rebuilds the older tree beside it.
+#: Read out of the generator rather than restated here, because the generator is
+#: where a third pair would be added and a copy is what this tree keeps finding
+#: rotted.
+COMPANION_ARM = re.compile(
+    r"^\s*(Bug[A-Za-z0-9_]+)\)\s*echo\s+(Bug[A-Za-z0-9_]+)\s*;;", re.M
+)
+
+
+@functools.cache
+def companions(root: pathlib.Path) -> dict[str, str]:
+    """bug -> the switch its configurations arm beside it, from the generator."""
+    try:
+        text = (root / "formal" / "gen-configs.sh").read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    body = text.partition("companion_bug()")[2].partition("\n}")[0]
+    return dict(COMPANION_ARM.findall(body))
+
+
+def armed_subject(config, companion: dict[str, str]) -> str | None:
+    """Which bug a configuration is ABOUT, or None if that is not decidable.
+
+    One armed switch is the whole answer. Two is the answer as well when the
+    second is the first's COMPANION -- `SoloClause_ResetKeepsTheBackupSeal.cfg`
+    arms `BugBackupSealedNotAGate` with `BugSeedDoesNotLead` beside it, because
+    the shipped seed-lead makes the defect unreachable alone, and refusing that
+    pair left the clause it is named for reading `co = 0` on the very commit that
+    drove its code twin. Anything else is None: a configuration arming two real
+    defects says which one fired, not which property either breaks.
+
+    The companion is never the subject. Crediting it would give `BugPpuatIsAGate`
+    an invariant it does not break, which is the defect the armed-alone condition
+    was written against and which this rule keeps out.
+    """
+    if len(config.armed) == 1:
+        return config.armed[0]
+    if len(config.armed) != 2:
+        return None
+    first, second = config.armed
+    if companion.get(first) == second:
+        return first
+    if companion.get(second) == first:
+        return second
+    return None
 
 
 def solo_index(root: pathlib.Path) -> dict[str, list[str]]:
@@ -277,13 +330,9 @@ def solo_index(root: pathlib.Path) -> dict[str, list[str]]:
         # configuration, `TraceSecurityBadAlphaNoR4b.cfg`, escapes only because it
         # checks three invariants and so is not solo-style — but the pattern exists
         # in this tree and the next solo-style one would be credited as evidence.
-        if (
-            len(config.armed) == 1
-            and not config.disarmed
-            and config.solo
-            and config.targets
-        ):
-            found = out.setdefault(config.armed[0], [])
+        subject = armed_subject(config, companions(root))
+        if subject and not config.disarmed and config.solo and config.targets:
+            found = out.setdefault(subject, [])
             if config.targets[0] not in found:
                 found.append(config.targets[0])
     return out
