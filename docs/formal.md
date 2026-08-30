@@ -169,12 +169,13 @@ worktree. A failing test is `co-refuted`; a green slice is an abstraction gap;
 a defect made impossible by a shipped structural fix is `unreachable` only
 with recorded evidence. A compile failure is never counted as a kill.
 
-The roadmap's fixed phase-2 denominator is the original 28 FIDO mutants. The
-generated table in `formal/README.md` records all 28, their target invariant,
-model verdict and code-level verdict: **26/28 are co-refuted, two are
+The phase-2 denominator is the FIDO mutant roster, and it MOVES with that
+roster rather than standing at the roadmap's original 28 — it is 31 now. The
+generated table in `formal/README.md` records every one, its target invariant,
+its model verdict and its code-level verdict: **30 of 31 are co-refuted, one is
 unreachable, and none is a gap**. Deriving that roster found six real coverage
-gaps; each now has a regression harness. Later modules extend the live roster
-to 69 entries: all 65 executable patches are killed and four are unreachable.
+gaps; each now has a regression harness. Later modules extend the live roster to
+73 entries: all 69 executable patches are killed and four are unreachable.
 
 The applet batch — the 24 seam, retry-lattice and policy mutants — was added
 because the roster had a measurable skew: 31 of its first 43 patches sat in

@@ -30,6 +30,9 @@ crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/getassertion.rs	384-384
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/makecredential.rs	518-518	if !ctx.state.verify_token(proto, req.client_data_hash, param)	if !ctx.state.verify_token(proto, req.client_data_hash, param)
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/state.rs	523-535	/// The CTAP 2.1 §6.5.5.7 post-user-presence triad — `clearUserPresentFlag()`,	}
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/state.rs	547-562	/// `stopUsingPinUvAuthToken` — drop the in-use state, permissions, and	}
+crates/rsk-fido/src/reset_assurance_tests.rs	crates/rsk-fido/src/reset.rs	209-215	/// **The list is FIVE and the clauses are three.** `EF_DEVICE_PIN` and	/// of what this predicate is for.
+crates/rsk-fido/src/reset_assurance_tests.rs	crates/rsk-fs/src/storage.rs	78-78	map: HashMap<u16, Vec<u8>>,	map: HashMap<u16, Vec<u8>>,
+crates/rsk-fido/src/reset_assurance_tests.rs	crates/rsk-fs/src/storage.rs	105-105	fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {	fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/clientpin.rs	420-426	ctx.state.reset_pin_uv_auth_token(ctx.rng);	ctx.state.paut.permissions = permissions;
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/clientpin.rs	427-433	match rp_id {	}
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
@@ -500,12 +503,19 @@ formal/TraceSecurity.tla	crates/rsk-fido/src/clientpin.rs	612-612	ctx.presence.u
 formal/TraceSecurity.tla	crates/rsk-fido/src/config.rs	315-315	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
 formal/TraceSecurity.tla	crates/rsk-fido/src/makecredential.rs	533-551	let always_uv = crate::config::always_uv_enabled(ctx.fs);	Ok(UvOutcome::NONE)
 formal/TraceSecurity.tla	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/comutants.toml	crates/rsk-fido/src/clientpin.rs	220-220	clear_ppuat(ctx.fs).map_err(|_| CtapError::Other)?;	clear_ppuat(ctx.fs).map_err(|_| CtapError::Other)?;
 formal/comutants.toml	crates/rsk-fido/src/clientpin.rs	493-495	if force_change_pending(ctx) {	}
+formal/comutants.toml	crates/rsk-fido/src/clientpin.rs	840-842	if fid == EF_PIN {	}
 formal/comutants.toml	crates/rsk-fido/src/clientpin_tests.rs	1239-1239	assert_eq!(	assert_eq!(
 formal/comutants.toml	crates/rsk-fido/src/clientpin_tests.rs	1303-1303	assert_eq!(	assert_eq!(
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	542-544	if always_uv {	}
 formal/comutants.toml	crates/rsk-fido/src/makecredential.rs	548-550	if pin_set && req.rk {	}
+formal/comutants.toml	crates/rsk-fido/src/reset.rs	209-215	/// **The list is FIVE and the clauses are three.** `EF_DEVICE_PIN` and	/// of what this predicate is for.
+formal/comutants.toml	crates/rsk-fido/src/reset_assurance_tests.rs	76-76	assert!(reset.delete(EF_BACKUP_SEALED));	assert!(reset.delete(EF_BACKUP_SEALED));
+formal/comutants.toml	crates/rsk-fido/src/reset_assurance_tests.rs	130-130	fn a_backup_seal_swept_with_the_secrets_is_a_reopened_export_window() {	fn a_backup_seal_swept_with_the_secrets_is_a_reopened_export_window() {
+formal/comutants.toml	crates/rsk-fido/src/reset_tests.rs	638-638	assert!(is_fido_gate_fid(fid), "{fid:#06x} gates the applet");	assert!(is_fido_gate_fid(fid), "{fid:#06x} gates the applet");
 formal/comutants.toml	crates/rsk-fs/src/fs.rs	752-752	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
+formal/comutants.toml	crates/rsk-fs/src/storage.rs	78-78	map: HashMap<u16, Vec<u8>>,	map: HashMap<u16, Vec<u8>>,
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1198-1205	/// Drop the VALIDATE result on deselect / card reset, so a later session must	}
 formal/comutants.toml	crates/rsk-oath/src/lib.rs	1238-1239	self.validated = !code_set;	self.otp_pin_verified = false;
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	258-260	if !putdata::write_authorized(&self.sess, fid) {	}

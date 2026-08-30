@@ -193,7 +193,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 41
+SCOPE_CEILING = 42
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -443,7 +443,7 @@ SCOPED = {
     "stage-0 criterion, and it is not this row",
     (
         "formal/README.md",
-        "the roadmap's original 28-row phase-2 denominator",
+        "roadmap's original 28-row phase-2 denominator and is 31 now",
     ): "the denominator a roadmap fixed, deliberately not the live roster — the whole "
     "point of the sentence is that it does not move",
     (
@@ -460,6 +460,12 @@ SCOPED = {
     "arguing that each mutant is caught by the invariant NAMING it — the ratio is the "
     "claim, and the generated roster line carries the same 30",
     (
+        "docs/formal.md",
+        "73 entries: all 69 executable patches are killed",
+    ): "the whole-tree roster restated in the page that introduces the phase-2 "
+    "table, whose generated region beside it gives the phase-2 line and not this "
+    "total",
+    (
         "formal/README.md",
         "`NoStatusAfterARefusedAuth` | 73 states |",
     ): "a coincidence and not a copy: the co-mutant roster is 73 entries and this is "
@@ -468,7 +474,7 @@ SCOPED = {
     "— so this registration is the same shape and will dissolve the same way",
     (
         "formal/README.md",
-        "**73 entries: 68 executable patches killed",
+        "**73 entries: 69 executable patches killed",
     ): "the co-mutant roster restated where its composition is broken down, which the "
     "generated line beside it does not give — and the copy that read 69, then 71, "
     "until each of two commits in this series re-measured it. The second time the "

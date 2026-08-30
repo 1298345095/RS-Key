@@ -65,7 +65,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 4 of 44 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | — | BOUNDED |
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 4 of 39 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-005` | `NoUnmanageableCredential` | 4 of 40 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 4 of 40 | 2 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
+| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 4 of 40 | 3 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 0 of 1 | 0 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |

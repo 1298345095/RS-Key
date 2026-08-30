@@ -106,3 +106,44 @@ fn the_secret_sweep_is_where_a_seed_the_medium_kept_stops_the_wipe() {
     assert!(reset.advance());
     assert_eq!(reset.progress, ResetProgress::Gates);
 }
+
+/// SEC-FIDO-006C stated over the CLASSIFIER, which is the half no test asked.
+///
+/// The two tests that fall when `EF_BACKUP_SEALED` leaves `is_fido_gate_record`
+/// both transcribe that function's match arm, so they answer "did somebody edit
+/// the list" — measured: demoting `EF_MINPINLEN`, which `crates/rsk-fido/src/reset.rs:209-215` says
+/// out loud is in the phase and in no clause, kills the slice the same way,
+/// 3 of 3 runs. And the one test that states the defect behaviourally,
+/// `reset_tests.rs::a_seed_the_medium_kept_stops_the_wipe_before_the_gates`, is a
+/// COIN FLIP: `RamStorage` is a `HashMap`
+/// (`crates/rsk-fs/src/storage.rs:78`) and `for_each_key` iterates it
+/// (`crates/rsk-fs/src/storage.rs:105`), so whether the aborted sweep reaches
+/// 0xCC02 before it stops on the refused 0xCC00 is a fresh permutation per
+/// process — 167 of 400 fixtures lose the marker.
+///
+/// This asks the property instead. `delete` derives its phase from the
+/// production `reset_phase`, so a classifier that moves the marker out of the
+/// gate set lets a `Secrets`-phase delete through while the owner seed is still
+/// reachable — which is exactly the clause. Deterministic in both directions:
+/// green on the shipped tree, red on that mutant, with no map in the path.
+#[test]
+fn a_backup_seal_swept_with_the_secrets_is_a_reopened_export_window() {
+    let mut volatile = ResetVolatileView::default();
+    let mut reset = ResetRefinement::new(protected());
+    assert!(reset.begin(&mut volatile));
+    assert!(reset.advance());
+    assert_eq!(reset.progress, ResetProgress::Secrets);
+    // The seed the medium would not remove: still reachable, so the clause is
+    // about a live secret rather than vacuously true.
+    assert!(reset.persistent.owner_seed);
+    assert!(reset.owner_seed_reachable(&volatile));
+    // Whatever phase the classifier assigns it. On the shipped tree this is a
+    // Gate record and the delete is refused here; the assertion below is what
+    // says why that refusal matters.
+    let swept = reset.delete(EF_BACKUP_SEALED);
+    assert!(
+        reset.reset_keeps_the_backup_seal(&volatile),
+        "the one-time export marker went in the secrets phase over a seed that is \
+         still reachable (swept={swept})"
+    );
+}

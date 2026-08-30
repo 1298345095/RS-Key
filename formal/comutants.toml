@@ -29,9 +29,11 @@
 # matrix about who catches what.
 
 pending_floor = 0
-# 28 until the token-less makeCredential bridge. The count is an EQUALITY and not
-# a floor, so it moves only with the `Mut_*` roster itself — the two additions are
-# BugUvNotRqdIgnoresRk and BugTokenlessIgnoresAlwaysUv, batch 6 below.
+# 28 until the token-less makeCredential bridge, and 31 now. The count is an
+# EQUALITY and not a floor, so it moves only with the `Mut_*` roster itself — the
+# three additions are BugUvNotRqdIgnoresRk and BugTokenlessIgnoresAlwaysUv
+# (batch 6) and BugForceChangeIgnored (batch 7). The arithmetic is stated because
+# an earlier version of this comment named two additions beside a count of 31.
 phase2_count = 31
 
 # ---- batch 1: the token/PIN family and the two write orders -----------------
@@ -184,12 +186,21 @@ note = "the second writer of the same cancel flag, unscoped."
 # ---- unreachable by construction — measured, not assumed --------------------
 
 [comutant.BugBackupSealedNotAGate]
-status = "unreachable"
-evidence = "formal/README.md — once the seed leads the wipe unconditionally (0x08BF), the window this re-opens is over a seed that is already gone; not falsifiable on its own, and NoAccessibleSecretWithoutGate's structural clause asserts the same fact."
+status = "patch"
+file = "crates/rsk-fido/src/reset.rs"
+find = """
+        EF_PIN | EF_DEVICE_PIN | EF_ALWAYS_UV | EF_MINPINLEN | EF_BACKUP_SEALED
+"""
+replace = """
+        EF_PIN | EF_DEVICE_PIN | EF_ALWAYS_UV | EF_MINPINLEN
+"""
+slice = ["cargo", "test", "-p", "rsk-fido"]
+expect = "killed"
+note = "THE VERDICT THIS ROW CARRIED WAS MEASURED IN THE MODEL AND WRITTEN ABOUT THE CODE. `unreachable` said the defect is not falsifiable on its own, and that is true of the MODEL: with the seed leading the wipe unconditionally (0x08BF) the window this re-opens is over a seed already gone, which is why `Mut_BugBackupSealedNotAGate.cfg` has to arm `BugSeedDoesNotLead` beside it. Nothing had asked the code the same question, and a model measurement is evidence about the model. WHAT THE CODE ANSWERS, AND WHAT THAT ANSWER IS WORTH -- both halves, because the first draft of this note got the second one wrong. Two tests fall deterministically, and BOTH TRANSCRIBE THE MATCH ARM this patch edits: `the_gate_set_defers_every_record_whose_absence_is_permissive` (crates/rsk-fido/src/reset_tests.rs:638) iterates the same five-member list, and `reset_projection_finishes_only_after_every_ordered_phase` (crates/rsk-fido/src/reset_assurance_tests.rs:76) asserts the Gate phase may delete it. Control measured, not argued: demoting `EF_MINPINLEN` instead -- which crates/rsk-fido/src/reset.rs:209-215 says out loud is in the phase and in NO clause -- kills the slice identically, 3 of 3 runs. So on their own these two answer `did somebody edit the list`, not `is the defect caught`. THE BEHAVIOURAL TEST THAT EXISTED WAS A COIN FLIP, and the mechanism is measured: `RamStorage` is a `HashMap` and `for_each_key` iterates it (crates/rsk-fs/src/storage.rs:78 and :105), so whether the sweep reaches 0xCC02 before it aborts on the refused 0xCC00 is a fresh permutation per process. Over 400 fixtures the marker survived 233 times and was lost 167. `a_seed_the_medium_kept_stops_the_wipe_before_the_gates` is therefore ~42% and reads deterministic-green on the shipped tree, which is where it looks trustworthy. SO A DETERMINISTIC ONE WAS ADDED IN THE SAME DIFF: `a_backup_seal_swept_with_the_secrets_is_a_reopened_export_window` (crates/rsk-fido/src/reset_assurance_tests.rs:130) drives the projection, whose `delete` takes its phase from the production `reset_phase`, and asserts `reset_keeps_the_backup_seal` over a seed still reachable. Measured in all three directions: shipped GREEN, this mutant RED 5 of 5, the `EF_MINPINLEN` control GREEN 3 of 3. That is the test this row`s `killed` should be read against; the two transcribers are the reason it is not read against them."
 
 [comutant.BugSetPinKeepsPpuat]
 status = "unreachable"
-evidence = "formal/README.md — under eab4b5c the grant is swept in phase 1 and EF_PIN in phase 2, so ~pin.set /\\ gate.ppuat is unreachable; the mutant explored 40M+ states without a counterexample (E171), which floors.txt records as its verdict."
+evidence = "MEASURED AT THE CODE LEVEL, after its sibling BugBackupSealedNotAGate was found carrying a model measurement written about the code. The model half stands: under eab4b5c the grant is swept in phase 1 and EF_PIN in phase 2, so `~pin.set /\\ gate.ppuat` is unreachable and the mutant explored 40M+ states without a counterexample (E171). The CODE half is different and is why this stays without a patch: there is no site whose removal reproduces `setPIN keeps the grant` ALONE. `set_pin`s own `clear_ppuat` (crates/rsk-fido/src/clientpin.rs:220) is REDUNDANT — deleting it leaves all 668 rsk-fido tests green, three runs — because `write_pin_verifier` (crates/rsk-fido/src/clientpin.rs:840-842) clears the grant before the EF_PIN write, which is where the ordering guarantee actually lives. Deleting THAT one is red at once (`every_ef_pin_verifier_write_revokes_the_persistent_token` and `local_pin_change_revokes_the_persistent_token`), but it is the site changePIN and the panel share, so it is BugChangePinKeepsPpuats twin as much as this ones. A shared chokepoint has no per-caller mutant, and saying so is the measurement."
 
 # ---- batch 2: the rest, floor now 0 ----------------------------------------
 
