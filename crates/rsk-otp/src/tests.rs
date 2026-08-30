@@ -1232,3 +1232,145 @@ fn scan_map_is_a_function_slot() {
     // leaving a live write to what the (disabled) slots would type.
     assert!(is_function_slot(P1_SCAN_MAP));
 }
+
+/// The replay position a typed Yubico OTP carries — its clear public id, the
+/// persisted use counter and the RAM session counter — decoded out of the modhex
+/// ticket with the record's own AES key. A validation server orders OTPs by
+/// exactly this triple, so a repeat inside one power cycle is a replay it accepts.
+fn typed_position(otp: &[u8], key: &[u8; 16]) -> ([u8; 6], u16, u8) {
+    let raw = crate::tests_support::demodhex(&otp[..44]);
+    let mut pid = [0u8; 6];
+    pid.copy_from_slice(&raw[..6]);
+    let mut block = [0u8; 16];
+    block.copy_from_slice(&raw[6..22]);
+    crate::tests_support::aes128_decrypt_block(key, &mut block);
+    // The block CRCs to the X.25 residual only under its own record's key — a
+    // decode with the wrong one would read counters that trivially never repeat.
+    assert_eq!(crc16(&block), 0xF0B8, "decoded with the wrong record's key");
+    (pid, u16::from_le_bytes([block[6], block[7]]), block[11])
+}
+
+/// Press `slot`, decode what it typed as the record `pid`/`key` names, and fail
+/// if that record has already typed this position in this power cycle.
+fn press_once(
+    app: &mut OtpApplet,
+    fs: &mut Fs<RamStorage>,
+    slot: u8,
+    pid: &[u8; 6],
+    key: &[u8; 16],
+    seen: &mut Vec<([u8; 6], u16, u8)>,
+) {
+    let mut out = [0u8; ticket::MAX_TICKET];
+    let (n, encode) = app.button_ticket(slot, 0, [0, 0], fs, &mut out).unwrap();
+    assert_eq!((n, encode), (44, true), "slot {slot} typed no Yubico OTP");
+    let pos = typed_position(&out[..n], key);
+    assert_eq!(&pos.0, pid, "slot {slot} holds the wrong record");
+    assert!(
+        !seen.contains(&pos),
+        "slot {slot} re-typed the replay position {pos:?}, already emitted this \
+         power cycle: {seen:?}"
+    );
+    seen.push(pos);
+}
+
+#[test]
+fn swap_carries_the_session_counter_with_its_record() {
+    // The Yubico replay position is a PAIR: the 15-bit use counter that lives in
+    // the slot RECORD, and the one-byte RAM session counter indexed by SLOT
+    // NUMBER. SLOT_SWAP moved the record and left the session counter behind, so
+    // the record was re-paired with the other slot's — and pressing the swapped
+    // slot re-emitted a position already typed in this power cycle, i.e. the
+    // position moved BACKWARDS. An unprotected slot's stored code is all-zero, so
+    // the bare unauthenticated 0x06 frame below is all it takes.
+    let mut fs = new_fs();
+    let presence = RefCell::new(AlwaysConfirm);
+    let rng = RefCell::new(CountRng(7));
+    let mut app = OtpApplet::new(SERIAL, SERIAL_HASH, None, &rng, &presence);
+
+    let (pid_a, pid_b) = (b"aaaaaa", b"bbbbbb");
+    let key_a = [0xA1u8; 16];
+    let key_b = [0xB1u8; 16];
+    // Plain typed Yubico-OTP slots (tkt = cfg = 0: neither OATH-HOTP, chal-resp,
+    // short nor static), the only kind that carries a session counter at all.
+    let cfg_a = build_config(pid_a, &[0x0A; 6], &key_a, &[0; 6], 0, 0, 0);
+    let cfg_b = build_config(pid_b, &[0x0B; 6], &key_b, &[0; 6], 0, 0, 0);
+    assert_eq!(
+        configure(&mut app, &mut fs, 0x01, 0, &cfg_a, &[0; 6]).0,
+        Sw::OK
+    );
+    assert_eq!(
+        configure(&mut app, &mut fs, 0x03, 0, &cfg_b, &[0; 6]).0,
+        Sw::OK
+    );
+
+    // Drive the two slots to different session counters first, so a swap that
+    // leaves them behind hands the moved record a less-used one.
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        press_once(&mut app, &mut fs, 1, pid_a, &key_a, &mut seen);
+    }
+    press_once(&mut app, &mut fs, 2, pid_b, &key_b, &mut seen);
+
+    assert_eq!(run(&mut app, &mut fs, &otp_apdu(0x06, 0, &[])).0, Sw::OK);
+    // A sits at slot 2 now and B at slot 1. Press the slots the other way round
+    // this time, so the pair is ordered the other way at the swap back: a fix
+    // that copies one counter onto the other survives only one of the two.
+    for _ in 0..2 {
+        press_once(&mut app, &mut fs, 2, pid_a, &key_a, &mut seen);
+    }
+    press_once(&mut app, &mut fs, 1, pid_b, &key_b, &mut seen);
+
+    assert_eq!(run(&mut app, &mut fs, &otp_apdu(0x06, 0, &[])).0, Sw::OK);
+    press_once(&mut app, &mut fs, 1, pid_a, &key_a, &mut seen);
+    press_once(&mut app, &mut fs, 2, pid_b, &key_b, &mut seen);
+
+    // RS-Key's 4-slot frame moves a record across a wider gap — `[a, b]` is
+    // slots (1+a) ↔ (2+b), so `[0, 1]` is 1 ↔ 3 — and the counter has to follow
+    // the FID, not the frame's slot names.
+    let (pid_c, key_c) = (b"cccccc", [0xC1u8; 16]);
+    let cfg_c = build_config(pid_c, &[0x0C; 6], &key_c, &[0; 6], 0, 0, 0);
+    assert_eq!(
+        configure(&mut app, &mut fs, 0x01, 2, &cfg_c, &[0; 6]).0,
+        Sw::OK
+    );
+    for _ in 0..2 {
+        press_once(&mut app, &mut fs, 3, pid_c, &key_c, &mut seen);
+    }
+    assert_eq!(
+        run(&mut app, &mut fs, &otp_apdu(0x06, 0, &[0, 1])).0,
+        Sw::OK
+    );
+    press_once(&mut app, &mut fs, 3, pid_a, &key_a, &mut seen);
+    press_once(&mut app, &mut fs, 1, pid_c, &key_c, &mut seen);
+}
+
+#[test]
+fn configure_does_not_rewind_the_session_counter() {
+    // The sibling of the swap defect, and it goes the other way: a re-CONFIGURE
+    // zeroes the record's persisted use counter, so the session counter of the
+    // slot it lands in must NOT be reset with it — resetting both is what would
+    // hand the same public id a position it already typed this power cycle.
+    let mut fs = new_fs();
+    let presence = RefCell::new(AlwaysConfirm);
+    let rng = RefCell::new(CountRng(7));
+    let mut app = OtpApplet::new(SERIAL, SERIAL_HASH, None, &rng, &presence);
+    let pid = b"aaaaaa";
+    let key = [0xA1u8; 16];
+    let cfg = build_config(pid, &[0x0A; 6], &key, &[0; 6], 0, 0, 0);
+    assert_eq!(
+        configure(&mut app, &mut fs, 0x01, 0, &cfg, &[0; 6]).0,
+        Sw::OK
+    );
+
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        press_once(&mut app, &mut fs, 1, pid, &key, &mut seen);
+    }
+    // The same secret programmed over itself: the use counter starts again at 1.
+    assert_eq!(
+        configure(&mut app, &mut fs, 0x01, 0, &cfg, &[0; 6]).0,
+        Sw::OK
+    );
+    press_once(&mut app, &mut fs, 1, pid, &key, &mut seen);
+    assert_eq!(seen[3], (*pid, 1, 3), "the session counter was rewound");
+}

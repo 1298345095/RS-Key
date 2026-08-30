@@ -2523,6 +2523,35 @@ and to the statuses it quotes.
 
 ### Security
 
+- **`SLOT_SWAP` moved a Yubico OTP record and left half of its replay position
+  behind.** The position a validation server orders OTPs by is a PAIR: the
+  15-bit use counter that lives in the slot RECORD, and the one-byte RAM session
+  counter, which is indexed by SLOT NUMBER and written only by a button press.
+  `cmd_swap` moved the record — public id, AES key, use counter — to the other
+  index and left the session counter where it was, so the record was re-paired
+  with whatever the destination slot had spent, and a slot pressed fewer times
+  handed it a position it had already typed. Measured against the shipped
+  command handlers: a slot 1 configured and pressed three times types
+  `(use 1, session 0)`, `(1, 1)`, `(1, 2)`, and after one `0x06` frame slot 2
+  types `(1, 1)` again — a pair already emitted in this power cycle, the
+  position moving BACKWARDS, which is the replay these two counters exist to
+  refuse. It needs no authentication: an unprotected slot's stored access code
+  is all-zero, so the bare `ykman otp swap` frame satisfies the swap's `ct_eq`
+  gate with the default.
+
+  The volatile half travels with the record now, so a swapped record's pair is
+  exactly the pair it would have had with no swap — which is why the repair is
+  an exchange and not a reset of both counters, the tempting other reading:
+  resetting them re-emits the FIRST position of the power cycle rather than the
+  second. The three siblings that also write that record were swept and are
+  clean, because none of them changes its index: `cmd_update` carries the tail
+  forward in place, the boot seal migration re-seals at the same FID, and
+  `cmd_configure`, which zeroes the persisted counter, deliberately leaves the
+  session counter standing — a test pins that direction too. A host that
+  programs the same secret into a second slot still clones its own credential,
+  as on a YubiKey; that host holds the AES key and can mint any OTP it likes.
+  **bcdDevice → 0x09B6.**
+
 - **A device PIN the running build could not collect waived the vendor gate
   entirely.** `vendor::pin_gate` is the PIN factor on every host-driven operation
   that reveals or replaces device identity — `BACKUP_EXPORT`, `BACKUP_LOAD`,

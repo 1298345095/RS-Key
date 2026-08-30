@@ -208,7 +208,8 @@ pub struct OtpApplet<'a> {
     /// SELECT to 1/0 depending on whether any slot is programmed.
     config_seq: u8,
     /// Per-slot RAM session-use counter mixed into a typed Yubico-OTP token;
-    /// resets each power cycle. One entry per slot (1–4).
+    /// resets each power cycle. One entry per slot (1–4). It belongs to the
+    /// slot's RECORD, not to the index: `cmd_swap` moves it with the record.
     session_counter: [u8; SLOT_COUNT],
 }
 
@@ -563,6 +564,13 @@ impl<'a> OtpApplet<'a> {
                 let _ = fs.delete(fid2);
             }
         }
+        // The replay position is a PAIR — the record's persisted use counter and
+        // the slot's RAM session counter — so the volatile half moves with the
+        // record, or the move re-pairs it with one used fewer times (a replay).
+        self.session_counter.swap(
+            (fid1 - EF_OTP_SLOT1) as usize,
+            (fid2 - EF_OTP_SLOT1) as usize,
+        );
         self.config_seq = self.config_seq.wrapping_add(1);
         self.status(fs, res)
     }

@@ -197,7 +197,7 @@ OathCalculate(touched) ==
 (***************************************************************************)
 (* Yubico OTP. Existing-slot configure/update/delete/swap all require the  *)
 (* stored six-byte code                                                    *)
-(* (crates/rsk-otp/src/lib.rs:438-450, 538-545), while each emitted OTP    *)
+(* (crates/rsk-otp/src/lib.rs:439-451, 539-546), while each emitted OTP    *)
 (* advances the combined persisted-use/RAM-session position.               *)
 (***************************************************************************)
 OtpConfigure(protected) ==

@@ -446,7 +446,7 @@ why = "TERMINATE DF's sweep, secrets before every record scan_files re-seeds. Op
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 432
+line = 433
 call = "let _ = fs.delete(fid);"
 verb = "delete"
 answer = "discarded"
@@ -457,7 +457,7 @@ why = "the reply is status(), recomputed from flash in the same response — so 
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 553
+line = 554
 call = "let _ = fs.delete(fid1);"
 verb = "delete"
 answer = "discarded"
@@ -468,7 +468,7 @@ why = "the swap's first half, under the same self-reporting status() reply."
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 563
+line = 564
 call = "let _ = fs.delete(fid2);"
 verb = "delete"
 answer = "discarded"
