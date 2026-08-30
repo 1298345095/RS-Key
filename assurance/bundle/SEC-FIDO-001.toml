@@ -46,7 +46,7 @@ clause_ghost = "assurance/ghost_actions.toml — 21 model actions over 24 routes
 owners_tagged = [
   "crates/rsk-fido/src/state.rs:172 CredMgmtState::may_walk_rps",
   "crates/rsk-fido/src/state.rs:286 PinLock",
-  "crates/rsk-fido/src/clientpin.rs:721 spend_and_verify_pin_hash",
+  "crates/rsk-fido/src/clientpin.rs:724 spend_and_verify_pin_hash",
 ]
 # And the files co-refutation patches, which the derived column cannot see.
 owners_co_refuted = [
@@ -258,11 +258,11 @@ c_creds_begin = "no_authorization_bypass_creds_begin_at_call_site SUCCESSFUL, 30
 c_mac_flag = "no_authorization_bypass_begin_mac_is_the_flag SUCCESSFUL, 233 s — D3, 1 of 1 cover. Its own harness because a third HMAC inside a Begin harness cost 448 s and 14.5 GiB"
 
 # The gates this slice added or extended, each with the number it now derives.
-gate_ghost = "ghost-gate: 21 actions record NoAuthorizationBypass over 24 routes, consulting 11 guards"
-gate_ledger = "token-refinement-gate: walk=4 softlock=12 window=2 sites owned, beside volatile=10 persistent=12 outcomes=7"
-gate_assumption = "assumption-gate: 4 standing assumptions; AlwaysUvShipped TRUE=3 FALSE=91, ForceChangeModelled TRUE=3 FALSE=91. Both counts moved when the EF_MINPINLEN[1] gate landed: `AlwaysUvShipped` gained PermWide.cfg and ForceChange.cfg, which take that arm for reasons of their own, and the denominator grew with the roster"
-gate_matrix = "matrix-gate: 40 P0-family properties x 31 configurations = 1240 cells (37 covered, 139 equivalent, 0 conditional, 106 out-of-scope, 958 gap) — UNCHANGED by this slice, and the reason is recorded in the firmware-always-uv settling question"
-gate_registry = "assurance-gate: SEC-FIDO-001 BOUNDED, cfgs=49 mut=12 co=12 kani=4 fuzz=0 rust=2 test=0 — `cfgs` grew by one when PermWide.cfg was added and by three more with ForceChange.cfg and the two configurations of BugForceChangeIgnored; `mut` and `co` grew by one, which IS new evidence: a mutant that reddens this invariant and a code twin that was killed. Configurations CHECKING an invariant are not evidence about it, and the freshness axis carries what that costs"
+gate_ghost = "ghost-gate: ok — 21 action(s) record NoAuthorizationBypass over 24 route(s), consulting 11 guard(s) — this slice's own row, and the ledger behind it is `assurance/ghost_actions.toml`; the invariant the gate is fixed to at module level is this property's"
+gate_ledger = "token-refinement-gate: GREEN keys=2 api=11 volatile=10/9 persistent=12/4 outcomes=7/6 walk=4 softlock=12 window=2 testonly=1 — the token axes this slice owns: the walk, soft-lock and window sites are held against their tags there and nowhere else"
+gate_assumption = "4 standing assumption(s) AlwaysUvShipped TRUE=5 FALSE=91 ForceChangeModelled TRUE=3 FALSE=93 PowerOnClearsScratch2 TRUE=9 FALSE=4 WidePerms TRUE=3 FALSE=93 — re-derived, not edited. The earlier line was hand-typed and had gone stale in the assignment rather than in the total: `AlwaysUvShipped`'s TRUE arm grew with the two PermWide mutant configurations and `ForceChangeModelled`'s FALSE denominator with them, while `4 standing assumption(s)` never moved, so a rule comparing the numbers a line HAS could not see it"
+gate_matrix = "matrix-gate: ok — 40 P0-family properties × 31 build configurations = 1240 cells (37 covered, 139 equivalent, 0 conditional, 106 out-of-scope, 958 gap) — UNCHANGED by this slice, and the reason is recorded in the firmware-always-uv settling question"
+gate_registry = "SEC-FIDO-001   NoAuthorizationBypass                    BOUNDED       cfgs=50  mut=12 co=12 kani=4 fuzz=0 rust=2 test=0 — `cfgs` counts the configurations CHECKING this invariant, which is not evidence about it; `mut` and `co` are the mutants that redden it and the code twins that were killed, and the freshness axis carries what a growing `cfgs` costs. Re-derived: the count this line used to carry was one short"
 
 # ---- 6. Raw artifact or log --------------------------------------------------
 

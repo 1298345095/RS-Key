@@ -30,12 +30,12 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 
 ## What a release may say
 
-- **53 of 59** security properties are ASSERTED by at least one finite TLA+ configuration whose recorded verdict is GREEN, and hold exhaustively over that configuration's constants.
+- **56 of 59** security properties are ASSERTED by at least one finite TLA+ configuration whose recorded verdict is GREEN, and hold exhaustively over that configuration's constants.
 - **42 of 59** carry a model mutant whose code twin `formal/comutants.toml` records as patched into the real tree and killed. That verdict is re-driven by the weekly `comutate run`, not by the gate that writes this page.
 - **31 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
 - **10 of 59** are checked by a configuration that ACCEPTS a recorded session, and **10** by one that must REFUSE a negative one.
 - **11 of 59** carry at least one Kani harness named after them. That is all `BOUNDED` keys on — a harness NAME, not the `#[kani::proof]` attribute, not a bound, not a `cfg` — so it points at the bundle's method table and is never the proof itself.
-- Rows carrying a dated raw evidence bundle: **2 of 59**; of those, still ahead of every input they are about: **0**.
+- Rows carrying a dated raw evidence bundle: **8 of 59**; of those, still ahead of every input they are about: **5**.
 - No property is claimed on more than **10** built image(s) of the configuration ledger; every other column is a gap or out of scope.
 
 ## What a release may not say
@@ -46,7 +46,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 - that the model-checked properties hold on *the firmware* — they hold on the images the scope axis names, and `docs/assurance-matrix.md` carries the rest of that row.
 - that the reconstructed `v1` column is an independent check on the registry's word. It reads the two derivations `assurance_gate.py` already forces that word from, so its disagreement set is empty on every input that gate accepts: it records that the scalar is a projection, and cannot discover that it is not.
 - that any property was measured on a board — **no** row carries a hardware result. A bundle claiming one without a board revision is refused rather than published, and every obligation of the platform registry is still `pending`.
-- that 57 of the rows are current — they carry no evidence date at all, so nothing here says when they were last true.
+- that 51 of the rows are current — they carry no evidence date at all, so nothing here says when they were last true.
 
 ## The vector
 
@@ -60,17 +60,17 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-REF-004` | `R4bEventConsensus` | 2 of 9 | 0 | 2 of 9 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-005` | `NoAuthorizationBypassA` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-006` | `RequiredGateAgreesWithRelation` | 0 of 1 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-001` | `NoAuthorizationBypass` | 4 of 49 | 12 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (57 input(s) newer) | BOUNDED |
-| `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 4 of 42 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | — | BOUNDED |
-| `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 4 of 44 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | — | BOUNDED |
-| `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 4 of 39 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-005` | `NoUnmanageableCredential` | 4 of 40 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 4 of 40 | 3 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
-| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 0 of 1 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
+| `SEC-FIDO-001` | `NoAuthorizationBypass` | 4 of 50 | 12 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (58 input(s) newer) | BOUNDED |
+| `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 4 of 42 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | `31c21a7` fresh | BOUNDED |
+| `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 4 of 45 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | `31c21a7` stale (1 input(s) newer) | BOUNDED |
+| `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 4 of 39 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` fresh | MODELLED-ONLY |
+| `SEC-FIDO-005` | `NoUnmanageableCredential` | 4 of 40 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` fresh | MODELLED-ONLY |
+| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 4 of 40 | 3 | 0 of 0 | 1 | 0 | 3 | 0 | `31c21a7` fresh | BOUNDED |
+| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
+| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
+| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | — | BOUNDED |
 | `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (8 input(s) newer) | MODELLED-ONLY |
-| `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` fresh | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L01` | `EveryOpQuiesces` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L02` | `EveryWaitReleases` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
@@ -164,7 +164,8 @@ Three spellings of "not current", which used to sit on two different pages and i
 
 | Kind | Subject | What is outstanding |
 |---|---|---|
-| bundle | `SEC-FIDO-001` | 57 input(s) newer than `f52b720` |
+| bundle | `SEC-FIDO-001` | 58 input(s) newer than `f52b720` |
+| bundle | `SEC-FIDO-003` | 1 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-007` | 8 input(s) newer than `3e08f75` |
 | bundle | `SEC-ADM-002` | no raw evidence bundle |
 | bundle | `SEC-ADM-004` | no raw evidence bundle |
@@ -173,15 +174,9 @@ Three spellings of "not current", which used to sit on two different pages and i
 | bundle | `SEC-DISP-001` | no raw evidence bundle |
 | bundle | `SEC-DISP-002` | no raw evidence bundle |
 | bundle | `SEC-DISP-003` | no raw evidence bundle |
-| bundle | `SEC-FIDO-002` | no raw evidence bundle |
-| bundle | `SEC-FIDO-003` | no raw evidence bundle |
-| bundle | `SEC-FIDO-004` | no raw evidence bundle |
-| bundle | `SEC-FIDO-005` | no raw evidence bundle |
-| bundle | `SEC-FIDO-006` | no raw evidence bundle |
 | bundle | `SEC-FIDO-006A` | no raw evidence bundle |
 | bundle | `SEC-FIDO-006B` | no raw evidence bundle |
 | bundle | `SEC-FIDO-006C` | no raw evidence bundle |
-| bundle | `SEC-FIDO-008` | no raw evidence bundle |
 | bundle | `SEC-LAT-001` | no raw evidence bundle |
 | bundle | `SEC-LAT-002` | no raw evidence bundle |
 | bundle | `SEC-LAT-003` | no raw evidence bundle |
@@ -215,10 +210,14 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-TOOL-002` | `tools/emu` implements the same authorization gates as the firmware, s |
 | platform | `PLAT-TOOL-003` | Kani/CBMC is sound for the arithmetic its harnesses bound, and the sol |
 | platform | `PLAT-TOOL-004` | TLC is sound for the finite configurations it checks, and the verdict  |
+| platform | `PLAT-TOOL-005` | Kani proves the presence arbiter's cross-executor flags under a SEQUEN |
+| platform | `PLAT-TOOL-006` | The `fuzz` axis counts a FILE that names the invariant, not a run of i |
 | platform | `PLAT-TOOLCHAIN-001` | The compiler on the path is the pinned rustc and its output is what th |
 | platform | `PLAT-TOOLCHAIN-002` | Every `unsafe` in the first-party tree upholds an invariant the compil |
 | platform | `PLAT-CRYPTO-001` | The HMAC-SHA-256 under `pinUvAuthProtocol` is correct as a MAC; the ha |
 | platform | `PLAT-BUILD-002` | `ea-conformance-rpid`'s enterprise-attestation allowlist is a conforma |
+| platform | `PLAT-BUILD-003` | The `display` build implements the one-hold-one-ceremony latch SOMEWHE |
+| platform | `PLAT-BUILD-004` | On the four `no-touch` images no presence DECISION is produced at all  |
 | platform | `PLAT-THREAT-001` | A CTAPHID channel id is a routing label the sender writes, so channel  |
 | platform | `PLAT-MODEL-001` | `PermSets`'s five subsets are a SCOPE and not a description: a host ca |
 | platform | `PLAT-MODEL-009` | `EF_MINPINLEN`'s FLOOR (byte 0) and its RP-id disclosure list (bytes 2 |
@@ -229,11 +228,31 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-MODEL-006` | `RamNeverOutlivesFlashSeed` is INERT on the shipped configuration: it  |
 | platform | `PLAT-MODEL-007` | The C-tier reset bridge cannot be reused as bounded evidence for the s |
 | platform | `PLAT-MODEL-002` | One credential per relying party is enough to carry the authorization  |
+| platform | `PLAT-MODEL-012` | `gate.ppuatStale` has no counterpart in the firmware. The model carrie |
+| platform | `PLAT-MODEL-013` | The two Kani harnesses named for this property cover the SESSION token |
 | platform | `PLAT-TRNG-001` | The RP2350's ring-oscillator TRNG delivers full-entropy words once its |
 | platform | `PLAT-TIMER-001` | `embassy_time::Instant` is monotonic and makes progress, so a timeout  |
 | platform | `PLAT-XIP-001` | Core 1 is paused for the whole of every flash erase or program, so no  |
 | platform | `PLAT-DISPLAY-001` | A panel update completes before the firmware treats the card as shown, |
 | platform | `PLAT-TRACE-001` | A trace-linked claim rests on the fields the recorded session VARIES;  |
+| platform | `PLAT-TRACE-002` | No recorded session reaches this property. `grep -lw NoTokenAfterInval |
+| platform | `PLAT-PRES-001` | `Owners` — the four `SCOPE_*` bytes plus `Panel`, the model-only split |
+| platform | `PLAT-PRES-002` | No API in the tree can originate a cancel from `SCOPE_CCID` or from an |
+| platform | `PLAT-PRES-003` | `NoCrossTransportTouchConsumption`'s structural conjunct — `(pres.gran |
+| platform | `PLAT-SOURCE-001` | The revoke-before-write ORDER that the first conjunct of `NoTokenAfter |
+| platform | `PLAT-SOURCE-002` | Three of the citations that carry this property's model-to-code bridge |
+| platform | `PLAT-GRANT-001` | `NoAccessibleSecretWithoutGate`'s ghost clause is DEAD by construction |
+| platform | `PLAT-GRANT-002` | The C-tier reset bridge cannot express this property at all: `ResetPer |
+| platform | `PLAT-GRANT-003` | `FixPpuatRequiresPin`'s FALSE arm is unobserved: the one configuration |
+| platform | `PLAT-CRED-001` | `r \in store.rpent` is read as `the EF_RP record for r is reachable by |
+| platform | `PLAT-CRED-002` | No action of `RSKeySecurityState` can fail a flash write: the model's  |
+| platform | `PLAT-CRED-003` | `KeepOpen` equates `the seed that opens it is gone` with `the record i |
+| platform | `PLAT-CRED-004` | `FixSweepDropsCredsBeforeRpEntries` — the counterfactual repair the mo |
+| platform | `PLAT-TOKEN-001` | `RSKeySecurityState`'s `tok.live` is `FidoState::paut.in_use` and its  |
+| platform | `PLAT-TOKEN-002` | One `pin.set` boolean stands for one record. `EF_DEVICE_PIN`, the trus |
+| platform | `PLAT-TOKEN-003` | `clientpin::issue_token` is the only production maker of a live pinUvA |
+| platform | `PLAT-TOKEN-004` | `reset()` is the only modelled deleter of `EF_PIN` and it is not the o |
+| platform | `PLAT-TOKEN-005` | No existing bounded proof can be reused as evidence for this invariant |
 
 ## Review packet
 
@@ -255,4 +274,4 @@ For the commit that carries this page — which is why no commit is named here: 
 | `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-30 | `b819ee5` | Apple M5 Pro (18 cores) |
 | `safety` | `./formal/run-tlc.sh safety` | 2026-08-30 | `b819ee5` | Apple M5 Pro (18 cores) |
 
-**Raw evidence bundles:** `SEC-FIDO-001`, `SEC-FIDO-007` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`, `SEC-FIDO-007`.
+**Raw evidence bundles:** `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-007`, `SEC-FIDO-008` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`, `SEC-FIDO-003`, `SEC-FIDO-007`.

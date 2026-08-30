@@ -19,13 +19,20 @@
 # DERIVED by scripts/platform_gate.py from four sources and printed, never
 # stored — the same rule properties.toml states, for the same reason.
 #
-# Read the `status` column first. **Two of thirty-three are discharged**, and
+# Read the `status` column first. **Two of fifty-eight are discharged**, and
 # both were discharged by reading — a manifest, and a model against the code it
 # abstracts. Nothing here is evidence about a board yet; every other row is an
 # obligation with an owner and a named route, and the routes that end at a board
 # this repository must not touch are exactly the rows whose `discharge_owner` is
 # `maintainer` — a count the generated page derives, and the same expression that
 # decides which rows owe a record under `assurance/board/`.
+#
+# Twenty-five of those fifty-eight arrived in one merge, from the six evidence
+# bundles closed alongside SEC-FIDO-001 and -007. They were written blind to each
+# other and three ids were proposed twice or three times over; the numbers moved
+# and the statements did not, and each renumbering is recorded in the `registered`
+# field of the bundle that proposed it. Not one of them added a maintainer-owned
+# row: the board obligation is still twelve.
 
 # ---- Reset and the boot ROM --------------------------------------------------
 
@@ -96,7 +103,7 @@ discharge = "A recorded PASS of tests/29_reset_power_cut.py on a throwaway board
 discharge_owner = "maintainer"
 status = "pending"
 failure_direction = "security: a reset interrupted mid-write could leave a credential live with its gate gone"
-covers = ["board-only:29_reset_power_cut"]
+covers = ["board-only:29_reset_power_cut", "slice:AS-RESET-1"]
 supports = [
   "SEC-FIDO-006",
   "SEC-FIDO-006A",
@@ -175,7 +182,7 @@ discharge = "A pinned toolchain and a recorded tool hash on the bundle. cargo-ka
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: every BOUNDED row rests on a solver nobody recorded"
-covers = ["slice:AS-AUTH-7"]
+covers = ["slice:AS-AUTH-7", "slice:AS-RESET-7"]
 supports = [
   "SEC-FIDO-001",
   "SEC-FIDO-002",
@@ -198,7 +205,14 @@ failure_direction = "coverage: every MODELLED-ONLY row, and the model half of ev
 # Found by building the calibration counterpart of §10: the registry had acquired
 # a tool-TCB row for the prover the ONE bounded slice uses and none for the one
 # every model-checked row in the tree rests on. The asymmetry is the finding.
-covers = ["slice:AS-RAM-7"]
+covers = [
+  "slice:AS-RAM-7",
+  "slice:AS-XT-7",
+  "slice:AS-F004-6",
+  "slice:AS-CRED-6",
+  "slice:AS-RESET-6",
+  "slice:AS-TOK-6",
+]
 # The P0-launch tranche by name. The dependency is universal over rows with a
 # configuration — `assurance_gate`'s `cfgs` column is that roster — and copying
 # fifty ids here would be a second, rotting copy of a derived set; this names the
@@ -224,6 +238,32 @@ supports = [
 ]
 
 [[assumption]]
+id = "PLAT-TOOL-005"
+class = "tool-tcb"
+statement = "Kani proves the presence arbiter's cross-executor flags under a SEQUENTIAL reading of their atomics: the tool says so itself, and the interleaving the harnesses check is one the harness scripts rather than every schedule the two executors can produce."
+discharge = "Either a checker that models the memory ordering, or a source-level argument that the arbiter's four flags admit no schedule the harness's own interleaving does not already cover. Measured rather than assumed: `cargo kani -p rsk-device --features kani-soft` prints `warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations: - atomic_load (6) - atomic_store (6)`, and the arbiter's own doc says why that matters — `crates/rsk-device/src/presence.rs:72-77`, one instance in a `static`, reached by the interrupt executor (CTAPHID/keyboard) and the thread executor (the worker), `&self` on every method for exactly that reason. The seven harnesses drive the transports' cancels from inside `Board::block_for_ms`, which is a chosen schedule; `Ordering::Release`/`Acquire` on `cancel_requested` and `Ordering::Relaxed` on `cancel_otp_wait`'s write are proved by nothing here."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the one mechanism the atomics exist for — two executors reaching one arbiter — is the one thing the bounded tier does not model, and a reader who takes `kani = 2` for a concurrency result is wrong"
+# The narrow half of PLAT-TOOL-003, the way PLAT-TOOL-002 is of PLAT-TOOL-001:
+# that row is about the arithmetic the solver bounds, this one about the single
+# construct the solver prints that it does not model at all.
+refines = ["PLAT-TOOL-003"]
+covers = ["slice:AS-XT-1"]
+supports = ["SEC-FIDO-002"]
+
+[[assumption]]
+id = "PLAT-TOOL-006"
+class = "tool-fidelity"
+statement = "The `fuzz` axis counts a FILE that names the invariant, not a run of it. `fuzz/fuzz_targets/fido_session.rs:1432` asserts ONE clause — `getPinToken` re-issuing the standing token — and `assurance_gate.derive` reads the axis with `grep_word` over `fuzz/fuzz_targets/*.rs`, so `fuzz = 1` is one file mentioning the name and says nothing about coverage, corpus or execution count."
+discharge = "A recorded `cargo fuzz run fido_session` with its execution count and corpus size, filed the way `docs/testing.md` files the other targets. The weekly `deep-checks` matrix runs the target; no verdict for it is recorded in this tree."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a `1` in a column named `fuzz` reads as a fuzzing result and is a grep hit"
+covers = ["slice:AS-NTAI-5"]
+supports = ["SEC-FIDO-003"]
+
+[[assumption]]
 id = "PLAT-TOOLCHAIN-001"
 class = "toolchain"
 statement = "The compiler on the path is the pinned rustc and its output is what the proofs are about; Kani proves over MIR, not over the emitted image."
@@ -235,7 +275,7 @@ failure_direction = "security: a miscompilation is invisible to every proof this
 # outright and the code's equivalent is a drop-and-replace plus an exhaustive
 # destructuring `Drop`, and nothing here covers what the emitted image does with
 # either.
-covers = ["slice:TCB-1", "slice:AS-RAM-4"]
+covers = ["slice:TCB-1", "slice:AS-RAM-4", "slice:AS-CRED-7", "slice:AS-RESET-9"]
 
 [[assumption]]
 id = "PLAT-TOOLCHAIN-002"
@@ -267,7 +307,7 @@ discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a forgeable tag makes every token check vacuous"
 covers = ["slice:TCB-2"]
-supports = ["SEC-FIDO-001"]
+supports = ["SEC-FIDO-001", "SEC-FIDO-003"]
 
 # ---- Build configuration, threat model, model abstraction --------------------
 
@@ -283,7 +323,7 @@ revalidated_by = "any change to firmware/Cargo.toml's [features] default set, or
 failure_direction = "coverage: the arm the shipped tree does not take is the STRICTER one — a token for every makeCredential and getAssertion"
 covers = ["slice:AS-AUTH-2", "model:AlwaysUvShipped"]
 discharges = ["AlwaysUvShipped"]
-supports = ["SEC-FIDO-001"]
+supports = ["SEC-FIDO-001", "SEC-FIDO-004", "SEC-FIDO-006", "SEC-FIDO-006B"]
 
 [[assumption]]
 id = "PLAT-BUILD-002"
@@ -295,6 +335,32 @@ status = "pending"
 failure_direction = "coverage: if it IS a gate, the matrix cell for that column is a gap and not an equivalence"
 covers = ["slice:AS-AUTH-8"]
 supports = ["SEC-FIDO-001"]
+
+[[assumption]]
+id = "PLAT-BUILD-003"
+class = "build-configuration"
+statement = "The `display` build implements the one-hold-one-ceremony latch SOMEWHERE ELSE: it compiles `ButtonWait` out entirely and the panel's own release debounce takes over, so the model keeps a defence that build has in a different place rather than one it does not have."
+discharge = "The `firmware-display` and `waveshare-touch-lcd` matrix cells, which are `gap` for this property today. `firmware/src/presence.rs:99-101` gates the button backend on `not(feature = \"display\")` and `:163-166` swaps `Presence` to `crate::display::TouchPresence`; `crates/rsk-display/src/presence.rs:45-48` clears the stale cancel in the panel's OWN loop, not in `ButtonWait::wait`, and `crates/rsk-display/src/lib.rs:131-134` gives the trait a no-op `set_up_pending`. `formal/RSKeySecurityState.tla:468-472` states the direction: NARROWER than the display build. No configuration and no harness in the tree runs the display build's version of this rule."
+# `contributor` and not the `maintainer` the proposal wrote. The route is the two
+# matrix cells and the display build's own ceremony code, all of it host-testable
+# in `crates/rsk-display`; the glass itself is PLAT-DISPLAY-001's, and a second
+# maintainer row here would owe a board record for a question no board answers.
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: two columns whose ceremony code is a different implementation of the same rule are covered by nothing, and the property's GREEN is about the button build only"
+covers = ["slice:AS-XT-4"]
+supports = ["SEC-FIDO-002"]
+
+[[assumption]]
+id = "PLAT-BUILD-004"
+class = "build-configuration"
+statement = "On the four `no-touch` images no presence DECISION is produced at all — the arbiter is still compiled in, but nothing can reach the wait that would consume one — which is why this property's cells there are `out-of-scope` and not `gap`."
+discharge = "Reading the cfg arms, and it is decided rather than open. `firmware/src/presence.rs:202-258`: `request` and `request_ceremony` return `Presence::Confirmed` unconditionally under `feature = \"no-touch\"`, `poll_pressed` returns `false`, and `ButtonPresence::wait` is `cfg(not(feature = \"no-touch\"))` so `ButtonWait::wait` — the sole caller of `set_up_pending(true)` on a non-display build — is never called. `Arbiter` itself, and the three `Refines`-tagged functions on it, ARE in those images; what is absent is the decision, not the arbitration code. `firmware/Cargo.toml` says \"Never ship a no-touch build\" and `release-build.yml` refuses to release one."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage in the reading direction: an `out-of-scope` cell that turned out to be a `gap` would be a claim quietly not made where the reader thinks it was refused"
+covers = ["slice:AS-XT-5"]
+supports = ["SEC-FIDO-002"]
 
 [[assumption]]
 id = "PLAT-THREAT-001"
@@ -311,13 +377,13 @@ supports = ["SEC-FIDO-001", "SEC-FIDO-002", "SEC-TRANS-001"]
 id = "PLAT-MODEL-001"
 class = "model-abstraction"
 statement = "`PermSets`'s five subsets are a SCOPE and not a description: a host can obtain all sixteen, and the missing eleven are covered by `WidePerms`'s other arm rather than by the claim that they cannot arise."
-discharge = "Two halves, and stage 2 п.7's choice between symmetry, a wider finite domain and a separate source obligation is answered by taking the last two. (1) The domain: `WidePerms = TRUE` in PermWide.cfg draws `ps` from `SUBSET Perms` and checks the whole invariant set -- GREEN, so the eleven reach no violation at that scope. Symmetry was not taken: `ConfigGuard` names `\"acfg\"` and `OpGuard` is called with `\"mc\"`/`\"ga\"`, so a permutation of `Perms` is not a symmetry of this spec, and the wide arm made the question moot at a measured 493 s. (2) The alphabet: `be`, `lbw` and `pcmr` are not elements of `Perms` at all and the 0x09/0x06 admission rules over them are cross-bit, so no widening of a four-element `Perms` can express them -- that half is a source obligation, the exhaustive 512-case sweep in crates/rsk-fido/src/clientpin_perms_tests.rs, which also measured the 48 cases where the shipped path and CTAP 2.1 §6.5.5.7.2 disagree."
+discharge = "Two halves, and stage 2 п.7's choice between symmetry, a wider finite domain and a separate source obligation is answered by taking the last two. (1) The domain: `WidePerms = TRUE` in PermWide.cfg draws `ps` from `SUBSET Perms` and checks the whole invariant set -- GREEN, so the eleven reach no violation at that scope. That arm is falsifiable now rather than a pass with nothing beside it: PermWideMut_BugStopUsingKeepsPerms.cfg and PermWideMut_BugConsumeKeepsMcGa.cfg run the same widening with one defect armed each, and formal/floors.txt requires each of them RED. What the pair does not buy is that the widening is load-bearing -- no switch in the roster is killed only under the wide arm, so what it says is that the arm's observers can fail. Symmetry was not taken: `ConfigGuard` names `\"acfg\"` and `OpGuard` is called with `\"mc\"`/`\"ga\"`, so a permutation of `Perms` is not a symmetry of this spec, and the wide arm made the question moot at a measured 493 s. (2) The alphabet: `be`, `lbw` and `pcmr` are not elements of `Perms` at all and the 0x09/0x06 admission rules over them are cross-bit, so no widening of a four-element `Perms` can express them -- that half is a source obligation, the exhaustive 512-case sweep in crates/rsk-fido/src/clientpin_perms_tests.rs, which also measured the 48 cases where the shipped path and CTAP 2.1 §6.5.5.7.2 disagree."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: an obtainable subset outside the wide arm's scope is a permission combination no configuration runs"
-covers = ["slice:AS-AUTH-5", "model:WidePerms"]
+covers = ["slice:AS-AUTH-5", "model:WidePerms", "slice:AS-F004-8"]
 discharges = ["WidePerms"]
-supports = ["SEC-FIDO-001"]
+supports = ["SEC-FIDO-001", "SEC-FIDO-003", "SEC-FIDO-004"]
 
 [[assumption]]
 id = "PLAT-MODEL-009"
@@ -327,7 +393,8 @@ discharge = "A source audit of the `EF_MINPINLEN` read sites, re-run when one is
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a new reader on a grant path makes an unmodelled record decide an authorization, and no configuration goes red"
-supports = ["SEC-FIDO-001", "SEC-FIDO-003"]
+covers = ["slice:AS-NTAI-6", "slice:AS-RESET-5"]
+supports = ["SEC-FIDO-001", "SEC-FIDO-003", "SEC-FIDO-006"]
 
 [[assumption]]
 id = "PLAT-MODEL-010"
@@ -360,7 +427,7 @@ failure_direction = "security: the model proves the authorization invariants ove
 # (clientpin.rs:1260) is the same kind of gap: `store_local_pin` has no action.
 covers = ["model:ForceChangeModelled"]
 discharges = ["ForceChangeModelled"]
-supports = ["SEC-FIDO-001", "SEC-FIDO-003"]
+supports = ["SEC-FIDO-001", "SEC-FIDO-003", "SEC-FIDO-004"]
 
 [[assumption]]
 id = "PLAT-MODEL-011"
@@ -370,6 +437,7 @@ discharge = "Model the vendor gate itself — MSE readiness plus the two-armed P
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a device PIN the running build cannot collect waived that gate entirely until it was refused instead — the second factor on an irreversible vendor operation became a touch"
+covers = ["slice:AS-F004-3"]
 supports = ["SEC-FIDO-004", "SEC-FIDO-006C"]
 
 [[assumption]]
@@ -380,6 +448,7 @@ discharge = "Nothing to run: a wider action reaches a superset of states, so a s
 discharge_owner = "contributor"
 status = "accepted-risk"
 failure_direction = "coverage, not security: safety carries across a widening, and a liveness or dead-action claim over `DeviceUnlock` does not — the model can take a step the firmware cannot"
+covers = ["slice:AS-F004-4", "slice:AS-RESET-11"]
 supports = [
   "SEC-FIDO-001",
   "SEC-FIDO-004",
@@ -408,7 +477,7 @@ discharge = "A second model variable, or a proof that the collapse preserves the
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: the locked state is the one where the RAM copy is the only readable seed, which is exactly where SEC-FIDO-007 has content"
-covers = ["slice:AS-RAM-2"]
+covers = ["slice:AS-RAM-2", "slice:AS-RESET-12"]
 supports = ["SEC-FIDO-007", "SEC-FIDO-006"]
 
 [[assumption]]
@@ -431,8 +500,14 @@ discharge = "Not by a run — by a second reset producer. `formal/README.md` rec
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: a GREEN nobody can turn red is a check that cannot fail, and everything that cites it inherits that"
-covers = ["slice:AS-RAM-5"]
-supports = ["SEC-FIDO-007"]
+covers = ["slice:AS-RAM-5", "slice:AS-F004-2", "slice:AS-RESET-3"]
+supports = [
+  "SEC-FIDO-004",
+  "SEC-FIDO-006",
+  "SEC-FIDO-006A",
+  "SEC-FIDO-006B",
+  "SEC-FIDO-007",
+]
 
 [[assumption]]
 id = "PLAT-MODEL-007"
@@ -442,7 +517,7 @@ discharge = "Either a conjunct added to `crates/rsk-fido/src/reset_assurance.rs`
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: `kani = 0` on this property is CORRECT rather than merely unfilled, and a reader who takes the neighbouring harnesses for coverage of it is wrong"
-covers = ["slice:AS-RAM-8"]
+covers = ["slice:AS-RAM-8", "slice:AS-RESET-8"]
 supports = ["SEC-FIDO-007", "SEC-FIDO-006"]
 
 [[assumption]]
@@ -453,8 +528,41 @@ discharge = "The store slice of stage 5, which is where a cardinality argument c
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: a defect that needs two credentials of one RP — the enumerate/delete interleavings — is outside every configuration"
-covers = ["slice:AS-AUTH-6"]
-supports = ["SEC-FIDO-001", "SEC-FIDO-005"]
+covers = ["slice:AS-AUTH-6", "slice:AS-CRED-1", "slice:AS-RESET-10"]
+supports = ["SEC-FIDO-001", "SEC-FIDO-005", "SEC-FIDO-006"]
+
+[[assumption]]
+id = "PLAT-MODEL-012"
+class = "model-abstraction"
+statement = "`gate.ppuatStale` has no counterpart in the firmware. The model carries the persistent grant as TWO booleans — `gate.ppuat` (EF_PAUTHTOKEN exists) and `gate.ppuatStale` (it exists and is no longer honoured) — and the second state is one no shipped code path can produce: `clear_ppuat` (crates/rsk-fido/src/seed.rs:337) is a `force_delete` of the record, so the code has present-and-live or absent, and nothing between. `ppuatStale` exists so that a MUTANT can build the state the invariant forbids."
+discharge = "Nothing to run, and that is the point of registering it: the third conjunct of `NoTokenAfterInvalidation` (`~(gate.ppuat /\\ gate.ppuatStale)`) is UNFALSIFIABLE on the shipped tree by construction, exactly as `RamNeverOutlivesFlashSeed` is for SEC-FIDO-007 (PLAT-MODEL-006). What would settle it is a second EF_PAUTHTOKEN writer that could leave a stranded record — `Fs::force_delete` returning an error the caller drops would be one — measured against the four `clear_ppuat` call sites."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage, not security: a conjunct with no reachable falsifying state proves nothing about the shipped tree, and its GREEN reads in the vector as a checked clause"
+covers = ["slice:AS-NTAI-1"]
+supports = ["SEC-FIDO-003"]
+
+[[assumption]]
+id = "PLAT-MODEL-013"
+class = "model-abstraction"
+statement = "The two Kani harnesses named for this property cover the SESSION token only. `crates/rsk-fido/src/state_kani.rs::no_token_after_invalidation` and `credmgmt_kani.rs::no_token_after_invalidation_at_call_site` drive `FidoState` in RAM; the persistent `pcmr` grant lives in EF_PAUTHTOKEN, needs a `Ctx` with flash behind it, and both harness headers say so in as many words. So the second conjunct of the invariant is bounded-proved and the first and third are not."
+discharge = "A harness over `clear_ppuat` and `write_pin_verifier` with a `Ctx`, which is the `p256`-in-the-reachable-set problem `credmgmt_kani.rs`'s own header records: Kani 0.67.0 aborts in codegen on `crypto-bigint 0.7.5 UintRef::lowest_u64`. Until that is answered the persistent half is held by host tests (`crates/rsk-fido/src/clientpin_tests.rs:2055` and its neighbours) and by the model, not by a proof."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: `kani = 2` reads as the whole property bounded, and it is one of the invariant's three conjuncts"
+covers = ["slice:AS-NTAI-3"]
+supports = ["SEC-FIDO-003"]
+
+[[assumption]]
+id = "PLAT-MODEL-014"
+class = "model-abstraction"
+statement = "The relational pre-state this property compares against is a GHOST in both tiers — `snap` in `RSKeySecurityState` and `ResetSnapshot` in `crates/rsk-fido/src/reset_assurance.rs` — and no shipped image holds it. So nothing in the firmware can observe, let alone enforce, the property at runtime: the write ORDER is the whole implementation, and a device that had reordered its phases would answer every command exactly as one that had not."
+discharge = "Nothing to run, and that is the content. What supports the claim is the other direction: `scripts/check.sh:174-223` (`assurance-trace image identity`) builds the default image twice, poisoning `reset_assurance.rs` and `reset_refinement_kani.rs` before the second, and requires the two loadable images to be byte-identical — so the abstraction is provably absent from every firmware, which is why it cannot also be the enforcement. A discharge would be a runtime check the device could fail closed on, and none is proposed: the ordering IS the mechanism."
+discharge_owner = "contributor"
+status = "accepted-risk"
+failure_direction = "coverage: every verdict in this property's ladder is about a projection, and a defect in the projection itself — a snapshot taken at the wrong point, a clause with the wrong antecedent — is invisible to all of it. The one guard against that is that `ResetRefinement::delete` takes its phase from the production `reset_phase` classifier rather than a second hand-written list"
+covers = ["slice:AS-RESET-2"]
+supports = ["SEC-FIDO-006", "SEC-FIDO-006A", "SEC-FIDO-006B", "SEC-FIDO-006C"]
 
 # --- the four inventory categories stage 10 names and this file did not hold ---
 # `scripts/platform_gate.py`'s CLASSES vocabulary already had all four names and
@@ -515,3 +623,227 @@ discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: a clause the recording never reaches is a clause the replay agrees with for free, and the agreement reads exactly like evidence"
 supports = ["SEC-TRACE-001", "SEC-TRACE-002", "SEC-TRACE-004", "SEC-REF-004"]
+
+
+[[assumption]]
+id = "PLAT-TRACE-002"
+class = "tool-fidelity"
+statement = "No recorded session reaches this property. `grep -lw NoTokenAfterInvalidation formal/*.cfg` returns every configuration that names the invariant and not one of them is a `TraceSecurity*` row, so the `trace` axis reads `0 of 0` — the honest value, and not a gap waiting to be filled by inheritance from a refinement property."
+discharge = "A `TraceSecurity*` configuration that checks this invariant, over a recording that performs the operations it is about: a changePIN, a stopUsingPinUvAuthToken and a panel PIN entry. `formal/traces/security-phase4.jsonl` is the existing recording and none of its 40 pre/post snapshot pairs contains one."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a property whose every verdict is a model verdict has no evidence that a real device's event stream ever enters the states the model reasons about"
+covers = ["slice:AS-NTAI-4"]
+supports = ["SEC-FIDO-003"]
+
+# ---- The presence arbiter and the cross-transport touch ----------------------
+# One AREA rather than three more `PLAT-MODEL-0NN`, and the class stays
+# `model-abstraction`: PLAT-TRACE-001 already reads that way, and three rows
+# about one mechanism are what a reader sorts for. They arrived as
+# PLAT-MODEL-012/013/014 from the SEC-FIDO-002 bundle, written blind to two
+# siblings proposing the same numbers for the persistent grant and the reset
+# snapshot; the numbers moved, the statements did not.
+[[assumption]]
+id = "PLAT-PRES-001"
+class = "model-abstraction"
+statement = "`Owners` — the four `SCOPE_*` bytes plus `Panel`, the model-only split of `SCOPE_NONE` — is the whole domain a presence decision can be produced for or applied to, so a wait owner outside those five does not exist."
+discharge = "Reading the byte and its writers. `crates/rsk-device/src/presence.rs:26-32` defines exactly four `SCOPE_*` constants and `firmware/src/worker.rs:434, :528, :663, :665` are every `set_wait_scope` call site in the tree; `formal/RSKeySecurityState.tla:127-144` maps them and splits `SCOPE_NONE` into `NoOwner` and `Panel` because `request_cancel` refuses in both while only one can be ENDED by a touch. What would falsify it is a fifth interface that opens a wait: the byte is a `u8`, nothing bounds it, and a new transport arrives as an owner no configuration and no harness checks."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a new wait owner is silently outside every configuration and every harness, and the invariant stays GREEN over a domain that no longer describes the device"
+covers = ["slice:AS-XT-2"]
+supports = ["SEC-FIDO-002"]
+
+[[assumption]]
+id = "PLAT-PRES-002"
+class = "model-abstraction"
+statement = "No API in the tree can originate a cancel from `SCOPE_CCID` or from an on-panel flow, so a CCID or panel ceremony is uncancellable by ABSENCE of a producer rather than by a guard anything checks."
+discharge = "A whole-tree measurement, and it is a grep rather than a proof: `git grep -n 'cancel_requested.store(true'` is exactly two sites, `crates/rsk-device/src/presence.rs:120` (`request_cancel`, gated on `SCOPE_FIDO`) and `:131` (`cancel_otp_wait`, gated on `SCOPE_OTP`), and the only other writer is `set_cancel_requested`, whose six production call sites (`crates/rsk-device/src/presence.rs:196, :233` and `crates/rsk-display/src/pin.rs:305, :441` + `crates/rsk-display/src/presence.rs:47, :58`) all pass a literal `false`, the two `cfg(feature = \"display\")` forwarders at `firmware/src/presence.rs:269` and `firmware/src/display.rs:205` reaching only those; the one site that passes `true` is `crates/rsk-device/src/presence_kani.rs:158`, a harness. The Kani cancel harness rests on this: `board.attempted[SCOPE_CCID]` stays false because the harness raises only the two cancels that exist, so 'a CCID wait cannot be cancelled at all' is the harness's construction and not its conclusion. A third writer added anywhere in the tree falsifies it with every harness still green."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security: a new cancel producer is invisible to the harness that reads as covering CCID, and the negative obligation for two of the four owners rests on it"
+covers = ["slice:AS-XT-3"]
+supports = ["SEC-FIDO-002"]
+
+[[assumption]]
+id = "PLAT-PRES-003"
+class = "model-abstraction"
+statement = "`NoCrossTransportTouchConsumption`'s structural conjunct — `(pres.granted = \"cancel\") => (pres.cancelBy = pres.scope)` — is INERT on the current module: no reachable state falsifies it that `TouchCancel`'s ghost write has not already marked in the same step."
+discharge = "A configuration that checks the conjunct alone, which the tree already has a family for (`formal/SoloClause_*.cfg`, three of them today) — or the module changing. ARGUED FROM THE MODULE TEXT AND NOT RUN: `TouchCancel` (`formal/RSKeySecurityState.tla:439-450`) sets `granted = \"cancel\"` and writes `viol` in the same step; every other writer of `pres` either requires `WaitOpen` (`granted = \"none\"`), or is `ClosedWait`/`OpenWaitFor`/`VolatileCleared`, all of which set `granted` back to `\"none\"`; and `viol` is only ever grown. So the conjunct's arm can be reached by nothing the ghost has not already caught. It is a backstop for a producer that does not exist yet, which is the same shape as an assumption constant nothing branches on."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a conjunct nothing can turn red on its own is a check that reads as a second clause and is one line of comment"
+covers = ["slice:AS-XT-6"]
+supports = ["SEC-FIDO-002"]
+
+# ---- The model-to-code bridge itself -----------------------------------------
+# Not what the model abstracts but where it says the code is: an owner with no
+# semantic address, and three citations that resolve to the wrong function while
+# `scripts/citation_gate.py` prints `ok` — it does not read `assurance/` and says
+# so in as many words.
+[[assumption]]
+id = "PLAT-SOURCE-001"
+class = "model-abstraction"
+statement = "The revoke-before-write ORDER that the first conjunct of `NoTokenAfterInvalidation` is about is owned by ONE function, `write_pin_verifier` (crates/rsk-fido/src/clientpin.rs:831), which clears the grant at :840-842 before `fs.put` at :852. The two functions the tree tags as this property's owners — `set_pin` (:175) and `change_pin` (:229) — hold a redundant OUTER `clear_ppuat`, and `formal/comutants.toml [comutant.BugSetPinKeepsPpuat]` records that deleting `set_pin`'s left all 668 rsk-fido tests green over three runs."
+discharge = "A `Refines RSKeySecurityState!NoTokenAfterInvalidation — SEC-FIDO-003` tag on `write_pin_verifier`, and the review of the third caller `store_local_pin` (clientpin.rs:1256) and the device-PIN caller (:1287) that a tag there forces. NOT a column move: `clientpin.rs` is already one of the three files `assurance_gate.grep_word` counts, so `rust` stays 3 and no gate reddens for the absence — which is why this is a registry row and not a gate rule."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security in the maintenance direction: the authoritative site carries no semantic address, so a change to the write order is unattributed while the two redundant sites read as the owners"
+covers = ["slice:AS-NTAI-2"]
+supports = ["SEC-FIDO-003"]
+
+[[assumption]]
+id = "PLAT-SOURCE-002"
+class = "model-abstraction"
+statement = "Three of the citations that carry this property's model-to-code bridge name code the surrounding prose is not about, and `scripts/citation_gate.py` is GREEN over all three: `formal/RSKeySecurityState.tla:65` cites `state.rs:584-599` for `stopUsingPinUvAuthToken` and that span is `retire_sequences_except`; `formal/README.md:99` cites `seed.rs:323-324` for `clear_ppuat` and that span is the last two lines of the function ABOVE it; and the bare `:300-304`, written three times at `RSKeySecurityState.tla:89`, `:824` and `:1755`, is four lines short of the `clear_ppuat` call it is cited for AND is matched by no rule of the gate, because the module writes it without the backticks `CITE`'s continuation alternative requires — measured by running `citation_gate.citations` over the module, which returns none of the three."
+discharge = "Re-point the three and re-lock. The measurements behind them, so the fix is checkable: `state.rs:584-599` WAS exactly `stop_using_token` at commit `250be31` and the function is at `:547-562` today; `:300-304` WAS the §6.5.5.6-step-15 comment through `clear_ppuat(ctx.fs)` at commit `c9bdc5b` and that block is at `:305-309` today, which is the span `formal/README.md` already uses for the same claim; and `seed.rs:323-324` was `r.map(|()| tok)` and `}` at `5e3abef`, the commit that INTRODUCED it, so it has never named `clear_ppuat`."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security in the reading direction: the claim table is the published requirement-to-code bridge, and a reader sent to the wrong function reads a defence that is not the one the model is about"
+covers = ["slice:AS-NTAI-7"]
+supports = ["SEC-FIDO-003"]
+
+# ---- The persistent `pcmr` grant ---------------------------------------------
+# `EF_PAUTHTOKEN` under `NoAccessibleSecretWithoutGate`: a ghost clause with no
+# reachable producer, a C-tier bridge with no field for the record, and a
+# constant whose FALSE arm changes the reachable set and no verdict.
+[[assumption]]
+id = "PLAT-GRANT-001"
+class = "model-abstraction"
+statement = "`NoAccessibleSecretWithoutGate`'s ghost clause is DEAD by construction in every configuration that could carry it but one: `PpuatGuard` is `gate.ppuat /\\ pin.set` wherever `FixPpuatRequiresPin` is TRUE, so `CmBeginViaPpuat` — the clause's only writer — adds the empty set by construction."
+discharge = "A configuration in which the ghost is REACHED. `formal/Historical_E77.cfg` is the only one that weakens the guard (`FixPpuatRequiresPin = FALSE`, and `grep -l` finds no second), and its recorded verdict is the STRUCTURAL clause at depth 13, not the ghost: `viol = {}` in the final state of the counterexample. Either a configuration that keeps the producer honest and the consumer weak — `BugPpuatIsAGate = FALSE` with `FixPpuatRequiresPin = FALSE`, which `formal/gen-configs.sh` does not emit — or a `SoloClause_*.cfg` naming this clause alone, in the shape the same script already uses for the three clauses of `ResetNeverWeakensSurvivingState`."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the invariant's first conjunct is asserted everywhere and falsifiable nowhere, so a reader who counts it as one of three checked clauses is counting a conjunct that cannot fail"
+covers = ["slice:AS-F004-1"]
+supports = ["SEC-FIDO-004"]
+
+[[assumption]]
+id = "PLAT-GRANT-002"
+class = "model-abstraction"
+statement = "The C-tier reset bridge cannot express this property at all: `ResetPersistentView` has no field for the persistent grant, so no Kani harness written over it can state `gate.ppuat => pin.set`."
+discharge = "Two edits and one harness. `crates/rsk-fido/src/reset_assurance.rs:11` imports six FIDs and `EF_PAUTHTOKEN` is not among them; the delete projection at :173-178 has an arm for `EF_KEY_DEV`, `EF_KEY_DEV_ENC`, `EF_CRED`, `EF_PIN`, `EF_ALWAYS_UV` and `EF_BACKUP_SEALED` and none for the grant. Add a `persistent_grant` field and its arm, then assert `persistent_grant => pin` at `ResetProgress::Idle`. The typed pair already exists on the other bridge — `crates/rsk-fido/src/state_assurance.rs:17-23` defines `TokenPersistentView { pin_set, persistent_grant }` over `TOKEN_PERSISTENT_FIDS = [EF_PIN, EF_PAUTHTOKEN]` — and no proof asserts the implication over it either."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: `kani = 0` is a fact about the BRIDGE and not about the difficulty of the property, and a reader who takes the four neighbouring reset harnesses for coverage of it is wrong in the same way `PLAT-MODEL-007` records for `SEC-FIDO-007`"
+covers = ["slice:AS-F004-5"]
+supports = ["SEC-FIDO-004"]
+
+[[assumption]]
+id = "PLAT-GRANT-003"
+class = "model-abstraction"
+statement = "`FixPpuatRequiresPin`'s FALSE arm is unobserved: the one configuration that takes the consumer fix out reports a verdict the producer switch alone produces, so no recorded run in this tree depends on that constant's value."
+discharge = "Run the arm where it can decide something. `formal/Historical_E77.cfg` arms `BugPpuatIsAGate` AND `FixPpuatRequiresPin = FALSE`; its counterexample is byte-identical to `formal/Mut_BugPpuatIsAGate.cfg`'s, which has the fix ON — measured, `diff` over the two recorded logs is the fingerprint line, the two timestamps and the state totals, and the 404-line trace body has the same md5. A configuration with the producer fix intact and the consumer weak, or the `SoloClause_*` shape of `PLAT-GRANT-001`, is what would make the constant answer for itself."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: an arm that changes the reachable set without changing any verdict reads on the assumption page as a discharged both-ways constant, which is the shape `formal/README.md` already records for an inert model term"
+covers = ["slice:AS-F004-7"]
+supports = ["SEC-FIDO-004"]
+
+# ---- What a credential IS, on each side of `NoUnmanageableCredential` --------
+# Three of the four are one question asked at three depths: the model equates a
+# RECORD with a record that reads, unseals and counts, and the tree's own open
+# sites are on the other side of that equation.
+[[assumption]]
+id = "PLAT-CRED-001"
+class = "model-abstraction"
+statement = "`r \\in store.rpent` is read as `the EF_RP record for r is reachable by the management surface`, and in the shipped tree it means only that the record exists: both browse surfaces additionally require the read to succeed, the count byte to be positive and the rpId to unseal."
+discharge = "Either a second model variable separating `the record exists` from `the record lists`, or a test at each surface that drives a refused `EF_RP` read and a record whose domain will not unseal and asserts what the owner is shown. The six arms are `crates/rsk-fido/src/credmgmt.rs:364, :368, :402` and `crates/rsk-fido/src/passkeys.rs:113, :117, :122`, and the two surfaces do not agree on the third: `enumerate_rps` answers `CtapError::Other` for the whole walk, so one unsealable record hides every other relying party from the host, while `for_each_rp` skips that one record and lists the rest."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security: a credential whose EF_RP record exists but does not read, does not carry a positive count or does not unseal satisfies `NoUnmanageableCredential` on every configuration while being exactly what `TM-HOST-CRED-REVOCABLE` forbids"
+covers = ["slice:AS-CRED-2"]
+supports = ["SEC-FIDO-005"]
+
+[[assumption]]
+id = "PLAT-CRED-002"
+class = "model-abstraction"
+statement = "No action of `RSKeySecurityState` can fail a flash write: the model's only tears are `PowerCut` and `ResetAborts` between two writes that succeeded, so an `Fs::put` returning `Err` — and a best-effort rollback that itself fails — is outside every configuration the FIDO properties are checked on."
+discharge = "Either a failing-write action in `formal/RSKeySecurityState.tla` (which needs the rollback modelled with it, and the rollbacks are best-effort BY CONSTRUCTION — each is itself a flash write), or a bounded proof over `rsk-fs`'s `Fs` with a symbolic write/delete outcome per step. `CHANGELOG.md:444-450` names five open sites of exactly this class; all five strand an EF_RP entry over a missing credential, which is the direction `store.cred \\subseteq store.rpent` does not constrain, so the cost falls on the opposite direction — asserted by `SEC-STORE-006 NoSilentOrphan`, on a different model."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the model is NARROWER than the medium here rather than wider — it cannot reach the states a refused write produces, so a GREEN says nothing about them, and the direction it cannot reach is the one the tree already records as open"
+covers = ["slice:AS-CRED-3"]
+supports = ["SEC-FIDO-005"]
+
+[[assumption]]
+id = "PLAT-CRED-003"
+class = "model-abstraction"
+statement = "`KeepOpen` equates `the seed that opens it is gone` with `the record is not there`, so a reset that leaves an undecryptable `EF_CRED` record behind is `store.cred = {}` in the model."
+discharge = "A model that carries the record and its openability apart — the same second variable PLAT-CRED-001 wants, one layer down. `formal/RSKeySecurityState.tla:305-309` defines `store.cred` as `the records that still OPEN` and empties both fields when the last seed copy goes, while `docs/threat-model.md`'s `TM-HOST-CRED-REVOCABLE` says of the wipe that `a torn wipe can still strand a credential, and what the ordering buys is that the survivor is undecryptable rather than that it does not exist`. The two agree in substance and differ in what a record IS."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a reader of `Shipped.cfg`'s GREEN would conclude the shipped wipe strands nothing, and the clause the property is rooted at says otherwise in as many words — the discrepancy is invisible from either side alone"
+covers = ["slice:AS-CRED-4"]
+supports = ["SEC-FIDO-005", "SEC-FIDO-006"]
+
+[[assumption]]
+id = "PLAT-CRED-004"
+class = "model-abstraction"
+statement = "`FixSweepDropsCredsBeforeRpEntries` — the counterfactual repair the model carries for the reset half of `NoUnmanageableCredential` — has never been run on its TRUE arm, so the model has never checked whether that repair would hold the invariant."
+discharge = "One `emit` call in `formal/gen-configs.sh` passing TRUE for it, most usefully over `Historical_E76.cfg`'s constants, where the question `would this repair have worked` is the one the counterfactual is for. Today the constant is assigned FALSE by every configuration that assigns it and TRUE by none, so the conjunct at `formal/RSKeySecurityState.tla:1405` could be deleted with every recorded verdict unchanged. It is also outside `assurance/assumptions.toml`, so the assumption gate's both-arms rule does not reach it — unlike `FixPpuatRequiresPin`, whose FALSE arm `Historical_E77.cfg` does run."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a model constant nothing branches on is a comment with a type, and this one names a repair a reader could take for a checked alternative"
+covers = ["slice:AS-CRED-5"]
+supports = ["SEC-FIDO-005"]
+
+# ---- The live token and the record that gates it -----------------------------
+# `NoLiveTokenWithoutPinRecord`'s two projections, its one issuance door, the
+# deleter no configuration runs, and why `kani = 0` there is correct rather than
+# unfilled.
+[[assumption]]
+id = "PLAT-TOKEN-001"
+class = "model-abstraction"
+statement = "`RSKeySecurityState`'s `tok.live` is `FidoState::paut.in_use` and its `pin.set` is `Fs::has_data(EF_PIN)`; no second live token and no second PIN record exists that the model would have to carry a field for."
+discharge = "A recorded session that asserts the implication, which the corpus can already carry and no configuration checks. Both halves are projected today: crates/rsk-device/src/ctap.rs:221 and :235 record `token_in_use_raw` and `pin_set`, formal/TraceSecurity.tla:44 and :32 map them into B, :60 and :52 map the model side, and R4aRawRefinesB equates all four at every boundary. Measured over formal/traces/security-phase4.jsonl: `token_in_use_raw` is TRUE in 24 of 40 pre and 24 of 40 post snapshots, `pin_record_len == 35` in 28 of each, and the boundaries where the antecedent holds and the consequent does not number ZERO. So unlike PLAT-MODEL-003, whose field is carried and never exercised, this projection runs its TRUE arm 48 times and the only thing missing is a line in an INVARIANTS block."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the projection is checked and the property over it is not, so a recording that violated the implication would replay GREEN"
+covers = ["slice:AS-TOK-1"]
+supports = ["SEC-FIDO-008"]
+
+[[assumption]]
+id = "PLAT-TOKEN-002"
+class = "model-abstraction"
+statement = "One `pin.set` boolean stands for one record. `EF_DEVICE_PIN`, the trusted-display build's second PIN verifier, is not it, so a state where the device PIN stands and `EF_PIN` is gone is one this model cannot distinguish from a factory-fresh device."
+discharge = "A source audit of the two verifiers, re-run when a third issuance door is added: crates/rsk-display/src/gates.rs:11 states that the backing record and the floor differ between them, crates/rsk-display/src/pin.rs:720 that the FIDO PIN goes to EF_PIN as the same verifier the host uses, and :455 that a host authenticatorReset clears both. What makes the single boolean sound TODAY is that built-in UV verifies EF_PIN and not the device PIN (crates/rsk-fido/src/clientpin.rs:574 and :612), so both doors to a live token are gated on the record the model has. A pad-only issuance path reading EF_DEVICE_PIN would end this row."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security: a second verifier that could mint a token would make the invariant true of the model and false of a display build"
+covers = ["slice:AS-TOK-2"]
+supports = ["SEC-FIDO-008"]
+
+[[assumption]]
+id = "PLAT-TOKEN-003"
+class = "model-abstraction"
+statement = "`clientpin::issue_token` is the only production maker of a live pinUvAuthToken, so the one `Refines … — SEC-FIDO-008` tag in the tree is the whole antecedent side of the invariant."
+discharge = "An enumeration a derivation already in the tree can re-run, and it was re-run rather than read: `git grep -n begin_using_token` gives 28 hits, all but two in files `assurance_gate.production_rust` drops by name, and of the two remaining `crates/rsk-fido/src/conformance/mod.rs:165` is reported by `assurance_gate.cfg_excluded` as `lib.rs declares mod conformance under cfg(test)`. That leaves crates/rsk-fido/src/clientpin.rs:425, inside the tagged function. A second in-image caller ends this row, and the derivation that would find it is the one just named."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a second issuance path outside the tagged function is an antecedent-maker no tag names and no gate counts"
+covers = ["slice:AS-TOK-3"]
+supports = ["SEC-FIDO-008"]
+
+[[assumption]]
+id = "PLAT-TOKEN-004"
+class = "model-abstraction"
+statement = "`reset()` is the only modelled deleter of `EF_PIN` and it is not the only deleter: `rsk_fs::Fs::factory_wipe` bypasses it entirely, and no configuration in this tree runs that path."
+discharge = "Modelling the second path, or a stated argument that its reboot makes the question vacuous. crates/rsk-fido/src/reset.rs:152 and :185 both say in as many words that `Fs::factory_wipe` bypasses that file and needs the same rule; the entry point is crates/rsk-fs/src/fs.rs:447 and its live callers are crates/rsk-device/src/ccid.rs:311, crates/rsk-display/src/pin.rs:685 and firmware/src/worker.rs:397. It is the SAME unmodelled path PLAT-MODEL-006 names as what would make `RamNeverOutlivesFlashSeed` bite, reached from the other side: here the question is whether the wipe kills the session before the record, and worker.rs:397 answers it with a reboot the model does not represent either."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the second route to a device with no PIN record is outside every configuration, so a session surviving it is a state no run visits"
+depends_on = ["PLAT-MODEL-006"]
+covers = ["slice:AS-TOK-4"]
+supports = ["SEC-FIDO-008"]
+
+[[assumption]]
+id = "PLAT-TOKEN-005"
+class = "model-abstraction"
+statement = "No existing bounded proof can be reused as evidence for this invariant, so `kani = 0` on SEC-FIDO-008 is correct rather than merely unfilled: the reset bridge names no token field, and the four harnesses that do drive `begin_using_token` never delete the PIN record."
+discharge = "Either a harness of this property's own, or a conjunct added to an existing bridge — and the second changes what the SEC-FIDO-006 harnesses prove, which is stage 4's call. Today crates/rsk-fido/src/reset_assurance.rs constrains the reset's survivors and names no token field, so those harnesses run over states where a token is live and the record is gone; and crates/rsk-fido/src/credmgmt_kani.rs:77, :158, :348 and :416 with crates/rsk-fido/src/state_kani.rs:86 do call `begin_using_token`, but each drives a permission or cursor question with the PIN record fixed present. None models a deletion, which is the only step that can falsify this implication."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a reader who takes the neighbouring harnesses for bounded coverage of this property is wrong, and nothing in the vector says so"
+covers = ["slice:AS-TOK-5"]
+supports = ["SEC-FIDO-008", "SEC-FIDO-006"]

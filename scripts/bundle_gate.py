@@ -106,7 +106,11 @@ BUNDLE = BUNDLE_DIR / "SEC-FIDO-001.toml"
 #: working; a bundle LEAVING is a closed slice unclosing itself with the row
 #: green, which is the family "the table was DELETED rather than EMPTIED" one
 #: layer out.
-ROSTER_FLOOR = 2
+#:
+#: Moved 2 -> 8 the day the six remaining P0 bundles landed. The value is the
+#: measured roster and not a margin under it: a floor below the count is a bundle
+#: that can leave with the row green, which is the direction above.
+ROSTER_FLOOR = 8
 
 REGISTRY = pathlib.Path("assurance/properties.toml")
 #: Where a bare `Name.cfg` lives. The bundle names TLC configurations without a

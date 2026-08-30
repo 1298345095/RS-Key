@@ -78,8 +78,8 @@ owners_tag_reading = "an independent measurement REFUTED the reading this bundle
 # spellings because one under-approximates: the field, `clear_keydev_dec`,
 # `ctx.state.reset()`, `*self = Self::new()` and the destructuring `Drop`.
 owners_writers = [
-  "crates/rsk-fido/src/vendor.rs:573 — `ctx.state.keydev_dec = Some(seed)`, the SOLE producer (model: DeviceUnlock)",
-  "crates/rsk-fido/src/vendor.rs:572 — the clear before it, so an unlock cannot stack two copies",
+  "crates/rsk-fido/src/vendor.rs:591 — `ctx.state.keydev_dec = Some(seed)`, the SOLE producer (model: DeviceUnlock)",
+  "crates/rsk-fido/src/vendor.rs:590 — the clear before it, so an unlock cannot stack two copies",
   "crates/rsk-fido/src/state.rs:386 — `keydev_dec: None` in `FidoState::new`",
   "crates/rsk-fido/src/state.rs:413 — `clear_keydev_dec`, zeroize then None",
   "crates/rsk-fido/src/state.rs:431 — `*self = Self::new()` inside `FidoState::reset`, which drops the old value",
@@ -91,7 +91,7 @@ owners_readers = [
   "crates/rsk-fido/src/lib.rs:106 — `Ctx::load_keydev`, RAM first then flash: the concrete SeedReachable, and the chokepoint nine call sites reach it through",
   "crates/rsk-fido/src/config.rs:415 — AUT_DISABLE's authorization gate",
   "crates/rsk-fido/src/config.rs:421 — the take that re-seals it",
-  "crates/rsk-fido/src/vendor.rs:933 — BACKUP_STATE's ungated `unlocked` bit",
+  "crates/rsk-fido/src/vendor.rs:961 — BACKUP_STATE's ungated `unlocked` bit",
   "crates/rsk-device/src/ctap.rs:221 — the trace projection, cfg-gated",
   "crates/rsk-fido/src/reset_assurance.rs:49 — the verification projection, cfg-gated",
 ]
@@ -164,7 +164,7 @@ bound_invariants = 2
 bound_armed_switches = 1
 bound_rps = 2
 bound_channels = 2
-shipped_relation = "the configuration checks TypeOK and this invariant and NOTHING ELSE (formal/Solo_RamNeverOutlivesFlashSeed.cfg:47-49), and arms BugStateResetAfterWipe alone with every other Bug* FALSE — which is what tells this kill from a neighbouring invariant's. It is needed here in a way it is not on Shipped.cfg: formal/gen-configs.sh:108-112 keeps the two structural facts OUT of ALL_INV precisely so a mutant reports the first invariant it violates, and formal/runs.toml:88 records Mut_BugStateResetAfterWipe.cfg going `RED: ResetNeverWeakensSurvivingState` — a SIBLING's name — under the same switch. So the Solo row is the only place in the tree where this property is observed to fail"
+shipped_relation = "the configuration checks TypeOK and this invariant and NOTHING ELSE (formal/Solo_RamNeverOutlivesFlashSeed.cfg:50-52), and arms BugStateResetAfterWipe alone with every other Bug* FALSE — which is what tells this kill from a neighbouring invariant's. It is needed here in a way it is not on Shipped.cfg: formal/gen-configs.sh:109-114 keeps the two structural facts OUT of ALL_INV precisely so a mutant reports the first invariant it violates, and formal/runs.toml:93 records Mut_BugStateResetAfterWipe.cfg going `RED: ResetNeverWeakensSurvivingState` — a SIBLING's name — under the same switch. So the Solo row is the only place in the tree where this property is observed to fail"
 cfg = "none"
 features = "none"
 
@@ -178,7 +178,7 @@ bound_ram_reader_sites = 4
 bound_projection_sites = 2
 bound_files_in_argument = 6
 bound_crates = 2
-shipped_relation = "the four writers are one producer (vendor.rs:573) and three destroyers (vendor.rs:572, config.rs:428, and reset.rs:66 through FidoState::reset -> Drop); the four readers are lib.rs:106, config.rs:415, config.rs:421 and vendor.rs:933; the two projection sites are rsk-device/src/ctap.rs:221 and rsk-fido/src/reset_assurance.rs:49 and BOTH are cfg-gated, so neither is in a shipped image. Six files and two crates against the THREE files docs/authorization-slice.md:484-487 estimated (seed.rs, state.rs, lib.rs) — the estimate named the tag's file and missed both writers and the ordering site, and seed.rs is the one of the three that contains no `keydev_dec` at all. This bound is a count of sites, not a shrink of a shipped constant, because a review has no other unit"
+shipped_relation = "the four writers are one producer (vendor.rs:591) and three destroyers (vendor.rs:590, config.rs:428, and reset.rs:66 through FidoState::reset -> Drop); the four readers are lib.rs:106, config.rs:415, config.rs:421 and vendor.rs:961; the two projection sites are rsk-device/src/ctap.rs:221 and rsk-fido/src/reset_assurance.rs:49 and BOTH are cfg-gated, so neither is in a shipped image. Six files and two crates against the THREE files docs/authorization-slice.md:484-487 estimated (seed.rs, state.rs, lib.rs) — the estimate named the tag's file and missed both writers and the ordering site, and seed.rs is the one of the three that contains no `keydev_dec` at all. This bound is a count of sites, not a shrink of a shipped constant, because a review has no other unit"
 cfg = "none — every writer and reader above is unconditional production code; the two projection sites are not, and the bound counts them apart for that reason"
 features = "none"
 
@@ -277,7 +277,7 @@ registered = "yes — assurance/platform.toml PLAT-MODEL-007, pending. It is the
 id = "AS-AUTH-2"
 statement = "The shipped image is built without --features always-uv, so gate.alwaysUv is a free state variable rather than the compiled default every reset restores."
 kind = "build configuration"
-discharger = "firmware/Cargo.toml's default feature set, and the firmware-always-uv matrix column. Stronger for this property than for SEC-FIDO-001: BOTH arms check this invariant — formal/Shipped.cfg:55 with AlwaysUvShipped FALSE and formal/AlwaysUv.cfg:55 with it TRUE — so the assumption's other arm is run against the property rather than beside it"
+discharger = "firmware/Cargo.toml's default feature set, and the firmware-always-uv matrix column. Stronger for this property than for SEC-FIDO-001: BOTH arms check this invariant — formal/Shipped.cfg:10 with AlwaysUvShipped FALSE and formal/AlwaysUv.cfg:10 with it TRUE — so the assumption's other arm is run against the property rather than beside it"
 expressible = "yes"
 registered = "yes — assurance/assumptions.toml AlwaysUvShipped, and assurance/platform.toml PLAT-BUILD-001, the one discharged row of that registry, which covers slice:AS-AUTH-2 and model:AlwaysUvShipped. The id is deliberately the one SEC-FIDO-001's bundle uses: it is the same standing assumption, so a fresh id here would create a candidate no entry claims"
 
@@ -357,11 +357,11 @@ t_trace = "formal/traces/security-phase4.jsonl carries `keydev_ram_raw` false in
 r_column = "the `rust` column is not a count of tags: assurance_gate.grep_word matches the bare invariant name anywhere in a production file and returns file names, so a second tag in a counted file moves nothing"
 
 # The gates this bundle's own change moved, each with the number it now derives.
-gate_ghost = "ghost-gate: 21 actions record NoAuthorizationBypass over 24 routes, consulting 11 guards — unchanged by this bundle, and transcribed because the roster rule demands every gate line whether or not this property moved it"
-gate_ledger = "token-refinement-gate: GREEN keys=2 api=11 volatile=10/9 persistent=12/4 outcomes=7/6 walk=4 softlock=12 window=2 testonly=1 — the ledger owns the token axes, not the seed ones, so none of the fourteen owners this bundle enumerates is in it"
-gate_assumption = "assumption-gate: 4 standing assumptions; AlwaysUvShipped TRUE=3 FALSE=91, ForceChangeModelled TRUE=3 FALSE=91, PowerOnClearsScratch2 TRUE=9 FALSE=4, WidePerms TRUE=1 FALSE=93. AlwaysUvShipped is still the one whose BOTH arms check this property; the two scope constants added since are FALSE in every configuration that does"
-gate_matrix = "matrix-gate: 40 P0-family properties × 31 build configurations = 1240 cells (37 covered, 139 equivalent, 0 conditional, 106 out-of-scope, 958 gap) — UNCHANGED by this bundle: a model check and a host-test slice read no board preset and no flash geometry, so nothing here settles a cell"
-gate_registry = "assurance-gate: SEC-FIDO-007 MODELLED-ONLY, cfgs=5 mut=1 co=1 kani=0 fuzz=0 rust=2 test=0 — `rust` moved 1 -> 2 when the ONE producer of the antecedent, `vendor.rs::unlock`, was tagged; it had carried only the consequent`s owner; `cfgs` grew by one when PermWide.cfg was added, a new configuration CHECKING the invariant rather than new evidence about it"
+gate_ghost = "ghost-gate: ok — 21 action(s) record NoAuthorizationBypass over 24 route(s), consulting 11 guard(s) — unchanged by this bundle, and transcribed because the roster rule demands every gate line whether or not this property moved it"
+gate_ledger = "token-refinement-gate: GREEN keys=2 api=11 volatile=10/9 persistent=12/4 outcomes=7/6 walk=4 softlock=12 window=2 testonly=1 — the ledger owns the token axes, not the seed ones, so none of the owners this bundle enumerates is in it"
+gate_assumption = "4 standing assumption(s) AlwaysUvShipped TRUE=5 FALSE=91 ForceChangeModelled TRUE=3 FALSE=93 PowerOnClearsScratch2 TRUE=9 FALSE=4 WidePerms TRUE=3 FALSE=93 — re-derived, and it REFUTES what this line used to say. `grep -lw RamNeverOutlivesFlashSeed formal/*.cfg` is Shipped.cfg, AlwaysUv.cfg, ForceChange.cfg, PermWide.cfg and Solo_RamNeverOutlivesFlashSeed.cfg, and across those five all three model constants now have BOTH arms run against this property — `AlwaysUvShipped` through Shipped.cfg and AlwaysUv.cfg, `WidePerms` through PermWide.cfg, `ForceChangeModelled` through ForceChange.cfg. The earlier wording said the two scope constants were FALSE in every configuration that checks it, which was true when it was typed and is not now. `PowerOnClearsScratch2` remains the one whose arms this property never sees, because it lives in RSKeyBootHardening"
+gate_matrix = "matrix-gate: ok — 40 P0-family properties × 31 build configurations = 1240 cells (37 covered, 139 equivalent, 0 conditional, 106 out-of-scope, 958 gap) — UNCHANGED by this bundle: a model check and a host-test slice read no board preset and no flash geometry, so nothing here settles a cell"
+gate_registry = "SEC-FIDO-007   RamNeverOutlivesFlashSeed                MODELLED-ONLY cfgs=5   mut=1  co=1 kani=0 fuzz=0 rust=2 test=0 — `rust` moved to two when the ONE producer of the antecedent, `vendor.rs::unlock`, was tagged; it had carried only the consequent's owner. `cfgs` counts configurations CHECKING the invariant rather than evidence about it"
 
 # ---- 6. Raw artifact or log --------------------------------------------------
 
