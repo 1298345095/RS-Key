@@ -32,6 +32,13 @@
 \* means nothing in the roster probes above it. Reading it the other way is the
 \* same mistake as reading a floor as a proof.
 \*
+\* LOWERING A MINIMUM TAKES TWO EDITS, and this is where the second one is named.
+\* The gate reads the number out of this file, so a number lowered here is a gate
+\* that agrees with it -- measured, `RSKeyStore Fids` 2 -> 1 is exit 0 on the row.
+\* Every minimum of 2 or more is therefore pinned in `scope_gate.MEASURED_MINIMA`
+\* beside the configuration it is the minimum FOR, and the pair must agree. Move
+\* one only with what re-measured it.
+\*
 \* Columns: <module>  <scope constant>  <measured minimum, or - >  <invariant, or - >
 
 \* --- RSKeySecurityState ----------------------------------------------------

@@ -735,6 +735,14 @@ run "platform assumptions"     python scripts/platform_gate.py
 # CONSTANTS are too small to express the defect its own mutants rebuild.
 # Two of the twenty-five module mutants go GREEN one element down.
 run "formal scopes"            python scripts/scope_gate.py
+# And the abstractions no scope constant can express: the "Narrower than the
+# firmware" roster, ten bullets on formal/README.md that NO script read — a
+# whole one could be deleted at exit 0 on citation, claims, run-count, threat,
+# evidence, scope, config-gen and comutants. The list is generated from
+# assurance/abstractions.toml now, and each row's disposition is held to the
+# artifact it rests on: a `closed` needs a mutant a tier runs and floors.txt
+# requires RED, an `open-obligation` reddens when its question is settled.
+run "narrow abstractions"      python scripts/narrow_gate.py
 # And `floors.txt` itself, which only the weekly TLC matrix reads — so between
 # two weeklies it could be weakened with every row here green. Measured: the two
 # layers that did reach it name 2 of its 25 wildcard families, and flipping
