@@ -716,11 +716,17 @@ run "delete-caller dispositions" python scripts/deleter_gate.py
 # past it, three overclaiming: a BARE `seal_put(` (the receiver test), a grouped
 # `use rsk_otp::{…, seal}`, a ledger entry certifying its own coverage through a
 # `via` hop it never calls, and a same-named stepper in another file. All four
-# redden now. The table is scripts/test_counter_writers_gate.py, 27 cases, two
-# of them controls that must stay GREEN: twelve lines inserted above every site,
-# and a local renamed at one call site. That second one is why the key is
-# (file, fn, ordinal) — keyed on the call TEXT, a rename or a rustfmt reflow was
-# a false red.
+# redden now. A fifth was measured later and is the one every other clause was
+# blind to by construction: they all read PRODUCTION code, so deleting both
+# `#[kani::proof]`s from counter_kani.rs left this row at rc 0 still printing
+# "2 functions take their step from counter.rs" over an empty proof. A rule the
+# ledger's `proved` column is about must now be called by a harness in that file.
+# The table is scripts/test_counter_writers_gate.py, 32 cases, three of them
+# controls that must stay GREEN: twelve lines inserted above every site, a local
+# renamed at one call site, and the harness itself renamed. The second is why the
+# key is (file, fn, ordinal) — keyed on the call TEXT, a rename or a rustfmt
+# reflow was a false red; the third says what this row does NOT measure, since
+# assurance_gate.py forces BOUNDED from a harness NAME.
 run "OTP counter writers"      python scripts/counter_writers_gate.py
 # A model constant that stands for a fact about the world, not a defect switch.
 # `PowerOnClearsScratch2` was TRUE in all seven Boot configurations and read by

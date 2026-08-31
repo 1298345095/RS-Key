@@ -92,7 +92,11 @@ PROOF = """\
 //! Scope is derived into `assurance/otp_counter_writers.toml`, not counted here.
 
 #[kani::proof]
-fn use_counter_climbs_and_stops_at_the_ceiling() {}
+fn use_counter_climbs_and_stops_at_the_ceiling() {
+    let (pressed, _, persist) = next_use_counter(stored, session);
+    assert_eq!(persist, pressed != stored);
+    assert!(boot_use_counter(stored).is_some());
+}
 """
 
 LEDGER = """\
@@ -438,6 +442,77 @@ def test_a_proof_that_stops_citing_the_ledger_is_rejected(tree, capsys):
         "four writers, and that is all of them",
     )
     assert "its scope is a sentence again" in red(tree, capsys)
+
+
+def test_both_harnesses_deleted_is_rejected(tree, capsys):
+    """The hole this rule closes, measured on the shipped guard first: deleting
+    both `#[kani::proof]`s from the real `counter_kani.rs` was EXIT=0 here, the
+    row still printing "2 functions take their step from counter.rs" over an
+    empty proof. Every other clause reads production code, so none of them could
+    fall. (`kani_gate.py` does go red on that one — by a crate-wide harness
+    floor that names no property and no rule.)"""
+    tree.edit(
+        "crates/rsk-otp/src/counter_kani.rs",
+        "#[kani::proof]\nfn use_counter_climbs_and_stops_at_the_ceiling() {",
+        "fn nothing_at_all() {",
+    )
+    said = red(tree, capsys)
+    assert "no `#[kani::proof]`" in said, said
+    assert "'boot_use_counter', 'next_use_counter'" in said, said
+
+
+def test_a_harness_that_stops_reaching_one_rule_is_rejected(tree, capsys):
+    """The direction, and the reason the message names the rules rather than
+    counting them: half a proof must report the half that went, not that
+    something is wrong. `next_use_counter` is still reached and must NOT be
+    named — a red that says both is a red for the wrong reason."""
+    tree.edit(
+        "crates/rsk-otp/src/counter_kani.rs",
+        "    assert!(boot_use_counter(stored).is_some());\n",
+        "",
+    )
+    said = red(tree, capsys)
+    assert "['boot_use_counter']" in said, said
+    assert "next_use_counter" not in said, said
+
+
+def test_a_rule_named_only_in_the_scope_prose_is_rejected(tree, capsys):
+    """The evasion a substring match admits. The real file's doc comment
+    discusses both rules by name directly above the harness, so a rule "reached"
+    by a comment would make this row green over a proof that calls neither."""
+    tree.edit(
+        "crates/rsk-otp/src/counter_kani.rs",
+        "    let (pressed, _, persist) = next_use_counter(stored, session);\n"
+        "    assert_eq!(persist, pressed != stored);\n"
+        "    assert!(boot_use_counter(stored).is_some());\n",
+        "    // next_use_counter(stored, session) and boot_use_counter(stored)\n",
+    )
+    said = red(tree, capsys)
+    assert "'boot_use_counter', 'next_use_counter'" in said, said
+
+
+def test_a_harness_with_the_proof_attribute_stripped_is_rejected(tree, capsys):
+    """A `fn` Kani never runs is not a proof, and it is the quietest way to lose
+    one: the body still reads as a proof to anyone opening the file."""
+    tree.edit("crates/rsk-otp/src/counter_kani.rs", "#[kani::proof]\n", "")
+    assert "no `#[kani::proof]`" in red(tree, capsys)
+
+
+def test_a_renamed_harness_stays_green(tree, capsys):
+    """CONTROL. This row measures what the proof REACHES, not what it is called
+    — so a rename must not move it, and the summary is compared against the
+    clean run rather than a literal. Said plainly because it is a live hole one
+    row over: `assurance_gate.py` forces `BOUNDED` from a harness NAME, so
+    renaming this one after a property would move that status with nothing here
+    or there noticing. That is a finding about the status ladder, not a rule
+    this roster can carry."""
+    before = summary(tree, capsys)
+    tree.edit(
+        "crates/rsk-otp/src/counter_kani.rs",
+        "fn use_counter_climbs_and_stops_at_the_ceiling()",
+        "fn otp_counter_never_repeats_anything()",
+    )
+    assert summary(tree, capsys) == before
 
 
 def test_a_writer_added_outside_the_crate_is_rejected(tree, capsys):

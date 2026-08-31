@@ -47,6 +47,10 @@ What is checked, and the direction of each:
   instead of a number typed into a doc comment;
 * both counter files must cite this ledger. That is the whole repair: the
   harness's scope stops being a sentence and becomes a file the gate reads;
+* and a `#[kani::proof]` in `counter_kani.rs` still calls each rule. Every clause
+  above is derived from PRODUCTION code, so all of them passed with that file
+  emptied: measured, both harnesses deleted was EXIT=0 here, still printing "2
+  functions take their step from counter.rs" over no proof at all;
 * no production source outside `crates/rsk-otp/` may reach `rsk_otp::seal`. The
   seal verb is `pub`, so a ninth writer could otherwise be added in `firmware/`
   or `tools/emu/` where this roster does not look;
@@ -98,7 +102,14 @@ ALIAS = re.compile(rf"(?<!\w)(?:{'|'.join(VERBS)})\s+as\s+(\w+)")
 #: The rule that moves the counter, in the two spellings `counter.rs` exports. A
 #: function whose body calls either of these is a "stepper": its bytes are the
 #: ones `counter_kani.rs` reasons about.
-STEP = re.compile(r"(?<![\w])(next_use_counter|boot_use_counter)\s*\(")
+RULES = ("next_use_counter", "boot_use_counter")
+STEP = re.compile(rf"(?<![\w])({'|'.join(RULES)})\s*\(")
+
+#: The attribute that makes a function a harness the solver runs. Read here as
+#: well as in `kani_gate.py` because the two rows ask different questions: that
+#: one asks whether the solver is pointed at the crate, this one whether the file
+#: every `proved` verdict below is written about still reaches the rule.
+KANI_PROOF = re.compile(r"^\s*#\[kani::proof\]")
 
 #: A function definition, at the head of its line. Used to attribute a site to
 #: the function that contains it by walking BACK, which is what makes `fn` a
@@ -314,6 +325,39 @@ def sites(root):
     ]
 
 
+def proven_rules(root):
+    """The rules of `counter.rs` a `#[kani::proof]` in `counter_kani.rs` calls.
+
+    Every `proved` verdict here, and `[scope] stepped`, are graded from PRODUCTION
+    code alone — whether a writer's function reaches the rule. Nothing asked
+    whether the proof reaching it still existed. Measured on this guard before
+    this function: with BOTH harnesses deleted the row printed "2 functions take
+    their step from counter.rs" at EXIT=0, and the whole `proved` column stood
+    over an empty file. `kani_gate.py` catches that deletion, but by a crate-wide
+    harness floor that names no property and would not survive the crate keeping
+    two harnesses about something else.
+
+    Attributed by [`enclosing`], not by proximity, so an edit above every harness
+    moves nothing; comment lines are skipped, so a rule NAMED in the scope prose
+    above a harness is not a rule the harness reaches.
+    """
+    lines = (root / PROOF).read_text().splitlines()
+    harnesses, armed = set(), False
+    for number, line in enumerate(lines):
+        if KANI_PROOF.match(line):
+            armed = True
+        elif (found := FN.match(line)) and armed:
+            harnesses.add(found.group(1))
+            armed = False
+    reached = set()
+    for number, line in enumerate(lines):
+        if IMPORT.match(line) or FN.match(line) or line.strip().startswith("//"):
+            continue
+        if STEP.search(line) and enclosing(lines, number) in harnesses:
+            reached.update(STEP.findall(line))
+    return reached
+
+
 def audit(root):  # noqa: C901 — one clause per failure mode, each named
     """Every disagreement between the ledger and the tree, each reported once."""
     problems = []
@@ -417,6 +461,12 @@ def audit(root):  # noqa: C901 — one clause per failure mode, each named
                 f"{rel} does not cite {LEDGER} — its scope is a sentence again,"
                 " which is what was wrong with it"
             )
+    if unproved := sorted(set(RULES) - proven_rules(root)):
+        problems.append(
+            f"no `#[kani::proof]` in {PROOF} calls {unproved} — the `proved`"
+            " column and `[scope] stepped` are derived from production code, so"
+            " they go on grading a rule the proof no longer reaches"
+        )
     if stray := sorted(outsiders(root)):
         problems.append(
             f"{stray} reach `rsk_otp::seal` from outside {CRATE} — a writer there"
