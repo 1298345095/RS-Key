@@ -62,6 +62,7 @@ contract was quietly dropped, that every claim it makes about the tree resolves
 in the tree, and that no cost was written as a range.
 """
 
+import ast
 import functools
 import hashlib
 import pathlib
@@ -119,6 +120,13 @@ REGISTRY = pathlib.Path("assurance/properties.toml")
 #: directory throughout — four of the eight method rows do — and `formal/` is the
 #: only place either extension is written.
 FORMAL = pathlib.Path("formal")
+
+#: Where a script that RAN something lives. Beside [`FORMAL`] because it is the
+#: same shape of claim — the DIRECTORY carries it. A `KAT/differential` row's
+#: `.py` half is the script that drove published vectors at a device or the
+#: emulator, and `tests/` is where this tree keeps exactly those; `scripts/` is
+#: gates and `tools/` is a CLI, and both resolved a KAT row at exit 0 before this.
+RUNNERS = pathlib.Path("tests")
 
 #: Stage 1A п.3's ten groups, in its order, with the table each is spelled as.
 #: The names are the contract's; renaming one here would be renaming the
@@ -237,15 +245,33 @@ DECLARED = re.compile(
 #: the closing brace above it.
 ATTRIBUTE = re.compile(r"^[ \t]*#!?\[")
 
+#: The `#[test]` attribute, in the shape `kani_gate.HARNESS` has for its own. No
+#: gate owns this token, so it is defined here rather than imported; and it is
+#: not widened past the literal because the tree spells a unit test one way and
+#: only one — 2349 sites over `crates/`, `firmware/` and `tools/`, and zero in
+#: any other spelling — and a pattern covering spellings nothing here uses is a
+#: rule nothing here can falsify.
+UNIT_TEST = re.compile(r"#\[test\]")
+
 #: §4.1's method vocabulary, in `docs/authorization-slice.md` п.3's order. A word
 #: outside it is a finding and not a shrug: [`METHOD_KIND`] reads this field, so
 #: `method = "bounded proofs"` would quietly drop the rule that field carries.
+#:
+#: `KAT/differential` is the tenth, and it cannot be spelled with any of the
+#: nine. `measurement` is one of three spellings of "this evidence came off a
+#: board" (`evidence_gate.MEASUREMENT_METHOD`, read by `hardware_claims`), so a
+#: KAT row wearing it owes a `build.board_revision` naming a real RP2350
+#: stepping — a false hardware claim on a tree whose hardware axis is honestly 0
+#: of 59. A word is added here only WITH the rules it carries: on its own it
+#: widens the vocabulary and takes the kind rule off the row, which is the pair
+#: `test_the_kat_word_and_its_kind_are_one_change_or_neither` drives.
 METHODS = (
     "review", "model-check", "bounded proof", "deductive proof",
     "exhaustive sweep", "mutation", "trace", "measurement", "accepted risk",
+    "KAT/differential",
 )
 
-#: The two methods whose own word NAMES the kind of artifact discharging them.
+#: The three methods whose own word NAMES the kind of artifact discharging them.
 #: Without it a row is satisfied by any file in the tree: re-pointing the walk
 #: row's artifact at `CHANGELOG.md`, at `README.md` and at this bundle were all
 #: exit 0, as were `state_kani.rs::STEPS` (a const) and `::StepRng` (a struct).
@@ -253,9 +279,19 @@ METHODS = (
 #: `exhaustive sweep` with a `.py` over a `.tla` and with two `.cfg` — and
 #: inventing one for them would be requiring the wrong one, which is why
 #: `bound_*` is a prefix one field over.
+#:
+#: `KAT/differential` takes TWO suffixes because both are how this tree runs
+#: vectors: a `#[test]` over an ACVP table in a crate, and a `tests/*.py` driving
+#: a device or the emulator against a reference. Naming only `.rs` would refuse
+#: the second half of the method's own word — and naming both without the RUNNER
+#: rule below made the `.py` half a rule that cannot fail: this gate's own file,
+#: `tools/rsk/__init__.py` and a bare `tests/*.py` were each exit 0, while the
+#: mixed row that names the vectors AND the script was refused. The gradient ran
+#: backwards, which is worse than the hole.
 METHOD_KIND = {
     "model-check": (".cfg",),
     "bounded proof": (".rs",),
+    "KAT/differential": (".rs", ".py"),
 }
 
 #: The method row's two PROSE fields — what the obligation is, and how the bound
@@ -386,8 +422,9 @@ def resolve(root: pathlib.Path, name: str) -> pathlib.Path | None:
     return None
 
 
-def declarations(target: pathlib.Path) -> tuple[list[str], set[str]]:
-    """(every Rust item `target` declares, and those carrying `#[kani::proof]`).
+def declarations(target: pathlib.Path) -> tuple[list[str], set[str], set[str]]:
+    """(every Rust item `target` declares, those carrying `#[kani::proof]`, and
+    those carrying `#[test]`).
 
     Rust is read as code — anything else has no item grammar this could parse and
     the claim there is only that the name occurs, which [`method_references`]
@@ -397,10 +434,15 @@ def declarations(target: pathlib.Path) -> tuple[list[str], set[str]]:
     A bounded proof is discharged by a HARNESS, and `DECLARED` matches a const, a
     struct and anything inside a `#[cfg(test)]` block just as happily: `::STEPS`
     and `::StepRng` each discharged the walk row at exit 0.
+
+    The test half is the same walk one attribute over, against the same hole: a
+    `KAT/differential` row is discharged by the function that RAN the vectors,
+    and `crates/rsk-mldsa/src/testvectors.rs::KeyGenKat` is the struct they sit
+    in. A table of inputs is the input, not the check.
     """
     code = gate_lines.rust_code(target.read_text(encoding="utf-8", errors="replace"))
     lines = code.splitlines()
-    names, proofs = [], set()
+    names, proofs, tests = [], set(), set()
     for match in DECLARED.finditer(code):
         name = match.group(1)
         names.append(name)
@@ -408,8 +450,29 @@ def declarations(target: pathlib.Path) -> tuple[list[str], set[str]]:
         while above >= 0 and (not lines[above].strip() or ATTRIBUTE.match(lines[above])):
             if kani_gate.HARNESS.search(lines[above]):
                 proofs.add(name)
+            if UNIT_TEST.search(lines[above]):
+                tests.add(name)
             above -= 1
-    return names, proofs
+    return names, proofs, tests
+
+
+def definitions(target: pathlib.Path) -> set[str]:
+    """Every `def` `target` declares, at any depth.
+
+    The `.py` counterpart of [`declarations`], and PARSED rather than matched,
+    because the Rust half already paid for that difference: what a file MENTIONS
+    is not what it defines, and `# def ran_the_vectors` in a comment clears any
+    pattern. A file that does not parse declares nothing, which reddens the row
+    resting on it — the direction that refuses rather than the one that admits.
+    """
+    try:
+        parsed = ast.parse(target.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError:
+        return set()
+    return {
+        node.name for node in ast.walk(parsed)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
 
 
 def core(value: str) -> str:
@@ -518,6 +581,14 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
     any one of them — and naming any DECLARATION is how it was: six of the eight
     rows carry no `::` at all, so the rule degenerated to "a file of that name
     exists" for all six.
+
+    `KAT/differential` owes a RUNNER on whichever half it names — a `#[test]` in
+    Rust, a `.py` under [`RUNNERS`] or one naming a `def` it declares. Written
+    for the `.rs` half alone it left the `.py` half with no requirement past the
+    file existing, and the gradient then ran backwards: `scripts/bundle_gate.py`
+    discharged a KAT obligation at exit 0 while the vectors PLUS a script was
+    refused. One counter over both halves is what makes adding the vectors to a
+    green row unable to redden it.
     """
     for index, row in enumerate(doc.get("method", []), 1):
         if not isinstance(row, dict) or "artifact" not in row:
@@ -530,7 +601,7 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
                 f" {METHODS} — the kind rule reads this field, so a word outside"
                 " it drops the rule the field carries"
             )
-        resolved, last, named, proofs, kinds = 0, None, [], 0, set()
+        resolved, last, named, proofs, runners, kinds = 0, None, [], 0, 0, set()
         for word in re.split(r"[\s+]+", str(row["artifact"])):
             token = word.strip(TRIM)
             if token.startswith(ELISION):
@@ -544,7 +615,7 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
                         " so the resolver never went looking for one"
                     )
                     continue
-                declared, harnesses = declarations(target)
+                declared, harnesses, unit_tests = declarations(target)
                 fresh = [
                     name for name in declared
                     if name.endswith(symbol) and name not in named
@@ -583,6 +654,11 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
                     text = target.read_text(encoding="utf-8", errors="replace")
                     if symbol and symbol not in text:
                         findings.append(f"{where}: {name} does not name `{symbol}`")
+                    elif target.suffix == ".py" and (
+                        RUNNERS in target.relative_to(root).parents
+                        or symbol in definitions(target)
+                    ):
+                        runners += 1
                     continue
                 if not symbol:
                     findings.append(
@@ -590,7 +666,7 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
                         " the file is not the proof, and it outlives any one of them"
                     )
                     continue
-                declared, harnesses = declarations(target)
+                declared, harnesses, unit_tests = declarations(target)
                 if symbol not in declared:
                     findings.append(
                         f"{where}: {target.relative_to(root)} declares no `{symbol}` —"
@@ -600,6 +676,7 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
                     continue
             named.append(symbol)
             proofs += symbol in harnesses
+            runners += symbol in unit_tests
         if not resolved:
             findings.append(
                 f"{where}: `artifact` resolves nothing in the tree — a method with"
@@ -618,6 +695,17 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
                 f"{where}: a bounded proof naming no `#[kani::proof]` — `::STEPS`"
                 " is a const and `::StepRng` a struct, and each discharged this"
                 " obligation at exit 0"
+            )
+        # Conditioned on the row having reached an artifact of its own kind, so
+        # the two rules do not say the same thing twice about one row — and so
+        # that deleting the `METHOD_KIND` entry takes this rule off with it,
+        # which is what makes the word a widening when it arrives alone.
+        if method == "KAT/differential" and kinds.intersection(wanted) and not runners:
+            findings.append(
+                f"{where}: a KAT/differential row naming nothing that RAN the"
+                " vectors — no `#[test]`, and no `.py` under `tests/` or naming a"
+                " `def` it declares. `testvectors.rs::KeyGenKat` is the struct the"
+                " table sits in, and a table of inputs is the input, not the check"
             )
 
 

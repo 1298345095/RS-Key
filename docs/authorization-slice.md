@@ -413,9 +413,16 @@ scattered across logs. A missing field blocks exit.
    cargo feature set, the board knobs, and the target triple for each artifact.
 3. **Method and scope/bounds** — the method per §4.1 (review / model-check /
    bounded proof / deductive proof / exhaustive sweep / mutation / trace /
-   measurement / accepted risk), and for each obligation its bound as structured
-   data: sequence length, symbolic byte count, cardinalities, unwind, `cfg` and
-   feature set, and the relation between each bound and the shipped constant.
+   measurement / accepted risk / KAT/differential), and for each obligation its
+   bound as structured data: sequence length, symbolic byte count, cardinalities,
+   unwind, `cfg` and feature set, and the relation between each bound and the
+   shipped constant. `KAT/differential` is published vectors, or a reference
+   implementation, run against this one; it is discharged by the `#[test]` or the
+   `tests/*.py` that RAN them, never by the table they sit in — and the gate
+   holds the second half as literally as the first, a `.py` outside `tests/`
+   needing to name a `def` it declares. It is not `measurement`, which in this
+   contract means a result taken off a board and owes the silicon revision it was
+   taken on.
 4. **Tool, version, invocation and execution environment** — for every artifact:
    tool name, exact version, the full command line, the environment
    (`WORKERS`, `HEAP`, `TIMEOUT`), the machine, and the tool hash where one

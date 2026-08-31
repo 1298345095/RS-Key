@@ -520,6 +520,140 @@ def test_a_model_check_row_discharged_by_something_that_is_not_a_configuration(t
     assert any("and no .cfg" in p for p in findings(root)), findings(root)
 
 
+#: The check that RAN a published vector table, and the table it ran. Both real:
+#: the arms below are about which of the two discharges the obligation.
+KAT_TEST = "crates/rsk-mldsa/src/sign_tests.rs::acvp_keygen_pk_exact"
+KAT_VECTORS = "crates/rsk-mldsa/src/testvectors.rs::KeyGenKat"
+
+#: A `tests/*.py` — a runner by the directory it is in — and the two `.py` files
+#: that resolved a KAT row at exit 0 before the `.py` arm had teeth. The second
+#: pair is deliberately one file that declares `def`s and one that declares none,
+#: so the refusal is about the row naming no RUNNER and not about the file being
+#: empty of functions.
+KAT_RUNNER = "tests/00_ctaphid_transport.py"
+KAT_NOT_A_RUNNER = ("scripts/bundle_gate.py", "tools/rsk/__init__.py")
+
+
+def as_kat(root, artifact):
+    r"""Row #5 re-methoded to `KAT/differential` and pointed at `artifact`.
+
+    Carrying the files that artifact names in by hand, because `tree` derives the
+    fixture from the SHIPPED bundles and no shipped bundle uses the word — the
+    rules below are the ones a first such row would meet.
+
+    Split the way the GATE splits, on `[\s+]+` and not on `" + "`, and skipping
+    the elision marker: a `path.rs::a + …b` row is one file and one back-
+    reference, and copying `…b` as a path raised `FileNotFoundError` out of the
+    fixture instead of reporting anything about the rule.
+    """
+    for word in re.split(r"[\s+]+", artifact):
+        token = word.strip(bundle_gate.TRIM)
+        if not token or token.startswith(bundle_gate.ELISION):
+            continue
+        name = token.partition("::")[0]
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / name, root / name)
+    rewrite(root, lambda doc: doc["method"][4].update(
+        {"method": "KAT/differential", "artifact": artifact}))
+    return root
+
+
+def test_a_kat_row_discharged_by_the_test_that_ran_the_vectors(tmp_path):
+    """The control the arms below are read against: an ACVP `#[test]` over
+    published vectors is what the word means, and it is green."""
+    assert findings(as_kat(tree(tmp_path), KAT_TEST)) == []
+
+
+def test_a_kat_row_discharged_by_the_vector_table_itself(tmp_path):
+    """`DECLARED` matches the struct the vectors sit in, so without the `#[test]`
+    arm the rule degenerates to "the file declares SOMETHING by that name" — the
+    hole `::STEPS` walked through one method over. The table is the INPUT."""
+    root = as_kat(tree(tmp_path), KAT_VECTORS)
+    assert any("nothing that RAN the vectors" in p for p in findings(root)), findings(root)
+
+
+def test_a_kat_row_discharged_by_a_tests_script(tmp_path):
+    """The `.py` half of the method's own word, and the arm that pins the CONTENT
+    of `METHOD_KIND["KAT/differential"]`: dropping `".py"` from the tuple makes
+    this row resolve `['.py']` against `('.rs',)` and the kind rule fires. Before
+    it, the tuple's second member was held only by an error-message substring
+    built from `'/'.join(wanted)` — the spelling checked, the behaviour not."""
+    assert findings(as_kat(tree(tmp_path), KAT_RUNNER)) == []
+
+
+@pytest.mark.parametrize("target", KAT_NOT_A_RUNNER)
+def test_a_kat_row_discharged_by_a_python_file_that_ran_nothing(tmp_path, target):
+    """The measured hole. The `#[test]` arm was guarded on `".rs" in kinds` and
+    the non-`.rs` branch only checked `symbol in text` when a `::symbol` was
+    written, so a bare `.py` path carried no requirement past the file existing:
+    this gate's OWN file and the host CLI's `__init__` were each EXIT=0."""
+    root = as_kat(tree(tmp_path), target)
+    assert any("nothing that RAN the vectors" in p for p in findings(root)), findings(root)
+
+
+def test_a_kat_row_discharged_by_a_python_file_naming_a_def_it_declares(tmp_path):
+    """The other half of the `.py` tooth, and the `.rs` arm's shape one language
+    over: a script outside `tests/` discharges the row by naming the function,
+    never by being a file. `symbol in text` is not that check — the name occurs
+    in this file's own docstring too, which is why [`bundle_gate.definitions`]
+    parses rather than matches."""
+    assert findings(as_kat(tree(tmp_path), f"{KAT_NOT_A_RUNNER[0]}::method_references")) == []
+
+
+def test_a_kat_row_naming_the_vectors_and_the_script_that_ran_them(tmp_path):
+    """The gradient. Adding the vector table to a green row must not redden it —
+    the first spelling of this rule refused exactly this row while passing the
+    weaker `.py`-only one, which is a worse failure than the hole it left."""
+    assert findings(as_kat(tree(tmp_path), f"{KAT_VECTORS} + {KAT_RUNNER}")) == []
+
+
+def test_a_kat_row_discharged_by_any_file_in_the_tree(tmp_path):
+    """The kind half, on the one word whose kind is a PAIR: `.md` is neither."""
+    root = as_kat(tree(tmp_path), "CHANGELOG.md")
+    assert any("and no .rs/.py" in p for p in findings(root)), findings(root)
+
+
+def test_the_kat_word_and_its_kind_are_one_change_or_neither(tmp_path, monkeypatch):
+    """The guard-deletion mutant. `METHOD_KIND` losing the entry while `METHODS`
+    keeps the word leaves `CHANGELOG.md` discharging a KAT obligation at exit 0:
+    the runner rule is conditioned on the row reaching an artifact of its own
+    KIND, so with the kind gone nothing stops a `.md`. A word added to the
+    vocabulary ALONE is a widening, and this is the arm that says so.
+
+    Red BEFORE the mutant and green after, in one case: `== []` alone passes for
+    any reason the fixture is green, which is a case that asserts the fixture and
+    not the rule.
+    """
+    root = as_kat(tree(tmp_path), "CHANGELOG.md")
+    assert any("and no .rs/.py" in p for p in findings(root)), findings(root)
+    monkeypatch.delitem(bundle_gate.METHOD_KIND, "KAT/differential")
+    assert findings(root) == []
+
+
+def test_every_method_kind_names_a_word_of_the_vocabulary():
+    """A kind keyed on a word `METHODS` does not carry is silently dead — the
+    direction `FLOORS` without `GROUPS` is, one roster over."""
+    assert set(bundle_gate.METHOD_KIND) <= set(bundle_gate.METHODS)
+
+
+def test_what_a_python_file_defines_is_parsed_and_not_matched(tmp_path):
+    """A `def` in a comment or a string is what a pattern would take: the `.rs`
+    half already paid for the difference — `credmgmt_kani.rs` names a harness in
+    a doc comment and resolved the wrong file at exit 0. A file that does not
+    parse defines nothing, which reddens the row resting on it."""
+    source = tmp_path / "runner.py"
+    source.write_text(
+        "# def commented_out():\n"
+        'TEXT = "def in_a_string(): pass"\n'
+        "def ran_the_vectors():\n"
+        "    async def nested(): pass\n"
+    )
+    assert bundle_gate.definitions(source) == {"ran_the_vectors", "nested"}
+    broken = tmp_path / "broken.py"
+    broken.write_text("def (:\n")
+    assert bundle_gate.definitions(broken) == set()
+
+
 def test_what_a_rust_file_declares_and_which_of_them_are_proofs(tmp_path):
     """`gate_lines.rust_code` blanks string literals BEFORE this runs, so the
     `extern "…"` alternative the pattern first carried could never match and
@@ -540,12 +674,15 @@ def test_what_a_rust_file_declares_and_which_of_them_are_proofs(tmp_path):
         "    fn a_test() {}\n"
         "}\n"
     )
-    declared, proofs = bundle_gate.declarations(source)
+    declared, proofs, tests = bundle_gate.declarations(source)
     assert {"exported", "a_harness", "a_test", "tests"} <= set(declared), declared
     assert proofs == {"a_harness"}, proofs
+    assert tests == {"a_test"}, tests
 
 
-@pytest.mark.parametrize("word", ["bounded proofs", "model check", "reviewed", ""])
+@pytest.mark.parametrize(
+    "word", ["bounded proofs", "model check", "reviewed", "KAT differential", ""],
+)
 def test_a_method_word_outside_the_vocabulary(tmp_path, word):
     """The kind rule reads this field, so a typo silently drops it: `bounded
     proofs` is not `bounded proof`, and the harness arm stops applying."""
