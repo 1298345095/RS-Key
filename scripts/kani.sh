@@ -131,14 +131,14 @@ STATEFUL="rsk-fido rsk-fs"
 # they are a consistency check against the tree, not a ratchet against history:
 # deleting a harness and pasting the new number is self-consistent, and only
 # the diff shows it.
-FLOOR_pr=63
+FLOOR_pr=65
 FLOOR_state=29
-FLOOR_all=92
+FLOOR_all=94
 # The four weekly rows partition `all`, so these sum to FLOOR_all and the guard
 # checks each against the tree the same way. A harness that moves between shards
 # has to move a number with it.
 FLOOR_heavy=5
-FLOOR_light1=30
+FLOOR_light1=32
 FLOOR_light2=29
 FLOOR_light3=28
 
@@ -149,11 +149,11 @@ FLOOR_light3=28
 # is caught on its own (the row fails when the per-check listing is absent); the
 # floor is for the partial case, a cover that stopped being reported while the
 # rest still are. Counted from source by the same guard as the floors above.
-COVERS_pr=35
+COVERS_pr=41
 COVERS_state=35
-COVERS_all=60
+COVERS_all=66
 COVERS_heavy=1
-COVERS_light1=28
+COVERS_light1=34
 COVERS_light2=12
 COVERS_light3=19
 
