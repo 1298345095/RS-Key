@@ -217,6 +217,39 @@ CBZ_IS_NOT_A_STOP = f"""{CHAIN}
 10000a0a:\td10b      \tbne.n\t10000a20
 """
 
+#: A clobber of the flag-setter's operand, SCHEDULED BETWEEN the compare and the
+#: branch, over an operand that genuinely came from a buffer. Thumb is scheduled,
+#: so this shape is ordinary; a trace that starts at the BRANCH answers with the
+#: `mov` and goes blind to the load the compare actually read. The clobber is
+#: `mov.w` and not `movs` on purpose — an `s` form would set the flags itself and
+#: become the governing instruction, and the case would stop being about the walk.
+CLOBBERED_OPERAND = f"""{CHAIN}
+10000b00:\tf810 3003 \tldrb.w\tr3, [r0, r3]
+{CHAIN}
+10000b04:\t2b00      \tcmp\tr3, #0
+{CHAIN}
+10000b06:\tf04f 0305 \tmov.w\tr3, #5
+{CHAIN}
+10000b0a:\td10b      \tbne.n\t10000b20
+"""
+
+#: The same scheduling, the other way round: here the CLOBBER is what reads the
+#: buffer and the compare's real operand does not. Copied instruction for
+#: instruction from `OtpApplet::process` at 0x10036fee..0x10036ff8 on the shipped
+#: image, where `cmp r0, #56` reads `orr.w r0, sl, #8` and the `and.w r0, r4, #34`
+#: after it feeds the NEXT compare. Traced from the branch this invents a finding.
+CLOBBER_IS_NOT_THE_OPERAND = f"""{CHAIN}
+10000c00:\t5cc4      \tldrb\tr4, [r0, r3]
+{CHAIN}
+10000c02:\tf04a 0008 \torr.w\tr0, sl, #8
+{CHAIN}
+10000c06:\t2838      \tcmp\tr0, #56
+{CHAIN}
+10000c08:\tf004 0022 \tand.w\tr0, r4, #34
+{CHAIN}
+10000c0c:\td155      \tbne.n\t10000c60
+"""
+
 SITE = {"CT-CMP-001": {"symbol": "rsk_crypto::mac::ct_eq", "class": "comparator"}}
 NO_FLOORS = {"run_floor": 0, "branch_floor": 0, "reasoned_floor": 0}
 
@@ -341,6 +374,45 @@ def test_a_conditional_branch_is_not_a_stop():
     assert violations[0][3].startswith("ldrb"), violations[0][3]
 
 
+def test_the_operand_is_traced_from_the_flag_setter_and_not_the_branch():
+    """The direction that HIDES a finding, and the reason the walk moved.
+
+    `cmp r3, #0` reads a byte the comparator loaded, and the scheduler puts a
+    `mov.w r3, #5` between it and the `bne`. Walking back from the BRANCH the
+    rule met the `mov` first, traced `#5` to nothing and reported clean — the
+    compare's real operand never asked about at all. That is the shape a live
+    early exit has, so the miss is silent.
+
+    Driven: with `governing`'s position dropped and the walk back on the branch
+    index, this case falls on `len(violations) == 1` seeing `[]` — the gate
+    SHOULD HAVE REFUSED this image and did not. The inverse defect would fall the
+    other way, on a finding invented over a clean image, and
+    [`test_the_clobber_after_the_compare_is_not_the_operand`] below is the case
+    that falls THAT way; neither passes a rule that always answers the same.
+    """
+    violations, runs, branches, _, reasoned = observed(CLOBBERED_OPERAND)
+    assert (runs, branches, reasoned) == (1, 1, 1), (runs, branches, reasoned)
+    assert len(violations) == 1, violations
+    addr, mnemonic, source, load = violations[0]
+    assert (addr, mnemonic) == (0x10000B0A, "bne")
+    assert source.startswith("cmp r3"), source
+    assert load.startswith("ldrb "), load
+
+
+def test_the_clobber_after_the_compare_is_not_the_operand():
+    """The control, and the other direction of the same walk: a clobber that
+    reads a buffer does not make the branch secret when the compare did not.
+
+    Green before this change and after it — the rule must not have bought its
+    reach by calling everything a taint. Driven with the walk back on the branch
+    index it falls on `violations == []` reporting `(0x10000c0c, 'bne', 'cmp r0,
+    #56', 'ldrb r4, [r0, r3]')`, which is the image's own `0x10036ff8` read
+    wrongly."""
+    violations, runs, branches, _, reasoned = observed(CLOBBER_IS_NOT_THE_OPERAND)
+    assert (runs, branches, reasoned) == (1, 1, 1), (runs, branches, reasoned)
+    assert violations == [], violations
+
+
 def test_a_store_on_the_far_side_of_a_barrier_does_not_excuse_the_load():
     """Same rule, and this is the direction that could hide a finding: a match
     here EXCUSES the load, so a store the flow cannot have executed would excuse
@@ -397,7 +469,9 @@ def test_the_shipped_floors_are_parameters_and_not_globals():
     """A case cannot patch them down: the defaults bind at `def` time, so the
     values the row runs with are the ones in the module. Pinned, so a floor moves
     in a diff that says why — the reasoned one went 15 -> 20 when a review
-    measured that 15 against 24 let nine branches go silently unasked."""
+    measured that 15 against 24 let nine branches go silently unasked, and STAYED
+    at 20 when the measurement itself fell to 22: a floor walked down after every
+    narrowing follows the defect it is there to catch."""
     assert (ct_gate.RUN_FLOOR, ct_gate.BRANCH_FLOOR, ct_gate.REASONED_FLOOR) == (
         30,
         20,
@@ -447,13 +521,13 @@ def test_the_image_arms_were_driven_by_hand():
     Driven through the row's own command (`python scripts/ct_gate.py`) after
     `cargo build --release -p firmware`:
 
-    | arm | attributed runs | branches | secret-dependent | row |
-    |---|---|---|---|---|
-    | shipped | 39 | 25 | 0 | EXIT=0 |
-    | early exit in `ct_eq` (`if diff != 0`) | 59 | 27 | 27 | EXIT=1 |
-    | early exit on ONE BIT (`if diff & 0x80 != 0`) | 58 | 27 | 27 | EXIT=1 |
-    | `cmd_update` back to a slice `!=`, `cmd_configure` untouched | 38 | 24 | 0 | EXIT=1, `cmd_update` inlines no site |
-    | early exit with a `copy_from_slice` before it | 3 | 3 | 1 | EXIT=1, `0x1006afb8` |
+    | arm | attributed runs | branches | traced | secret-dependent | row |
+    |---|---|---|---|---|---|
+    | shipped | 39 | 25 | 22 | 0 | EXIT=0 |
+    | early exit in `ct_eq` (`if diff != 0`) | 59 | 27 | 24 | 28 | EXIT=1 |
+    | early exit on ONE BIT (`if diff & 0x80 != 0`) | 58 | 27 | 24 | 28 | EXIT=1 |
+    | `cmd_update` back to a slice `!=`, `cmd_configure` untouched | 38 | 24 | 21 | 0 | EXIT=1, `cmd_update` inlines no site |
+    | early exit with a `copy_from_slice` before it | 3 | 3 | — | 1 | EXIT=1, `0x1006afb8` |
 
     The last two are the arms an independent review used to refute the first
     version of this gate: at depth-1 taint the bit test reported 0 and passed,
@@ -478,8 +552,26 @@ def test_the_image_arms_were_driven_by_hand():
     64 instructions of two public branches in `cmd_calculate` across two `b.n`
     and a `bl`.
 
-    `mac.rs` and `rsk-otp/src/lib.rs` restored byte-identical (sha256 compared)
-    and the control re-run green after each rebuild.
+    Re-driven again when the trace moved from the branch to the flag-setter, and
+    the four rows above are that re-drive's own numbers. Both moves are the
+    stricter direction: the shipped arm traces 22 and not 24, because a `subs r5,
+    #1` is no longer credited as the definition of its own operand, and BOTH
+    early-exit arms report 28 secret-dependent branches and not 27. The extra one
+    is real — `0x10036ebe`, `bne` on `cmp r4, r3` over `ldrb r4, [r1, r2]` — and
+    the shipped rule missed it because the walk from the BRANCH met the `b.n` at
+    `0x10036ebc` and died one instruction short of the compare whose flags that
+    branch reads. No arm lost a finding.
+
+    The fifth row is the exception and is NOT this revision's measurement: its
+    source edit was never recorded, so what ran here is a reconstruction —
+    `copy_from_slice` into a scratch array ahead of the early exit. It answers 1
+    secret-dependent at EXIT=1 like the original, but over 1 run and 2 branches
+    rather than 3 and 3, so the row keeps the original's counts and its traced
+    cell stays blank rather than borrowing a different mutant's number.
+
+    `crates/rsk-crypto/src/mac.rs` and `crates/rsk-otp/src/lib.rs` restored
+    byte-identical (sha256 compared) and the control re-run green after each
+    rebuild.
 
     Cost, measured rather than quoted from the objdump alone: `arm-none-eabi-
     objdump -d -l --inlines` is 0.9 s over a 1 370 429-line dump, and the ROW —

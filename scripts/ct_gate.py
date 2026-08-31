@@ -95,6 +95,20 @@ buys an accident, not a reach. It is the ONLY class the walk stops at blind: a
 call stops it for a caller-saved register and nothing else, and a `cbz` does not
 stop it at all.
 
+The trace starts at the FLAG-SETTER, and that is the fifth thing this shipped
+wrong. Thumb is scheduled, so an instruction sitting between the compare and the
+branch may redefine the compare's operand, and the walk began at the BRANCH: at
+`0x10036ff8` the shipped image reads `orr.w r0, sl, #8` / `cmp r0, #56` / `and.w
+r0, r4, #34` / `bne`, and the rule answered with the `and` — a value the compare
+never saw. Which way that errs is a coin toss on what the clobber happens to be,
+and `cmp r0, r1` / `mov r0, #5` / `beq` is the losing side: the rule goes blind
+to whatever really fed the compare, which is the shape a real early exit has. A
+`cbz` is exempt because it reads its register at the branch itself. Measured:
+the shipped image keeps its 0 secret-dependent branches and traces 22 rather
+than 24, and the early-exit mutant goes from 27 findings to 28 — the extra one a
+`bne` whose compare sat on the far side of a `b.n`, which the walk from the
+branch met first and stopped at.
+
 The mutant this row exists to catch is an early exit inside the accumulate loop
 (`if diff != 0 { return false; }`): the accumulator and the barrier vanish and
 the loop becomes a `memcmp`, with the two secret bytes reaching a `cmp` that
@@ -224,13 +238,25 @@ STORE = re.compile(r"^str(b|h|d)?$")
 #: down — `run_count_gate.SCAN_FLOOR` shipped the other way and its own docstring
 #: says the shipped value was therefore never checked against the shipped tree.
 #: Measured on this tree: 39 attributed runs, 25 conditional branches examined,
-#: 24 traced to a definition.
+#: 22 traced to a definition.
 #:
 #: The reasoned floor sat at 15 against a measurement of 24, so nine branches
 #: could go silently unasked — and a change that narrowed the walk is exactly
-#: what it was there to catch. It is 20 now, the same ~20% under the measurement
-#: the other two carry (39/30, 25/20); tighter would redden on the next
-#: unrelated code motion, which moved this count 26 -> 24 over two commits.
+#: what it was there to catch. It went to 20, the same ~20% under the
+#: measurement the other two carry (39/30, 25/20).
+#:
+#: It STAYS 20 against 22, and the two it now stands under is deliberate. The 24
+#: was inflated: traced from the branch, a loop's `subs r5, #1` was answered as
+#: the definition of its own operand, so two branches were counted reasoned on a
+#: self-credit that decided nothing. Tracing from the flag-setter reports them
+#: untraced, which is the truth — the slack under this floor was always 2, and
+#: only the arithmetic said a fifth. Lowering it to keep the ~20% would walk the
+#: floor down behind exactly the narrowing it exists to catch.
+#:
+#: The cost, stated here rather than discovered later: this count also moved
+#: 26 -> 24 on unrelated code motion, so a motion that size reddens the row with
+#: no defect behind it. Re-measure the walk when that happens; the floor is not
+#: the first thing to reach for.
 RUN_FLOOR = 30
 BRANCH_FLOOR = 20
 REASONED_FLOOR = 20
@@ -429,13 +455,17 @@ def clobbers(mnemonic, register):
 
 
 def walk_back(stream, index, want, limit=64):
-    """Steps before `index`, nearest first, until a barrier or `limit`."""
+    """(position, instruction) before `index`, nearest first, to a barrier or `limit`.
+
+    The position is yielded because the flag-setter's caller has to trace its
+    operands from WHERE IT SITS, not from the branch that reads its flags.
+    """
     frame = stream[index][3][-1] if stream[index][3] else None
     for step in range(index - 1, max(-1, index - limit - 1), -1):
         addr, mnemonic, operands, chain = stream[step]
         if (chain[-1] if chain else None) != frame:
             return
-        yield stream[step]
+        yield step, stream[step]
         if BARRIER.match(mnemonic) and step != index - 1:
             return
         if want is not None and mnemonic == want:
@@ -534,7 +564,7 @@ def reload_of_a_store(stream, index):
 
 
 def governing(stream, index):
-    """Every flag-setter that can govern the branch at `index`.
+    """Every flag-setter that can govern the branch at `index`, WITH its position.
 
     More than one when predication is in play: a predicated `cmpeq` writes the
     flags only if its own condition held, so the branch may still be reading what
@@ -542,11 +572,11 @@ def governing(stream, index):
     and asking all of them is the conservative direction.
     """
     out = []
-    for step in walk_back(stream, index, None):
+    for where, step in walk_back(stream, index, None):
         found = flag_setter(step[1])
         if not found:
             continue
-        out.append(step)
+        out.append((where, step))
         if not found[1]:
             break
     return out
@@ -563,23 +593,26 @@ def secret_branches(stream, symbols, asked=None):
     out = []
     asked = set() if asked is None else asked
     for index, (addr, mnemonic, operands, _) in enumerate(stream):
+        # A `cbz` reads its register AT THE BRANCH; every other conditional
+        # branch reads flags, and those were set where the flag-setter sits, so
+        # its operands must be traced from THERE.
         if CBZ.match(mnemonic):
-            candidates = [(mnemonic, operands.split(",")[0].strip())]
+            candidates = [(mnemonic, operands.split(",")[0].strip(), index)]
         elif COND_BRANCH.match(mnemonic):
             candidates = [
-                (f"{flags[1]} {flags[2]}", register)
-                for flags in governing(stream, index)
+                (f"{flags[1]} {flags[2]}", register, where)
+                for where, flags in governing(stream, index)
                 for register in REGISTER.findall(flags[2])
             ]
         else:
             continue
         reasoned = False
-        for source, register in candidates:
+        for source, register, reads_at in candidates:
             found = REGISTER.search(register)
             name = found.group(1) if found else None
-            if name and last_definition(stream, index, name):
+            if name and last_definition(stream, reads_at, name):
                 reasoned = True
-            defined = buffer_load(stream, index, name) if name else None
+            defined = buffer_load(stream, reads_at, name) if name else None
             if not defined:
                 continue
             site = next((s for s in symbols if s in defined[3]), None)
