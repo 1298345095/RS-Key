@@ -55,6 +55,11 @@ RUNNER = (FORMAL / "run-tlc.sh").read_text(encoding="utf-8")
 PREVIOUS = verdict_gate.previous_registry()
 
 ROWS, RATCHETS, PARSE_PROBLEMS = verdict_gate.read_registry(REGISTRY)
+#: The same, off the committed registry. `check_floors` reads a decrease's BEFORE
+#: from here and its AFTER from the text handed in, so a floor arm that takes
+#: both from the working tree agrees with the guard only while the two files
+#: carry the same number — see `lowered` for the commit on which they did not.
+WAS_ROWS, WAS_RATCHETS, _ = verdict_gate.read_registry(PREVIOUS or "")
 FAMILIES = [row["pattern"] for row in ROWS if verdict_gate.GLOB.search(row["pattern"])]
 FLOORED = [row["pattern"] for row in ROWS if row["floor"] is not None]
 #: Subjects of a floor: the configurations a floored row decides, plus the
@@ -290,15 +295,29 @@ def test_a_wrong_reason_red_on_an_exact_row_is_rejected(pattern):
 
 
 def lowered(subject):
-    """(the registry with `subject`'s floor weakened, the two numbers)."""
+    """(the registry with `subject`'s floor weakened, the two numbers).
+
+    `was` is the COMMITTED registry's value and not the working tree's, because
+    that is the side `check_floors` compares a decrease against. The two are the
+    same number on almost every checkout and differ for exactly one commit after
+    a floor is RE-DERIVED — measured when `Shipped.cfg` and `Historical_E76.cfg`
+    were re-derived from the first recorded run: five cases then asserted a
+    movement the guard never reports, which is the sibling of the edge `SUBJECTS`
+    above already records. `now` still rewrites the line that is actually in the
+    file, but it is weakened off the SMALLER of the two numbers rather than off
+    the working tree's alone: `Policies.cfg` grew 750 -> 110000 in this same
+    tree, and half of a floor that grew by more than 2x is an INCREASE against
+    the committed one — the guard reports nothing and the arm fails saying so.
+    """
     if subject.startswith("@"):
-        was = RATCHETS[subject]
+        here, was = RATCHETS[subject], WAS_RATCHETS[subject]
         # A `Max` is the same ratchet upside down: it is weakened by RISING.
-        now = was + 1 if subject.endswith("Max") else max(0, was - 1)
-        return REGISTRY.replace(f"{subject} {was}", f"{subject} {now}"), was, now
+        now = (max(here, was) + 1 if subject.endswith("Max")
+               else max(0, min(here, was) - 1))
+        return REGISTRY.replace(f"{subject} {here}", f"{subject} {now}"), was, now
     row = next(r for r in ROWS if r["pattern"] == subject)
-    was = row["floor"]
-    now = max(verdict_gate.MIN_FLOOR, was // 2)
+    was = next(r for r in WAS_ROWS if r["pattern"] == subject)["floor"]
+    now = max(verdict_gate.MIN_FLOOR, min(row["floor"], was) // 2)
     return rewrite(subject, f"{subject} {row['want']} {now}"), was, now
 
 
@@ -339,8 +358,8 @@ def test_a_marker_for_a_movement_that_did_not_happen_is_rejected():
 
 
 def test_a_floor_that_is_deleted_outright_is_a_decrease():
-    """`GREEN 20000000` → `GREEN -` weakens more than any number would."""
-    row = next(r for r in ROWS if r["pattern"] == "Shipped.cfg")
+    """A floor replaced by `-` weakens more than any number would."""
+    row = next(r for r in WAS_ROWS if r["pattern"] == "Shipped.cfg")
     problems = findings(rewrite("Shipped.cfg", "Shipped.cfg GREEN -"))
     assert any(f"floor {row['floor']} -> 0" in p for p in about(problems, "Shipped.cfg"))
 
@@ -410,7 +429,7 @@ def test_a_red_row_given_a_floor_is_rejected():
 def test_a_green_row_naming_an_invariant_is_rejected():
     """Nothing compares an invariant on a pass, so a name there is a claim the
     runner never reads — and reads exactly like one it does."""
-    text = rewrite("Shipped.cfg", "Shipped.cfg GREEN 20000000 - NoAuthorizationBypass")
+    text = rewrite("Shipped.cfg", "Shipped.cfg GREEN 25854624 - NoAuthorizationBypass")
     assert any("nothing compares" in p for p in findings(text))
 
 

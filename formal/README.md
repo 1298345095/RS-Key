@@ -1260,9 +1260,12 @@ buys the real constants — and not the margin. All thirty-two mutant and
 historical configurations stay RED on their own invariant. Symmetry is applied
 to the safety configurations only: TLC's
 liveness check is not sound under it, so `Liveness*` and `Fairness*` keep their
-own smaller constants and no symmetry. The floor did not move — 20 000 000 is
-still under the measurement, and stricter than the "near a third" rule, which is
-the safe direction to be wrong in.
+own smaller constants and no symmetry. The floor did not move then, and being
+stricter than the "near a third" rule read as the safe direction to be wrong in
+— which is how a ratchet goes slack without anyone deciding to loosen it.
+20 000 000 was a third of the 61 215 504 it had been set against, and against the
+count above it had drifted to a quarter; it is 25 854 624 now, re-derived from
+the recorded run.
 
 ### What the review's repairs cost
 
@@ -2660,7 +2663,7 @@ to itself.
 | `SeamMut_*.cfg` `RED` → `GREEN` | `… requires GREEN, but the configuration switches BugAdminOpensKeyOps on and so owes RED` | **1** |
 | the `SeamSolo_*.cfg` row deleted | `no verdict entry in formal/floors.txt and no registered exemption` | **1** |
 | a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 14 configuration(s) first `` | **1** |
-| a second, disagreeing `Shipped.cfg` row | `both match it and disagree (('RED', None, None) against ('GREEN', 20000000, None))` | **1** |
+| a second, disagreeing `Shipped.cfg` row | `both match it and disagree (('RED', None, None) against ('GREEN', 25854624, None))` | **1** |
 | `Mut_*.cfg` given a floor | `RED with a floor of 5000 — a counterexample search halts at the first violation` | **1** |
 | a RED naming an invariant its configuration does not check | `expects RED at NoOrphanedMetadata, which the configuration does not check` | **1** |
 | a RED attributed to `TypeOK` | `which every configuration checks and no mutant targets — that attributes the RED to nothing` | **1** |

@@ -150,7 +150,7 @@ def test_one_state_model_is_vacuous_not_green(fake_tlc):
 def test_floor_regression_is_not_green(fake_tlc):
     result = run(fake_tlc, "Shipped.cfg", GREEN)
     assert result.returncode == 1
-    assert "FLOOR: 100 < 20000000" in result.stdout
+    assert "FLOOR: 100 < 25854624" in result.stdout
     assert "expected GREEN" in result.stdout
 
 
@@ -285,10 +285,37 @@ def test_a_mutant_refused_without_naming_an_invariant_is_rejected(fake_tlc):
 def test_a_deadlock_row_with_no_switch_armed_is_not_held_to_a_name(fake_tlc):
     """`TraceSeamsBad.cfg` lists six invariants and is refused by a DEADLOCK: no
     defect switch is armed in it, so the first name in its block describes
-    nothing it does. Deriving there would demand a name no run of it can print."""
+    nothing it does. Deriving there would demand a name no run of it can print,
+    so it is held to the SHAPE of the refusal instead — and this is that shape."""
     result = run(fake_tlc, "TraceSeamsBad.cfg", RED_DEADLOCK)
     assert result.returncode == 0
     assert "RED: Error: Deadlock reached." in result.stdout
+
+
+#: The rest of the shape rule, driven on the row it exists for. `TypeOK` is in
+#: `TraceSeamsBad.cfg`'s own INVARIANTS block, so a "names some invariant it
+#: checks" rule accepts this and only the shape refuses it.
+NO_SWITCH_ARMED = "  !! expected RED on a deadlock or a property this configuration declares"
+
+
+def test_a_zero_armed_row_reddening_on_typeok_is_rejected(fake_tlc):
+    """Nothing compared these rows at all: a `TraceSeamsBad.cfg` whose harness
+    broke instead of refusing the session reported RED and exited 0."""
+    result = run(fake_tlc, "TraceSeamsBad.cfg", RED_TYPEOK)
+    assert result.returncode == 1
+    assert NO_SWITCH_ARMED in result.stdout
+
+
+def test_a_zero_armed_row_reddening_on_an_invariant_it_checks_is_rejected(fake_tlc):
+    """And not only on `TypeOK`. With no switch armed the configuration models no
+    defect, so no name in its block attributes the RED to anything — which is why
+    the rule here is a shape and not the two-armed rows' narrowed name set."""
+    result = run(
+        fake_tlc, "TraceSeamsBad.cfg",
+        RED.replace("NoAuthorizationBypass", "NoStatusOutsideItsSelection"),
+    )
+    assert result.returncode == 1
+    assert NO_SWITCH_ARMED in result.stdout
 
 
 #: A configuration arming TWO defects: `Mut_BugSetPinKeepsPpuat.cfg` needs its
@@ -307,19 +334,94 @@ def test_a_two_armed_mutant_may_redden_on_either_switch(fake_tlc):
     assert "RED: NoAccessibleSecretWithoutGate" in result.stdout
 
 
+#: What the two-armed rows are held to now: a name one of their OWN switches
+#: targets, read off that switch's solo twin. Both `Mut_` rows check six
+#: invariants and their switches target two, so "an invariant this configuration
+#: checks" was accepting four names nothing in the row is about.
+NOT_A_TARGET = "  !! expected RED on an invariant one of its armed switches targets"
+
+
 def test_a_two_armed_mutant_reddening_on_typeok_is_still_rejected(fake_tlc):
     """What it may NOT do. `TypeOK` is checked by every configuration and targeted
     by neither switch, so a RED there attributes the failure to nothing."""
     result = run(fake_tlc, "Mut_BugSetPinKeepsPpuat.cfg", RED_TYPEOK)
     assert result.returncode == 1
-    assert "expected RED on an invariant this configuration checks" in result.stdout
+    assert NOT_A_TARGET in result.stdout
 
 
 def test_a_two_armed_mutant_refused_without_an_invariant_is_rejected(fake_tlc):
     """…nor may it deadlock instead of breaking something it checks."""
     result = run(fake_tlc, "Mut_BugSetPinKeepsPpuat.cfg", RED_DEADLOCK)
     assert result.returncode == 1
-    assert "expected RED on an invariant this configuration checks" in result.stdout
+    assert NOT_A_TARGET in result.stdout
+
+
+#: The two names inside its own block that NEITHER armed switch is about.
+#: `Mut_BugSetPinKeepsPpuat.cfg` arms `BugSetPinKeepsPpuat` (whose solo twin
+#: checks `NoTokenAfterInvalidation`) and `BugPpuatIsAGate` (whose twin checks
+#: `NoAccessibleSecretWithoutGate`); these are two of the other four.
+RED_UNMANAGEABLE = RED.replace("NoAuthorizationBypass", "NoUnmanageableCredential")
+RED_CROSS_TRANSPORT = RED.replace(
+    "NoAuthorizationBypass", "NoCrossTransportTouchConsumption")
+
+
+def test_a_two_armed_mutant_reddening_on_a_name_no_switch_targets_is_rejected(fake_tlc):
+    """The gap the old rule left: `NoUnmanageableCredential` is one of the six
+    this configuration checks, so it passed — while neither armed defect is about
+    it, which makes the RED a kill for a reason the row does not model."""
+    result = run(fake_tlc, "Mut_BugSetPinKeepsPpuat.cfg", RED_UNMANAGEABLE)
+    assert result.returncode == 1
+    assert NOT_A_TARGET in result.stdout
+
+
+def test_the_same_gap_on_the_other_two_armed_mutant(fake_tlc):
+    """A different configuration and a different name, so a rule that special-cases
+    one of them does not pass here. `Mut_BugBackupSealedNotAGate.cfg` arms
+    `BugBackupSealedNotAGate` and `BugSeedDoesNotLead`; touch consumption is
+    neither one's target and is in the block all the same."""
+    result = run(fake_tlc, "Mut_BugBackupSealedNotAGate.cfg", RED_CROSS_TRANSPORT)
+    assert result.returncode == 1
+    assert NOT_A_TARGET in result.stdout
+
+
+def test_a_two_armed_mutant_may_redden_on_either_switch_s_own_target(fake_tlc):
+    """THE CONTROL. Which of two armed defects TLC halts on is a property of the
+    search, not of the tree: `NoAccessibleSecretWithoutGate` is the recorded one
+    and `NoTokenAfterInvalidation` is this row's own first-listed name. Both are a
+    switch's target, so the guard is indifferent between them — a rule pinned to
+    the observed name would refuse this and call a scheduler a regression."""
+    result = run(fake_tlc, "Mut_BugSetPinKeepsPpuat.cfg",
+                 RED.replace("NoAuthorizationBypass", "NoTokenAfterInvalidation"))
+    assert result.returncode == 0
+    assert "RED: NoTokenAfterInvalidation" in result.stdout
+
+
+def test_the_other_two_armed_mutant_reddening_on_its_own_target_passes(fake_tlc):
+    """And the recorded verdict of the second row, so the narrowing is shown not
+    to have reddened the run it was derived from."""
+    result = run(fake_tlc, "Mut_BugBackupSealedNotAGate.cfg", RED_TARGET)
+    assert result.returncode == 0
+    assert "RED: ResetNeverWeakensSurvivingState" in result.stdout
+
+
+def test_a_solo_row_arming_two_switches_keeps_its_one_name(fake_tlc):
+    """`Solo_BugSetPinKeepsPpuat.cfg` arms the same pair and checks ONE invariant,
+    so the intersection is narrower than the twins' set rather than equal to it —
+    the third shape the narrowing has to get right, and its recorded verdict."""
+    result = run(fake_tlc, "Solo_BugSetPinKeepsPpuat.cfg",
+                 RED.replace("NoAuthorizationBypass", "NoTokenAfterInvalidation"))
+    assert result.returncode == 0
+    assert "RED: NoTokenAfterInvalidation" in result.stdout
+
+
+def test_a_clause_row_falls_back_to_the_invariant_it_names(fake_tlc):
+    """`SoloClause_ResetKeepsTheBackupSeal.cfg` checks ONE CLAUSE of an invariant,
+    and no solo twin of either armed switch can name a clause — so the two sets
+    do not meet and the fallback is what keeps the row satisfiable at all."""
+    result = run(fake_tlc, "SoloClause_ResetKeepsTheBackupSeal.cfg",
+                 RED.replace("NoAuthorizationBypass", "ResetKeepsTheBackupSeal"))
+    assert result.returncode == 0
+    assert "RED: ResetKeepsTheBackupSeal" in result.stdout
 
 
 #: A run refuted by a temporal PROPERTY of a configuration that also checks an

@@ -39,7 +39,14 @@
 \* Columns: <config or glob>  <GREEN|RED>  <min distinct, or - >  [heap]  [invariant]
 \* First match wins, so an exact name may precede its class glob.
 
-Shipped.cfg                          GREEN   20000000
+\* The tree as it stands. Its floor was a third of the count measured the day the
+\* column was written (7e96900) and was never moved again, while the model GREW
+\* -- the token-less non-discoverable registration -- so the same number had
+\* quietly fallen to about a QUARTER of the measurement. A ratchet drifting slack
+\* is the one failure nothing here reports: every gate stayed green through it.
+\* Re-derived to a third of the distinct count `runs.toml` records for the safety
+\* run at 9cafee7, the same rule as its siblings.
+Shipped.cfg                          GREEN   25854624
 \* AS-AUTH-2's other arm: the same six invariants over a build that SHIPS
 \* alwaysUv. 23 521 512 distinct at depth 51 on a reduced retry ladder (2 : 1) --
 \* the arm buys the reachability question, not the ladder -- so a third is the
@@ -212,15 +219,13 @@ Fairness.cfg                         GREEN   2000000
 \* conjunct at RSKeySecurityState.tla:1405 and this file behaves as
 \* `Mut_BugSeedDoesNotLead.cfg` does, which is RED.
 \*
-\* THE FLOOR IS ARGUED, NOT MEASURED, AND NOTHING HERE CAN CHECK THAT. Driven:
-\* the verdict column flipped to RED, the floor below as it stands, and the same
-\* floor with a dozen more digits on it ALL pass the merge gate; only a GREEN
-\* with no floor is refused. So this number is an ASSERTION about a run nobody
-\* has made, and if the tier comes back RED the repair is a one-line edit here
-\* that the gate will accept without a murmur. RE-DERIVE IT from the first
-\* recorded run, to a third of the measured count, the way every other GREEN row
-\* in this file was set -- until then it is a placeholder wearing a ratchet's
-\* clothes.
+\* THE FLOOR WAS ARGUED, NOT MEASURED, AND NOTHING HERE COULD CHECK THAT. Driven
+\* at the time: the verdict column flipped to RED, the floor as it stood, and the
+\* same floor with a dozen more digits on it ALL passed the merge gate; only a
+\* GREEN with no floor is refused, so the number was an ASSERTION about a run
+\* nobody had made. That run has since happened -- `runs.toml`'s safety tier,
+\* recorded at 9cafee7 -- and the floor below is a third of what it found, the
+\* way every other GREEN row in this file was set.
 \*
 \* It is Shipped.cfg's own number because that is the one thing about this
 \* configuration that could be known before running it: its transition relation
@@ -233,9 +238,10 @@ Fairness.cfg                         GREEN   2000000
 \* empties `store.rpent`, so `\E r \in store.rpent` can never fire on Shipped and
 \* the added conjunct removes nothing it had. Arm that switch and the argument
 \* goes with it.
-\* RE-DERIVE IT from the first recorded run, to a third of the measured count,
-\* the way every other GREEN row here was set.
-Historical_E76.cfg                   GREEN   20000000
+\* The recording settles that argument rather than repeating it: this row came
+\* back at Shipped.cfg's distinct count TO THE STATE and at Shipped.cfg's depth,
+\* a superset that added nothing, so both rows carry one number for one reason.
+Historical_E76.cfg                   GREEN   25854624
 Historical_E77.cfg                   RED     -
 Mut_*.cfg                            RED     -
 Solo_*.cfg                           RED     -

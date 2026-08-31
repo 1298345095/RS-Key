@@ -224,7 +224,7 @@ features = "the default set and `always-uv`, driven separately"
 name = "tlaplus"
 version = "1.7.4"
 provenance = "flake.lock; formal/run-tlc.sh:16 records the tla2tools.jar sha256 prefix 936a2620, which is the half PLAT-TOOL-003 does not have for the prover"
-invocation = "java -XX:+UseParallelGC -Xmx4g -cp $TLA2TOOLS_JAR tlc2.TLC -nowarning -workers 2 -config <cfg> RSKeySecurityState — formal/run-tlc.sh:158-159"
+invocation = "java -XX:+UseParallelGC -Xmx4g -cp $TLA2TOOLS_JAR tlc2.TLC -nowarning -workers 2 -config <cfg> RSKeySecurityState — formal/run-tlc.sh:214-215"
 environment = "nix develop; WORKERS=2, HEAP=4g. Not the liveness tier's larger heap — no configuration in this bundle declares a temporal property"
 
 [[tool]]
@@ -283,7 +283,7 @@ r_owner = "`rust = 1` is a FILE count and the file is crates/rsk-fido/src/reset.
 r_five_and_three = "and the tagged classifier is wider than the clauses: `is_fido_gate_record` matches five records and three clauses name three of them. reset.rs:209-215 says so in the same doc comment the three tags live in, and RSKeySecurityState.tla:1446-1450 repeats it at the `gate.forceChange` disjunct — `snap` has no field for the fourth, so a torn reset dropping EF_DEVICE_PIN or EF_MINPINLEN early is unobserved by everything in this bundle"
 # THE MATRIX REGISTER, and the second finding.
 x_matrix_question = "assurance/configurations.toml:570-587 is the open `[[question]]` for the firmware-always-uv column, it names this property by id, and it answers `THE MODEL HALF IS ANSWERED`, resting that on AlwaysUv.cfg running with the constant TRUE and going green. That green is the one arm on which this clause cannot go red — the same fact formal/gen-configs.sh:211-225 states and assurance/bundle/SEC-FIDO-006.toml records as a finding. Two files in one tree, one using an arm as an answer and the other saying that arm is where the question stops being askable. The column's code half the paragraph calls unanswered is separately measured: assurance/bundle/logs/cargo-test-always-uv.log is 446 passed and 172 failed"
-x_stale_six = "and the same paragraph says AlwaysUv.cfg `runs all six invariants`. Measured: `sed -n '/^INVARIANTS/,/^SYMMETRY/p' formal/AlwaysUv.cfg | grep -c '^    '` returns nine — TypeOK and eight invariants. Six is the size of `ALL_INV` at formal/gen-configs.sh:105-107, and the block also carries `EXTRA_INV`'s two. formal/floors.txt:43 carries the same sentence and the same undercount"
+x_stale_six = "and the same paragraph says AlwaysUv.cfg `runs all six invariants`. Measured: `sed -n '/^INVARIANTS/,/^SYMMETRY/p' formal/AlwaysUv.cfg | grep -c '^    '` returns nine — TypeOK and eight invariants. Six is the size of `ALL_INV` at formal/gen-configs.sh:105-107, and the block also carries `EXTRA_INV`'s two. formal/floors.txt:50 carries the same sentence and the same undercount"
 x_no_gate_row = "and no row of the merge gate builds this column at all: `grep -n always scripts/check.sh` returns nothing. The flavour rows that exist are advertise-pqc, fido-conformance, fips-profile, strong-pin, strict-config, largeblob-ext, bench, core1-stats and display; always-uv is not among them, so the arm that inverts this clause's meaning is built by no gate row, proved by no harness, and checked by one model configuration on which the clause is vacuous"
 # The gates, each with the number it derives, transcribed from a run taken
 # immediately before this file was written.

@@ -91,7 +91,7 @@ names_a_property() {
   return 1
 }
 
-# How many defect switches a configuration ARMS. One is what makes the derived
+# Which defect switches a configuration ARMS. One is what makes the derived
 # name the right question. Zero is `TraceSeamsBad.cfg`, which lists invariants and
 # is refused by a deadlock, so a derived name there would demand one no run can
 # print. TWO is a mutant whose own defect the shipped tree makes unreachable
@@ -99,17 +99,73 @@ names_a_property() {
 # prediction: measured on `Mut_BugSetPinKeepsPpuat.cfg`, the companion's
 # counterexample is the shallower one (`NoAccessibleSecretWithoutGate` at depth
 # 13 against `NoTokenAfterInvalidation` at 15), so TLC halts on the companion's.
-# Those rows are still held to naming SOME invariant they check, which is what
-# refuses a `TypeOK` RED and a deadlock alike; the mutant's own attribution lives
-# in its `Solo_` twin, which checks one invariant and gets the exact comparison.
+# Those rows are held to a name one of their OWN switches targets, read off the
+# solo twins below -- not merely to a name the configuration checks, which on the
+# two `Mut_` rows was any of six and so was barely narrower than nothing.
 #
 # Registering the exception in `floors.txt` instead was tried and is REFUSED by
 # `scripts/verdict_gate.py`: an exact row in front of its class glob is the very
 # shape it rejects, because nothing in the tree can tell first-match from
 # last-match. The header of `floors.txt` advertises that mechanism and its own
 # gate forbids it -- the gate wins.
-armed_count() {
-  grep -cE '^[[:space:]]*(Bug|Mutate)[A-Z][A-Za-z0-9_]*[[:space:]]*(=|<-)[[:space:]]*TRUE([[:space:]]|$)' "$1"
+armed_switches() {
+  sed -nE 's/^[[:space:]]*((Bug|Mutate)[A-Z][A-Za-z0-9_]*)[[:space:]]*(=|<-)[[:space:]]*TRUE([[:space:]].*)?$/\1/p' "$1"
+}
+
+# Counted off the same reader, so the branch a row takes below and the names that
+# branch accepts cannot come to disagree about what is armed in it.
+armed_count() { armed_switches "$1" | grep -c .; }
+
+# The solo family that answers for a configuration's own, derived not listed:
+# `SeamMut_X` asks `SeamSolo_X`, and a `SoloClause_` row asks the plain `Solo_`
+# twins of the switches it arms. A family with no solo half answers nothing and
+# the caller falls back, which is what keeps this from being a second roster.
+twin_family() {
+  local fam=${1%%_*}
+  case "$fam" in
+    *Mut)        echo "${fam%Mut}Solo" ;;
+    *SoloClause) echo "${fam%Clause}" ;;
+    *Solo)       echo "$fam" ;;
+    *)           echo "" ;;
+  esac
+}
+
+# What the armed switches THEMSELVES target: each one's solo twin checks its own
+# invariant and `gen-configs.sh` writes that name first, so `derived_inv` over the
+# twin is the switch's target. It is the twin `scripts/verdict_gate.py` already
+# searches for to decide a multi-target RED is attributable at all -- asked here
+# for the name rather than for its existence.
+twin_targets() {
+  local fam sw twin
+  fam=$(twin_family "$1")
+  [ -n "$fam" ] || return 0
+  while read -r sw; do
+    twin="${fam}_${sw}.cfg"
+    [ -r "$twin" ] && derived_inv "$twin"
+  done < <(armed_switches "$1")
+  return 0
+}
+
+# The names a RED may carry where no single one can be predicted: what this
+# configuration CHECKS, narrowed to what its own switches target. An empty
+# intersection means the two cannot meet -- a `SoloClause_` row names one CLAUSE
+# of an invariant, which no twin's block can name -- and there the wider set is
+# the answer rather than a refusal nobody can satisfy.
+allowed_names() {
+  local mine wanted narrowed=""
+  mine=$(invariants_of "$1" | grep -vx TypeOK)
+  [ -n "$mine" ] || return 0
+  wanted=$(twin_targets "$1")
+  [ -n "$wanted" ] && narrowed=$(printf '%s\n' "$mine" | grep -xF "$wanted")
+  printf '%s\n' "${narrowed:-$mine}"
+}
+
+# What a configuration with NO switch armed may be refused BY. It models no
+# defect, so nothing in its INVARIANTS block describes it -- and `TypeOK` is in
+# that block, which is exactly what a "names something it checks" rule accepts.
+refused_by_shape() {
+  case "$2" in *Deadlock*) return 0 ;; esac
+  names_a_property "$1" "$2"
 }
 
 # floors.txt: what each configuration must produce. First match wins.
@@ -232,13 +288,24 @@ one() {
        && [ "$verdict" != "RED: $inv" ] && ! names_a_property "$cfg" "$verdict"; then
     mark="  !! expected RED: $inv"
     FAILED=$((FAILED + 1))
-  # A configuration arming two defects predicts no single name, but it still may
-  # not pass on `TypeOK` -- which it checks and neither switch targets -- nor on a
-  # refusal that names no invariant at all.
+  # A configuration arming two defects predicts no single name, but it does
+  # predict a SET: what one of its OWN switches targets. `TypeOK`, an invariant
+  # no armed switch is about, and a refusal naming none all fall outside it.
   elif [ "$got" = RED ] && [ "$armed_n" -gt 1 ] \
        && ! names_a_property "$cfg" "$verdict" \
-       && ! invariants_of "$cfg" | grep -vx TypeOK | grep -qxF "${verdict#RED: }"; then
-    mark="  !! expected RED on an invariant this configuration checks"
+       && ! allowed_names "$cfg" | grep -qxF "${verdict#RED: }"; then
+    mark="  !! expected RED on an invariant one of its armed switches targets"
+    FAILED=$((FAILED + 1))
+  # And a RED with NOTHING armed is held to a SHAPE, having no defect to name.
+  # Nothing looked at these rows at all, so `TraceSeamsBad.cfg` reddening on
+  # `TypeOK` -- an invariant it checks -- was a pass.
+  # `-z "$inv"` and not `armed_n = 0` alone: the branch above is a WRONG-NAME test
+  # and skips ITSELF when the name matches, so a row floors.txt already governs --
+  # `TokenGateDisagreement.cfg`, named `RequiredGateAgreesWithRelation` -- fell
+  # through to here and was refused for producing exactly what was asked of it.
+  elif [ "$got" = RED ] && [ "$armed_n" = 0 ] && [ -z "${inv:-}" ] \
+       && ! refused_by_shape "$cfg" "$verdict"; then
+    mark="  !! expected RED on a deadlock or a property this configuration declares"
     FAILED=$((FAILED + 1))
   fi
   printf '%-42s %-38s states=%-9s distinct=%-8s depth=%-3s %ss%s\n' \
