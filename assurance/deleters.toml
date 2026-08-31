@@ -446,36 +446,36 @@ why = "TERMINATE DF's sweep, secrets before every record scan_files re-seeds. Op
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 433
-call = "let _ = fs.delete(fid);"
+line = 468
+call = "} else if fs.delete(fid).is_err() {"
 verb = "delete"
-answer = "discarded"
+answer = "read"
 class = "secret-or-gate"
 metadata = "none"
-disposition = "best-effort"
-why = "the reply is status(), recomputed from flash in the same response — so a slot that did not go still reports CONFIG_VALID and the host is told without being told."
+disposition = "must-read"
+why = "the reply is status(), recomputed from flash in the same response — so a slot that did not go still reported CONFIG_VALID and the host was told without being told. It answers 6581 now. OTP fids carry no EF_META head, so an Err here is the backend refusing the removal: the slot secret is still in flash."
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 554
-call = "let _ = fs.delete(fid1);"
+line = 606
+call = "if fs.delete(fid1).is_err() {"
 verb = "delete"
-answer = "discarded"
+answer = "read"
 class = "secret-or-gate"
 metadata = "none"
-disposition = "best-effort"
-why = "the swap's first half, under the same self-reporting status() reply."
+disposition = "must-read"
+why = "the swap's first half, under the same self-reporting status() reply. It stands BEFORE the arm that copies this record to the other slot, so reading the answer here also stops a refused delete leaving one public id in two slots — the replay the RAM session counter cannot cover."
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 564
-call = "let _ = fs.delete(fid2);"
+line = 621
+call = "if fs.delete(fid2).is_err() {"
 verb = "delete"
-answer = "discarded"
+answer = "read"
 class = "secret-or-gate"
 metadata = "none"
-disposition = "best-effort"
-why = "and its second. Both slots' valid bits come off flash in the response that acknowledges the swap."
+disposition = "must-read"
+why = "and its second. Both slots' valid bits come off flash in the response that acknowledges the swap. Here the record write has already landed, so the answer buys the report and not the state: the duplicate stands either way, and that torn half is stated in docs/threat-model.md."
 
 [[site]]
 file = "crates/rsk-piv/src/files.rs"

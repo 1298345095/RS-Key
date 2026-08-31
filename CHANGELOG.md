@@ -2557,6 +2557,64 @@ and to the statuses it quotes.
 
 ### Security
 
+- **A faulted flash read spelled *unprogrammed slot*, so an unauthenticated
+  `SLOT_SWAP` destroyed both records.** `Storage::read` answers `None` for a
+  value that is absent and for one it could not serve, and `rsk-otp` reads a
+  slot's access code out of the record it just probed — so a refused probe
+  presented a protected slot as a free one. Six sites acted on that collapse, and
+  the swap is the one that loses data rather than a gate: `cmd_swap` read both
+  slots, and a slot read as absent had its own `ct_eq` gate skipped, was DELETED
+  by the other slot's `None` arm, and was written over by the other slot's
+  record. Driven before the fix on the shipped command handlers, one faulted
+  probe of slot 2 and one bare `0x06` frame carrying no code at all: slot 1
+  empty, slot 2 holding slot 1's record, slot 2's own record gone.
+
+  The four gates take a fallible probe now — `seal::try_seal_read` beside
+  `seal_read`, the shape `Fs::try_read` already has — and answer `6581` where the
+  medium could not decide: `CONFIGURE`, `UPDATE`, `SWAP`, and
+  `code_clears_every_slot`, the gate on the device-global scan-map and NDEF
+  writes, which cleared for an unreadable slot and let a host retarget what that
+  slot TYPES. The three `let _ = fs.delete(…)` in those handlers read their answer
+  too, because the reply is `status()` taken back off the same flash: a slot that
+  did not go reported itself VALID under a `9000`.
+
+  **Three of the six were losing data or opening a gate; three were reporting a
+  mutation that never happened, and the entry does not blur them.** `SWAP`'s read,
+  `CONFIGURE`'s read and `code_clears_every_slot` are the first kind.
+  `CONFIGURE`'s delete, `UPDATE`'s read and `SWAP`'s *second* delete are the
+  second: `Sw(36864)` where `Sw(25985)` belongs, nothing lost. That last one is
+  worth saying plainly — its record write has already landed when the delete is
+  refused, so the guard buys the report and not the state, and its own test says
+  so.
+
+  **The write half of the replay window, which the read half does not cover.**
+  The Yubico position is a pair, and both halves reach flash. The press's write —
+  the 15-bit advance owed when the one-byte session counter wraps — was
+  `let _ = put_slot(…)`: measured, the press after a refused one re-typed
+  `(use 1, session 0)`, this power cycle's FIRST position, because the slot reads
+  the old counter back and pairs it with a session it has already used. A press
+  that cannot store its advance now types nothing and leaves the RAM half where
+  the stored one is, so the press is retried rather than replayed. The boot bump's
+  write is retried too (`BUMP_TRIES`, both sides) — one refused write no longer
+  costs a whole power cycle.
+
+  What is NOT claimed, and one of these is more reachable than anything above. A
+  boot-bump write the store refuses **for good** still leaves the counter where it
+  was, and the next cycle re-types the last one's positions — `Fs::put` answers
+  `NoMemory` on a full store, so this needs no fault at all. Nothing in the applet
+  can close it: boot has no one to report to and a press cannot tell a stale
+  counter from a fresh one, so closing it means carrying the failure out to the
+  applet through `firmware/src/main.rs`. It is **pinned by a test that asserts the
+  repeat** rather than described, and that test goes red the day it is closed. The
+  same is true of a medium that keeps refusing a boot READ, and of the swap's torn
+  half, which is older and unchanged. Eleven mutations, eleven kills, each read
+  for direction — every failure says a mutation happened that should have been
+  refused, a position was re-typed, or a `9000` stood over something that did not
+  happen; none says something should have succeeded. Six functions keep a
+  collapsing probe on purpose and the list is now written down in one place at
+  `read_slot_m`, so a seventh arrives unlisted rather than unnoticed.
+  **bcdDevice → 0x09B7.**
+
 - **`SLOT_SWAP` moved a Yubico OTP record and left half of its replay position
   behind.** The position a validation server orders OTPs by is a PAIR: the
   15-bit use counter that lives in the slot RECORD, and the one-byte RAM session

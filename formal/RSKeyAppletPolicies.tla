@@ -195,10 +195,11 @@ OathCalculate(touched) ==
                        otpPresent, otpProtected, otpCounter >>
 
 (***************************************************************************)
-(* Yubico OTP. Existing-slot configure/update/delete/swap all require the  *)
-(* stored six-byte code                                                    *)
-(* (crates/rsk-otp/src/lib.rs:439-451, 539-546), while each emitted OTP    *)
-(* advances the combined persisted-use/RAM-session position.               *)
+(* Yubico OTP. Existing-slot configure, update and swap each state the     *)
+(* stored-six-byte-code rule at their OWN gate, so the citation names all  *)
+(* three (crates/rsk-otp/src/lib.rs:440-457, 502-516, 591-598): a range    *)
+(* resolving to a prologue reads as a gate nothing checks. Each emitted    *)
+(* OTP advances the combined persisted-use/RAM-session position.           *)
 (***************************************************************************)
 OtpConfigure(protected) ==
     /\ ~otpPresent

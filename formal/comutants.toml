@@ -1090,7 +1090,7 @@ replace = """
             // Existing config: the host must present its access code.
 """
 find2 = """
-        if self.read_slot_m(fs, fid, &mut stored).is_some() {
+        if programmed.is_some() {
             if data.len() < CONFIG_SIZE + ACC_CODE_SIZE {
                 return Sw::WRONG_LENGTH;
             }
@@ -1102,11 +1102,11 @@ find2 = """
             }
 """
 replace2 = """
-        if self.read_slot_m(fs, fid, &mut stored).is_some() {
+        if programmed.is_some() {
 """
 slice = ["cargo", "test", "-p", "rsk-otp"]
 expect = "killed"
-note = "a programmed slot is overwritten (find) or updated (find2) without its six-byte access code. Two anchors because the gate is written twice — the model has ONE OtpMutate switch, so patching one site would leave the other half of the switch unmeasured. The swap path states the same rule a THIRD time, at crates/rsk-otp/src/lib.rs:542-546, and is left unpatched: its gate is a swap's own move/delete rule rather than the configure/update pair OtpMutate models."
+note = "a programmed slot is overwritten (find) or updated (find2) without its six-byte access code. Two anchors because the gate is written twice — the model has ONE OtpMutate switch, so patching one site would leave the other half of the switch unmeasured. The swap path states the same rule a THIRD time, at crates/rsk-otp/src/lib.rs:594-598, and is left unpatched: its gate is a swap's own move/delete rule rather than the configure/update pair OtpMutate models."
 
 [comutant.BugOtpCounterRepeats]
 status = "patch"

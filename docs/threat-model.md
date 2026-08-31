@@ -184,21 +184,32 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   ceiling — so the session counter restarts at zero over an unchanged use counter
   and the current power cycle's pairs are typed again. At that ceiling neither
   path advances anything and the key goes on typing, so the pair repeats every
-  256 presses. Both counter writes are best-effort and neither answer is read: the
-  ticket is typed whether or not the store took the new value, and a boot bump the
-  store refuses is dropped. So is the boot *read* — a slot whose sealed read
-  faults is skipped by the bump entirely, which is the faulted-read clause above
-  wearing this applet's clothes. And position is not monotone across
+  256 presses. Of the two counter WRITES, the press's answer is read — a ticket
+  whose advance the store would not take is not typed at all, because typing it
+  re-emits: the next press reads the old counter back and pairs it with a session
+  this cycle has already used. The boot bump's is not, and cannot be: it is
+  retried, and a refusal that outlasts the retries is dropped, leaving the last
+  cycle's positions typeable again. **That one needs no fault at all** — `Fs::put`
+  answers `NoMemory` on a full store — and nothing inside the applet can close it,
+  since boot has no one to report to and a press cannot tell a stale counter from
+  a fresh one; closing it means carrying the failure out to the applet, and a test
+  pins the repeat until that lands. So is the boot *read* dropped, though only
+  where the medium keeps refusing: a sealed read that faults is retried, and a
+  slot the retries never reach is skipped by the bump entirely — which is the
+  faulted-read clause above wearing this applet's clothes. A press answers that
+  same refusal by typing nothing, so what the skip costs is a fault that clears
+  before the first press. And position is not monotone across
   re-provisioning: `CONFIGURE` writes a fresh record with a zeroed counter, gated
   by the slot access code whenever the existing slot reads back. And the move that
   carries the pair is not atomic: `SWAP` writes the two records one after the
   other and swaps the RAM halves only once both are through, with nothing to undo
   a step that failed. A refused second write answers `6581` with the first already
-  landed; a refused delete is not read at all. Either way one public id is left in
-  two slots with only one of the two session halves its own, and the other slot
-  can then type a position that id has already typed this power cycle — which a
-  plain `ykman otp swap` reaches unauthenticated, an unprotected slot's stored
-  access code being all-zero.
+  landed, and so does a refused delete — the answer is read now, but where the
+  record write has already gone in it buys the report and not the state. That
+  direction still leaves one public id in two slots with only one of the two
+  session halves its own, and the other slot can then type a position that id has
+  already typed this power cycle — which a plain `ykman otp swap` reaches
+  unauthenticated, an unprotected slot's stored access code being all-zero.
 - **Device config is UNGATED on the default build.** The shipped default is the
   full-ykman/YubiKey-compatible admin surface: a hostile USB host can silently
   rewrite the DeviceInfo / enabled-applications / USB identity — over CCID

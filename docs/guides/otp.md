@@ -223,7 +223,10 @@ stops the presses.
   scdaemon is holding the CCID interface. `gpgconf --kill scdaemon`, then retry.
   See [linux.md](../linux.md) and [openpgp.md](openpgp.md#troubleshooting).
 - **A press types nothing** → the slot is empty, or it's a challenge-response
-  slot (those never type). `ykman otp info` shows which.
+  slot (those never type). `ykman otp info` shows which. A programmed typing slot
+  can also stay silent if the key could not store the counter step that press
+  owed — it will not type a code it cannot move past. Re-plug and try again; if it
+  persists the store is full or failing.
 - **`ykman otp calculate` returns `CONDITIONS_NOT_SATISFIED` / waits forever** →
   the slot is `--touch`. Press the button.
 - **Overwrite/delete refused** → the slot has an access code. Pass it with
@@ -231,6 +234,14 @@ stops the presses.
   the OTP applet.
 - **Slots 3/4 don't show in `ykman otp info`** → expected. `ykman otp` only
   enumerates 1 and 2.
+- **A configure / update / swap / `set-scan-map` fails where the same command
+  worked a moment ago** → the key could not read, or could not write, a slot it
+  had to touch, so it refused rather than treat an unreadable slot as an empty
+  one. Retry. A command refused **before** it moved anything leaves the slots
+  exactly as they were, which is the usual case — but `swap` writes the two slots
+  one after the other, so one refused partway can leave the copy that already
+  landed standing, and both slots showing the same public id. Check with
+  `ykman otp info` and re-run the swap.
 - **KeePassXC on Linux says `Hardware key USB error: Pipe error`, or
   `ykchalresp` fails while `ykman otp calculate` works** → firmware older than
   bcdDevice `0x0859` enumerated the FIDO interface first, and these tools address

@@ -202,10 +202,11 @@ happens to sit at.""", """
 And the move that carries the pair is not atomic: `SWAP` writes the two records
 one after the other and swaps the RAM halves only once both are through, with
 nothing to undo a step that failed. A refused second write answers `6581` with
-the first already landed; a refused delete is not read at all. Either way one
-public id is left in two slots with only one of the two session halves its own,
-and the other slot can then type a position that id has already typed this power
-cycle"""]
+the first already landed, and so does a refused delete — the answer is read now,
+but where the record write has already gone in it buys the report and not the
+state. That direction still leaves one public id in two slots with only one of the
+two session halves its own, and the other slot can then type a position that id
+has already typed this power cycle"""]
 
 [[clause]]
 id = "TM-HOST-CONFIG-UNGATED"
