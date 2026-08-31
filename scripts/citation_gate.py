@@ -98,24 +98,38 @@ page is ever padded with citations it does not mean just to clear one number.
 citations another agent's in-flight commits rotted while this guard was being
 written. Each names the commit that broke it and fails once it stops rotting.
 
-It resolves `.rs` citations only, and only on `.rs` pages, `.py` pages under
-`scripts/`, and the named `formal/` ones. The `scripts/` half was the last
-substantive citing surface no gate read, and the round that swept the reset class
-found **2 of 2** of `security_trace.py`'s reset citations pointing at the wrong
-line — the same rot rate every surface has had the day it was first read
-(`RSKeyAppletPolicies.tla` 1 of 4, `comutants.toml` 15 of 16, the code half 19 of
-42). Nine other files cite and are not read; the largest are this
+It resolves `.rs`, `.sh` and `.txt` citations, and only on `.rs` pages, `.py`
+pages under `scripts/`, the evidence bundles and the named `formal/` ones. The
+`scripts/` half was the last substantive citing surface no gate read, and the
+round that swept the reset class found **2 of 2** of `security_trace.py`'s reset
+citations pointing at the wrong line — the same rot rate every surface has had
+the day it was first read (`RSKeyAppletPolicies.tla` 1 of 4, `comutants.toml` 15
+of 16, the code half 19 of 42, the bundles 31 of 517 — and eight more that
+RESOLVE and are wrong, which is what [`KEYED`] below is about). Nine other files cite and
+are not read; the largest are this
 guard and its own table, which quote the rotted examples they are about, and
 `CHANGELOG.md`, whose entries cite the tree as it stood and must be allowed to
-rot. Four prose files (`assurance/*.toml`, `docs/guides/fips.md`,
-`docs/token-refinement.md`) carry live model→code claims that only a person
-reads; two of them were found rotted by hand while this list was being written,
-and repaired. Named here so each stays a decision. A citation *edited in place* still passes, and one that was
+rot. Three prose files (`assurance/*.toml` outside `bundle/`,
+`docs/guides/fips.md`, `docs/token-refinement.md`) carry live model→code claims
+that only a person reads.
+Named here so each stays a decision. A citation *edited in place* still passes, and one that was
 wrong the day it was written locks wrong — so the lock diff is a thing to read,
 not a proof it hands you. And [`SEARCH`] is
 a hand-written list; entries are asserted to exist, not to be used, so an entry
 whose last citation goes away sits there harmlessly rather than turning an
 unrelated edit red.
+
+## A keyed table is cited by its KEY
+
+A line number is the wrong anchor for a file whose rows have names. Six bundle
+citations into `formal/floors.txt` named a `\\*` COMMENT where the sentence was
+about a data row; two of the six had been re-anchored by hand that same morning
+and rotted again within hours, because the file gained three comment lines. So
+[`KEYED`] holds the files whose rows are cited by NAME — `floors.txt:Solo_*.cfg`
+— and the check is that the name is some row's key. Comment edits above it move
+nothing. The line form still works on the same file and is still locked, because
+a citation whose subject IS the prose has no key to name (`floors.txt:50`, whose
+sentence is about the undercount that comment carries).
 """
 
 import pathlib
@@ -239,6 +253,26 @@ SCRIPT_EXEMPT = frozenset(
 #: signal someone argues away.
 SCRIPT_PAGES_FLOOR = 1
 
+#: The evidence bundles, and the third derived half. Every `.toml` directly under
+#: here is a page — no "does it cite?" filter, unlike the two halves above:
+#: `bundle_gate.py` already holds this directory to a per-row evidence contract,
+#: so a bundle that cites NOTHING is a finding rather than a file that opts out.
+#: Read off the directory for the reason `bundle_gate.py` gives at its own
+#: `BUNDLE_DIR`: a roster written down is a roster to remember to extend, and the
+#: next bundle then arrives unchecked. Measured the day this was added: 517
+#: citations over the eleven, of which 20 were already wrong by this row's own
+#: rules — 12 naming a file the tree does not have, 4 landing on a blank line, 2
+#: past the end, 2 basenames that resolve two ways — plus 11 bare continuations
+#: bound to nothing. Not one of them was reachable from any gate before.
+BUNDLE_ROOT = "assurance/bundle/"
+
+#: The bundle half's own floor, apart from its two siblings for the same reason
+#: they are apart from each other. It is 1, not 11: what a number here can catch
+#: is the derivation finding NOTHING, and the roster ratchet — a bundle leaving —
+#: is `bundle_gate.py`'s `BUNDLE_FLOOR`, which already refuses it. Two guards
+#: holding one number is how the second one comes to disagree with the first.
+BUNDLE_PAGES_FLOOR = 1
+
 
 def _cites(root, rel):
     """Whether `rel` carries a citation.
@@ -251,9 +285,17 @@ def _cites(root, rel):
 
 
 def code_pages(root, tracked):
-    """Tracked `.rs` files under [`CODE_ROOTS`] that cite code by line."""
+    """Tracked `.rs` files under [`CODE_ROOTS`] that cite code by line.
+
+    The suffix is asserted here rather than inherited from `tracked`, which now
+    carries every suffix [`CITE`] can NAME: a `tools/*.sh` is a citable target,
+    not a proof header, and letting it in through the caller's set would widen
+    this half by a side effect of the other one.
+    """
     return tuple(
-        pathlib.Path(rel) for rel in sorted(tracked) if rel.startswith(CODE_ROOTS) and _cites(root, rel)
+        pathlib.Path(rel)
+        for rel in sorted(tracked)
+        if rel.endswith(".rs") and rel.startswith(CODE_ROOTS) and _cites(root, rel)
     )
 
 
@@ -266,6 +308,15 @@ def script_pages(root):
         and str(rel).startswith(SCRIPT_ROOT)
         and str(rel) not in SCRIPT_EXEMPT
         and _cites(root, rel)
+    )
+
+
+def bundle_pages(root):
+    """Every `.toml` directly under [`BUNDLE_ROOT`], citing or not."""
+    return tuple(
+        rel
+        for rel in sorted(gate_lines.tree_files(root))
+        if rel.suffix == ".toml" and rel.parent == pathlib.Path(BUNDLE_ROOT.rstrip("/"))
     )
 
 
@@ -360,12 +411,59 @@ def floor_for(page):
 #: Every dash a prose editor can leave behind. An en dash reads as a citation to
 #: a single line with the upper bound silently discarded, in two pages whose prose
 #: already uses `—` and `·` throughout — measured: `state.rs:284–99991` passed.
+#: `.sh` and `.txt` beside `.rs`, because the bundles cite the RUNNER as finely
+#: as they cite the firmware — `run-tlc.sh:200-203` is the derivation their
+#: reason-comparison argument rests on — and the `.rs`-only group made every one
+#: of those invisible. Priced before flipping it, over the whole tree and not
+#: just the pages: 122 citations the group had never seen, of which exactly ONE
+#: (`scripts/bcd_gate.py` -> `fuzz-coverage.sh:39-41`) lands on a page that was
+#: already read, and it resolves. The rest are on the bundles and on pages this
+#: guard does not read. Widening further was measured and REFUSED: `.tla`, `.md`,
+#: `.toml` and `.cfg` take the tree-wide count to 2438 and turn 72 bundle
+#: citations red at once, because [`SEARCH`] holds five `.rs` directories and a
+#: bare `RSKeySecurityState.tla` resolves in none of them. That is a corpus
+#: widening of its own, with its own repair pass, not a character class.
+EXTS = "rs|sh|txt"
 DASH = "-\u2010\u2011\u2012\u2013\u2014\u2212"
 CITE = re.compile(
-    r"(?:(?<![\w/.:-])(?P<file>[\w./-]+\.rs)|(?<=`)(?=:[^`]*`))"
+    rf"(?:(?<![\w/.:-])(?P<file>[\w./-]+\.(?:{EXTS}))|(?<=`)(?=:[^`]*`))"
     rf":\s*(?P<refs>\d+(?:\s*[{DASH}]\s*\d+)?(?:\s*,\s*\d+(?:\s*[{DASH}]\s*\d+)?)*)"
 )
 SPAN = re.compile(rf"(\d+)(?:\s*[{DASH}]\s*(\d+))?")
+
+#: Files whose rows have NAMES, so a line number is the wrong anchor for them,
+#: with how to read a row's key. `floors.txt` is a table keyed by configuration
+#: or glob — its own header says so — and a line into it moves whenever the prose
+#: above it does. Measured: six bundle citations named a comment where the
+#: sentence was about a row, two of them re-anchored by hand that morning and
+#: rotted again the same day by three added comment lines. A key does not move,
+#: so `floors.txt:Solo_*.cfg` is checked by LOOKUP and is not in [`LOCK`] at all:
+#: the key IS the content, and what the row then says is `verdict_gate.py`'s
+#: ratchet, not a second copy of it here.
+#:
+#: It is not a BAN on the line form into a keyed file, and that was decided by
+#: measurement too: `SEC-FIDO-006B.toml`'s `formal/floors.txt:50` is about the
+#: undercount that COMMENT carries, which has no key to name. The lock is what
+#: covers those.
+KEYED = {
+    # Columns are `<config or glob>  <GREEN|RED>  …`; `\*` opens a comment and
+    # `expect_for` in `run-tlc.sh` skips exactly those, so this reads the same
+    # column the runner matches on.
+    "formal/floors.txt": lambda line: line.split()[0],
+}
+ROW = re.compile(
+    r"(?<![\w/.:-])(?P<file>" + "|".join(re.escape(k) for k in KEYED) + r")"
+    r":(?P<row>[@A-Za-z][\w*.-]*)"
+)
+
+
+def rows_of(text, key):
+    """The keys a keyed table offers, comments and blank lines dropped."""
+    return {
+        key(line)
+        for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith(("\\*", "#"))
+    }
 
 
 def resolve(rel, tracked, page=None):
@@ -457,7 +555,11 @@ def audit(root, relock=False):
     # git's answer, like the other guards: a filesystem walk also finds the
     # agent worktrees under `.claude/` and the generated `book/`, whole second
     # copies of the tree in which a citation would resolve to the wrong file.
-    tracked = {str(rel) for rel in gate_lines.tree_files(root) if rel.suffix == ".rs"}
+    tracked = {
+        str(rel)
+        for rel in gate_lines.tree_files(root)
+        if rel.suffix.lstrip(".") in EXTS.split("|")
+    }
     lengths, problems, total, said, carried = {}, [], 0, set(), set()
     locked, entries, cited = read_lock(root), {}, set()
 
@@ -471,16 +573,18 @@ def audit(root, relock=False):
     for missing in (d for d in SEARCH if not (root / d).is_dir()):
         problems.append(f"{missing} is in SEARCH but is not a directory any more")
     derived, scripted = code_pages(root, tracked), script_pages(root)
+    bundled = bundle_pages(root)
     for found, floor, where in (
         (derived, CODE_PAGES_FLOOR, "/, ".join(CODE_ROOTS)),
         (scripted, SCRIPT_PAGES_FLOOR, SCRIPT_ROOT),
+        (bundled, BUNDLE_PAGES_FLOOR, BUNDLE_ROOT),
     ):
         if len(found) < floor:
             problems.append(
                 f"{len(found)} code page(s) under {where} cite by line,"
                 f" under the floor of {floor}: the derivation stopped finding them"
             )
-    derived += scripted
+    derived += scripted + bundled
     for page in PAGES + derived:
         if not (root / page).is_file():
             problems.append(f"{page} is gone; the model's citations are unchecked")
@@ -488,6 +592,17 @@ def audit(root, relock=False):
         text = (root / page).read_text()
         blank = {n for n, line in enumerate(text.splitlines(), 1) if not line.strip()}
         seen, at, here = None, 0, 0
+        for found in ROW.finditer(text):
+            here += 1
+            rel, want = found.group("file"), found.group("row")
+            if rel not in tracked:
+                problems.append(f"{page} cites `{found.group(0)}`, and no such file is in the tree")
+            elif want not in rows_of((root / rel).read_text(), KEYED[rel]):
+                note(
+                    found.group(0),
+                    f"{page}: `{found.group(0)}` names no row of {rel};"
+                    " the row was renamed or removed, or the key is a comment's",
+                )
         for number, name, start, end, written in citations(text):
             here += 1
             if any(n in blank for n in range(at + 1, number)):
@@ -597,7 +712,8 @@ def audit(root, relock=False):
     debt = f", {len(carried)} carried" if carried else ""
     return problems, (
         f"citation-gate: ok — {total} citations across {len(PAGES)} model pages, "
-        f"{len(derived) - len(scripted)} code pages and {len(scripted)} script pages resolve; "
+        f"{len(derived) - len(scripted) - len(bundled)} code pages, {len(scripted)} script pages "
+        f"and {len(bundled)} evidence bundles resolve; "
         f"phase-1 property tags close both ways{debt}"
     )
 

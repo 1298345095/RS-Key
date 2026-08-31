@@ -132,7 +132,7 @@ artifact = "SoloClause_ResetKeepsThePinGate.cfg::ResetKeepsThePinGate"
 bound_invariants = 2
 stops_invariants = "anything about the rest of the invariant set. TypeOK and this one clause is the whole of what this row checks, which is exactly why its RED cannot be a neighbour's — and equally why it says nothing about whether a neighbour would have caught the same defect"
 bound_armed_switches = 1
-stops_armed_switches = "any defect the one switch does not build. One armed switch is also what makes the runner compare the reported name: `formal/floors.txt:224` gives this family `RED -` with no invariant column, and `formal/run-tlc.sh:199-201` then DERIVES the expected name from the configuration's own INVARIANTS block whenever `armed_count` is 1 — which it is here, measured"
+stops_armed_switches = "any defect the one switch does not build. One armed switch is also what makes the runner compare the reported name: `formal/floors.txt:SoloClause_*.cfg` gives this family `RED -` with no invariant column, and `formal/run-tlc.sh:199-203` then DERIVES the expected name from the configuration's own INVARIANTS block whenever `armed_count` is 1 — which it is here, measured"
 bound_clauses = 1
 stops_clauses = "the other two conjuncts of the parent. This row is about one third of `ResetNeverWeakensSurvivingState` and is silent on the rest"
 bound_depth = 16
@@ -219,7 +219,7 @@ bound_assertions = 1
 stops_assertions = "the same attribution, one rung up. tests/29_reset_power_cut.py:190-194 asserts the old credential's assertion was REFUSED; the refusal could be either gate's and the assertion does not say. The failure MESSAGE prints both option flags, so a human reading a red run could tell — the assertion could not"
 bound_recorded_board_runs = 0
 stops_recorded_board_runs = "everything the board column might have been. No run of that script is recorded anywhere in the tree; `hardware` is 0 on this row's vector, `build` names no board revision because there is no board result to date one, and PLAT-FLASH-001 owns the missing result with `status = \"pending\"`"
-shipped_relation = "both files NAME this clause in their doc comments — power_cut.rs:29-31 and 29_reset_power_cut.py:12-14 list all three — and neither can report it. So of the four non-zero evidence columns on this row, two are counts of files whose oracles fold this clause into a sibling's. The columns are not wrong; they count what they say they count, which is a file"
+shipped_relation = "both files NAME this clause in their doc comments — fuzz/fuzz_targets/power_cut.rs:29-31 and 29_reset_power_cut.py:12-14 list all three — and neither can report it. So of the four non-zero evidence columns on this row, two are counts of files whose oracles fold this clause into a sibling's. The columns are not wrong; they count what they say they count, which is a file"
 cfg = "none"
 features = "none"
 

@@ -1339,12 +1339,18 @@ NOT_TYPED_HERE = {
     "CHANGELOG.md": "every line of it sits under a version heading, which is exactly the"
     " scope label a historical figure needs — an entry saying what a run cost at 0.4.10"
     " does not go stale, it stays 0.4.10's",
+    "formal/citations.lock": "nobody types a sentence into it: `citation_gate.py --relock`"
+    " copies a cited SOURCE line into every row verbatim, so what reads as a count there"
+    " is Rust, not prose. Driven — the day the evidence bundles joined that gate's corpus"
+    " the file gained 503 rows and one of them was `77-77` beside"
+    " `cfg!(feature = \"always-uv\")`, reported as `'77-77\\tcfg'`; a SCOPED entry for it"
+    " would name a fragment the next relock rewrites",
 }
 
-#: Two, and EQUAL to `len(NOT_TYPED_HERE)` for [`SCOPE_CEILING`]'s reason. A
-#: third file that is not a place a run-count gets typed is a claim worth making
+#: Three, and EQUAL to `len(NOT_TYPED_HERE)` for [`SCOPE_CEILING`]'s reason. A
+#: fourth file that is not a place a run-count gets typed is a claim worth making
 #: in a diff.
-CARVE_OUT_CEILING = 2
+CARVE_OUT_CEILING = 3
 
 
 def tracked(root):

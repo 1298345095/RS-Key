@@ -100,12 +100,36 @@ SCRIPT = """# SPDX-License-Identifier: AGPL-3.0-only
 # The gate this recorder stands in for (`clientpin.rs:4-6`).
 """
 
+#: A KEYED table: rows with names, under comment lines that move. Both anchors a
+#: bundle can write — a line and a row key — point into this one file, which is
+#: what lets the two be measured against the same edit.
+FLOORS = """\\* WHAT EACH CONFIGURATION MUST PRODUCE, so a run nobody watched cannot
+\\* pass by getting smaller.
+\\* Columns: <config or glob>  <GREEN|RED>  <min distinct, or - >
+Shipped.cfg                          GREEN   25854624
+Solo_*.cfg                           RED     -
+"""
+
+#: An evidence bundle: it cites code by line and the verdict table by ROW, which
+#: is the pair the six repaired citations are about. In the corpus because the
+#: directory holds it, not because a tuple names it.
+BUNDLE = """\
+[[method]]
+artifact = "Solo_Probe.cfg"
+reading = "the gate this row drives (`clientpin.rs:4-6`), and the verdict the runner holds\
+ it to: formal/floors.txt:Solo_*.cfg gives the family `RED -` with no invariant column"
+"""
+
 #: The derived page every code-half case drives.
 PROOF_PAGE = "crates/rsk-fido/src/probe_kani.rs"
 
 #: The derived page every scripts-half case drives, and one the exemption covers.
 SCRIPT_PAGE = "scripts/probe_trace.py"
 EXEMPT_PAGE = "scripts/citation_gate.py"
+
+#: The derived page every bundle-half case drives, and the table it cites.
+BUNDLE_PAGE = "assurance/bundle/SEC-T-001.toml"
+FLOORS_PAGE = "formal/floors.txt"
 
 MODEL_PAGE = _page("RSKeySecurityState.tla")
 PROSE_PAGE = _page("README.md")
@@ -122,6 +146,8 @@ class Tree:
         self.write(PROOF_PAGE, PROOF)
         self.write(SCRIPT_PAGE, SCRIPT)
         self.write(EXEMPT_PAGE, SCRIPT)
+        self.write(FLOORS_PAGE, FLOORS)
+        self.write(BUNDLE_PAGE, BUNDLE)
         self.write("crates/rsk-device/src/ctap.rs", UNTAGGED_CODE)
         self.write("crates/rsk-usb/src/ctaphid.rs", UNTAGGED_CODE)
         self.write("crates/rsk-fs/src/lib.rs", UNTAGGED_CODE)
@@ -544,7 +570,18 @@ def test_a_citation_that_trips_another_rule_is_not_also_an_orphaned_lock(tree):
 
 
 def code_pages_of(tree):
-    tracked = {str(rel) for rel in gate_lines.tree_files(tree.root) if rel.suffix == ".rs"}
+    """`audit`'s own `tracked` set, widened suffixes and all.
+
+    It filtered `.rs` here for a while, which is the set `code_pages` is supposed
+    to narrow — so the helper was doing the rule's job and hiding it. Measured:
+    deleting the suffix test inside `code_pages` left every case in this file
+    green.
+    """
+    tracked = {
+        str(rel)
+        for rel in gate_lines.tree_files(tree.root)
+        if rel.suffix.lstrip(".") in citation_gate.EXTS.split("|")
+    }
     return [str(page) for page in citation_gate.code_pages(tree.root, tracked)]
 
 
@@ -598,6 +635,132 @@ def test_relock_names_a_citation_the_lock_has_never_seen(tree):
     tree.edit(MODEL_PAGE, "NoDrift == TRUE", "\\* and one more (state.rs:2)\nNoDrift == TRUE")
     buried = tree.problems(buried=True)
     assert only(buried, "is not in"), buried
+
+
+# --- the evidence bundles: the third derived half ----------------------------
+
+
+def bundle_pages_of(tree):
+    return [str(page) for page in citation_gate.bundle_pages(tree.root)]
+
+
+def test_the_bundle_roster_is_the_directory(tree):
+    """A bundle is a page because the directory holds it. Named rosters are how
+    the twelfth bundle would arrive with every citation in it unread."""
+    tree.write("assurance/bundle/SEC-T-002.toml", BUNDLE)
+    found = bundle_pages_of(tree)
+    assert BUNDLE_PAGE in found and "assurance/bundle/SEC-T-002.toml" in found, found
+    # And a bundle that cites NOTHING is still a page: `bundle_gate.py` holds this
+    # directory to an evidence contract, so citing nothing is a finding, not an
+    # opt-out — unlike the `.rs` and `.py` halves, which are in the set BECAUSE
+    # they cite.
+    tree.write("assurance/bundle/SEC-T-003.toml", 'note = "no citation here"\n')
+    assert "assurance/bundle/SEC-T-003.toml" in bundle_pages_of(tree)
+
+
+def test_a_bundle_citation_past_the_end_of_the_file(tree):
+    """The whole class, before the widening: 517 citations over eleven bundles and
+    not one of them reachable from any gate."""
+    tree.edit(BUNDLE_PAGE, "clientpin.rs:4-6", "clientpin.rs:4-600")
+    assert only(tree.problems(), "which has 8 lines")
+
+
+def test_a_bundle_row_citation_that_names_a_comment(tree):
+    """The live defect, in its own shape: all six named a `\\*` COMMENT where the
+    sentence was about a data row. A key is looked up in the row column, and
+    comments are not in it."""
+    tree.edit(BUNDLE_PAGE, "formal/floors.txt:Solo_*.cfg", "formal/floors.txt:Columns")
+    assert only(tree.problems(), "names no row of formal/floors.txt")
+
+
+def test_a_keyed_tables_comment_lines_are_not_rows():
+    """`rows_of` reads the column `run-tlc.sh`'s own `expect_for` matches on, and
+    that reader skips `\\*` and `#`. Without the skip a comment's first word is a
+    row key, and a citation that names one reads as resolved."""
+    rows = citation_gate.rows_of(FLOORS, citation_gate.KEYED[FLOORS_PAGE])
+    assert rows == {"Shipped.cfg", "Solo_*.cfg"}, rows
+
+
+def test_a_bundle_row_citation_whose_row_was_renamed(tree):
+    tree.edit(FLOORS_PAGE, "Solo_*.cfg  ", "SoloWide_*.cfg  ")
+    assert only(tree.problems(), "names no row of formal/floors.txt")
+
+
+def test_a_row_citation_into_a_file_the_tree_does_not_have(tree):
+    (tree.root / FLOORS_PAGE).unlink()
+    assert only(tree.problems(), "no such file is in the tree")
+
+
+def test_the_line_form_cannot_tell_a_comment_from_a_data_row(tree):
+    """WHY the anchor is the key, measured rather than argued: the same wrong
+    target written as a LINE resolves, is in range and is not blank, so every rule
+    this guard has passes it. This is the arm that decided the repair."""
+    tree.edit(BUNDLE_PAGE, "formal/floors.txt:Solo_*.cfg", "formal/floors.txt:2")
+    assert tree.problems() == []
+
+
+def test_deleting_the_bundle_half_is_caught_by_its_own_floor(tree, monkeypatch):
+    """The derivation pointed somewhere the tree has nothing: a loop over an empty
+    set exits 0, which is the shape four guards in this tree shipped with."""
+    monkeypatch.setattr(citation_gate, "BUNDLE_ROOT", "assurance/no-bundles-here/")
+    assert only(tree.problems(), "under the floor of 1")
+
+
+def test_the_bundle_half_is_what_reads_a_bundles_citations(tree, monkeypatch):
+    """The guard-deletion arm: take the pages out AND the floor that notices, the
+    way a deletion actually happens, and the bad citation above is green again.
+    That is what says the widening is load-bearing rather than decorative."""
+    tree.edit(BUNDLE_PAGE, "clientpin.rs:4-6", "clientpin.rs:4-600")
+    assert only(tree.problems(), "which has 8 lines")
+    monkeypatch.setattr(citation_gate, "bundle_pages", lambda root: ())
+    monkeypatch.setattr(citation_gate, "BUNDLE_PAGES_FLOOR", 0)
+    assert tree.problems() == []
+
+
+# --- the control: the exact motion that rotted the six ------------------------
+
+
+def test_a_comment_inserted_above_a_cited_ROW_stays_green(tree):
+    """Two of the six were re-anchored by hand one morning and rotted again the
+    same day, because `floors.txt` gained three comment lines. A key does not
+    move, so this edit is a non-event — which is the point of the row form."""
+    tree.lock()
+    tree.edit(FLOORS_PAGE, "Shipped.cfg", "\\* one more comment line\nShipped.cfg")
+    assert tree.problems() == []
+
+
+def test_the_same_insertion_moves_a_LINE_citation(tree):
+    """The control's twin, and the measurement behind [`KEYED`]: written as a
+    line, that same comment turns the row red and buys a hand re-anchor. Both are
+    recorded because the choice between them is what this pair decides."""
+    tree.edit(BUNDLE_PAGE, "formal/floors.txt:Solo_*.cfg", "formal/floors.txt:5")
+    tree.lock()
+    tree.edit(FLOORS_PAGE, "Shipped.cfg", "\\* one more comment line\nShipped.cfg")
+    drift = only(tree.problems(), "has drifted")
+    assert drift, tree.problems()
+    assert "is now at :6" in drift[0], drift[0]
+
+
+# --- the widened extension set ------------------------------------------------
+
+
+def test_a_shell_citation_is_read(tree):
+    """`.sh` beside `.rs`: the bundles cite the RUNNER as finely as the firmware,
+    and `run-tlc.sh:200-203` is the derivation a reason-comparison argument rests
+    on. The `.rs`-only group saw none of them."""
+    tree.write("formal/run-tlc.sh", "#!/usr/bin/env bash\nderived_inv() { :; }\n")
+    tree.edit(BUNDLE_PAGE, "clientpin.rs:4-6", "formal/run-tlc.sh:2")
+    assert tree.problems() == []
+    tree.edit(BUNDLE_PAGE, "formal/run-tlc.sh:2", "formal/run-tlc.sh:20")
+    assert only(tree.problems(), "which has 2 lines")
+
+
+def test_a_shell_page_is_not_a_code_page(tree):
+    """`code_pages` asserts the `.rs` suffix itself rather than inheriting it from
+    `tracked`, which now carries every suffix `CITE` can NAME. Without that a
+    `tools/*.sh` that cites becomes a proof header by side effect."""
+    tree.write("tools/probe.sh", "# cites (`clientpin.rs:4-6`)\n")
+    assert "tools/probe.sh" not in code_pages_of(tree)
 
 
 def test_relock_on_an_unmoved_tree_buries_nothing(tree):
