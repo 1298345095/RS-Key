@@ -699,6 +699,99 @@ def test_a_reported_line_is_the_line_in_the_file(tree):
     assert got and got[0].startswith(f"{page}:{want}:"), (want, got)
 
 
+#: A hard wrap in the RAW file, which is what the reader looks at and where the
+#: deleted newline was. Not `-\n[ \t]*\S` — 11 of `docs/protocol.md`'s 12 sites are
+#: followed by a BLANK line and the join deleted those newlines too, so a pattern
+#: demanding a continuation finds ONE of them and measures a twelfth of the drift.
+#: Counted on the raw text and not on a [`normalise`]d copy, which invents two more
+#: by stripping a trailing `*`.
+WRAP = re.compile(r"-\n[ \t]*")
+
+
+def worst_wrapped(root):
+    """(page, the 1-based lines its hard wraps end) for the worst hand-written page.
+
+    Derived rather than named. Measured over the tracked corpus today:
+    `docs/protocol.md` 12, `CHANGELOG.md` 6, `docs/anti-rollback.md` 5,
+    `formal/README.md` 3, `docs/formal.md` 2, `docs/reset-refinement.md` 1 — all
+    of it the author's editor rather than a decision, so a case naming the page
+    goes stale the week the prose is rewrapped, which this file has already been
+    bitten by twice.
+    """
+    best = ("", [])
+    for rel, _ in claims_gate.corpus(root):
+        raw = (root / rel).read_text(errors="replace")
+        at = [raw.count("\n", 0, found.start()) + 1 for found in WRAP.finditer(raw)]
+        if len(at) > len(best[1]):
+            best = (rel, at)
+    return best
+
+
+def test_a_claim_below_a_hard_wrap_cites_its_own_line(tree):
+    """BOTH citations this row prints, under the wraps that used to move them.
+
+    The sibling above appends at the END of `docs/formal.md`, two wraps down.
+    This one puts the claims DIRECTLY under the last wrap of the worst page — 12
+    wraps on `docs/protocol.md` — and asserts the other line the row prints, the
+    transcribed-row rule's, which nothing asserted: `enumerate(text.splitlines(),
+    2)` was 104 passed. Measured end to end before this case existed: 89 claims
+    over all 66 hand-written pages, drift 0; with `re.sub(r"-\n[ \t]*", "-",
+    text)` back in [`normalise`], exactly the six pages above drift by 12/6/5/3/2/1.
+
+    Killed here, and each read for its DIRECTION rather than its colour: the join
+    (the sentence cited 12 EARLY, one per wrap above it), a join narrowed to a
+    lowercase continuation, and the row's own off-by-one (the row cited one LATE
+    while the sentence stayed exact). The generated-region half stays the
+    sibling's — the worst-wrapped page carries no region to mask.
+    """
+    page, wraps = worst_wrapped(tree)
+    assert len(wraps) >= 2, f"{page} is the worst at {len(wraps)} wrap(s) — nothing drifts"
+    lines = (tree / page).read_text(errors="replace").split("\n")
+    # Below the wrapped word, not between its halves, and bottom-most so every
+    # wrap on the page is above it — the drift is the count of joins ABOVE.
+    lines[wraps[-1] + 1 : wraps[-1] + 1] = [
+        "",
+        "`SEC-FIDO-001` is not BOUNDED.",
+        "",
+        "| `SEC-FIDO-007` | MODELLED-ONLY | 3 | 1 | 0 |",
+        "",
+    ]
+    (tree / page).write_text("\n".join(lines))
+    assert sum("is not BOUNDED" in line for line in lines) == 1, "the page already said it"
+    assert sum("MODELLED-ONLY | 3" in line for line in lines) == 1, "the page already had the row"
+    said = next(n for n, line in enumerate(lines, 1) if "is not BOUNDED" in line)
+    row = next(n for n, line in enumerate(lines, 1) if "MODELLED-ONLY | 3" in line)
+    reported = [f for f in findings(tree) if f.startswith(f"{page}:")]
+    assert any(
+        f.startswith(f"{page}:{said}:") and "does not assert it" in f for f in reported
+    ), (said, reported)
+    assert any(
+        f.startswith(f"{page}:{row}:") and "transcribed row" in f for f in reported
+    ), (row, reported)
+
+
+def test_a_claim_above_every_hard_wrap_is_the_control(tree):
+    """The other arm, and it has to stay GREEN.
+
+    The same claim on the same page with no wrap ABOVE it keeps its line under
+    the join, so its sibling going red is the wraps and not a blanket miscount.
+    Measured with the join put back: this case passes while the sibling reports
+    12 lines early (`docs/protocol.md:1189` for the 1201 the file holds) — the
+    drift is the durable half of that, the line numbers move with the prose.
+    """
+    page, wraps = worst_wrapped(tree)
+    lines = (tree / page).read_text(errors="replace").split("\n")
+    lines[wraps[0] - 1 : wraps[0] - 1] = ["", "`SEC-FIDO-001` is not BOUNDED.", ""]
+    (tree / page).write_text("\n".join(lines))
+    assert sum("is not BOUNDED" in line for line in lines) == 1, "the page already said it"
+    said = next(n for n, line in enumerate(lines, 1) if "is not BOUNDED" in line)
+    assert said < wraps[0] + 3, (said, wraps[0])
+    reported = [f for f in findings(tree) if f.startswith(f"{page}:")]
+    assert any(
+        f.startswith(f"{page}:{said}:") and "does not assert it" in f for f in reported
+    ), (said, reported)
+
+
 @pytest.mark.parametrize(
     "sentence,refused",
     [
