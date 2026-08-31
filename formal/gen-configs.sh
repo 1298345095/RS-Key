@@ -292,7 +292,34 @@ force_ch=TRUE ship_auv=TRUE retries=2 mism=1 rps='{r1}' chans='{c1, c2}' \
   emit ForceChange.cfg "" FALSE TRUE
 # The two findings this model produced, kept as regression configurations rather
 # than deleted: each is the tree with exactly the shipped fix taken back out.
-emit Historical_E76.cfg BugSeedDoesNotLead FALSE TRUE
+#
+# E76 IS THE ONE WHERE THAT SENTENCE PRODUCED NOTHING. The tree's own fix for it
+# is `BugSeedDoesNotLead = FALSE`, so "the shipped fix taken back out" is the
+# `Mut_` loop below verbatim -- and `emit Historical_E76.cfg BugSeedDoesNotLead
+# FALSE TRUE` passed the same four arguments the loop passes, so the two files
+# were BYTE-IDENTICAL from 301c53a, the commit that introduced them, until this
+# line changed. One experiment under a pair of names, and every denominator
+# derived by grepping `formal/*.cfg` counted that experiment twice.
+#
+# So the row is the COUNTERFACTUAL instead, which is the one experiment in this
+# family nothing else runs: the pre-0x08BF tree with the repair the model
+# proposed and the maintainer did not take. `FixSweepDropsCredsBeforeRpEntries`
+# had never been passed TRUE by any call -- every configuration that assigned it
+# assigned it FALSE -- so the conjunct it guards (RSKeySecurityState.tla:1405) could
+# be deleted with every recorded verdict unchanged: a model constant nothing
+# branches on. Armed HERE it is load-bearing, because this row is GREEN only if
+# the repair closes E76, and deleting the conjunct makes this file's behaviour
+# `Mut_BugSeedDoesNotLead.cfg`'s and the row goes RED. That is the discharge
+# `assurance/platform.toml`'s PLAT-CRED-004 asks for, in the place it asks for.
+#
+# Shipped.cfg's constants and NOT a reduced ladder, which is the whole point:
+# the sibling it must be read against, `Mut_BugSeedDoesNotLead.cfg`, runs at
+# those constants, so a one-line difference between the two files is a one-line
+# explanation of the difference in verdict. Reduce them and a GREEN could be the
+# repair or could be a scope too small to express the defect, and nothing in the
+# tree would separate the two -- there is no RED twin at reduced constants, and
+# minting one would take a name the runner's own tier roster does not have.
+emit Historical_E76.cfg BugSeedDoesNotLead TRUE TRUE
 # E77 is closed at BOTH ends now: the consumer refuses the stranded record
 # (32b9fa3) and eab4b5c stopped the wipe producing one. So reproducing its
 # counterexample takes the producer back out too -- the record the consumer
@@ -800,6 +827,21 @@ trans_target() {
 }
 TRANS_INV=(NoCrossChannelSplice NoSequenceGap NoBufferOverrun)
 
+# SYMMETRY over Channels here: CONSIDERED, and REJECTED. The record sits beside
+# the function that would carry the line rather than in a roadmap, because this
+# is where the next reader will reach for it.
+#
+# It would erase the identity the properties are ABOUT. `owner` ranges over
+# Channels and `Cont`'s first arm is `c # owner`; a permutation quotient
+# identifies `owner = a` with `owner = b`, which is precisely the distinction
+# NoCrossChannelSplice's ghost is written on. That is the same fact scopes.txt
+# records as `Channels 2` for it: GREEN over one channel, RED from two.
+#
+# And there is nothing to buy. The quotient in `emit` above is priced at
+# 61 215 504 distinct states -> 25 829 584; Transport.cfg's WHOLE graph is 13
+# distinct states at depth 4, 127 generated, under a second (formal/runs.toml).
+# RSKeyTransport defines no Symm and does not EXTEND TLC either, so it is a
+# MODEL change plus a re-run of all seven transport rows, spent to halve 13.
 emit_trans() { # $1 = cfg, $2 = switch (""), $3 = 1 for solo
   local out=$1 on=${2:-} solo=${3:-0}
   {
@@ -990,3 +1032,82 @@ emit_token_gate TokenGateDisagreement.cfg Spec "" RequiredGateAgreesWithRelation
 emit_token_gate TokenGateMut_BugUnauthorizedEdge.cfg Spec BugUnauthorizedEdge \
   NoAuthorizationBypassA
 echo "wrote tier-A gate configs and the unauthorized-edge mutant"
+
+# ---------------------------------------------------------------------------
+# NO TWO NAMES MAY BE ONE CONFIGURATION, and this is what makes the duplicate
+# above impossible to write again rather than merely absent today. Nothing here
+# compared one emitted file with another for its whole life: `Historical_E76
+# .cfg` and `Mut_BugSeedDoesNotLead.cfg` were byte-identical from 301c53a, so a
+# pair of matrix rows ran a single experiment, each was paid for in wall time,
+# and every denominator derived from the roster counted that file twice.
+#
+# ONE PASS AT THE END, not a test inside `emit`. FIFTEEN functions in this file
+# write a configuration (`grep -c '^emit[a-z_]*() {'`); a per-emitter guard is
+# fourteen copies plus the one the sixteenth emitter ships without -- which is
+# this tree's measured shape for a new guard, 5 of 5. Sweeping `$out_dir` also
+# reaches a configuration written BY HAND beside the generated ones, which no
+# emitter can see.
+#
+# awk and not a hasher: the content IS the array key, so nothing here depends on
+# `sha256sum`/`shasum`/`md5` existing under whichever shell runs this. The key
+# folds a missing final newline into the same bucket as a present one; that is a
+# WIDER net than byte equality and deliberately so -- `scripts/config_gen_gate
+# .py` compares the tree byte-for-byte, and the two disagreeing would mean this
+# passed something that row must then refuse.
+# THE ONE PAIR WHERE TWO IDENTICAL FILES ARE TWO EXPERIMENTS, and it is written
+# as a PAIR because the first edition wrote it as a NAME and shipped the sixth
+# hole of the family it closes: a DUP_OK naming TraceSeamsBad.cfg alone exempted
+# that file from being anybody's twin, so `cp Shipped.cfg TraceSeamsBad.cfg` passed both
+# guards -- the exemption held while the file had become the twin of a DIFFERENT
+# configuration and the pair it was granted for had quietly gone.
+#
+# Why the pair is legitimate: TLC takes the MODULE as an argument, and the
+# runner's own `spec_for` routes `TraceSeamsBad.cfg` to TraceSeamsBad.tla and
+# `TraceSeams.cfg` to TraceSeams.tla -- the divergence that pair of rows is
+# about lives in the modules, which is the same sentence
+# `scripts/verdict_gate.py`'s UNSWITCHED_RED already records for that file. This
+# sweep cannot ASK that question (the routing lives in the runner, which is not
+# beside this script in every tree it is generated into), so the pair is
+# asserted here and `scripts/config_gen_gate.py` reads this line and checks the
+# premise against `spec_for` itself. Both directions below: a pair that is no
+# longer a pair is a stale carve-out, and reported as one.
+#
+# `<later>:<owner>`, with the names in the order the sweep prints them -- the
+# owner is the alphabetically first of the two, because that is the one the
+# `*.cfg` glob reaches first.
+DUP_OK="TraceSeamsBad.cfg:TraceSeams.cfg"
+pairs=$(awk '
+  FNR == 1 { order[++n] = FILENAME }
+  { body[FILENAME] = body[FILENAME] $0 "\n" }
+  END {
+    for (i = 1; i <= n; i++)
+      if (body[order[i]] in seen) printf "%s:%s\n", order[i], seen[body[order[i]]]
+      else seen[body[order[i]]] = order[i]
+  }' *.cfg)
+problems=""
+for pair in $pairs; do
+  case " $DUP_OK " in
+    *" $pair "*) ;;
+    *) problems="$problems  ${pair%%:*} is the same configuration as ${pair#*:}
+" ;;
+  esac
+done
+# Unquoted, so the newline separators collapse to spaces: `case " $pairs "` over
+# the raw value cannot match a pair sitting at the start or end of a line, and
+# the stale-carve-out arm would then fire on a pair that IS there.
+pairs_line=$(echo $pairs)
+for pair in $DUP_OK; do
+  case " $pairs_line " in
+    *" $pair "*) ;;
+    *) problems="$problems  $pair: carved out as a legitimate identical pair, but
+  they are not each other's twin now -- stale carve-out in gen-configs.sh
+" ;;
+  esac
+done
+if [ -n "$problems" ]; then
+  echo "gen-configs: one configuration under a pair of names -- give it one" >&2
+  echo "name, or make the second row a different experiment:" >&2
+  printf '%s' "$problems" >&2
+  exit 1
+fi
+echo "checked that no configuration is another's byte-for-byte twin"

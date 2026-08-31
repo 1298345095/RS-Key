@@ -437,30 +437,93 @@ def check_switches(configs, problems):
                 " reads here exactly like one that is off")
 
 
-def check_reverted_fixes(configs, first, problems):
-    """A shipped fix taken back out is a defect, whatever its constant is called.
+def repair_arms(configs, problems):
+    """{configuration: the `Fix*` constants it turns ON that `BASELINE` leaves OFF}.
 
-    `Fix*` is not a defect switch — reading it as one would call every baseline a
-    mutant — so it is read as one exactly where it differs from `BASELINE`, which
-    is what `Historical_E77.cfg` is. One direction only: a reverted fix may not
-    be required GREEN, and nothing here asks a configuration to be RED.
+    The counterpart of a reverted fix, and it had no reader at all until
+    `Historical_E76.cfg` became one. A `Fix*` the tree does NOT ship is a
+    counterfactual repair: armed beside the defect it was proposed for, the
+    question the run answers is "would this repair have worked", and that is the
+    one thing a configuration's constants cannot say in advance — which is why
+    `check_verdicts` stops deriving for these and the registry decides instead.
+
+    A `Fix*` whose value is neither TRUE nor FALSE is reported here rather than
+    read as OFF, for the reason `Config.unreadable` gives one switch family over:
+    the silent direction is the one that derives the permissive answer.
     """
     baseline = configs.get(BASELINE)
     if baseline is None:
         problems.append(f"{BASELINE}: no such configuration, so a `Fix*` constant taken"
                         " off the arm the tree ships has nothing to be compared with")
+        return {}
+    for name, config in sorted(configs.items()):
+        for fix, value in sorted(config.fixes.items()):
+            if value not in ("TRUE", "FALSE"):
+                problems.append(
+                    f"{name}: {fix} = {value!r}, which is neither TRUE nor FALSE — whether"
+                    " it takes a shipped fix out or applies one the tree never took cannot"
+                    " be derived, and an unreadable fix reads here like the shipped arm")
+    return {name: sorted(n for n, v in config.fixes.items()
+                         if v == "TRUE" and baseline.fixes.get(n) == "FALSE")
+            for name, config in configs.items()}
+
+
+def check_reverted_fixes(configs, first, problems):
+    """A shipped fix taken back out is a defect, whatever its constant is called.
+
+    `Fix*` is not a defect switch — reading it as one would call every baseline a
+    mutant — so it is read as one exactly where it is taken OFF the arm
+    `BASELINE` ships it on, which is what `Historical_E77.cfg` is. One direction
+    only: a reverted fix may not be required GREEN, and nothing here asks a
+    configuration to be RED.
+
+    ONE DIRECTION OF THE VALUE, TOO, and that is the correction `Historical_E76
+    .cfg` forced. The comparison was `v != baseline.fixes[n]`, which is symmetric
+    — so a fix the baseline leaves OFF and a configuration turns ON tripped this
+    as "a fix taken back out". Applying a repair the tree never took cannot
+    reintroduce a defect; the direction that can is a fix REMOVED. What the
+    other direction owes instead is `check_repair_experiments`.
+    """
+    baseline = configs.get(BASELINE)
+    if baseline is None:
         return
     for name, config in sorted(configs.items()):
         row = first.get(name)
         if row is None or row["want"] == "RED":
             continue
         reverted = sorted(n for n, v in config.fixes.items()
-                          if n in baseline.fixes and v != baseline.fixes[n])
+                          if baseline.fixes.get(n) == "TRUE" and v != "TRUE")
         if reverted:
             problems.append(
                 f"{name}: {REGISTRY}:{row['line']} `{row['pattern']}` requires GREEN, but"
                 f" it takes {', '.join(reverted)} off the arm {BASELINE} ships it on —"
                 " a fix taken back out is the defect it closed, and owes RED")
+
+
+def check_repair_experiments(configs, first, repaired, problems):
+    """A defect armed beside a repair the tree never took owes an EXACT row.
+
+    Its verdict is a measurement and not a derivation, so the registry is the
+    only thing that can carry it — and a WILDCARD carrying it would be an
+    accident: `Mut_*.cfg RED -` would silently absorb a `Mut_` configuration
+    somebody had disarmed with a `Fix*`, and the family's own RED would be the
+    reason nobody looked. Naming the row makes the exemption a line of the
+    registry that a reader passes on the way to the family it sits beside.
+
+    The verdict itself is still held: `check_row_shape` refuses a GREEN with no
+    floor, and `check_reasons` refuses a RED nothing can attribute.
+    """
+    for name, config in sorted(configs.items()):
+        if not repaired.get(name) or not config.armed:
+            continue
+        row = first.get(name)
+        if row is None or not GLOB.search(row["pattern"]):
+            continue
+        problems.append(
+            f"{name}: arms {', '.join(config.armed)} together with"
+            f" {', '.join(repaired[name])}, a repair {BASELINE} does not ship — whether"
+            " that closes the defect is what the run measures, so it owes an exact"
+            f" row of its own and {REGISTRY}:{row['line']} `{row['pattern']}` is a family")
 
 
 def check_conflicts(every, problems):
@@ -475,11 +538,17 @@ def check_conflicts(every, problems):
                     " match decides it silently")
 
 
-def check_verdicts(configs, first, problems):
+def check_verdicts(configs, first, repaired, problems):
     """The verdict a configuration's CONSTANTS ask for against the one it is given."""
     for name, config in sorted(configs.items()):
         row = first.get(name)
         if row is None:
+            continue
+        if repaired.get(name) and config.armed:
+            # A repair the tree never took, armed beside the defect it was
+            # proposed for: the constants say a defect is present AND that
+            # something is meant to close it, so neither verdict is derivable
+            # from them. `check_repair_experiments` makes the row say which.
             continue
         exempt = name in UNSWITCHED_RED
         if exempt and config.armed:
@@ -685,21 +754,26 @@ def audit(formal=FORMAL, registry_text=None, previous_text=FROM_GIT, runner_text
                         " reads it — the last column is compared against nothing")
     reads = re.compile(reads["name"]) if reads else None
 
+    repaired = repair_arms(configs, problems)
     check_completeness(rows, first, every, problems)
     check_conflicts(every, problems)
     check_switches(configs, problems)
-    check_verdicts(configs, first, problems)
+    check_verdicts(configs, first, repaired, problems)
     check_reverted_fixes(configs, first, problems)
+    check_repair_experiments(configs, first, repaired, problems)
     check_row_shape(rows, reads, problems)
     check_reasons(configs, first, problems)
     check_floors(configs, first, ratchets, previous_text, text, problems)
 
     families = {row["pattern"] for row in rows if GLOB.search(row["pattern"])}
     covered = sum(1 for hit in first.values() if hit and hit["pattern"] in families)
+    experiments = sum(1 for name, config in configs.items()
+                      if repaired.get(name) and config.armed)
     return problems, (
         f"verdict-gate: ok — {sum(1 for hit in first.values() if hit)} configuration(s)"
         f" held to {len(rows)} entries ({len(families)} wildcard families covering"
-        f" {covered}), {len(ratchets)} ratchets, {len(NO_VERDICT)} exempt"
+        f" {covered}), {len(ratchets)} ratchets, {len(NO_VERDICT)} exempt,"
+        f" {experiments} counterfactual repair(s)"
     )
 
 
