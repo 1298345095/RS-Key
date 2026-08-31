@@ -1,6 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 RS-Key contributors
 
+//! The transport's tests, and the mutation table that says they can fail.
+//!
+//! `SEC-TRANS-001..003` are checked by TLC and by five Kani harnesses. Neither
+//! answers the question the exit criterion asks: does `cargo test -p rsk-usb` —
+//! the row CI actually runs — go red on the same defects, and for the right
+//! reason? `formal/comutants.toml` records three that do
+//! (`BugContIgnoresChannel`, `BugContIgnoresSeq`, `BugInitLenUnchecked`), and it
+//! cannot record the three below: an entry there is closed-world against a
+//! `TransMut_*.cfg`, and a new configuration costs a TLC tier pair. So they are
+//! measured and kept here instead, with the assertion that fell and the
+//! DIRECTION it fell in — a mutant killed by an "it should have succeeded" is a
+//! mutant killed for the inverse defect, which this tree has scored twice.
+//!
+//! Each anchor is an exact find/replace in `crates/rsk-usb/src/ctaphid.rs`,
+//! resolving exactly once; each patch compiled and ran all 62 tests, so none is
+//! a build break wearing a kill's colour.
+//!
+//! | Defect | Anchor, and what it becomes | The assertion that fell, and its direction |
+//! |---|---|---|
+//! | wrong channel, INIT-type arm | the BUSY return at `crates/rsk-usb/src/ctaphid.rs:425-429`, deleted | `init_other_channel_busy`: `Error(cid, 4)` where `Error(cid, 6)` was owed — `INVALID_SEQ` in place of `CHANNEL_BUSY`. `an_interfering_frame_never_moves_the_owners_transaction`: `owner: None` where `Some(0x1122_3344)` was owed. Both say a stranger's frame was ACTED ON, not that an honest one was refused |
+//! | premature completion | `crates/rsk-usb/src/ctaphid.rs:469` relaxed to `self.cur + CONT_DATA >= self.bcnt` | NINE tests fall, and the count matters because most are not witnesses. `multi_frame_reassembly` is: `Message(..)` where `None` was owed after the INIT of a two-frame message — a message COMPLETED that had not arrived. `cont_wrong_cid_busy`, `init_other_channel_busy` and `wrong_seq_aborts` say the same at their own INIT. TWO fall the other way round — `max_length_message` and `roundtrip`, `None` where `Message` was owed — the far side of the same defect, which proves nothing alone; `the_declared_length_is_refused_one_byte_past_the_buffer` reads 7550 for 7609, one CONT frame short, on that same reading. And `an_interfering_frame_never_moves_the_owners_transaction:631` fells its own SETUP ("the pre-state is not a live transaction"), so it is a casualty, not evidence |
+//! | the copy bound | `crates/rsk-usb/src/ctaphid.rs:463` relaxed to `CONT_DATA` | Exactly ONE killer, which is the row's point: `a_partial_last_frame_advances_by_its_remainder_and_no_further` — "the tail advanced by more than it carried", `cur` 116 where 67 was owed, the index walked PAST the declared length. Nothing else in the suite sees it: `CTAP_MAX_MESSAGE - INIT_DATA` divides by `CONT_DATA` exactly, so every other test's last frame is full and the `min` never bites |
+//! | CONTROL — no patch | — | 62 passed, exit 0: the row is not red for a reason of its own |
+
 use super::*;
 
 // Build an INIT report: cid | cmd | bcnt_hi | bcnt_lo | data...

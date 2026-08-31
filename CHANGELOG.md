@@ -339,6 +339,82 @@ and to the statuses it quotes.
   configurations, the floors and the two scripts. Empty over the 32 commits since
   the recorded run.
 
+- **Every citation the transport model made had rotted, and the pages carrying
+  its evidence made none.** `formal/RSKeyTransport.tla`'s eight
+  `ctaphid.rs:NNN` were all correct at `a6eff75`, the commit that wrote the
+  module; `c91dff0` shifted six of them by +19, one by +15 and one by +1, and
+  the lock was regenerated over the result, so `NoCrossChannelSplice`'s `:433-435` named the INIT-type
+  arm's `ERR_INVALID_SEQ` return and `:437-440` named `ERR_INVALID_LEN` — the
+  guards next door to the ones the module is about, which is the worst kind of
+  wrong citation because it still reads plausible. All eight re-derived by
+  CONTENT and re-locked. The bridge itself — `transport_assurance.rs`, the five
+  `transport_refinement_kani.rs` harnesses and `ctaphid_tests.rs` — carried no
+  `file.rs:line` at all, so none of it was a citation page; all three are now,
+  and inserting one line above `feed` reddens the row naming each of them.
+
+- **`SEC-TRANS-001..003` reach the production dispatcher, not only the
+  reassembler.** `CtapHid::on_frame` is the only caller of `feed` in the image
+  and carries all three `Refines` tags; `dispatch`, whose every arm reads
+  `asm.message()`, carries the two ghosts. The published evidence counts do not
+  move — `scripts/assurance_gate.py` counts tagged FILES, not tag sites.
+
+- **The reassembler's shipped-size relation is a compile-time obligation instead
+  of a sentence.** It was prose in `transport_assurance.rs` ("`Cap` chunks is
+  `INIT_DATA + Cap * CONT_DATA` bytes here"), and the sentence beside
+  `PROBE_MAX` had the number wrong: `formal/Transport.cfg` runs `Cap = 3`, and 2
+  is `formal/scopes.txt`'s FLOOR, so the harnesses pose one chunk *under* the
+  configuration TLC walks — stated now rather than claimed the other way round.
+  `PROBE_CHUNKS` writes the chunk count out independently of `CTAP_MAX_MESSAGE`
+  and three `const _: () = assert!` hold them together. Measured: moving either
+  side alone fails the build on `PROBE_MAX == INIT_DATA + PROBE_CHUNKS *
+  CONT_DATA`, and a width of 1200 frames fails `CTAP_MAX_MESSAGE <= u16::MAX` —
+  the obligation that keeps the over-length INIT refusal reachable at all. No
+  `bcdDevice` bump is owed and none was taken: every changed line is a comment,
+  a `cfg` attribute or an anonymous const, which is what `scripts/bcd_gate.py`
+  excuses. The row reading green on the shared tree was NOT evidence for that —
+  a concurrent change had already bumped to 0x09B7, and reverting
+  `firmware/src/main.rs` to HEAD makes the row exit 1 naming `crates/rsk-otp/`
+  and nothing of this change's.
+
+- **`--relock` now says what it launders, which is the mechanism that made the
+  rot above.** `scripts/citation_gate.py --relock` is a RECORD, not a repair, and
+  it printed one line — "rewritten; read the diff" — over a 549-row tab-separated
+  file. That is exactly how eight citations were re-locked at their new lines
+  with the pages left saying the old thing. It runs the audit against the OLD
+  lock first now and prints every complaint the rewrite will bury, prefixed
+  `rewritten:`. Measured on the repaired tree: one line inserted above `feed`
+  took it from 1 line to 25. `scripts/test_citation_gate.py` gains the three
+  cases, including the control that a quiet tree buries nothing.
+
+- **`scripts/transport_bridge_gate.py`, because Rust cannot read `formal/`.**
+  The two `const _: () = assert!` tie `PROBE_CHUNKS` to `CTAP_MAX_MESSAGE` and
+  nothing tied either to the model. Measured: `Cap = 3 -> 4` in the generator and
+  all seven `Trans*.cfg` leaves `config_gen_gate.py` and `scope_gate.py` both at
+  exit 0 — the scope row is a `>=`, and 4 clears it — with no Rust file touched.
+  The new row holds four numbers against each other: the recorded floor, the
+  configuration's `Cap`, and `PROBE_CHUNKS` under each `cfg`. Its own table is 19
+  cases including three controls, and the row itself is red on that mutation and
+  green without it. A third `const _` — the `cfg(kani)` multiple-of assertion — is
+  gone: it is implied by the first and could never fire alone.
+
+- **The emulator's dispatcher carries the tags too.** `on_frame` is the only
+  `feed` caller in the IMAGE, but `tools/emu/src/hid.rs`'s `serve` is a second
+  one, arm for arm the same down to `lock.refuses`, and it is what every
+  `tests/*.py` actually runs against. Tagged and cross-cited both ways; the
+  firmware comment now says "in the image" rather than "nowhere else".
+
+- **Three more transport defects, measured against the row CI actually runs.**
+  `formal/comutants.toml` carries three transport twins and is closed-world
+  against `TransMut_*.cfg`, so a fourth needs a configuration and a TLC tier
+  pair. The three classes stage 8A names and no entry covered — wrong channel on
+  the INIT-type arm, premature completion, and the copy bound — are measured in
+  `ctaphid_tests.rs`'s own table instead: each anchor resolves exactly once,
+  each patch compiled and ran all 62 tests, and each kill is recorded with the
+  assertion that fell and its DIRECTION. Premature completion fells seven tests
+  and three of them fall the wrong way round ("should have completed"); the
+  witness is `multi_frame_reassembly`, which says a message completed that had
+  not arrived.
+
 ### Changed
 
 - **An adversarial review of the whole fidelity-debt stage returned CHANGED, and
@@ -448,6 +524,31 @@ and to the statuses it quotes.
   restrictive answer, at the cost of one more changePIN onto a third value —
   while propagating reports a FAILED change over a PIN `store_new_pin` has
   already committed. **bcdDevice → 0x09AF.**
+
+- **The transport model claimed a liveness guard it does not have.** Its header
+  said the bounded IN-endpoint write was "guarded by the FrameSink seam's own
+  mutation-tested regression over the async `run` loop". Measured: the two
+  regressions are over `write_frames`, the response path, and neither enters
+  `run`; `write_frames`, `FrameSink` and `TX_TIMEOUT` appear nowhere in
+  `formal/comutants.toml`, `formal/floors.txt` or `formal/runs.toml`, and
+  `scripts/comutate.py` excludes liveness switches from the roster by design. The
+  header now names the two tests, says no liveness proof is claimed from CTAPHID
+  evidence, and says no mutation record stands behind either. Swept by CLASS:
+  the same sentence stood in `assurance/crates.toml`'s `rsk-usb` row, which also
+  said the keyboard framing was "Kani-proved" — `crates/rsk-usb/src/kbd.rs` has
+  **zero** occurrences of `kani`. Both corrected there; `formal/README.md`
+  carries the third and fourth copies and is regenerated from the registry.
+
+- **A `SYMMETRY` quotient over the transport's channels: considered, rejected,
+  and the reason kept beside `emit_trans` in `formal/gen-configs.sh`.** It would
+  erase the identity the properties are about — `owner` ranges over `Channels`
+  and `Cont`'s first arm is `c # owner`, which is the distinction
+  `NoCrossChannelSplice`'s ghost is written on and the reason `formal/scopes.txt`
+  records `Channels 2` for it. And there is nothing to buy: the quotient in
+  `emit` is priced at 61 215 504 distinct states to 25 829 584, while
+  `Transport.cfg`'s whole graph is 13 distinct states at depth 4 in under a
+  second. `RSKeyTransport` defines no `Symm` either, so it would be a model
+  change and a re-run of all seven transport rows to halve thirteen.
 
 ### Fixed
 

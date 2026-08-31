@@ -735,6 +735,10 @@ run "platform assumptions"     python scripts/platform_gate.py
 # CONSTANTS are too small to express the defect its own mutants rebuild.
 # Two of the twenty-five module mutants go GREEN one element down.
 run "formal scopes"            python scripts/scope_gate.py
+# The scope row is a `>=`, so `Cap = 3 -> 4` on the transport configuration
+# clears it and no Rust file mentions Cap at all. This holds the four numbers
+# the chunk-to-byte bridge is proved through against each other.
+run "transport bridge"         python scripts/transport_bridge_gate.py
 # And the abstractions no scope constant can express: the "Narrower than the
 # firmware" roster, ten bullets on formal/README.md that NO script read — a
 # whole one could be deleted at exit 0 on citation, claims, run-count, threat,

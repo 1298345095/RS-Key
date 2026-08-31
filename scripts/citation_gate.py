@@ -602,10 +602,44 @@ def audit(root, relock=False):
     )
 
 
+#: The complaints a rewrite BURIES: the three that are about the lock rather than
+#: about the tree. Everything else survives a relock and is printed by the run
+#: after it. Named so the report below cannot silently stop covering a family.
+LAUNDERED = ("has drifted", f"is not in {LOCK}", f"{LOCK} still locks")
+
+
+def laundered(problems):
+    return [p for p in problems if any(m in p for m in LAUNDERED)]
+
+
+def relock_report(root):
+    """What a `--relock` is about to silence, read off the tree it silences it on.
+
+    `--relock` is not a repair tool, and for one commit in this tree's history it
+    was used as one: the eight `RSKeyTransport.tla` citations that `c91dff0`
+    moved were re-locked at their new lines with the pages left saying the old
+    thing, and the row printed `ok` over the result for eleven days. It printed
+    ONE line then — "rewritten; read the diff" — and a diff of 549 tab-separated
+    rows is not a thing anyone reads. So the pass runs twice: once against the
+    OLD lock to say what the rewrite will bury, then the rewrite. Two text scans;
+    the row itself is unaffected, because this runs only under `--relock`.
+    """
+    return laundered(audit(root)[0])
+
+
 def main():
     if "--relock" in sys.argv[1:]:
+        buried = relock_report(ROOT)
         problems, _ = audit(ROOT, relock=True)
         print(f"citation-gate: {LOCK} rewritten; read the diff before committing it")
+        for line in buried:
+            print(f"  rewritten: {line}")
+        if buried:
+            print(
+                f"\n{len(buried)} citation(s) above were re-locked, not repaired."
+                " A DRIFTED one is a page still\nsaying what the code no longer says"
+                " — fix the page by CONTENT first, then re-lock."
+            )
         for line in problems:
             print(f"  {line}")
         return 1 if problems else 0

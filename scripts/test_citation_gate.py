@@ -153,7 +153,7 @@ class Tree:
         """Lock the citations as they stand — the state a case then perturbs."""
         self.problems(relock=True)
 
-    def problems(self, floor=2, pending=None, relock=False):
+    def problems(self, floor=2, pending=None, relock=False, buried=False):
         """Audited with the floor lowered and no landing debt: the fixture is
         smaller than the tree and carries none of its history. A case that wants
         a debt passes one.
@@ -172,6 +172,8 @@ class Tree:
             {},
         )
         try:
+            if buried:
+                return citation_gate.relock_report(self.root)
             return citation_gate.audit(self.root, relock=relock)[0]
         finally:
             citation_gate.FLOOR, citation_gate.PENDING, citation_gate.FLOOR_BY_PAGE = (
@@ -565,6 +567,44 @@ def test_a_rotted_citation_in_a_proof_header_is_found(tree):
     surrounding prose was never about, while this row printed `ok`."""
     tree.edit(PROOF_PAGE, "clientpin.rs:4-6", "clientpin.rs:3-6")
     assert only(tree.problems(), "cited line is blank")
+
+
+def test_relock_names_the_drift_it_is_about_to_bury(tree):
+    """`--relock` is the laundering step, and it used to print one line.
+
+    That is not a hypothetical: eight `RSKeyTransport.tla` citations were re-locked
+    at their new lines with the page left saying the old thing, and this row read
+    `ok` over it. The relock still succeeds — it is a record, not a judge — but it
+    now names what it buried. Drive both halves: the rewrite is silent, the report
+    is not.
+    """
+    tree.lock()
+    tree.edit(
+        "crates/rsk-fido/src/clientpin.rs",
+        "// SPDX-License-Identifier: AGPL-3.0-only\n",
+        "// SPDX-License-Identifier: AGPL-3.0-only\n// inserted\n// inserted\n",
+    )
+    assert only(tree.problems(), "has drifted"), "the fixture did not drift"
+    buried = tree.problems(buried=True)
+    assert only(buried, "has drifted"), buried
+    assert any(str(MODEL_PAGE) in problem for problem in buried), buried
+    # And the rewrite itself stays quiet, which is why the report has to exist.
+    assert tree.problems(relock=True) == []
+
+
+def test_relock_names_a_citation_the_lock_has_never_seen(tree):
+    """The second family `LAUNDERED` covers: a NEW citation is locked unread."""
+    tree.lock()
+    tree.edit(MODEL_PAGE, "NoDrift == TRUE", "\\* and one more (state.rs:2)\nNoDrift == TRUE")
+    buried = tree.problems(buried=True)
+    assert only(buried, "is not in"), buried
+
+
+def test_relock_on_an_unmoved_tree_buries_nothing(tree):
+    """The CONTROL. A report that fires on a quiet tree is one nobody reads."""
+    tree.lock()
+    assert tree.problems(buried=True) == []
+    assert tree.problems() == []
 
 
 def test_a_moved_citation_in_a_proof_header_is_found(tree):
