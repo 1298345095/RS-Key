@@ -27,14 +27,19 @@ The classes differ in how they are DISCHARGED, which is the other half: a model
 constant is discharged by a TLC run, an entry here by a board measurement, a
 vendor erratum, a source audit or an accepted risk with an owner. Nothing here
 can be discharged by anything this repository runs, and **only a small minority
-of entries is discharged at all**. The count is DERIVED — [`main`] prints it on
-every run and [`render`] opens the generated page with it — because the typed
-copy that stood here read `two of thirty-three` against a registry that had
-grown past sixty, and no rule holds a number a docstring states.
+of entries is discharged at all**. The count is DERIVED — [`run`] prints it on a
+GREEN literal run and [`render`] opens the generated page with it — because the
+typed copy that stood here read `two of thirty-three` against a registry that had
+grown past sixty, and no rule holds a number a docstring states. Measured, the
+"prints it on every run" this sentence used to claim was false in two directions
+and [`main`] was the wrong function: `--write` prints `wrote …` and returns
+before the audit, and a red run prints findings on stderr and returns 1. The page
+is the copy a reader who never runs the gate sees, which is why it is generated
+and not typed.
 
 Seven rules, and the first is the one that earns the file:
 
-* **candidates are DERIVED, and every one is claimed.** Four derivations, each
+* **candidates are DERIVED, and every one is claimed.** Five derivations, each
   floored where its source exists and it found nothing:
   `slice:` the assumption ids the closed slice's bundle and the design pages
   carry — ten of them, and `docs/authorization-slice.md` measured **zero
@@ -43,9 +48,12 @@ Seven rules, and the first is the one that earns the file:
   `board-only:` the suites `tests/emu.py` refuses by name that
   `scripts/usbip-guest.sh` does not run either — no runner in this tree can pass
   them, so each is a pending board obligation; `unsafe:` every `.rs` whose CODE
-  carries the token, which is stage 10's "firmware unsafe invariant" half.
+  carries the token, which is stage 10's "firmware unsafe invariant" half;
+  `backend:` every semantic a crate-ledger row declares its model ABSTRACTS —
+  the anchor for a row that no other derivation reaches ([`backend_candidates`]).
   Each reads a STRUCTURE and not a text: the shim's dict through `ast`, the
-  guest's rows through `gate_lines`, Rust with its comments and strings removed.
+  guest's rows through `gate_lines`, Rust with its comments and strings removed,
+  the ledger's `abstracts` as a list and not its `gap` prose.
   The review drove nine legal spellings past the first, text-reading versions.
 * **both ways.** A `covers` token no derivation produces is an entry outliving
   its candidate — the shape that leaves a registry looking complete over a
@@ -94,6 +102,9 @@ ARTIFACT = pathlib.Path("docs/platform-assumptions.md")
 EMU_SHIM = pathlib.Path("tests/emu.py")
 USBIP_GUEST = pathlib.Path("scripts/usbip-guest.sh")
 UNSAFE_PAGE = pathlib.Path("docs/unsafe.md")
+#: The crate coverage ledger. A `state-partial` row names a model and the gap it
+#: leaves; [`backend_candidates`] reads the STRUCTURED half of that gap.
+CRATE_LEDGER = pathlib.Path("assurance/crates.toml")
 #: Where a raw board result lands, and where every maintainer-owned row's RECORD
 #: lives whether or not the run has happened: a discharge naming a stepping must
 #: cite something from here, or any file in the tree that happens to exist stands
@@ -325,6 +336,30 @@ def unsafe_candidates(root):
     }
 
 
+def backend_candidates(root):
+    """Every semantic a crate-ledger row declares its model ABSTRACTS.
+
+    The `abstracts` LIST, never the `gap` prose beside it. A regex over the prose
+    was the obvious first reading and it is the shape this module refuses
+    everywhere else: `rsk-store`'s gap sentence names six mechanics in running
+    text, and which of the six are obligations is a decision, not a noun phrase a
+    pattern can pick out. So the decision is written down as a list, in the ledger
+    rather than here, and the both-ways rule does the rest -- a row deleted from
+    `assurance/platform.toml` alone leaves its semantic claimed by nobody.
+
+    Keyed `<crate>/<semantic>` because a semantic name is only unique per crate,
+    and read for EVERY class: `abstracts` on a `pure` row would be a modelling
+    claim in the wrong place, and producing its candidate is what says so.
+    """
+    doc = _toml(root / CRATE_LEDGER).get("crate", {})
+    return {
+        f"{crate}/{semantic}": f"{CRATE_LEDGER} [{crate}] abstracts"
+        for crate, entry in sorted(doc.items())
+        for semantic in entry.get("abstracts", [])
+        if str(semantic).strip()
+    }
+
+
 def candidates(root):
     """namespace:key -> where the derivation found it."""
     out = {}
@@ -333,6 +368,7 @@ def candidates(root):
         ("model", model_candidates(root)),
         ("board-only", board_only_candidates(root)),
         ("unsafe", unsafe_candidates(root)),
+        ("backend", backend_candidates(root)),
     ):
         for key, where in found.items():
             out[f"{prefix}:{key}"] = where
@@ -343,7 +379,7 @@ def candidates(root):
 #: loop-over-an-empty-set shape. Each is 1 and not a transcribed count: what
 #: ratchets the sets is the both-ways rule, which turns a source that stopped
 #: being read into one unclaimed-`covers` message per entry that named it.
-FLOORS = {"slice": 1, "model": 1, "board-only": 1, "unsafe": 1}
+FLOORS = {"slice": 1, "model": 1, "board-only": 1, "unsafe": 1, "backend": 1}
 
 
 def entries(root, findings):

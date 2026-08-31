@@ -38,8 +38,13 @@
 # and the statements did not, and each renumbering is recorded in the `registered`
 # field of the bundle that proposed it. Not one of them added a maintainer-owned
 # row, and neither did the store-backend section at the foot of this file: the
-# board obligation is `BOARD_ROW_FLOOR` in scripts/platform_gate.py, which the
-# gate holds against the live count and the generated page prints.
+# board obligation is the LIVE count of `discharge_owner = "maintainer"` rows,
+# which is what scripts/platform_gate.py's `board_rows` returns and the only
+# number the generated page prints. `BOARD_ROW_FLOOR` is not that number and
+# never appears on the page — it is a MINIMUM under it, so that a row deleted
+# with its record is a red gate rather than a smaller table. Measured: with
+# twelve rows live, `audit(board_floor=11)` and `=12` are both green and only
+# `=13` fires.
 
 # ---- Reset and the boot ROM --------------------------------------------------
 
@@ -185,7 +190,7 @@ supports = [
 id = "PLAT-TOOL-003"
 class = "tool-tcb"
 statement = "Kani/CBMC is sound for the arithmetic its harnesses bound, and the solver that ran is the pinned one."
-discharge = "The recorded tool hash, which is the half of this sentence that does not exist. The VERSION half does: `KANI_VERSION: \"0.67.0\"` at .github/workflows/ci.yml:155, .github/workflows/deep-checks.yml:354 and :446, installed with `cargo install --locked kani-verifier --version` and held against the line docs/testing.md:307 tells a reader to run by scripts/kani_gate.py:500-507. The earlier wording here conflated two statements: `grep -i kani nix/*.nix` and flake.lock both answer nothing, so the tool is outside the hermetic shell — but outside the shell is not unpinned, and reading it as unpinned is what let the real gap sit unnamed. That gap is one layer down. `cargo kani setup` FETCHES a prebuilt CBMC/SAT bundle, and no hash of it is recorded anywhere in this tree. Two evidence bundles record a solver VERSION in prose and disagree on how far: assurance/bundle/SEC-FIDO-001.toml:256-258 writes `the one cargo-kani 0.67.0 ships; CaDiCaL 2.0.0 as the SAT back end`, assurance/bundle/SEC-FIDO-002.toml:341-342 writes `6.8.0 (cbmc-6.8.0), 64-bit arm64 macos`, and both were transcribed off a run banner rather than derived, both self-describing as inheriting the unpinned provenance. Measured on the maintainer's machine, ~/.kani/kani-0.67.0/ carries cbmc 6.8.0, kissat 4.0.1, rustc 1.93.0-nightly (53732d5e0 2025-11-20) and toolchain nightly-2025-11-21 — of those five strings only `6.8.0` is written down at all, and `kissat` appears nowhere in the repository, so the second solver the bundle ships is unrecorded by every spelling. Settled WITHOUT hardware: pin the bundle's identity — the three versions and a hash — beside the version pin the gate already holds. One caveat on that pin, and it is a separate commit's: KANI_VERSION is three independent literals and scripts/kani_gate.py:77 reads only deep-checks.yml, so an edit to ci.yml:155 alone is invisible to the gate."
+discharge = "The recorded tool hash, which is the half of this sentence that does not exist. The VERSION half does: `KANI_VERSION: \"0.67.0\"` at .github/workflows/ci.yml:155, .github/workflows/deep-checks.yml:354 and :446, installed with `cargo install --locked kani-verifier --version` and held against the line docs/testing.md:307 tells a reader to run by scripts/kani_gate.py:500-507. The earlier wording here conflated two statements: `grep -i kani nix/*.nix` and flake.lock both answer nothing, so the tool is outside the hermetic shell — but outside the shell is not unpinned, and reading it as unpinned is what let the real gap sit unnamed. That gap is one layer down. `cargo kani setup` FETCHES a prebuilt CBMC/SAT bundle, and no hash of it is recorded anywhere in this tree. THREE evidence bundles record a solver VERSION in prose, at three different specificities: assurance/bundle/SEC-FIDO-001.toml:257 writes `the one cargo-kani 0.67.0 ships; CaDiCaL 2.0.0 as the SAT back end`, assurance/bundle/SEC-FIDO-003.toml:337 writes the same sentence with the SAT version dropped — `CaDiCaL` bare — and assurance/bundle/SEC-FIDO-002.toml:343 writes `6.8.0 (cbmc-6.8.0), 64-bit arm64 macos`. Three transcriptions of one banner that disagree with each other is the measurement: prose is not a pin. Measured on the maintainer's machine, ~/.kani/kani-0.67.0/ carries cbmc 6.8.0, kissat 4.0.1, rustc 1.93.0-nightly (53732d5e0 2025-11-20) and toolchain nightly-2025-11-21 — of those five strings only `6.8.0` is written down at all, and `kissat` appears nowhere in the repository, so the second solver the bundle ships is unrecorded by every spelling. Note which SAT solver each half names: the bundles say CaDiCaL because that is what `--sat-solver cadical` asks for, and kissat is the binary shipped beside it — one more reason the identity has to come off the install and not off a sentence. Settled WITHOUT hardware: pin the bundle's identity — the three versions and a hash — beside the version pin the gate already holds. HERMETICITY IS DELIBERATELY NOT PART OF THIS ROW, which is a narrowing from the earlier wording and is stated here so it is a decision and not an omission: this row's statement is `the solver that ran is the pinned one`, an identity claim, and bringing cargo-kani into flake.lock would not settle it — `cbmc` and `kissat` are prebuilt BINARIES inside the fetched ~/.kani/kani-0.67.0/bin/, not built by the `cargo install` a flake input would replace, so the fetch survives the packaging and the recorded identity is the necessary half either way. Making the shell hermetic is a real and separate obligation; it belongs to whichever row states one, and to the maintainer under AGENTS.md's toolchain-pin rule. One caveat on the identity pin, and it is a separate commit's: KANI_VERSION is three independent literals and scripts/kani_gate.py:77 reads only deep-checks.yml, so an edit to ci.yml:155 alone is invisible to the gate."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: every BOUNDED row rests on a solver nobody recorded"
@@ -990,13 +995,31 @@ supports = ["SEC-FIDO-006C"]
 
 # ---- The store backend the model abstracts -----------------------------------
 #
-# assurance/crates.toml's `rsk-store` row already NAMES these four as RSKeyStore's
-# backend assumptions — in a `gap` field with no owner, no route, no failure
-# direction and no status, which is a note and not an obligation. Three of them
-# had no row anywhere; the fourth, tear, had one for the SILICON only
-# (PLAT-FLASH-001) — the layer the defect was NOT at. third_party/sequential-storage.patch
-# items 2 and 3 record both guarantees FALSE in the library this tree vendors, so
-# the layer split below is a measured one, not a taxonomy.
+# Where the four come from, corrected: NOT from assurance/crates.toml, which an
+# earlier draft of this header credited with "already NAMES these four". Read by
+# content, its `rsk-store` row (assurance/crates.toml:95) names SIX things —
+# atomic append, an enumeration-completeness flag, the two-partition counter/main
+# ring, `is_counter_fid` routing, wear and page reclaim, and compact — and REBOOT
+# RECOVERY is not among them at all. The four are stage 5's exit criteria —
+# `atomicity/tear semantics, scan completeness, reboot recovery и partition
+# routing`, FORMAL_VERIFICATION_ROADMAP.md:1329-1331 — and the ledger's six
+# overlap them without either list containing the other. Two of the ledger's six
+# get no row here on purpose: wear and page reclaim, and compact. Both are
+# liveness — a store that stops reclaiming fills up and refuses writes, which is a
+# denial of service and not a false answer about a committed record — and neither
+# has a recorded falsification, where each of the four does. That decision is now
+# a list rather than a sentence:
+# assurance/crates.toml's `abstracts` field produces one `backend:rsk-store/…`
+# candidate per obligation and each row below CLAIMS one, so a row deleted from
+# this file alone leaves a candidate no entry claims and the gate goes red. Before
+# that list these four were notes with a status column: measured, deleting all
+# four, or PLAT-STORE-004 alone, or PLAT-STORE-003 alone, left every rule at
+# exit 0.
+#
+# The layer split is a measured one, not a taxonomy. Three of the four had no row
+# anywhere; the fourth, tear, had one for the SILICON only (PLAT-FLASH-001) — the
+# layer the defect was NOT at. third_party/sequential-storage.patch items 2 and 3
+# record both guarantees FALSE in the library this tree vendors.
 
 [[assumption]]
 id = "PLAT-STORE-001"
@@ -1006,6 +1029,7 @@ discharge = "Two things, and neither is in the tree. First a recorded verdict fo
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a remove torn by a power cut that restores an older committed value rolls back whatever that record gates — on a PIN-retry record it hands back spent attempts"
+covers = ["backend:rsk-store/tear"]
 depends_on = ["PLAT-FLASH-001"]
 supports = [
   "SEC-STORE-001",
@@ -1020,21 +1044,23 @@ supports = [
 id = "PLAT-STORE-002"
 class = "model-abstraction"
 statement = "The backend's enumeration-completeness flag is honest: `for_each_key` answering *complete* means every committed key was yielded, which is what lets `Fs::scan` decide the whole FID space and read a cold absence O(1) instead of probing for it."
-discharge = "A test at the `Storage` seam driving a flash read fault on a page that holds a live key and asserting `for_each_key` answers false — there is none. The claim is stated only in two COMMENTS, crates/rsk-fs/src/fs.rs:100-106 and crates/rsk-fs/src/fs.rs:265-272, each arguing it from the backend's internals rather than from anything that runs. It is also a claim about a vendored third-party crate, where it was FALSE: third_party/sequential-storage.patch item 2 records that upstream's page-advance loop swallowed a page-state Err via `_ => continue`, so a skipped page still reached the None terminator and a truncated walk reported complete. The fork tells Corrupted (a fully-migrated source, safe to skip) from a genuine read fault and aborts on the second — so the guarantee is the FORK's, which is what PLAT-STORE-001 carries. crates/rsk-store/src/lib.rs:179-181 ANDs the two partitions' walks, so the flag is only ever as honest as the weaker ring."
+discharge = "A test driving a SELECTIVE, single-page read fault at the `Storage` seam and asserting `for_each_key` answers false. The UNCONDITIONAL case is already covered and an earlier draft of this row said it was not: crates/rsk-store/src/tests.rs:361-370 `a_faulted_walk_reports_itself_incomplete` mounts a store, writes a live key, sets `fail_reads` and asserts the walk answers false; it predates this row and scripts/check.sh:489 runs it on every gate. What that test cannot reach is the shape the defect had. The mock says so itself at crates/rsk-store/src/tests.rs:59-62: `fail_reads` fails every read `unconditionally and for every address — which no torn write produces`, so it stands for a chip or bus fault, and a walk whose FIRST read fails is refused before it can report a truncated set as complete. Item 2 of third_party/sequential-storage.patch is the other shape: upstream's page-advance loop swallowed a page-state Err via `_ => continue`, so ONE unreadable page mid-ring was skipped and the walk still reached the None terminator and reported complete. Only a fault that answers for one address and not the rest distinguishes the fork from upstream, and no test in this tree can pose one. The claim itself is stated only in two COMMENTS, crates/rsk-fs/src/fs.rs:100-106 and crates/rsk-fs/src/fs.rs:265-272, each arguing it from the backend's internals rather than from anything that runs. The fork tells Corrupted (a fully-migrated source, safe to skip) from a genuine read fault and aborts on the second — so the guarantee is the FORK's, which is what PLAT-STORE-001 carries. crates/rsk-store/src/lib.rs:179-181 ANDs the two partitions' walks, so the flag is only ever as honest as the weaker ring."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a walk reporting complete after skipping a page makes `Fs::scan`'s `decided.fill` mark every un-yielded FID authoritatively absent for the rest of the boot — the false-absent that reads as `not provisioned` and opens every gate testing `has_data`"
+covers = ["backend:rsk-store/scan-completeness"]
 depends_on = ["PLAT-FLASH-001", "PLAT-STORE-001"]
 supports = ["SEC-STORE-002"]
 
 [[assumption]]
 id = "PLAT-STORE-003"
 class = "model-abstraction"
-statement = "A reboot recovers the committed store: after any number of power cuts every key whose write or remove returned cleanly reads back exactly, and only the operation the cut interrupted is ambiguous — its old value or its new one, never a third older one. firmware/src/main.rs:542 runs `Fs::scan` once at boot, and every later absence answer is that one walk's."
-discharge = "A run record naming a verdict, which is the half that does not exist. The CONTRACT is asserted already: fuzz/fuzz_targets/kv_durability.rs states it in as many words in its header and drives one `MapStorage` partition directly, and fuzz/fuzz_targets/power_cut.rs torments the whole rsk-fs stack over the same power-cuttable mock. Both are on the weekly roster — scripts/fuzz-all.sh:41 takes it from `cargo fuzz list` rather than a hand-written table, so neither can silently fall off it. What nothing does is READ those verdicts: `kv_durability` appears in no workflow, no docs page, no script and no assurance file, so its result is a green shard nothing cites. And the mock is not the medium — the oracle settles that the LIBRARY recovers, not that the silicon tears the way `MockFlashBase` does, which is the half PLAT-FLASH-001 owns."
+statement = "GIVEN a medium that tears the way PLAT-FLASH-001 asserts, a reboot recovers the committed store: after any number of power cuts every key whose write or remove returned cleanly reads back exactly, and only the operation the cut interrupted is ambiguous — its old value or its new one, never a third older one. The `GIVEN` is the whole narrowing and it is what makes this row dischargeable by a mock; the medium half is PLAT-FLASH-001's and is not restated here. firmware/src/main.rs:542 runs `Fs::scan` once at boot, and every later absence answer is that one walk's."
+discharge = "A run record naming a verdict, which is the half that does not exist. The CONTRACT is asserted already: fuzz/fuzz_targets/kv_durability.rs states it in as many words in its header and drives one `MapStorage` partition directly, and fuzz/fuzz_targets/power_cut.rs torments the whole rsk-fs stack over the same power-cuttable mock. Both are on the weekly roster — scripts/fuzz-all.sh:41 takes it from `cargo fuzz list` rather than a hand-written table, so neither can silently fall off it. What nothing does is READ those verdicts: `kv_durability` appears in no workflow, no docs page, no script and no assurance file, so its result is a green shard nothing cites. Why this row is `model-abstraction` and not `flash`, decided by measurement rather than by taxonomy: the class is the whole difference between a discharge that must name silicon and one that need not. Marked `discharged` with `evidence = [\"fuzz/fuzz_targets/kv_durability.rs\"]` this row is exit 0 under `model-abstraction` and exit 1 under `flash` — `PLAT-STORE-003: a flash discharge records no 'board_revision'`. As the statement stood before the `GIVEN`, `flash` was the honest class and the row was mis-classed. Narrowing the statement is the better repair: classing it `flash` would oblige a stepping for a defect that sits ABOVE the medium, which is exactly the mistake PLAT-STORE-001 exists to undo — a software question parked behind hardware that cannot answer it — and this row's `discharge_owner` is `contributor`, who under AGENTS.md may not produce a board revision at all. What the narrowing does NOT buy: `model-abstraction` accepts any path that exists, so `evidence = [\"README.md\"]` on this row is also exit 0, measured. That hole is `check_evidence`'s and belongs to every row of the class, not to this one."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a reboot that resurrects a superseded value rolls back whatever it gates — a signature counter, or a PIN-retry ladder that hands back spent attempts"
+covers = ["backend:rsk-store/reboot-recovery"]
 depends_on = ["PLAT-FLASH-001", "PLAT-STORE-001"]
 supports = ["SEC-STORE-001", "SEC-STORE-002"]
 
@@ -1042,8 +1068,9 @@ supports = ["SEC-STORE-001", "SEC-STORE-002"]
 id = "PLAT-STORE-004"
 class = "model-abstraction"
 statement = "`is_counter_fid` is a correct routing table over every FID the firmware persists: a record is read back from the partition it was written to, and the counter/main split never leaves a live FID on the other side."
-discharge = "A derivation reading the FID constants out of the applet crates and holding them against the table — no script does. crates/rsk-store/src/lib.rs:87 is a hand-written `matches!` over four bare literals (0xC000, 0xC001, 0x0093, 0xCC01) whose named homes are in other crates: `EF_COUNTER` at crates/rsk-fido/src/consts.rs:329 and `EF_CRED_CTR` at crates/rsk-fido/src/consts.rs:336. Table and constants therefore drift without a compile error, and the set HAS moved once — `EF_CRED_CTR` joined it at 0x0821 after 0x081D had been writing that FID to main. crates/rsk-store/src/lib.rs:145-152 records what the resulting state costs: a copy in the wrong partition is invisible to `read` yet yielded by every `for_each_key`, so authenticatorReset's sweep loops on it until its progress bound gives up. `git grep is_counter_fid` reaches crates/rsk-store/src/lib.rs, crates/rsk-store/src/tests.rs and formal/README.md and no script at all — so what holds the table today is crates/rsk-store/src/tests.rs:210-231, which lists the same four numbers a third time and would move WITH a wrong edit."
+discharge = "A derivation reading the FID constants out of the applet crates and holding them against the table — no script does. crates/rsk-store/src/lib.rs:88 is a hand-written `matches!` over four bare literals (0xC000, 0xC001, 0x0093, 0xCC01) whose named homes are in other crates: `EF_COUNTER` at crates/rsk-fido/src/consts.rs:329 and `EF_CRED_CTR` at crates/rsk-fido/src/consts.rs:336. Table and constants therefore drift without a compile error, and the set HAS moved once — `EF_CRED_CTR` joined it at 0x0821 after 0x081D had been writing that FID to main. crates/rsk-store/src/lib.rs:145-152 records what the resulting state costs: a copy in the wrong partition is invisible to `read` yet yielded by every `for_each_key`, so authenticatorReset's sweep loops on it until its progress bound gives up. FOUR hand-written copies of the set, not two, and an earlier draft of this row missed the one that matters. `git grep -l is_counter_fid` reaches nine files — this registry and its generated page, assurance/crates.toml, CHANGELOG.md, docs/assurance-vector.md, formal/README.md, the two rsk-store sources, and fuzz/fuzz_targets/power_cut.rs. That last one is the fourth copy: fuzz/fuzz_targets/power_cut.rs:76-78 spells the same four literals into a `FIDS` array, and its own comment at :67-75 records that the set has ALREADY drifted there twice — the mirror it replaced listed three of the four and missed `EF_CRED_CTR` (0xC001, rewritten on every getAssertion), and the selector was `& 7` over nine entries, so `0xCC01` could never be written by any input while the sweep asserted it absent on every one. A whole partition routing was in the roster and out of the fuzzer's reach. So this row's subject is not hypothetical drift; it is drift that has happened twice in the copy the row was written without. What holds the table today is crates/rsk-store/src/tests.rs:210-230, which lists the same four numbers a third time and would move WITH a wrong edit — and which names the `power_cut` miss at :216-217, so the two copies that drifted are the two nothing derives."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a FID changing sides across a firmware upgrade reads absent on the new build while its old value stays live in the other ring — a rollback on a counter, and on a gate record an absent read is what opens the gate"
+covers = ["backend:rsk-store/partition-routing"]
 supports = ["SEC-STORE-002"]

@@ -277,8 +277,8 @@ features = "none — the slice is `cargo test -p rsk-fido --lib` on the default 
 
 # FIVE tools and no prover, for the reason `property.subjects_absent` gives:
 # `kani = 0` is this property's correct value, so cargo-kani and CBMC — which
-# carry SEC-FIDO-001's only unpinned provenance — are absent here rather than
-# unfilled.
+# carry SEC-FIDO-001's only UNHASHED provenance, the version being pinned and the
+# fetched solver bundle not — are absent here rather than unfilled.
 
 [[tool]]
 name = "tlaplus"

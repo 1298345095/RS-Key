@@ -28,7 +28,7 @@ that runs nothing; four legal spellings of an `UNSUPPORTED` entry the shim's own
 regex could not read; the word `unsafe` in a line comment, a doc comment, a
 nested block comment and a string literal; a new crate at the top of the tree;
 and a board revision written `RP2350 A2`, `A2` alone, and `RP2350` alone. The
-four derivations are floored apart rather than in total, because a floor over the
+five derivations are floored apart rather than in total, because a floor over the
 union cannot tell "the `unsafe` finder stopped finding" from "the bundle reader
 did" — and the floors are asserted by VALUE, because a key set does not see a 0.
 """
@@ -111,6 +111,22 @@ pub const EMITTED: &str = "\\n    unsafe fn ";
 pub const N: u8 = 1;
 """
 
+#: Two crates, and only one declares an `abstracts` list — so the derivation is
+#: SELECTING rather than returning a candidate per ledger row. The `gap` prose
+#: names a semantic the list leaves out, which is the real ledger's shape too: a
+#: mechanic can be named without being an obligation.
+CRATE_LEDGER = """\
+[crate.rsk-a]
+class = "state-partial"
+model = "Mini"
+gap = "the tear guarantee, and page reclaim, are backend mechanics the model abstracts."
+abstracts = ["tear"]
+
+[crate.rsk-b]
+class = "pure"
+evidence = ["assurance/properties.toml"]
+"""
+
 REGISTRY = """\
 [[assumption]]
 id = "PLAT-TOOL-001"
@@ -158,6 +174,16 @@ covers = ["board-only:29_reset_power_cut"]
 supports = ["SEC-T-001"]
 
 [[assumption]]
+id = "PLAT-STORE-001"
+class = "model-abstraction"
+statement = "The tear guarantee holds one layer up, in the KV library."
+discharge = "A recorded verdict for the durability target."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "security: a torn remove restoring an older committed value"
+covers = ["backend:rsk-a/tear"]
+
+[[assumption]]
 id = "PLAT-TOOLCHAIN-001"
 class = "toolchain"
 statement = "Every unsafe upholds an invariant the compiler cannot check."
@@ -167,6 +193,14 @@ status = "pending"
 failure_direction = "security: the one class safe Rust does not rule out"
 covers = ["unsafe:crates/rsk-a/src/lib.rs", "unsafe:firmware/src/main.rs"]
 """
+
+#: The `PLAT-STORE-001` block verbatim, so the deletion test removes ONE row and
+#: reddens for one reason. A truncation would take PLAT-TOOLCHAIN-001 with it and
+#: orphan two `unsafe:` candidates as well.
+STORE_ROW = REGISTRY[
+    REGISTRY.index('[[assumption]]\nid = "PLAT-STORE-001"'):
+    REGISTRY.index('[[assumption]]\nid = "PLAT-TOOLCHAIN-001"')
+]
 
 
 #: The one maintainer-owned hardware row of the fixture, and so the one that
@@ -207,6 +241,7 @@ class Tree:
         self.write("assurance/properties.toml", PROPERTIES)
         self.write("assurance/bundle/SEC-T-001.toml", BUNDLE)
         self.write("assurance/platform.toml", REGISTRY)
+        self.write("assurance/crates.toml", CRATE_LEDGER)
         self.write("assurance/board/PLAT-FLASH-001.toml", BOARD_RECORD)
         # The SECOND maintainer-owned row, and its class is not a silicon class.
         # It is here because keying the obligation on `HARDWARE_CLASSES` was the
@@ -291,7 +326,7 @@ def test_this_checkout_is_green():
     assert summary.startswith("platform-gate: ok")
 
 
-def test_the_fixture_derives_all_four_candidate_kinds(tree):
+def test_the_fixture_derives_all_five_candidate_kinds(tree):
     """A fixture missing a namespace would pass that namespace's rules vacuously."""
     found = platform_gate.candidates(tree.root)
     assert set(found) == {
@@ -301,7 +336,23 @@ def test_the_fixture_derives_all_four_candidate_kinds(tree):
         "board-only:29_reset_power_cut",
         "unsafe:crates/rsk-a/src/lib.rs",
         "unsafe:firmware/src/main.rs",
+        "backend:rsk-a/tear",
     }, sorted(found)
+
+
+def test_the_backend_derivation_reads_the_list_and_not_the_gap_prose(tree):
+    """`page reclaim` is in the fixture's `gap` sentence and not in `abstracts`.
+
+    A regex over the prose was the obvious first reading of this source, and it
+    would produce a candidate for every mechanic a sentence happens to name --
+    turning "the ledger mentions it" into "the registry owes a row for it".
+    Which mechanics are OBLIGATIONS is a decision, so it is a list.
+    """
+    found = platform_gate.candidates(tree.root)
+    assert "backend:rsk-a/tear" in found
+    assert not [k for k in found if "reclaim" in k], sorted(found)
+    # And the key is per-crate: `rsk-b` declares no list, so it produces nothing.
+    assert not [k for k in found if k.startswith("backend:rsk-b/")], sorted(found)
 
 
 def test_the_checkout_derives_what_it_is_measured_at():
@@ -370,6 +421,14 @@ def test_an_unclaimed_unsafe_file_is_a_finding(tree):
     tree.write("crates/rsk-b/src/lib.rs", UNSAFE_RS)
     tree.git("add", "-A")
     assert only(tree.problems(), "unsafe:crates/rsk-b/src/lib.rs: derived from")
+
+
+def test_a_deleted_store_row_leaves_its_backend_semantic_unclaimed(tree):
+    """The anchor. Before `abstracts` the four `PLAT-STORE-*` rows covered nothing,
+    so deleting one -- or all of them -- was exit 0 on every rule."""
+    tree.edit("assurance/platform.toml", STORE_ROW, "")
+    tree.regenerate()
+    assert only(tree.problems(), "backend:rsk-a/tear: derived from")
 
 
 def test_a_usbip_glob_covers_its_suite(tree):
@@ -551,7 +610,7 @@ def test_a_status_that_moves_without_the_page_is_a_finding(tree):
 
 
 def test_a_hand_edit_of_the_page_is_a_finding(tree):
-    tree.edit("docs/platform-assumptions.md", "Discharged: 1 of 5.", "Discharged: 5 of 5.")
+    tree.edit("docs/platform-assumptions.md", "Discharged: 1 of 6.", "Discharged: 5 of 6.")
     assert only(tree.problems(), "docs/platform-assumptions.md is not what the generator writes")
 
 
@@ -559,7 +618,7 @@ def test_the_page_carries_every_entry_and_its_status(tree):
     page = (tree.root / "docs/platform-assumptions.md").read_text()
     for name in ("PLAT-TOOL-001", "PLAT-MODEL-001", "PLAT-BUILD-001", "PLAT-FLASH-001"):
         assert f"`{name}`" in page, name
-    assert "Discharged: 1 of 5." in page
+    assert "Discharged: 1 of 6." in page
 
 
 # --- rule 7: the bundle's own `registered` field -------------------------------
@@ -612,10 +671,20 @@ def test_the_model_derivation_is_floored(tree):
     assert only(tree.problems(), "the `model:` derivation found 0 candidate(s)")
 
 
+def test_the_backend_derivation_is_floored(tree):
+    """The fifth floor, and the one that answers deleting the ANCHOR rather than
+    the row: emptying `abstracts` would otherwise retire four obligations by
+    editing one line in a file the registry's own rules never open."""
+    tree.edit("assurance/crates.toml", 'abstracts = ["tear"]', "")
+    assert only(tree.problems(), "the `backend:` derivation found 0 candidate(s)")
+
+
 def test_the_floors_are_apart_not_in_total(tree):
     """One number over the union cannot say WHICH reader stopped — and a floor of
     0 is a floor nothing can fall below, which the key set alone does not see."""
-    assert platform_gate.FLOORS == {"slice": 1, "model": 1, "board-only": 1, "unsafe": 1}
+    assert platform_gate.FLOORS == {
+        "slice": 1, "model": 1, "board-only": 1, "unsafe": 1, "backend": 1,
+    }
 
 
 # --- the row that runs it ------------------------------------------------------

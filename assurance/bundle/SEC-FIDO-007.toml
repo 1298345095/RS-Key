@@ -310,8 +310,9 @@ registered = "yes — assurance/assumptions.toml AlwaysUvShipped, and assurance/
 # ---- 4. Tool, version, invocation and environment ----------------------------
 
 # FIVE tools and no prover. `kani = 0` is this property's correct value — see
-# AS-RAM-8 — so cargo-kani and CBMC, which carry the strong row's only unpinned
-# provenance, are absent here rather than unfilled. What replaces them is TLC,
+# AS-RAM-8 — so cargo-kani and CBMC, which carry the strong row's only UNHASHED
+# provenance (the version is pinned; the fetched solver bundle is not), are absent
+# here rather than unfilled. What replaces them is TLC,
 # which had no TCB registry entry at all until this bundle wrote one.
 
 [[tool]]

@@ -314,7 +314,8 @@ features = "none — `no-touch` is the feature the four columns add, and no evid
 # SEVEN tools, and unlike SEC-FIDO-007 the prover is here rather than absent:
 # `kani = 2` is a real number for this property and the tier was RE-RUN for this
 # bundle rather than transcribed, which is what puts cargo-kani and CBMC — the
-# only unpinned provenance on any path in this tree — back in the trust base.
+# only UNHASHED provenance on any path in this tree; the version is pinned and
+# the fetched solver bundle is not — back in the trust base.
 
 [[tool]]
 name = "tlaplus"
@@ -333,14 +334,14 @@ environment = "nix develop"
 [[tool]]
 name = "cargo-kani"
 version = "0.67.0"
-provenance = "NOT in flake.lock — not packaged in nixpkgs. Installed with `cargo install --locked kani-verifier --version $KANI_VERSION`, and KANI_VERSION is a workflow variable in .github/workflows/ci.yml and deep-checks.yml. It is still the one tool on any path in this tree the flake does not pin"
+provenance = "NOT in flake.lock — not packaged in nixpkgs. Installed with `cargo install --locked kani-verifier --version $KANI_VERSION`, and KANI_VERSION is a workflow variable in .github/workflows/ci.yml and deep-checks.yml. It is the one tool on any path in this tree OUTSIDE the hermetic shell — which is not the same as unpinned, and reading it that way is what let the real gap sit unnamed: the version is pinned and scripts/kani_gate.py holds it; what nothing records is the fetched solver bundle (PLAT-TOOL-003)"
 invocation = "cargo kani -p rsk-device --features kani-soft -Z unstable-options --harness-timeout 5m"
 environment = "nix develop, with RUSTFLAGS='--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft' — scripts/kani.sh:299's own export, carried by hand because this run selected one crate rather than a tier"
 
 [[tool]]
 name = "cbmc"
 version = "6.8.0 (cbmc-6.8.0), 64-bit arm64 macos — the banner every harness in the artifact prints"
-provenance = "inside the kani-verifier install above, so it inherits its unpinned provenance"
+provenance = "a prebuilt binary inside the CBMC/SAT bundle `cargo kani setup` FETCHES, beside kissat 4.0.1; nothing in this tree hashes that bundle, which is the gap PLAT-TOOL-003 names. Not the same as unpinned: the kani-verifier VERSION above is pinned"
 invocation = "driven by cargo kani, not by hand"
 environment = "and it printed its own scope limit: `Kani currently does not support concurrency. The following constructs will be treated as sequential operations: - atomic_load (6) - atomic_store (6)`. AS-XT-1 is the row that owns that sentence"
 
@@ -574,7 +575,7 @@ registered = "yes — assurance/platform.toml PLAT-THREAT-001, pending, whose `s
 id = "AS-AUTH-7"
 statement = "Kani/CBMC is sound for the harness's arithmetic and the pinned solver is the one that ran."
 kind = "tool TCB"
-discharger = "the pinned toolchain and a recorded tool hash. Half-discharged here and no more: this bundle RECORDS the versions off the run itself — cargo-kani 0.67.0, CBMC 6.8.0 64-bit arm64 macos — where SEC-FIDO-001 transcribed them, but cargo-kani is still the one tool on any path in this tree that flake.lock does not pin at all, so the version in the artifact is a fact about this machine on this day and not a reproducibility guarantee"
+discharger = "the pinned toolchain and a recorded tool hash. Half-discharged here and no more: this bundle RECORDS the versions off the run itself — cargo-kani 0.67.0, CBMC 6.8.0 64-bit arm64 macos — where SEC-FIDO-001 transcribed them, but the version in the artifact is a fact about this machine on this day rather than a reproducibility guarantee: flake.lock says nothing about cargo-kani, so the recording is the only thing holding the identity, and the solver bundle underneath it is unhashed. What IS pinned, and what the earlier wording here read as absent, is the version — three KANI_VERSION literals, held by scripts/kani_gate.py"
 expressible = "no — a fact about a tool, not about the model"
 registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending, whose `supports` already names SEC-FIDO-002 and whose `covers` already carries `slice:AS-AUTH-7`"
 
@@ -674,7 +675,7 @@ reading = "recorded as a verdict with its weakness stated rather than dropped or
 
 [freshness]
 measured = "2026-08-30, Europe/Moscow"
-expires_on_prover_bump = "cargo-kani 0.67.0 / CBMC 6.8.0 for the seven harness verdicts, tlaplus 1.7.4 or its jar hash for the fourteen TLC ones — and the first of those two is unpinned, which AS-AUTH-7 says in as many words"
+expires_on_prover_bump = "cargo-kani 0.67.0 / CBMC 6.8.0 for the seven harness verdicts, tlaplus 1.7.4 or its jar hash for the fourteen TLC ones — and the first of those two has a version pin but no hash, which AS-AUTH-7 says in as many words"
 expires_on_toolchain_bump = "rustc/cargo 1.96.0 — the co-refutation slice and, through MIR, every Kani verdict here"
 expires_on_stepping = "nothing here is a hardware result. The `hardware` axis reads 0 and the row is honest rather than unfilled: this property is about a physical button and every result in this bundle is about the code that arbitrates it, never about the button"
 expires_on_owner_change = "crates/rsk-device/src/presence.rs — and it alone, which is what makes the derivation finding matter: `evidence_gate` watches the Refines-tagged file, so an edit to firmware/src/presence.rs moves the `rust` column and no freshness verdict. Add crates/rsk-usb/src/ctaphid.rs:88-92 and firmware/src/worker.rs's four `set_wait_scope` sites by hand, because nothing derives them"

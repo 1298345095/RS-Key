@@ -734,10 +734,11 @@ run "OTP counter writers"      python scripts/counter_writers_gate.py
 run "standing assumptions"     python scripts/assumption_gate.py
 # And the assumptions no constant can carry, which the row above refuses by
 # construction: a board question, a recorded PASS, emulator fidelity. Their
-# candidates are DERIVED from four sources — the slice bundle's own ids said
-# "registered: no" on eight of ten rows — and so is how many are discharged: the
-# row prints the live tally, because the copy typed here read "one of the
-# eighteen" long after both numbers had moved.
+# candidates are DERIVED from five sources — the slice bundle's own ids said
+# "registered: no" on eight of ten rows, and `assurance/crates.toml`'s `abstracts`
+# is what anchors a store-backend row so deleting one is a diff — and so is how
+# many are discharged: the row prints the live tally on a green run, because the
+# copy typed here read "one of the eighteen" long after both numbers had moved.
 run "platform assumptions"     python scripts/platform_gate.py
 # `floors.txt` catches a run that got smaller; this catches one whose
 # CONSTANTS are too small to express the defect its own mutants rebuild.

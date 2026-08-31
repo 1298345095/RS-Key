@@ -246,7 +246,7 @@ environment = "nix develop"
 [[tool]]
 name = "cargo-kani"
 version = "0.67.0"
-provenance = "NOT in flake.lock — not packaged in nixpkgs, installed with `cargo install --locked kani-verifier`, and the version is a workflow variable rather than a hash. PLAT-TOOL-003 is the registry row that says so, and it is the one tool on this clause's path the flake does not pin"
+provenance = "NOT in flake.lock — not packaged in nixpkgs, installed with `cargo install --locked kani-verifier`, and the version is a workflow variable rather than a hash. PLAT-TOOL-003 is the registry row that says so — a version pin outside the hermetic shell, and no hash of the solver bundle `cargo kani setup` fetches"
 invocation = "cargo kani -p rsk-fido --features kani-soft --harness reset_keeps_the_pin_gate, run in the scratch workspace; the tier form is scripts/kani.sh state"
 environment = 'RUSTFLAGS=--cfg sha2_backend="soft" --cfg poly1305_force_soft --cfg sha1_force_soft'
 
@@ -406,7 +406,7 @@ registered = "yes — assurance/platform.toml PLAT-TOOL-004, pending, which alre
 id = "AS-PIN-3"
 statement = "Kani/CBMC is sound for the arithmetic this clause's harness bounds, and the solver that ran is the pinned one — which for cargo-kani means a version number in a workflow file and not a hash in flake.lock."
 kind = "tool TCB"
-discharger = "a pinned toolchain and a recorded tool hash, and the second does not exist. cargo-kani is the one tool on this clause's path the flake does not pin, and this bundle drove four arms of it"
+discharger = "a pinned toolchain and a recorded tool hash, and the second does not exist — for cargo-kani or for the solver bundle it fetches. The first does: KANI_VERSION 0.67.0, held by scripts/kani_gate.py. cargo-kani is the one tool on this clause's path outside the hermetic shell, and this bundle drove four arms of it"
 expressible = "no — a fact about a tool, not about the model"
 registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending, whose `covers` is `slice:AS-AUTH-7` and `slice:AS-RESET-7` and carries `slice:AS-PIN-3` now; its `supports` named the parent and not this row, and names it now"
 

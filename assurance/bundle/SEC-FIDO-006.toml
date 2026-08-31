@@ -485,7 +485,7 @@ registered = "yes — assurance/platform.toml PLAT-TOOL-004, pending, which alre
 id = "AS-RESET-7"
 statement = "Kani/CBMC is sound for the arithmetic the four harnesses bound, and the solver that ran is the pinned one — which for cargo-kani means a version number in a workflow file and not a hash in flake.lock."
 kind = "tool TCB"
-discharger = "the pinned toolchain and a recorded tool hash, neither of which exists for cargo-kani today. It is the one tool on this property's path the flake does not pin at all"
+discharger = "the pinned toolchain and a recorded tool hash. The version pin exists — KANI_VERSION 0.67.0, held by scripts/kani_gate.py — and the hash does not, for cargo-kani or for the solver bundle it fetches. It is the one tool on this property's path outside the hermetic shell, which PLAT-TOOL-003 records is not the same claim"
 expressible = "no — a fact about a tool, not about the model"
 registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending, which already supports this property; its `covers` is `slice:AS-AUTH-7` and needs `slice:AS-RESET-7` beside it"
 

@@ -93,6 +93,15 @@ gap = "the committed store, the delete write-order and the present-cache soundne
 class = "state-partial"
 model = "RSKeyStore"
 gap = "the Storage contract it implements — atomic append, an enumeration-completeness flag — is taken as RSKeyStore's backend assumption; the two-partition counter/main ring, is_counter_fid routing, wear and page reclaim, and compact are backend mechanics the model abstracts."
+# Which of the six the `gap` sentence names are OBLIGATIONS, one candidate each
+# for scripts/platform_gate.py. The list is here and not there so that deleting a
+# `PLAT-STORE-*` row from assurance/platform.toml alone goes red instead of green;
+# a note that anchors nothing is what these were before fff3b38.
+# `wear-and-reclaim` and `compact` are named in the gap and deliberately absent:
+# both are liveness — a device that stops reclaiming fills up and refuses writes,
+# which is not a false answer about a committed record — and neither has the
+# vendored fork's measured falsification the other four have.
+abstracts = ["tear", "scan-completeness", "reboot-recovery", "partition-routing"]
 
 [crate.rsk-rescue]
 class = "state-partial"

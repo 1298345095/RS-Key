@@ -248,8 +248,8 @@ features = "none"
 # ---- 4. Tool, version, invocation and environment ----------------------------
 
 # FIVE tools and no prover. cargo-kani and CBMC, which carry the strong row's one
-# unpinned provenance, are absent here rather than unfilled — AS-F004-5 is the
-# row that says why.
+# UNHASHED provenance (the version is pinned; the fetched solver bundle is not),
+# are absent here rather than unfilled — AS-F004-5 is the row that says why.
 
 [[tool]]
 name = "tlaplus"

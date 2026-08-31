@@ -401,7 +401,7 @@ registered = "yes — assurance/platform.toml PLAT-TOOL-004, pending, which alre
 id = "AS-SEAL-3"
 statement = "Kani/CBMC is sound for the arithmetic this clause's harness bounds, and the solver that ran is the pinned one — which for cargo-kani means a version number in a workflow file and not a hash in flake.lock."
 kind = "tool TCB"
-discharger = "a pinned toolchain and a recorded tool hash, and the second does not exist. cargo-kani is the only tool on this clause's path the flake does not pin at all, and this clause's BOUNDED status rests entirely on one harness that tool ran"
+discharger = "a pinned toolchain and a recorded tool hash, and the second does not exist — for cargo-kani or for the solver bundle it fetches. The first does: KANI_VERSION 0.67.0, held by scripts/kani_gate.py. cargo-kani is the only tool on this clause's path outside the hermetic shell, and this clause's BOUNDED status rests entirely on one harness that tool ran"
 expressible = "no — a fact about a tool, not about the model"
 registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending, whose `covers` carries `slice:AS-SEAL-3` now; its `supports` named the parent property and no clause row, and names this property now"
 

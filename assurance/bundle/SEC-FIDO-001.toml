@@ -255,7 +255,7 @@ environment = "nix develop"
 [[tool]]
 name = "cbmc"
 version = "the one cargo-kani 0.67.0 ships; CaDiCaL 2.0.0 as the SAT back end"
-provenance = "inside the kani-verifier install above, so it inherits its unpinned provenance"
+provenance = "a prebuilt binary inside the CBMC/SAT bundle `cargo kani setup` FETCHES, beside kissat 4.0.1; nothing in this tree hashes that bundle, which is the gap PLAT-TOOL-003 names. Not the same as unpinned: the kani-verifier VERSION above is pinned"
 invocation = "driven by cargo kani, not by hand"
 environment = "--object-bits 16 --sat-solver cadical --slice-formula"
 
@@ -420,7 +420,7 @@ statement = "Kani/CBMC is sound for the harness's arithmetic and the pinned solv
 kind = "tool TCB"
 discharger = "the pinned toolchain and a recorded tool hash"
 expressible = "no — a fact about a tool, not about the model"
-registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending; cargo-kani is still the one tool on this path the flake does not pin at all"
+registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending; cargo-kani is the one tool on this path outside the hermetic shell, and the half that row says is missing is the HASH, not the version"
 
 [[assumption]]
 id = "AS-AUTH-8"

@@ -307,8 +307,9 @@ features = "none — the slices are `cargo test -p rsk-fido` and `cargo test -p 
 # ---- 4. Tool, version, invocation and environment ----------------------------
 
 # SIX tools, and the prover is here where SEC-FIDO-007's is not: this property
-# has two harnesses, so cargo-kani and CBMC — which carry the only unpinned
-# provenance on either path — are back in the trust base.
+# has two harnesses, so cargo-kani and CBMC — which carry the only UNHASHED
+# provenance on either path, the version being pinned and the fetched solver
+# bundle not — are back in the trust base.
 
 [[tool]]
 name = "tlaplus"
@@ -327,14 +328,14 @@ environment = "nix develop"
 [[tool]]
 name = "cargo-kani"
 version = "0.67.0"
-provenance = "NOT in flake.lock — not packaged in nixpkgs. Installed with `cargo install --locked kani-verifier --version $KANI_VERSION`, and KANI_VERSION is a workflow variable at .github/workflows/deep-checks.yml:354 and :446. The one tool on either of this property's paths the flake does not pin"
+provenance = "NOT in flake.lock — not packaged in nixpkgs. Installed with `cargo install --locked kani-verifier --version $KANI_VERSION`, and KANI_VERSION is a workflow variable at .github/workflows/deep-checks.yml:354 and :446. The one tool on either of this property's paths OUTSIDE the hermetic shell — which is not the same as unpinned: the version is pinned there and scripts/kani_gate.py holds it; what nothing records is the fetched solver bundle (PLAT-TOOL-003)"
 invocation = "scripts/kani.sh state, which resolves to `cargo kani -p rsk-fido … --features kani-soft`; FLOOR_state=29 harnesses, TIMEOUT_state=30m"
 environment = 'RUSTFLAGS=--cfg sha2_backend="soft" --cfg poly1305_force_soft --cfg sha1_force_soft (scripts/kani.sh:299)'
 
 [[tool]]
 name = "cbmc"
 version = "the one cargo-kani 0.67.0 ships; CaDiCaL as the SAT back end"
-provenance = "inside the kani-verifier install above, so it inherits its unpinned provenance"
+provenance = "a prebuilt binary inside the CBMC/SAT bundle `cargo kani setup` FETCHES, beside kissat 4.0.1; nothing in this tree hashes that bundle, which is the gap PLAT-TOOL-003 names. Not the same as unpinned: the kani-verifier VERSION above is pinned"
 invocation = "driven by cargo kani, not by hand"
 environment = "the harness bounds are the environment here: 442 checks on the state harness and 1310 on the call-site one"
 
@@ -568,7 +569,7 @@ registered = "yes — assurance/platform.toml PLAT-MODEL-001, pending, which cov
 id = "AS-AUTH-7"
 statement = "Kani/CBMC is sound for the harnesses' arithmetic and the pinned solver is the one that ran."
 kind = "tool TCB"
-discharger = "a pinned toolchain and a recorded tool hash. cargo-kani 0.67.0 is still the one tool on this path the flake does not pin at all — it is a workflow variable — and the two verdicts this bundle quotes were produced by an install nothing in the tree hashes. The 442 and 1310 check counts are the shape of what CBMC was asked, and nothing here re-checks them"
+discharger = "a pinned toolchain and a recorded tool hash. The first exists — cargo-kani 0.67.0 is pinned by three KANI_VERSION literals that scripts/kani_gate.py holds — and the second does not: the two verdicts this bundle quotes were produced by an install nothing in the tree hashes, from a solver bundle `cargo kani setup` fetched. The 442 and 1310 check counts are the shape of what CBMC was asked, and nothing here re-checks them"
 expressible = "no — a fact about a tool, not about the model"
 registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending. Its `supports` does not yet name this property, which has two harnesses; the widening is proposed alongside this bundle"
 
@@ -701,7 +702,7 @@ reading = "this row is why `mut = 7` and `co = 6`, and it is a finding about the
 
 [freshness]
 measured = "2026-08-30, Europe/Moscow"
-expires_on_prover_bump = "tlaplus 1.7.4 or its jar hash — seventeen of the eighteen mechanised verdicts here are TLC's; and cargo-kani 0.67.0, which is unpinned, for the other two"
+expires_on_prover_bump = "tlaplus 1.7.4 or its jar hash — seventeen of the eighteen mechanised verdicts here are TLC's; and cargo-kani 0.67.0, whose version is pinned but whose solver bundle is unhashed, for the other two"
 expires_on_toolchain_bump = "rustc/cargo 1.96.0 — the two co-refutation slices and, through MIR, both Kani verdicts"
 expires_on_stepping = "nothing here is a hardware result and `property.subjects_absent` says so; no method row is a `measurement`, so this bundle declares no board and records no revision"
 expires_on_owner_change = "any file in property.owners_tagged, property.owners_untagged or property.owners_co_refuted — and clientpin.rs:831 write_pin_verifier in particular, which is the untagged chokepoint AS-NTAI-2 is about"
