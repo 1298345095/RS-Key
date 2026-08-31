@@ -612,6 +612,13 @@ run "rsk-wipe refuses an unknown flash size" sh -c '
     echo "FAIL: rsk-wipe failed for the wrong reason:"; printf "%s\n" "$out" | tail -5; exit 1
   }'
 run "flake.lock in sync"       lock_in_sync
+# The row above proves the lock is not STALE and nothing proves what it pins is
+# in the TCB at all: `flip-link`, `rust-lld` and `arm-none-eabi-as` appeared in no
+# registry, no gate and no page, and `cargo-kani` is in no nix file whatsoever —
+# its only pin is an `env:` written three times, of which `kani_gate.py` reads
+# one. This holds every tool's recorded pin against the file that pins it and
+# prints the TCB into docs/supply-chain.md.
+run "toolchain TCB registry"   python scripts/toolchain_gate.py
 run "one embassy for all"      embassy_revs_match
 # No `--ignore`: the tree carries no vulnerability advisory. RUSTSEC-2023-0071
 # (the `rsa` crate, no fixed release) was the last one and left with the crate.
