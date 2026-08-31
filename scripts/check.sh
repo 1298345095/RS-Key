@@ -703,6 +703,25 @@ run "threat-model traceability" python scripts/threat_gate.py
 # wrote them found `force_delete` hiding a faulted metadata drop on the reset
 # path, behind a doc sentence that named the wrong caller as the only one.
 run "delete-caller dispositions" python scripts/deleter_gate.py
+# The same shape one crate over, and the finding that asked for it: the OTP use
+# counter's own two files each stated a roster of its writers from memory and
+# each was wrong. `counter.rs` said "both writers … take their step from here"
+# and `counter_kani.rs` said four sites "are every writer of the first two tail
+# bytes". There are eight — `cmd_swap` writes them twice per command and
+# `migrate_seal` twice per boot, and neither sentence mentioned either. A proof
+# whose scope is a sentence has no way to notice a ninth arriving; this derives
+# the roster and the harness cites it. Driven through THIS row, exit taken with
+# no pipe: a ninth writer in a new `crates/rsk-otp/src/*.rs` -> rc 1 naming that
+# file and function; removed -> rc 0. An adversarial review then found four ways
+# past it, three overclaiming: a BARE `seal_put(` (the receiver test), a grouped
+# `use rsk_otp::{…, seal}`, a ledger entry certifying its own coverage through a
+# `via` hop it never calls, and a same-named stepper in another file. All four
+# redden now. The table is scripts/test_counter_writers_gate.py, 27 cases, two
+# of them controls that must stay GREEN: twelve lines inserted above every site,
+# and a local renamed at one call site. That second one is why the key is
+# (file, fn, ordinal) — keyed on the call TEXT, a rename or a rustfmt reflow was
+# a false red.
+run "OTP counter writers"      python scripts/counter_writers_gate.py
 # A model constant that stands for a fact about the world, not a defect switch.
 # `PowerOnClearsScratch2` was TRUE in all seven Boot configurations and read by
 # no action: deleting its `ASSUME` left every run bit-identical.
