@@ -107,10 +107,12 @@ BUNDLE = BUNDLE_DIR / "SEC-FIDO-001.toml"
 #: green, which is the family "the table was DELETED rather than EMPTIED" one
 #: layer out.
 #:
-#: Moved 2 -> 8 the day the six remaining P0 bundles landed. The value is the
-#: measured roster and not a margin under it: a floor below the count is a bundle
-#: that can leave with the row green, which is the direction above.
-ROSTER_FLOOR = 8
+#: Moved 2 -> 8 the day the six remaining P0 bundles landed, and 8 -> 11 the day
+#: `SEC-FIDO-006` was split into `SEC-FIDO-006A/B/C` and the three clause bundles
+#: landed together. The value is the measured roster and not a margin under it: a
+#: floor below the count is a bundle that can leave with the row green, which is
+#: the direction above.
+ROSTER_FLOOR = 11
 
 REGISTRY = pathlib.Path("assurance/properties.toml")
 #: Where a bare `Name.cfg` lives. The bundle names TLC configurations without a

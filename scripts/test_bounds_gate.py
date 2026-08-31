@@ -382,14 +382,14 @@ def test_the_consequence_column_can_go_backwards(tree):
 def test_one_consequence_removed_is_under_the_shipped_prose_floor(tree):
     """The arm the floor at the count buys, driven at the SHIPPED value.
 
-    `PROSE_FLOOR` was 0 while the column was empty and could not fire; at 295 it
+    `PROSE_FLOOR` was 0 while the column was empty and could not fire; at 397 it
     is a ratchet, and losing one consequence is red until an author moves it in
     the same diff. Reached by removing evidence — the direction a floor is for.
     """
     drop_line(tree, "assurance/bundle/SEC-FIDO-007.toml", "stops_tagged_owners = ")
     assert only(
         tree.problems(),
-        f"294 bound(s) carry a `stops_*` consequence, under the floor of"
+        f"396 bound(s) carry a `stops_*` consequence, under the floor of"
         f" {bounds_gate.PROSE_FLOOR}",
     )
 
@@ -400,15 +400,15 @@ def test_one_consequence_removed_is_under_the_shipped_prose_floor(tree):
 def test_a_bundle_that_stopped_being_rendered(tree):
     (tree.root / "assurance/bundle/SEC-FIDO-005.toml").unlink()
     tree.git("add", "-A")
-    assert only(tree.problems(), "7 bundle(s) reached this table, under the floor of 8")
+    assert only(tree.problems(), "10 bundle(s) reached this table, under the floor of 11")
 
 
 def test_a_method_row_whose_bounds_were_stripped(tree):
     """The row floor and the bounds floor are two questions, and this asks both."""
     tree.strip_bounds("assurance/bundle/SEC-FIDO-001.toml", 2)
     problems = tree.problems()
-    assert only(problems, "60 method row(s) carry a bound, under the floor of 61")
-    assert only(problems, "293 `bound_*` key(s) rendered, under the floor of 295")
+    assert only(problems, "82 method row(s) carry a bound, under the floor of 83")
+    assert only(problems, "395 `bound_*` key(s) rendered, under the floor of 397")
 
 
 def test_one_bound_removed_is_under_the_bounds_floor(tree):
@@ -416,7 +416,7 @@ def test_one_bound_removed_is_under_the_bounds_floor(tree):
     buys over a floor set comfortably below it."""
     drop_line(tree, "assurance/bundle/SEC-FIDO-001.toml", "bound_outcomes = ")
     drop_line(tree, "assurance/bundle/SEC-FIDO-001.toml", "stops_outcomes = ")
-    assert only(tree.problems(), "294 `bound_*` key(s) rendered, under the floor of 295")
+    assert only(tree.problems(), "396 `bound_*` key(s) rendered, under the floor of 397")
 
 
 def test_a_checkout_with_no_bundle_directory_is_a_fact_not_a_finding(tmp_path):
@@ -449,7 +449,7 @@ def test_a_case_cannot_patch_a_floor_downward(monkeypatch):
     """
     monkeypatch.setattr(bounds_gate, "BOUNDS_FLOOR", 1)
     monkeypatch.setattr(bounds_gate, "BUNDLE_FLOOR", 1)
-    assert bounds_gate.audit.__defaults__[1:3] == (61, 295)
+    assert bounds_gate.audit.__defaults__[1:3] == (83, 397)
 
 
 # --- the derivation -----------------------------------------------------------
@@ -524,7 +524,7 @@ def test_a_missing_page_is_refused(tree):
 
 
 def test_the_page_carries_the_disclaimer(tree):
-    """It names eight registered ids, so `claims_gate` owes it the sentence — and
+    """It names eleven registered ids, so `claims_gate` owes it the sentence — and
     the sentence is imported rather than typed, so there is one copy to drop."""
     page = (tree.root / "docs/assurance-bounds.md").read_text()
     assert "RS-Key is not formally verified" in page
@@ -533,8 +533,8 @@ def test_the_page_carries_the_disclaimer(tree):
 def test_the_page_says_which_properties_it_renders_and_why(tree):
     """Requirement: the decision is on the page, not only in the commit."""
     page = (tree.root / "docs/assurance-bounds.md").read_text()
-    assert "**Every bundle the tree has — 8 of them.**" in page
-    assert "**9 of its 17 rows** carry no bundle" in page
+    assert "**Every bundle the tree has — 11 of them.**" in page
+    assert "**6 of its 17 rows** carry no bundle" in page
 
 
 def test_the_rows_without_a_bundle_are_derived_from_the_ledger(tree):

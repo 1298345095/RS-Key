@@ -14,22 +14,23 @@ bound 5 -> 9999 while the bundle still said 5, a docs row's `model Channels 2`
 and `bound_channels` 2 -> 77 while the docs still said 5 and 2, a docs row
 renamed after a constant that does not exist, and a whole docs row deleted.
 
-The bundles already carry the numbers as structured data — 295 `bound_*` keys
-over 61 `[[method]]` rows in 8 files — and `bundle_gate.method_bounds` floors
+The bundles already carry the numbers as structured data — 397 `bound_*` keys
+over 83 `[[method]]` rows in 11 files — and `bundle_gate.method_bounds` floors
 them, but on COUNT and TYPE only: the VALUES are unconstrained and nothing
 rendered them anywhere. So this writes them out, the shape `evidence_gate.py`
 already uses on `docs/assurance-vector.md`: one page, `--write`, a byte diff, a
 `check.sh` row.
 
-## What it renders, and why all eight
+## What it renders, and why all eleven
 
-All eight bundles, not `SEC-FIDO-001`'s alone. The criterion says "the slice's
-bundle" because there was one bundle when it was written; there are eight now,
-and rendering one would leave 262 of the 295 bounds unshown — the criterion
-answered for an eighth of the evidence, which is the shape it exists to refuse.
-Measured: all eight are `p0-launch` rows of `assurance/configurations.toml`, so
-"all the bundles" and "the P0-launch rows carrying any raw evidence" are one set;
-the other 9 rows of that 17-row tranche have no bundle, so they have no bound.
+All eleven bundles, not `SEC-FIDO-001`'s alone. The criterion says "the slice's
+bundle" because there was one bundle when it was written; there are eleven now —
+`SEC-FIDO-006` having since split into three clause bundles beside it — and
+rendering one would leave 364 of the 397 bounds unshown, the criterion answered
+for a twelfth of the evidence, which is the shape it exists to refuse. Measured:
+all eleven are `p0-launch` rows of `assurance/configurations.toml`, so "all the
+bundles" and "the P0-launch rows carrying any raw evidence" are one set; the
+other 6 rows of that 17-row tranche have no bundle, so they have no bound.
 That difference is DERIVED on the page from the ledger rather than listed here —
 a hand-typed list of ids on a generated page is the defect one paragraph up.
 
@@ -38,7 +39,7 @@ a hand-typed list of ids on a generated page is the defect one paragraph up.
 `shipped_relation` is the bundle's per-ROW prose and is required of every method
 row. The consequence a scope table is for — *what stops being proved* — is
 per-BOUND, so it is carried the same way one field down: `stops_<name>` beside
-`bound_<name>`. All 295 carry one now; the page prints that as a number rather
+`bound_<name>`. All 397 carry one now; the page prints that as a number rather
 than asserting it, and a cell reading `—` would be a bound whose consequence
 lives only in its row's `shipped_relation`, printed under the table. The count is
 the measurement either way — the page read `0 of 292` before the field existed.
@@ -99,9 +100,15 @@ SECTION = "## The bounds"
 LAUNCH = "p0-launch"
 TABLE_HEADER = "| Bound | Value | What stops being proved |"
 
-#: Floors, at the measured counts of this tree: 8 bundles, 61 method rows
-#: carrying at least one bound, 295 bounds, and **all 295** of those carrying the
-#: per-bound consequence. Each is the DEFAULT of an [`audit`] parameter and is
+#: Floors, at the measured counts of this tree: 11 bundles, 83 method rows
+#: carrying at least one bound, 397 bounds, and **all 397** of those carrying the
+#: per-bound consequence. Moved from 8/61/295/295 the day `SEC-FIDO-006` was
+#: split into `SEC-FIDO-006A/B/C` and the three clause bundles landed; each new
+#: value was READ OFF `table()` over the eleven bundles rather than added up from
+#: the three deltas, which each reported the count as of the moment it was
+#: written and so could only be a lower bound on the merge.
+#:
+#: Each is the DEFAULT of an [`audit`] parameter and is
 #: read once, at import — so a case reaches it by passing a value, and
 #: monkeypatching the name here changes nothing about what `main` runs. That is
 #: `claims_gate.DISCLAIMER_FLOOR`'s shape and it is deliberate: a ceiling a case
@@ -110,10 +117,10 @@ TABLE_HEADER = "| Bound | Value | What stops being proved |"
 #: by construction because nothing can be under it; at the count it is the ratchet
 #: the other three are — dropping one `stops_*` is red until an author moves it in
 #: the same diff, which is the direction a floor exists for.
-BUNDLE_FLOOR = 8
-ROW_FLOOR = 61
-BOUNDS_FLOOR = 295
-PROSE_FLOOR = 295
+BUNDLE_FLOOR = 11
+ROW_FLOOR = 83
+BOUNDS_FLOOR = 397
+PROSE_FLOOR = 397
 
 #: A rendered bound row, for the completeness rule. It reads the page ON DISK
 #: rather than the string `render` just built, so a filter inside `render` and a

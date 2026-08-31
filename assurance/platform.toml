@@ -103,7 +103,7 @@ discharge = "A recorded PASS of tests/29_reset_power_cut.py on a throwaway board
 discharge_owner = "maintainer"
 status = "pending"
 failure_direction = "security: a reset interrupted mid-write could leave a credential live with its gate gone"
-covers = ["board-only:29_reset_power_cut", "slice:AS-RESET-1"]
+covers = ["board-only:29_reset_power_cut", "slice:AS-RESET-1", "slice:AS-PIN-1", "slice:AS-SEAL-1"]
 supports = [
   "SEC-FIDO-006",
   "SEC-FIDO-006A",
@@ -182,12 +182,15 @@ discharge = "A pinned toolchain and a recorded tool hash on the bundle. cargo-ka
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: every BOUNDED row rests on a solver nobody recorded"
-covers = ["slice:AS-AUTH-7", "slice:AS-RESET-7"]
+covers = ["slice:AS-AUTH-7", "slice:AS-RESET-7", "slice:AS-PIN-3", "slice:AS-SEAL-3"]
 supports = [
   "SEC-FIDO-001",
   "SEC-FIDO-002",
   "SEC-FIDO-003",
   "SEC-FIDO-006",
+  "SEC-FIDO-006A",
+  "SEC-FIDO-006B",
+  "SEC-FIDO-006C",
   "SEC-STORE-002",
   "SEC-TRANS-001",
   "SEC-TRANS-002",
@@ -212,6 +215,8 @@ covers = [
   "slice:AS-CRED-6",
   "slice:AS-RESET-6",
   "slice:AS-TOK-6",
+  "slice:AS-PIN-2",
+  "slice:AS-SEAL-2",
 ]
 # The P0-launch tranche by name. The dependency is universal over rows with a
 # configuration — `assurance_gate`'s `cfgs` column is that roster — and copying
@@ -275,7 +280,7 @@ failure_direction = "security: a miscompilation is invisible to every proof this
 # outright and the code's equivalent is a drop-and-replace plus an exhaustive
 # destructuring `Drop`, and nothing here covers what the emitted image does with
 # either.
-covers = ["slice:TCB-1", "slice:AS-RAM-4", "slice:AS-CRED-7", "slice:AS-RESET-9"]
+covers = ["slice:TCB-1", "slice:AS-RAM-4", "slice:AS-CRED-7", "slice:AS-RESET-9", "slice:AS-PIN-9"]
 
 [[assumption]]
 id = "PLAT-TOOLCHAIN-002"
@@ -394,7 +399,7 @@ discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a new reader on a grant path makes an unmodelled record decide an authorization, and no configuration goes red"
 covers = ["slice:AS-NTAI-6", "slice:AS-RESET-5"]
-supports = ["SEC-FIDO-001", "SEC-FIDO-003", "SEC-FIDO-006"]
+supports = ["SEC-FIDO-001", "SEC-FIDO-003", "SEC-FIDO-006", "SEC-FIDO-006B"]
 
 [[assumption]]
 id = "PLAT-MODEL-010"
@@ -437,7 +442,7 @@ discharge = "Model the vendor gate itself — MSE readiness plus the two-armed P
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: a device PIN the running build cannot collect waived that gate entirely until it was refused instead — the second factor on an irreversible vendor operation became a touch"
-covers = ["slice:AS-F004-3"]
+covers = ["slice:AS-F004-3", "slice:AS-SEAL-7"]
 supports = ["SEC-FIDO-004", "SEC-FIDO-006C"]
 
 [[assumption]]
@@ -477,8 +482,8 @@ discharge = "A second model variable, or a proof that the collapse preserves the
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: the locked state is the one where the RAM copy is the only readable seed, which is exactly where SEC-FIDO-007 has content"
-covers = ["slice:AS-RAM-2", "slice:AS-RESET-12"]
-supports = ["SEC-FIDO-007", "SEC-FIDO-006"]
+covers = ["slice:AS-RAM-2", "slice:AS-RESET-12", "slice:AS-PIN-8", "slice:AS-SEAL-5"]
+supports = ["SEC-FIDO-007", "SEC-FIDO-006", "SEC-FIDO-006A", "SEC-FIDO-006C"]
 
 [[assumption]]
 id = "PLAT-MODEL-005"
@@ -500,7 +505,7 @@ discharge = "Not by a run — by a second reset producer. `formal/README.md` rec
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: a GREEN nobody can turn red is a check that cannot fail, and everything that cites it inherits that"
-covers = ["slice:AS-RAM-5", "slice:AS-F004-2", "slice:AS-RESET-3"]
+covers = ["slice:AS-RAM-5", "slice:AS-F004-2", "slice:AS-RESET-3", "slice:AS-PIN-4"]
 supports = [
   "SEC-FIDO-004",
   "SEC-FIDO-006",
@@ -517,8 +522,8 @@ discharge = "Either a conjunct added to `crates/rsk-fido/src/reset_assurance.rs`
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: `kani = 0` on this property is CORRECT rather than merely unfilled, and a reader who takes the neighbouring harnesses for coverage of it is wrong"
-covers = ["slice:AS-RAM-8", "slice:AS-RESET-8"]
-supports = ["SEC-FIDO-007", "SEC-FIDO-006"]
+covers = ["slice:AS-RAM-8", "slice:AS-RESET-8", "slice:AS-PIN-6", "slice:AS-SEAL-6"]
+supports = ["SEC-FIDO-007", "SEC-FIDO-006", "SEC-FIDO-006A", "SEC-FIDO-006B", "SEC-FIDO-006C"]
 
 [[assumption]]
 id = "PLAT-MODEL-002"
@@ -528,8 +533,8 @@ discharge = "The store slice of stage 5, which is where a cardinality argument c
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: a defect that needs two credentials of one RP — the enumerate/delete interleavings — is outside every configuration"
-covers = ["slice:AS-AUTH-6", "slice:AS-CRED-1", "slice:AS-RESET-10"]
-supports = ["SEC-FIDO-001", "SEC-FIDO-005", "SEC-FIDO-006"]
+covers = ["slice:AS-AUTH-6", "slice:AS-CRED-1", "slice:AS-RESET-10", "slice:AS-PIN-7"]
+supports = ["SEC-FIDO-001", "SEC-FIDO-005", "SEC-FIDO-006", "SEC-FIDO-006A"]
 
 [[assumption]]
 id = "PLAT-MODEL-012"
@@ -561,7 +566,7 @@ discharge = "Nothing to run, and that is the content. What supports the claim is
 discharge_owner = "contributor"
 status = "accepted-risk"
 failure_direction = "coverage: every verdict in this property's ladder is about a projection, and a defect in the projection itself — a snapshot taken at the wrong point, a clause with the wrong antecedent — is invisible to all of it. The one guard against that is that `ResetRefinement::delete` takes its phase from the production `reset_phase` classifier rather than a second hand-written list"
-covers = ["slice:AS-RESET-2"]
+covers = ["slice:AS-RESET-2", "slice:AS-PIN-5", "slice:AS-SEAL-4"]
 supports = ["SEC-FIDO-006", "SEC-FIDO-006A", "SEC-FIDO-006B", "SEC-FIDO-006C"]
 
 # --- the four inventory categories stage 10 names and this file did not hold ---
@@ -780,8 +785,8 @@ supports = ["SEC-FIDO-005", "SEC-FIDO-006"]
 [[assumption]]
 id = "PLAT-CRED-004"
 class = "model-abstraction"
-statement = "`FixSweepDropsCredsBeforeRpEntries` — the counterfactual repair the model carries for the reset half of `NoUnmanageableCredential` — has never been run on its TRUE arm, so the model has never checked whether that repair would hold the invariant."
-discharge = "One `emit` call in `formal/gen-configs.sh` passing TRUE for it, most usefully over `Historical_E76.cfg`'s constants, where the question `would this repair have worked` is the one the counterfactual is for. Today the constant is assigned FALSE by every configuration that assigns it and TRUE by none, so the conjunct at `formal/RSKeySecurityState.tla:1405` could be deleted with every recorded verdict unchanged. It is also outside `assurance/assumptions.toml`, so the assumption gate's both-arms rule does not reach it — unlike `FixPpuatRequiresPin`, whose FALSE arm `Historical_E77.cfg` does run."
+statement = "`FixSweepDropsCredsBeforeRpEntries` — the counterfactual repair the model carries for the reset half of `NoUnmanageableCredential` — is now ASSIGNED TRUE by one configuration and has still not been RUN on that arm, so the model has still never checked whether that repair would hold the invariant."
+discharge = "A RECORDED RUN of that arm, which is what is left. The `emit` call this row asked for now exists — `formal/gen-configs.sh:322` is `emit Historical_E76.cfg BugSeedDoesNotLead TRUE TRUE`, over `Shipped.cfg`'s constants, and it is the one experiment in the family nothing else runs. Measured over `formal/*.cfg`: the constant is TRUE in exactly one file, `Historical_E76.cfg`, and FALSE in 95, where it was FALSE in every one of them and TRUE in none; the two files that were byte-identical differ at exactly line 48 now. So the conjunct at `formal/RSKeySecurityState.tla:1405` is load-bearing where it was inert — this configuration is GREEN only if the repair closes E76, and deleting the conjunct makes its behaviour `Mut_BugSeedDoesNotLead.cfg`'s. What no artifact says yet is which way it goes: `formal/runs.toml` still records this file RED under its SUPERSEDED byte-identical content, `formal/floors.txt` now asks GREEN of it, and `run_count_gate` carries both of those as findings until the tier is re-run and `--record`ed. This stays `pending` on that run and not on the configuration: a `.cfg` in the tree is an experiment arranged, not an experiment observed. It is also outside `assurance/assumptions.toml`, so the assumption gate's both-arms rule does not reach it — unlike `FixPpuatRequiresPin`, whose FALSE arm `Historical_E77.cfg` does run."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: a model constant nothing branches on is a comment with a type, and this one names a repair a reader could take for a checked alternative"
@@ -847,3 +852,125 @@ status = "pending"
 failure_direction = "coverage: a reader who takes the neighbouring harnesses for bounded coverage of this property is wrong, and nothing in the vector says so"
 covers = ["slice:AS-TOK-5"]
 supports = ["SEC-FIDO-008", "SEC-FIDO-006"]
+
+# ---- The three clauses SEC-FIDO-006 was split into ---------------------------
+# `SEC-FIDO-006A/B/C` are one parent's three conjuncts, written blind to each
+# other, and the rows below are what each one's own ladder cannot answer. Two of
+# the three proposed the SAME premise from opposite sides — the fold two rungs
+# down — and it is `PLAT-ORACLE-001` once rather than twice: a row per clause per
+# premise is the "two answers about one premise" shape this registry exists to
+# refuse.
+
+[[assumption]]
+id = "PLAT-PINGATE-001"
+class = "tool-fidelity"
+statement = "`SEC-FIDO-006A`'s only bounded evidence carries a non-vacuity guard that does not guard the conjunct it omits: `reset_keeps_the_pin_gate`'s `kani::cover!` names three of the clause's four antecedent conjuncts and puts the clause's CONSEQUENT where `snapshot.credential` belongs, so a witness it accepts may be a state at which the clause holds vacuously."
+discharge = "One conjunct in `crates/rsk-fido/src/reset_refinement_kani.rs:133-138`, and it was priced by measurement rather than argued. Driven on a scratch copy of the workspace with cargo-kani 0.67.0: the shipped condition conjoined with `!reset.snapshot.credential` is SATISFIED (1.08 s), which is the defect; conjoined with `reset.snapshot.credential` instead it is SATISFIED at 0.98 s against a 0.99 s baseline, which is the repair at no cost. The guard is not inert — under a real vacuity mutation, both credential draws forced false, the shipped condition goes UNSATISFIABLE (0.94 s) — so what it misses is the route through the snapshot draw alone. `crates/rsk-fido/src/reset_assurance.rs:144-151` is why the two routes differ: `begin` is the only writer of `snapshot.credential` and takes it from `persistent.credential`. The sibling harnesses at :142 and :162 have the SAME shape and were not driven."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the one rung that makes this row read BOUNDED could be proving its clause over a domain in which the clause cannot fail, and its own cover would report SATISFIED either way"
+covers = ["slice:AS-PIN-10"]
+supports = ["SEC-FIDO-006A"]
+
+[[assumption]]
+id = "PLAT-PINGATE-002"
+class = "model-abstraction"
+statement = "`SEC-FIDO-006A`'s isolated RED is a localisation and not a demonstration of unique reach: its falsifying state also falsifies `NoAccessibleSecretWithoutGate`, and the two properties share one model switch and one production function."
+discharge = "A configuration or a witness exhibiting a state where this clause falls and `NoAccessibleSecretWithoutGate` holds, and the recorded tier contains none. Measured: `SoloClause_ResetKeepsThePinGate.cfg`'s State 16 has store.cred = {r1}, SeedReachable, pin.everSet TRUE and pin.set FALSE, so `RSKeySecurityState.tla:1779` is false there too; `assurance_gate.co_refuted` credits `BugResetGatesFirst` to both names; and the two `Refines` tags sit at `crates/rsk-fido/src/reset.rs:199` and `:217`, on `is_fido_gate_fid` and the `is_fido_gate_record` it wraps. The converse IS witnessed — `Solo_NoAccessibleSecretWithoutGate.cfg` falls on the stranded-grant conjunct at `:1788` where snap.surv is empty and this clause is vacuous — so the pair is asymmetric rather than redundant. What would settle it is a switch that breaks the snapshot comparison without touching the steady-state ghost `everSet`, and the model has none."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage in the reading direction: `co = 1` on this row and `co = 1` on SEC-FIDO-004 are the same patch counted twice, and a reader who adds the two columns double-counts one experiment"
+covers = ["slice:AS-PIN-12"]
+supports = ["SEC-FIDO-006A", "SEC-FIDO-004"]
+
+[[assumption]]
+id = "PLAT-AUVGATE-001"
+class = "model-abstraction"
+statement = "`ResetKeepsTheAlwaysUvGate` has no falsifying state wherever `AlwaysUvShipped = TRUE`, so the three green configurations on that arm assert it vacuously. `gate.alwaysUv` has two writers: `ConfigOp` (RSKeySecurityState.tla:1108), which sets `snap' = NoSnap` in the same action and so cannot leave the clause's antecedent standing, and `ResetSweepGates` (:1438-1439), guarded by `gate.alwaysUv # AlwaysUvShipped` and assigning that constant — which on the TRUE arm can only RAISE the flag."
+discharge = "A configuration that arms `BugResetGatesFirst` at `AlwaysUvShipped = TRUE` and is recorded on this clause, which would exhibit the vacuity rather than argue it. No such configuration exists: measured over all 210, the five taking that arm (AlwaysUv.cfg, PermWide.cfg, ForceChange.cfg, PermWideMut_BugConsumeKeepsMcGa.cfg, PermWideMut_BugStopUsingKeepsPerms.cfg) and the five arming that switch are disjoint sets. Until one is written the discharge is a reading of the two writers, which formal/gen-configs.sh:211-225 also carries and which is why `clauses=1` is on Shipped.cfg and on no other baseline."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a green nobody can turn red is a check that cannot fail, and the matrix register already uses one of these three runs as an answer for this very property"
+covers = ["slice:AS-AUV-1"]
+supports = ["SEC-FIDO-006", "SEC-FIDO-006B"]
+
+[[assumption]]
+id = "PLAT-AUVGATE-002"
+class = "model-abstraction"
+statement = "The model's consequent for this clause is the alwaysUv FLAG and the Rust α's is the `EF_ALWAYS_UV` RECORD's presence, and the two coincide only while the compiled default is off — so every Rust-tier artifact for `SEC-FIDO-006B` is evidence about a record, not about a gate."
+discharge = "Either a `cfg(feature = \"always-uv\")` arm in crates/rsk-fido/src/reset_assurance.rs that makes the α's consequent the EFFECTIVE state, or a stated narrowing that the clause is about the record. Neither exists today: `git grep 'feature = \"always-uv\"' crates/rsk-fido/src` returns crates/rsk-fido/src/config.rs:315 and crates/rsk-fido/src/conformance/config.rs:77 and nothing in the reset family. The cost is measured — the six `reset_assurance` tests report `6 passed; 0 failed` on BOTH feature arms, against two different test binaries. crates/rsk-fido/src/config.rs:351-359 is the site that makes the coincidence hold on the default build and break on the other."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: on an `always-uv` build the record's presence means the gate is OFF, so a clause named for keeping the gate would be asserting the survival of a permissive override — and no harness, test or fuzz oracle in the tree can tell the two builds apart"
+covers = ["slice:AS-AUV-2"]
+supports = ["SEC-FIDO-006B"]
+
+# One row and not two. `SEC-FIDO-006A` proposed this as `PLAT-PINGATE-002` and
+# `SEC-FIDO-006B` as `PLAT-AUVGATE-003`, blind to each other, and the two
+# statements are the same premise read from each clause's side: the fold is a
+# property of the two ORACLES, so it belongs to neither clause's area.
+[[assumption]]
+id = "PLAT-ORACLE-001"
+class = "model-abstraction"
+statement = "Below the model tier nothing can report `ResetKeepsThePinGate` rather than `ResetKeepsTheAlwaysUvGate`: `fuzz/fuzz_targets/power_cut.rs:202` folds both gates into one conjunct (`fs.has_data(EF_PIN) && fs.has_data(EF_ALWAYS_UV)`) and `tests/29_reset_power_cut.py:191-194` asserts one refused assertion for both, so a red run on either rung says a gate went and not which one."
+discharge = "Splitting either oracle: a second boolean in `reset_property_holds`, or a second assertion in tests/29_reset_power_cut.py reading getInfo's `options.alwaysUv` — which the script already fetches and prints in its failure message but does not test. Both are small; neither has been done. Both files NAME all three clauses in their doc comments, and the columns are not wrong — `assurance_gate` counts FILES — which is why nothing in the apparatus reports the gap. The backup-seal clause is separable on both rungs and is the sibling this does not cover."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage in the reading direction: the fuzz and board rungs are counted for two clauses and can localise neither, so `fuzz = 1` and `test = 1` on both rows are the same undifferentiated evidence counted twice"
+covers = ["slice:AS-PIN-11", "slice:AS-AUV-3"]
+supports = ["SEC-FIDO-006A", "SEC-FIDO-006B"]
+
+[[assumption]]
+id = "PLAT-SEAL-001"
+class = "model-abstraction"
+statement = "EF_BACKUP_SEALED is one byte on flash and every tier models it as one boolean, so a marker that is present but unreadable — a third state the runtime reader has and the model does not — cannot be described by any configuration, harness or twin."
+discharge = "Either a second model variable, or the argument that the byte's VALUE is never read. The second is nearly available and is not the same claim: every consumer tests presence rather than content (crates/rsk-fido/src/vendor.rs:1036 and the display side's has_data), and both writers write the same one byte. What is left over is the read that FAILS, which crates/rsk-fido/src/vendor.rs:1026 deliberately answers `true` for because the absent arm hands out the master seed — and which the model has no state for at all. PLAT-FLASH-001 assumes that state away at the medium; this row says the model could not describe it if it happened."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the one state the production reader was hardened against is the one state no verdict in the ladder ranges over"
+covers = ["slice:AS-SEAL-8"]
+supports = ["SEC-FIDO-006C"]
+
+[[assumption]]
+id = "PLAT-SEAL-002"
+class = "tool-fidelity"
+statement = "This clause's model verdict and its co-refutation credit both come from a configuration arming a PAIR of switches — BugBackupSealedNotAGate with its companion BugSeedDoesNotLead — so what the clause-isolating configuration isolates is the CLAUSE and never the defect."
+discharge = "A recorded run of the switch armed alone, which no configuration in formal/ performs. The model text says it would be GREEN and the argument is derivable: the demoted marker's disjunct in ResetSweepSecrets is guarded by `SeedLeadsTheWipe => ~store.seed`, the only clearer of store.seed assigns `snap' = KeepSurv(snap, ram)`, and KeepSurv at formal/RSKeySecurityState.tla:310-311 retires snap.seed whenever ram is FALSE — which it is from ResetConfirmed onward wherever BugStateResetAfterWipe is off. But that is an argument about the model and not a verdict, and `comutate.armed_subject` accepts the pair on a NAME lookup in gen-configs.sh's companion_bug rather than on it. A recorded GREEN of the switch alone would discharge this and make the argument checkable at the same time."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: if the pairing were ever wrong, the clause's mut and co columns would both be crediting a configuration whose RED belongs to a defect the property is not about"
+covers = ["slice:AS-SEAL-9"]
+supports = ["SEC-FIDO-006C"]
+
+[[assumption]]
+id = "PLAT-SEAL-003"
+class = "model-abstraction"
+statement = "The TLA+ clause and its Rust abstraction do not state the same sentence: formal/RSKeySecurityState.tla:1848-1849 has no reachability conjunct in the antecedent, and crates/rsk-fido/src/reset_assurance.rs:122-128 adds `owner_seed_reachable`, which makes the Rust statement strictly weaker. The two sibling clauses carry that conjunct on both sides and have no such gap."
+discharge = "Either the conjunct added to the model's clause or the disjunct removed from the abstraction — and the direction says which way the gap is safe. The model's clause is the STRONGER of the two, so its GREEN carries to the abstraction and the harness proves less than the configurations do. That is sound for citing them together and unsound for reading the bounded row as an independent confirmation of the model one, which is what a `kani` column of one invites. Removing the disjunct changes what the harness proves and is stage 4's call."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage in the reading direction: a reader who takes the model verdict and the bounded proof as two checks of one sentence is counting the weaker one twice"
+covers = ["slice:AS-SEAL-10"]
+supports = ["SEC-FIDO-006C"]
+
+[[assumption]]
+id = "PLAT-SEAL-004"
+class = "build-configuration"
+statement = "The shipped image is built without `--features fips-profile`. On that build `backup_export` returns NotAllowed before the seal is ever read, so one of this clause's two consumers is gone and the property guards a surface that column does not have."
+discharge = "Reading the cfg arms, and the reading is the content rather than a run: crates/rsk-fido/src/vendor.rs:841-844 refuses export under `cfg!(feature = \"fips-profile\")` ahead of the seal check, and the on-device recovery-phrase reveal is disabled on that profile too. The direction is unusual and worth stating: the property is WEAKER there, not stronger, because a torn reset that drops the marker re-opens nothing over USB — so a GREEN measured on the default column is not evidence about that one. No configuration and no harness runs it."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: the fips-profile cells for this property are covered by nothing, and the property's verdicts are about the default column only"
+covers = ["slice:AS-SEAL-11"]
+supports = ["SEC-FIDO-006C"]
+
+[[assumption]]
+id = "PLAT-SEAL-005"
+class = "build-configuration"
+statement = "The marker's SECOND consumer — the on-device recovery-phrase reveal at crates/rsk-display/src/backup.rs:47 — exists only on a display build, so on that column this clause guards two disclosure surfaces and every rung of its ladder checks it as if it guarded one."
+discharge = "The display columns of the assurance matrix, which are not covered for this property. crates/rsk-display/src/backup.rs:47 conjoins `!st.sealed` into `can_reveal`; formal/RSKeySecurityState.tla has one `gate.backupSealed` and no consumer at all; fuzz/fuzz_targets/power_cut.rs tests one record's presence; and tests/29_reset_power_cut.py drives the host path only. The uncovered surface is not the marginal one — the reveal is the case where the host is outside the trust path entirely, which is what docs/threat-model.md's seed-backup clause exists for."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a torn reset that re-opened the on-device reveal would be a disclosure surface no rung of this property's ladder observes"
+covers = ["slice:AS-SEAL-12"]
+supports = ["SEC-FIDO-006C"]

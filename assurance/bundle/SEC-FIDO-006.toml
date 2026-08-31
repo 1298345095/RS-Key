@@ -95,7 +95,7 @@ owners_of_the_kills = [
 
 [build]
 commit = "31c21a771734c1fc87f093c38125bffbee47c558"
-tree_state = "the runs this bundle records are `formal/runs.toml`'s safety tier, taken at `b819ee5` — and `git diff b819ee5..HEAD -- formal/*.tla formal/*.cfg formal/*.sh` is EMPTY, so every verdict below describes the model at the recorded commit. The working tree while this was written is NOT clean: eight other bundles were being built in it concurrently, and one of those agents had already added the three clause names to `formal/Shipped.cfg` uncommitted. That edit is the repair this bundle's central finding asks for; §5's `x_vector_before` and `x_vector_after` record BOTH readings, measured, and the transcribed `result.gate_*` lines are derived over the working tree and must be re-derived by the integrator"
+tree_state = "the runs this bundle records are `formal/runs.toml`'s safety tier, taken at `b185fc3`. THE TIER MOVED UNDER THIS BUNDLE: it was written against the tier recorded at `b819ee5`, and every state count, wall clock and log digest below was re-derived from `formal/runs.toml` and from the eight preserved logs on integration. The falsifying states and their depths did not move; the counts, the clocks and all eight sha256s did. The working tree while this was written is NOT clean: eight other bundles were being built in it concurrently, and one of those agents had already added the three clause names to `formal/Shipped.cfg` uncommitted. That edit is the repair this bundle's central finding asks for; §5's `x_vector_before` and `x_vector_after` record BOTH readings, measured, and the transcribed `result.gate_*` lines are derived over the working tree and must be re-derived by the integrator"
 matrix_column = "firmware"
 cargo_features = "the default workspace feature set, with no feature flag and no build knob; the four Kani harnesses are the one exception and build under `--features kani-soft` with `--cfg kani`"
 board_knobs = "BOARD unset, LED_KIND unset, the default 4 MB layout — and none of the three is on this property's path, which is why the two equivalent columns below are equivalent"
@@ -321,22 +321,22 @@ environment = "nix develop"
 
 [result]
 # TIER B — the conjunction over four GREEN configurations. Every row is
-# `formal/run-tlc.sh <cfg>` from the safety tier recorded at `b819ee5`, WORKERS=2,
+# `formal/run-tlc.sh <cfg>` from the safety tier recorded at `b185fc3`, WORKERS=2,
 # HEAP=4g, and the numbers are `formal/runs.toml`'s, each with TLC's own closing
 # sentence beside it in the artifact.
-b_shipped = "Shipped.cfg GREEN — 986 836 197 states, 77 563 872 distinct, depth 58, 1913 s; ResetNeverWeakensSurvivingState among the nine invariants that configuration checked at the recorded commit"
+b_shipped = "Shipped.cfg GREEN — 986 836 197 states, 77 563 872 distinct, depth 58, 1984 s; ResetNeverWeakensSurvivingState among the TWELVE invariants that configuration checks at the recorded commit. It was nine at `b819ee5`, which this bundle was written against: the three clause names went into that INVARIANTS block between the two tiers, which is the repair §5's `x_vector_after` records"
 b_shipped_clauses = "and that GREEN is a verdict about all three conjuncts. RSKeySecurityState.tla:1851-1854 defines the invariant as `ResetKeepsThePinGate /\\ ResetKeepsTheAlwaysUvGate /\\ ResetKeepsTheBackupSeal`, TLC evaluates an invariant at every reachable state, and a conjunction is violated exactly when a conjunct is. So each of the three held at every one of the 77 563 872 distinct states of this run — which is the fact the clause rows' own column could not see"
-b_always_uv = "AlwaysUv.cfg GREEN — 273 124 081 states, 23 521 512 distinct, depth 51, 519 s; AS-AUTH-2's other arm, the whole invariant set with alwaysUv as the compiled default"
-b_perm_wide = "PermWide.cfg GREEN — 344 527 413 states, 21 456 020 distinct, depth 45, 553 s; WidePerms's other arm, all sixteen permission subsets"
-b_force_change = "ForceChange.cfg GREEN — 106 956 959 states, 10 765 176 distinct, depth 46, 177 s; ForceChangeModelled's other arm, the EF_MINPINLEN[1] forced-change gate"
+b_always_uv = "AlwaysUv.cfg GREEN — 273 124 081 states, 23 521 512 distinct, depth 51, 536 s; AS-AUTH-2's other arm, the whole invariant set with alwaysUv as the compiled default"
+b_perm_wide = "PermWide.cfg GREEN — 344 527 413 states, 21 456 020 distinct, depth 45, 555 s; WidePerms's other arm, all sixteen permission subsets"
+b_force_change = "ForceChange.cfg GREEN — 106 956 959 states, 10 765 176 distinct, depth 46, 182 s; ForceChangeModelled's other arm, the EF_MINPINLEN[1] forced-change gate"
 # AND THE SECOND FINDING, which no column in this tree carries.
 b_clause_b_vacuous = "clause B cannot fail on three of those four. `gate.alwaysUv` has exactly two writers in the module — `ConfigOp` (RSKeySecurityState.tla:1108), which sets `snap' = NoSnap` at :1123 and so cannot leave the clause's `snap.seen` antecedent standing, and `ResetSweepGates` (:1439), which assigns `AlwaysUvShipped`. With `AlwaysUvShipped = TRUE` that second write can only RAISE the flag, so `snap.auv => gate.alwaysUv` has no falsifying state on any tree, mutant or not. AlwaysUv.cfg, PermWide.cfg and ForceChange.cfg all take that arm; Shipped.cfg is the only GREEN configuration on which clause B is falsifiable at all. Clauses A and C are falsifiable on all four — their consequents are written FALSE by ResetSweepGates on every arm"
 
 # NON-DEGENERACY, one configuration per clause, and the reason the split exists.
-b_solo_clause_pin = "SoloClause_ResetKeepsThePinGate.cfg RED: ResetKeepsThePinGate — 8 827 785 states, 928 556 distinct, depth 16, 19 s. The counterexample is 16 states: register a credential, set a PIN, start the reset, TouchConfirm, ResetConfirmed, ResetSweepGates deletes EF_PIN, ResetAborts — ending Idle with snap.surv = {r1}, snap.pin TRUE, store.seed TRUE and pin.set FALSE"
-b_solo_clause_auv = "SoloClause_ResetKeepsTheAlwaysUvGate.cfg RED: ResetKeepsTheAlwaysUvGate — 20 768 430 states, 2 096 258 distinct, depth 18, 41 s. Same shape two states deeper, and the discriminating detail is that pin.set is TRUE in the falsifying state: clause A holds there and clause B does not, which is what a per-clause configuration is for"
-b_solo_clause_seal = "SoloClause_ResetKeepsTheBackupSeal.cfg RED: ResetKeepsTheBackupSeal — 23 358 states, 5 350 distinct, depth 8, 1 s. More than two orders of magnitude smaller than its two siblings — 5 350 distinct against 928 556 and 2 096 258 — at half the depth of one and less than half the other, and the falsifying state needs no credential at all: snap.seed TRUE, snap.sealed TRUE, gate.backupSealed FALSE, reached through ResetSweepSecrets rather than ResetSweepGates"
-b_solo_parent = "Solo_BugResetGatesFirst.cfg RED: ResetNeverWeakensSurvivingState — 23 381 states, 5 341 distinct, depth 8, 1 s. The same switch as the first two rows above, armed alone against the PARENT, and its counterexample is the THIRD clause: snap.surv is empty and snap.pin is FALSE in the falsifying state, so the two clauses this switch is the sole owner of are vacuous there. The parent's verdict names the invariant and cannot name the conjunct"
+b_solo_clause_pin = "SoloClause_ResetKeepsThePinGate.cfg RED: ResetKeepsThePinGate — 8 729 164 states, 918 170 distinct, depth 16, 18 s. The counterexample is 16 states: register a credential, set a PIN, start the reset, TouchConfirm, ResetConfirmed, ResetSweepGates deletes EF_PIN, ResetAborts — ending Idle with snap.surv = {r1}, snap.pin TRUE, store.seed TRUE and pin.set FALSE"
+b_solo_clause_auv = "SoloClause_ResetKeepsTheAlwaysUvGate.cfg RED: ResetKeepsTheAlwaysUvGate — 20 480 388 states, 2 063 890 distinct, depth 18, 40 s. Same shape two states deeper, and the discriminating detail is that pin.set is TRUE in the falsifying state: clause A holds there and clause B does not, which is what a per-clause configuration is for"
+b_solo_clause_seal = "SoloClause_ResetKeepsTheBackupSeal.cfg RED: ResetKeepsTheBackupSeal — 23 504 states, 5 359 distinct, depth 8, 1 s. More than two orders of magnitude smaller than its two siblings — 5 359 distinct against 918 170 and 2 063 890 — at half the depth of one and less than half the other, and the falsifying state needs no credential at all: snap.seed TRUE, snap.sealed TRUE, gate.backupSealed FALSE, reached through ResetSweepSecrets rather than ResetSweepGates"
+b_solo_parent = "Solo_BugResetGatesFirst.cfg RED: ResetNeverWeakensSurvivingState — 23 327 states, 5 331 distinct, depth 8, 1 s. The same switch as the first two rows above, armed alone against the PARENT, and its counterexample is the THIRD clause: snap.surv is empty and snap.pin is FALSE in the falsifying state, so the two clauses this switch is the sole owner of are vacuous there. The parent's verdict names the invariant and cannot name the conjunct"
 b_parent_mutants = "and all three parent-credited mutants do the same. Solo_BugBackupSealedNotAGate.cfg RED at depth 8, Solo_BugStateResetAfterWipe.cfg RED at depth 11, Solo_BugResetGatesFirst.cfg RED at depth 8 — every falsifying state carries snap.seed TRUE, snap.sealed TRUE and gate.backupSealed FALSE, which is clause C. formal/README.md:867-873's grid says the same thing from the other side: `BugResetGatesFirst` is the ONLY switch that reddens clauses 1 and 2, and it reaches clause 3 first every time"
 
 # TIER C — four harnesses, and the recorded solve times are docs/reset-refinement.md's.
@@ -364,11 +364,11 @@ x_vector_after = "and the repair is one line per clause in a GREEN configuration
 x_vector_reading = "docs/assurance-vector.md already carries the sentence — `for a clause_of row it can be 0 while the parent invariant carrying that clause is asserted` — so the page knows. What it does not carry is the arithmetic: a reader is told the zero may be an artefact and is given nothing to check it with, and the four rows sit adjacent in the table with 4, 0, 0, 0 in the same column"
 
 # A FINDING ABOUT THE TREE, recorded here because building this is what found it.
-readme_stale = "formal/README.md:881 publishes three run counts for the three SoloClause configurations — `RED in 983 327, 2 248 941 and 5 895 at the full constants` — and all three are STALE. formal/runs.toml's recorded tier gives 928 556, 2 096 258 and 5 350 distinct for the same three, and formal/README.md:1140's GENERATED row gives the range `5 350 – 2 096 258` two hundred lines below the prose. The paragraph predates 48 commits to RSKeySecurityState.tla. `python3 scripts/run_count_gate.py` does not reach it, and NOT because the gate is green — it exits 1 at HEAD with 20 findings, and not one of the twenty is this paragraph. All twenty are provenance: twelve say six formal/ inputs have moved since the commit both tiers are recorded against, and the rest are two configurations in no recorded run, one Results group matching no configuration, three generated regions the generator would write differently, and three duplicated `2 states` literals. The tier is stale until it is re-run and re-recorded, and a stale tier is what those twenty are about. This paragraph is invisible for its own two reasons: its shape scan is armed by NAMES_A_RUN in the same paragraph (`run-tlc|run_tlc|comutate|safety|liveness|--tiers`) and that paragraph names no run, while its value rule only sees literals a region PRINTS and 983 327 is not one — the module's own docstring says in as many words that a STALE number is what the shape scan is for"
+readme_stale = "formal/README.md:881 publishes three run counts for the three SoloClause configurations — `RED in 983 327, 2 248 941 and 5 895 at the full constants` — and all three are STALE. formal/runs.toml's recorded tier gives 918 170, 2 063 890 and 5 359 distinct for the same three, and formal/README.md:1141's GENERATED row gives the range `5 359 – 2 063 890` two hundred and sixty lines below the prose. The paragraph predates 48 commits to RSKeySecurityState.tla. `python3 scripts/run_count_gate.py` does not reach it, and NOT because the gate is green — it exits 1 at HEAD with 10 findings, and not one of the ten is this paragraph. All ten are provenance: eight say four formal/ inputs — TraceSecurityData.tla, floors.txt, gen-configs.sh and Historical_E76.cfg — have moved since the commit both tiers are recorded against, and the other two are Historical_E76.cfg's recorded verdict and distinct count against the floors it now faces. Re-derived on integration; it read twenty when this bundle was written, and it moves with every edit to formal/. The tier is stale until it is re-run and re-recorded, and a stale tier is what those twenty are about. This paragraph is invisible for its own two reasons: its shape scan is armed by NAMES_A_RUN in the same paragraph (`run-tlc|run_tlc|comutate|safety|liveness|--tiers`) and that paragraph names no run, while its value rule only sees literals a region PRINTS and 983 327 is not one — the module's own docstring says in as many words that a STALE number is what the shape scan is for"
 
 # The gates, each with the number it derives, transcribed from a live run.
 gate_ghost = "ghost-gate: ok — 21 action(s) record NoAuthorizationBypass over 24 route(s), consulting 11 guard(s) — unchanged by this bundle, and transcribed because the roster rule demands every gate line whether or not this property moved it. The ghost records a different invariant: no action in this module writes ResetNeverWeakensSurvivingState into `viol`, which is correct, because this property is a state predicate and not a step one"
-gate_ledger = "token-refinement-gate: GREEN keys=2 api=11 volatile=10/9 persistent=12/4 outcomes=7/6 walk=4 softlock=12 window=2 testonly=1 — the ledger owns the pinUvAuthToken axes and none of this property's owners is in it; the reset family's own ledger is `formal/comutants.toml` and the tag grep, neither of which is a site ledger"
+gate_ledger = "token-refinement-gate: GREEN keys=2 api=11 volatile=11/10 persistent=12/4 outcomes=7/6 walk=4 softlock=12 window=2 testonly=1 — the ledger owns the pinUvAuthToken axes and none of this property's owners is in it; the reset family's own ledger is `formal/comutants.toml` and the tag grep, neither of which is a site ledger"
 gate_assumption = "assumption-gate: 4 standing assumption(s) AlwaysUvShipped TRUE=5 FALSE=91 ForceChangeModelled TRUE=3 FALSE=93 PowerOnClearsScratch2 TRUE=9 FALSE=4 WidePerms TRUE=3 FALSE=93 — derived over a working tree carrying other agents' uncommitted configurations, so these four denominators move with the roster and the integrator must re-derive them. The one that matters here is the first: both arms of AlwaysUvShipped check this invariant, and the TRUE arm is the one on which its second clause cannot fail"
 gate_matrix = "matrix-gate: ok — 40 P0-family properties × 31 build configurations = 1240 cells (37 covered, 139 equivalent, 0 conditional, 106 out-of-scope, 958 gap) — UNCHANGED by this bundle: a model check, a bounded proof and a review read no board preset and no flash geometry, so nothing here settles a cell"
 gate_registry = "assurance-gate: SEC-FIDO-006 BOUNDED, cfgs=40 mut=3 co=3 kani=1 fuzz=1 rust=3 test=1 — `test=1` is the only non-zero runtime column of the eleven and it counts a FILE, not a board run; `kani=1` counts harnesses whose name contains the snake form of the invariant, which the three clause harnesses do not, so the parent's proof column omits three of the four harnesses that are about it. Every clause row derives its own line beneath this one"
@@ -378,50 +378,50 @@ gate_registry = "assurance-gate: SEC-FIDO-006 BOUNDED, cfgs=40 mut=3 co=3 kani=1
 [[artifact]]
 run = "formal/run-tlc.sh Shipped.cfg — the conjunction over the shipped constants, and the run all three conjuncts were asserted over"
 path = "assurance/bundle/logs/SEC-FIDO-006/tlc-Shipped.log"
-bytes = 7163
-sha256 = "317703de77238fd60a9cb2fc9391ba387c3d2c352529a98e21be7f970f3d1452"
+bytes = 7332
+sha256 = "9adf2af45b85995b91491cca599ead504f65e9f7e38cee3c85d17b088c7ffa37"
 
 [[artifact]]
 run = "formal/run-tlc.sh AlwaysUv.cfg — AS-AUTH-2's other arm, and the first of the three configurations on which clause B cannot fail"
 path = "assurance/bundle/logs/SEC-FIDO-006/tlc-AlwaysUv.log"
 bytes = 3135
-sha256 = "4fd7becdee7d1cada4b68b905ba11966f97ae9b59b83fc0bc19f6ceeaaac49cd"
+sha256 = "05e1978bcae7d63a36af4f750d84c4d923fdf4883b5a6c91d4f933d449cc7df0"
 
 [[artifact]]
 run = "formal/run-tlc.sh PermWide.cfg — WidePerms's other arm; the CONSTANTS block is what shows AlwaysUvShipped TRUE here too"
 path = "assurance/bundle/logs/SEC-FIDO-006/tlc-PermWide.log"
-bytes = 3307
-sha256 = "1b2a8dfe9b4da6d863e334cc6efbb3cdf34eeb3b448d30e4bb51672897990cdc"
+bytes = 3306
+sha256 = "286e592f7c4679f8ae3b6cb9fbcdd8c9876fd0cb2de92d9b00e6847f57394e09"
 
 [[artifact]]
 run = "formal/run-tlc.sh ForceChange.cfg — ForceChangeModelled's other arm, the third AlwaysUvShipped=TRUE configuration"
 path = "assurance/bundle/logs/SEC-FIDO-006/tlc-ForceChange.log"
-bytes = 2112
-sha256 = "25b7a355205d89defaf052ce50648efe85e6f17c0743bb3555068dbe75e19833"
+bytes = 2111
+sha256 = "ef2e90e70b6a8f4b1495c1431bf8907b2dcbc5e51e4fc9401694961cd0132123"
 
 [[artifact]]
 run = "formal/run-tlc.sh SoloClause_ResetKeepsThePinGate.cfg — clause A alone, RED, and the log IS the 16-state counterexample"
 path = "assurance/bundle/logs/SEC-FIDO-006/tlc-SoloClause_ResetKeepsThePinGate.log"
-bytes = 17393
-sha256 = "3be8aefb13410521ee97720db5299f4ab35eaad4bfdaa4e1217537a756f404fd"
+bytes = 17394
+sha256 = "69911bf3e017eff1ee8340f9036f9786fafe356b153e971ee76bda1ce1013cc7"
 
 [[artifact]]
 run = "formal/run-tlc.sh SoloClause_ResetKeepsTheAlwaysUvGate.cfg — clause B alone, RED at depth 18, with pin.set TRUE in the falsifying state"
 path = "assurance/bundle/logs/SEC-FIDO-006/tlc-SoloClause_ResetKeepsTheAlwaysUvGate.log"
-bytes = 19368
-sha256 = "b0dee81bf99e3d796ee032f0ecf7a4477f2f70aaaf2675a477c656769e6d6334"
+bytes = 19369
+sha256 = "a8a0228df7836f1afd4c3c25dc875cbc08ffc0237e50e55a4e80dabae827caea"
 
 [[artifact]]
 run = "formal/run-tlc.sh SoloClause_ResetKeepsTheBackupSeal.cfg — clause C alone, RED at depth 8, the shallow one that hid the other two"
 path = "assurance/bundle/logs/SEC-FIDO-006/tlc-SoloClause_ResetKeepsTheBackupSeal.log"
-bytes = 9278
-sha256 = "35d17f592e32c1c1da1f71541274cf4025d1df29599169c4637923311d055b0c"
+bytes = 9279
+sha256 = "f8047fc39ab30fab15b8fd48338f61a25d56d3224fa4f54f63aaa37866b78d35"
 
 [[artifact]]
 run = "formal/run-tlc.sh Solo_BugResetGatesFirst.cfg — the same switch against the PARENT, whose counterexample is the third clause; read beside the two SoloClause logs above, this pair is the whole localisation argument"
 path = "assurance/bundle/logs/SEC-FIDO-006/tlc-Solo_BugResetGatesFirst.log"
 bytes = 9284
-sha256 = "c08a5db4ce108c0936b1f4b49f5b78d751de8d666012a4d162a6b21dcb49b6e4"
+sha256 = "82f6b3ffa5f1553bab8116163a32b3c7400b9dfb7de373df6941b0544923247c"
 
 # ---- 7. Assumptions and TCB / trust dependencies -----------------------------
 
@@ -546,7 +546,7 @@ level = "B"
 mutant = "the same switch armed alone against the parent invariant only"
 invocation = "formal/run-tlc.sh Solo_BugResetGatesFirst.cfg"
 expected = "RED: ResetNeverWeakensSurvivingState, and it is the row that says the kill is not a neighbouring invariant's"
-verdict = "RED: ResetNeverWeakensSurvivingState, 23 381 states, 5 341 distinct, depth 8, 1 s"
+verdict = "RED: ResetNeverWeakensSurvivingState, 23 327 states, 5 331 distinct, depth 8, 1 s"
 fell = "ResetNeverWeakensSurvivingState — the only invariant besides TypeOK this configuration checks"
 direction = "modelled"
 reading = "AND THE VERDICT IS RIGHT FOR THE WRONG CLAUSE. The falsifying state carries snap.surv = {} and snap.pin = FALSE, so clauses A and B are vacuously true there; what fell is clause C, `snap.seed /\\ snap.sealed => gate.backupSealed`. This switch is the SOLE owner of clauses A and B in the whole tree — formal/README.md:867-873's grid measures it — and its own solo configuration reports through the one clause it shares with two other switches. A verdict column at invariant granularity cannot show that, which is the entire reason `SoloClause_*.cfg` exists."
@@ -556,17 +556,17 @@ level = "B"
 mutant = "the same switch again, against `ResetKeepsThePinGate` alone"
 invocation = "formal/run-tlc.sh SoloClause_ResetKeepsThePinGate.cfg"
 expected = "RED: ResetKeepsThePinGate"
-verdict = "RED: ResetKeepsThePinGate, 8 827 785 states, 928 556 distinct, depth 16, 19 s"
+verdict = "RED: ResetKeepsThePinGate, 8 729 164 states, 918 170 distinct, depth 16, 18 s"
 fell = "ResetKeepsThePinGate, at an Idle state reached by ResetAborts with snap.surv = {r1}, snap.pin TRUE, store.seed TRUE and pin.set FALSE"
 direction = "modelled"
-reading = "the counterexample is a credential the owner still has and a PIN record the wipe already dropped, which is the defect and not its inverse: the inverse — a wipe that keeps EF_PIN too long — leaves `pin.set` TRUE and makes the consequent true. That this needs depth 16 and 928 556 distinct states where the same switch reddens the parent at depth 8 in 5 341 is the measurement: 174 times the state space for the clause that had no owner on record."
+reading = "the counterexample is a credential the owner still has and a PIN record the wipe already dropped, which is the defect and not its inverse: the inverse — a wipe that keeps EF_PIN too long — leaves `pin.set` TRUE and makes the consequent true. That this needs depth 16 and 918 170 distinct states where the same switch reddens the parent at depth 8 in 5 331 is the measurement: 172 times the state space for the clause that had no owner on record."
 
 [[mutation]]
 level = "B"
 mutant = "the same switch a third time, against `ResetKeepsTheAlwaysUvGate` alone"
 invocation = "formal/run-tlc.sh SoloClause_ResetKeepsTheAlwaysUvGate.cfg"
 expected = "RED: ResetKeepsTheAlwaysUvGate"
-verdict = "RED: ResetKeepsTheAlwaysUvGate, 20 768 430 states, 2 096 258 distinct, depth 18, 41 s"
+verdict = "RED: ResetKeepsTheAlwaysUvGate, 20 480 388 states, 2 063 890 distinct, depth 18, 40 s"
 fell = "ResetKeepsTheAlwaysUvGate, with snap.auv TRUE, snap.surv = {r1}, gate.alwaysUv FALSE — and pin.set TRUE in the same state"
 direction = "modelled"
 reading = "pin.set TRUE is what makes this row evidence about clause B and not a second copy of the row above: clause A holds at the falsifying state and clause B does not, so the two clauses are separated by a witness and not by an argument. It also needs `AlwaysUvShipped = FALSE`, which this configuration has and three of the four GREEN configurations do not — the same fact from the other side."
@@ -576,7 +576,7 @@ level = "B"
 mutant = "BugBackupSealedNotAGate — EF_BACKUP_SEALED moved from the gate phase into the secret phase, against `ResetKeepsTheBackupSeal` alone"
 invocation = "formal/run-tlc.sh SoloClause_ResetKeepsTheBackupSeal.cfg"
 expected = "RED: ResetKeepsTheBackupSeal"
-verdict = "RED: ResetKeepsTheBackupSeal, 23 358 states, 5 350 distinct, depth 8, 1 s"
+verdict = "RED: ResetKeepsTheBackupSeal, 23 504 states, 5 359 distinct, depth 8, 1 s"
 fell = "ResetKeepsTheBackupSeal, at an Idle state after ResetSweepSecrets and ResetAborts with snap.seed TRUE, snap.sealed TRUE and gate.backupSealed FALSE"
 direction = "modelled"
 reading = "the failure is the one-time export window re-opened over a seed the wipe did not manage to destroy, which is the audit run-36 defect and not its inverse — a marker that outlives the seed makes the consequent TRUE. This configuration also arms `BugSeedDoesNotLead`, which `companion_bug` drags in because with the seed leading the wipe unconditionally the window this re-opens is over a seed already gone; the isolation here is of the CLAUSE, and the defect is two switches."
@@ -586,17 +586,17 @@ level = "B"
 mutant = "BugStateResetAfterWipe — `ctx.state.reset()` behind the flash work, so the RAM seed copy outlives the record"
 invocation = "formal/run-tlc.sh Solo_BugStateResetAfterWipe.cfg"
 expected = "RED: ResetNeverWeakensSurvivingState"
-verdict = "RED: ResetNeverWeakensSurvivingState, 478 994 states, 68 328 distinct, depth 11, 2 s"
+verdict = "RED: ResetNeverWeakensSurvivingState, 478 501 states, 68 156 distinct, depth 11, 2 s"
 fell = "ResetNeverWeakensSurvivingState, at a state with ram TRUE and store.seed FALSE — snap.seed TRUE, snap.sealed TRUE, gate.backupSealed FALSE, so again the third clause"
 direction = "modelled"
-reading = "this is the ONE row in this bundle where `SeedReachable`'s `ram` disjunct does work: the falsifying state has the flash record gone and the RAM copy standing, which is unreachable on every other tree here and is precisely what AS-RESET-3 says the GREEN runs never see. The twelvefold distinct-state count against the other two parent-level solo rows — 68 328 against 5 341 and 5 495 — is that disjunct becoming live. Its inverse — the session dying too early — makes every antecedent false and reddens nothing."
+reading = "this is the ONE row in this bundle where `SeedReachable`'s `ram` disjunct does work: the falsifying state has the flash record gone and the RAM copy standing, which is unreachable on every other tree here and is precisely what AS-RESET-3 says the GREEN runs never see. The twelvefold distinct-state count against the other two parent-level solo rows — 68 156 against 5 331 and 5 312 — is that disjunct becoming live. Its inverse — the session dying too early — makes every antecedent false and reddens nothing."
 
 [[mutation]]
 level = "B"
 mutant = "BugBackupSealedNotAGate against the parent, in its own solo configuration"
 invocation = "formal/run-tlc.sh Solo_BugBackupSealedNotAGate.cfg"
 expected = "RED: ResetNeverWeakensSurvivingState"
-verdict = "RED: ResetNeverWeakensSurvivingState, 24 042 states, 5 495 distinct, depth 8, 1 s"
+verdict = "RED: ResetNeverWeakensSurvivingState, 23 258 states, 5 312 distinct, depth 8, 1 s"
 fell = "ResetNeverWeakensSurvivingState, on the same clause-C shape as the two parent rows above and at the same depth 8"
 direction = "modelled"
 reading = "three switches, three parent-level RED verdicts, and all three falsifying states have snap.seed TRUE, snap.sealed TRUE and gate.backupSealed FALSE. Depth 8 for two of them and 11 for the third, against 16 and 18 for the clauses nobody owned — so the search reaches clause C first by construction and the parent's verdict column has never once reported clause A or clause B in this tree."
@@ -655,7 +655,7 @@ expires_on_schema_change = "assurance/properties.toml's field set or its `clause
 # ---- 10. Measured costs ------------------------------------------------------
 
 # The runner seconds are measurements: formal/run-tlc.sh's own timer, as
-# formal/runs.toml records it for the tier taken at `b819ee5`, with TLC's closing
+# formal/runs.toml records it for the tier taken at `b185fc3`, with TLC's closing
 # sentence in each artifact beside it. The peak is NOT a measurement of these
 # runs and every row says so — run-tlc.sh records no RSS, and this bundle ran no
 # TLC of its own to take one.
@@ -671,57 +671,60 @@ expires_on_schema_change = "assurance/properties.toml's field set or its `clause
 # they are the only cost signal the programme has, not because they are
 # measurements.
 #
-# AND THE SHIPPED BOUND IS NOT THE ONE `SEC-FIDO-002` CARRIES over a
-# byte-identical artifact — `317703de…`, the same log in six directories. 2940
-# MiB is a `/usr/bin/time -l` SAMPLE of a DIFFERENT run — the log at
-# `assurance/bundle/logs/SEC-FIDO-007/tlc-Shipped.log` has its own sha256, its
-# own seed and its own closing line, so the figure bounds THAT process and is
-# carried across to this one. `SEC-FIDO-002` bounds the same log with 3705
-# instead — the JVM ceiling the banner states, derived from the artifact rather
-# than transferred to it, and the larger of the two. Neither is this run's RSS.
-# The unit is MiB, which is checkable: the sibling writes the same sample as
-# 3083 at `assurance/bundle/SEC-FIDO-007.toml:572`, and that is 2940 MiB in
-# decimal MB.
+# AND THE SHIPPED BOUND IS TRANSFERRED FROM A RUN THAT IS NOT THIS ONE, which
+# was true when this bundle was written and is now true twice over. 2940 MiB is a
+# `/usr/bin/time -l` SAMPLE taken by `SEC-FIDO-007` over its own Shipped log
+# (`e4d6eafd…`), which has its own sha256, its own seed and its own closing line;
+# the figure bounds THAT process and is carried across to this one. When this
+# bundle was written its own Shipped log was `317703de…`, byte-identical with the
+# copy in five sibling directories, and `SEC-FIDO-002` bounded that same log with
+# 3705 instead — the JVM ceiling its banner states, derived from the artifact
+# rather than transferred to it. The tier has since moved: this bundle's log is
+# `9adf2af4…` now, shared with `SEC-FIDO-006A/B/C` and with no other directory,
+# and its banner states 3641MB heap plus 64MB offheap. So neither 2940 nor 3705
+# is this run's RSS, and the second is not even this run's ceiling. The unit is
+# MiB, which is checkable: the sibling writes the same sample as 3083 at
+# `assurance/bundle/SEC-FIDO-007.toml:572`, and that is 2940 MiB in decimal MB.
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-006/tlc-Shipped.log"
 human_minutes = 9
-runner_seconds = 1913
+runner_seconds = 1984
 peak_memory_mb = 2940
-basis = "runner is the runner's own timer as formal/runs.toml records it; TLC's closing sentence in the same log says 31min 52s, the difference being JVM start. PEAK IS A BOUND AND NOT A MEASUREMENT: it is the figure assurance/bundle/SEC-FIDO-007.toml took with /usr/bin/time -l over this same configuration at the same HEAP=4g (2940 MiB, which is 3 082 813 440 B), carried here because run-tlc.sh records no RSS and no TLC was run for this bundle. human is attended time RECONSTRUCTED after the fact, not measured — it carries reading the conjunction against this run rather than the run itself"
+basis = "runner is the runner's own timer as formal/runs.toml records it; TLC's closing sentence in the same log says 33min 02s, the difference being JVM start. PEAK IS A BOUND AND NOT A MEASUREMENT: it is the figure assurance/bundle/SEC-FIDO-007.toml took with /usr/bin/time -l over this same configuration at the same HEAP=4g (2940 MiB, which is 3 082 813 440 B), carried here because run-tlc.sh records no RSS and no TLC was run for this bundle. human is attended time RECONSTRUCTED after the fact, not measured — it carries reading the conjunction against this run rather than the run itself"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-006/tlc-AlwaysUv.log"
 human_minutes = 11
-runner_seconds = 519
+runner_seconds = 536
 peak_memory_mb = 2940
 basis = "runner from formal/runs.toml. peak is the SEC-FIDO-007 Shipped measurement above, 2940 MiB, which bounds every process in this row — this configuration explores under a third of Shipped's distinct states. human is attended time — RECONSTRUCTED after the fact, not measured — and carries the clause-B vacuity derivation, which started here"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-006/tlc-PermWide.log"
 human_minutes = 3
-runner_seconds = 553
+runner_seconds = 555
 peak_memory_mb = 2940
 basis = "runner from formal/runs.toml; peak is the bound above, in MiB. human is attended time RECONSTRUCTED after the fact, not measured — the row was read for its CONSTANTS block and for nothing else"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-006/tlc-ForceChange.log"
 human_minutes = 3
-runner_seconds = 177
+runner_seconds = 182
 peak_memory_mb = 2940
 basis = "runner from formal/runs.toml; peak is the bound above, in MiB. human is attended time RECONSTRUCTED after the fact, not measured"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-006/tlc-SoloClause_ResetKeepsThePinGate.log"
 human_minutes = 14
-runner_seconds = 19
+runner_seconds = 18
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml, where TLC's own sentence says 17s. peak is the bound above, in MiB and is loose by an order of magnitude for a run of this size, which is what a bound costs. human is attended time — RECONSTRUCTED after the fact, not measured — and carries reading the 16-state counterexample and settling that clause A is falsified there and clause B is not"
+basis = "runner from formal/runs.toml, where TLC's own sentence in the refreshed artifact says 17s. peak is the bound above, in MiB and is loose by an order of magnitude for a run of this size, which is what a bound costs. human is attended time — RECONSTRUCTED after the fact, not measured — and carries reading the 16-state counterexample and settling that clause A is falsified there and clause B is not"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-006/tlc-SoloClause_ResetKeepsTheAlwaysUvGate.log"
 human_minutes = 8
-runner_seconds = 41
+runner_seconds = 40
 peak_memory_mb = 2940
 basis = "runner from formal/runs.toml, TLC's own sentence 40s. peak is the bound above, in MiB. human is attended time — RECONSTRUCTED after the fact, not measured — the falsifying state's pin.set TRUE is the detail this row was read for"
 
