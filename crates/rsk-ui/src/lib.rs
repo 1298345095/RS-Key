@@ -596,9 +596,9 @@ pub enum SettingsPage {
     /// Display-sleep timeout adjust (−/+/Back) — blanks the panel after inactivity to
     /// stop image retention on the IPS glass.
     Sleep,
-    /// The Security sub-page: device + FIDO PIN, the audit log, the backup status, and the
-    /// (danger) Factory reset. Reached from the Root "Security" row; the title-bar back
-    /// chevron returns to Root.
+    /// The Security sub-page: the device, FIDO and PIV PINs, the PIN-pad scramble toggle,
+    /// the audit log, the backup status, and the (danger) Factory reset. Reached from the
+    /// Root "Security" row; the title-bar back chevron returns to Root.
     Security,
 }
 
@@ -647,8 +647,9 @@ pub enum RootEntry {
     /// Drill into the Display sub-page ([`SettingsPage::Display`]) — brightness, display
     /// sleep, and the touch timeout (all the panel/interaction knobs).
     Display,
-    /// Drill into the Security sub-page ([`SettingsPage::Security`]) — device + FIDO PIN,
-    /// the audit log, the backup status, and the (danger) Factory reset.
+    /// Drill into the Security sub-page ([`SettingsPage::Security`]) — the device, FIDO and
+    /// PIV PINs, the PIN-pad scramble toggle, the audit log, the backup status, and the
+    /// (danger) Factory reset.
     Security,
     /// The Firmware screen: the installed build version and the (hold-to-confirm)
     /// reboot-to-update-over-USB action. Last on the list — a rarely-touched maintenance

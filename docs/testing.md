@@ -347,12 +347,20 @@ that would otherwise die half an hour later on a confusing one. It is also the
 thing that has to be revisited if a later Kani lets the two combine, because then
 the interleaving becomes real and grouping by harness stops being safe.
 
-The split is by measured cost, not by guess. Every row below is one run of the
-command above it, taken on 2026-08-26 under kani 0.67.0, on the maintainer's
-18-core Apple M5 Pro (48 GB, macOS 27) with nothing else on the machine. "Solve" is the sum of Kani's own per-harness `Verification Time` and so
-excludes compilation; "Wall" is the whole command with it. "Peak" is the tier's
-`maximum resident set size` under `/usr/bin/time -l` — the largest single CBMC
-process, not the sum of them:
+The split is by measured cost, not by guess — but a row is not one reading, and
+its two halves must not be read as if they were. **Crates, Harnesses and Covers
+are the current tree's counts**, derived from source by `scripts/kani_gate.py`
+and held against `scripts/kani.sh`'s floors in both directions; they move the day
+a harness lands, and no run stands behind them. **Solve, Wall, Peak and Slowest
+harness are a measurement**, of one run of the command above the table, taken on
+2026-08-26 under kani 0.67.0 on the maintainer's 18-core Apple M5 Pro (48 GB,
+macOS 27) with nothing else on the machine. Nothing re-checks those four:
+`kani_gate.py` reads a row's Crates, Harnesses and Covers cells and stops there,
+so a tier that has gained harnesses since keeps the timing it was given before
+them, and only a fresh measurement moves it. "Solve" is the sum of Kani's own
+per-harness `Verification Time` and so excludes compilation; "Wall" is the whole
+command with it. "Peak" is the tier's `maximum resident set size` under
+`/usr/bin/time -l` — the largest single CBMC process, not the sum of them:
 
 | Tier | Crates | Harnesses | Covers | Solve | Wall | Peak | Slowest harness |
 |---|---|---|---|---|---|---|---|

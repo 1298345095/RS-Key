@@ -1302,9 +1302,9 @@ fn security_page_paints_every_row_under_either_pin_state() {
             !d.oob,
             "security (pin_set={pin_set}) drew outside the panel"
         );
-        // Every Security row (Device PIN, FIDO PIN, PIV PIN, Audit log, Backup, Factory
-        // reset) is painted in the rect `hit_security` maps its tap to; the bottom row
-        // (now six) must stay on-panel (the `!oob` check above).
+        // Every Security row (Device PIN, FIDO PIN, PIV PIN, Scramble PIN pad, Audit log,
+        // Backup, Factory reset — `security_row_entry`'s order) is painted in the rect
+        // `hit_security` maps its tap to; the bottom row must stay on-panel (`!oob` above).
         for i in 0..crate::SECURITY_ROWS {
             assert!(
                 d.any_non_bg_in(settings_row_rect(i)),
