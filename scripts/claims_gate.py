@@ -40,11 +40,38 @@ What this row does not do, measured rather than guessed — an independent revie
 drove 23 spellings and broke the first version with plain English before it
 needed a trick one:
 
-* it does not read English. NEGATION and TENSE are invisible: "`SEC-FIDO-001` is
-  not BOUNDED" and "`SEC-FIDO-007` is no longer MODELLED-ONLY" are false claims
-  using the registry's own word about the right id, and both pass — and worse,
-  both COUNT as held copies, so [`CLAIM_FLOOR`] is satisfiable by lies. No
-  scanner of a natural language closes that;
+* it does not read English, and what it reads instead is the POLARITY of the
+  clause a status word ends. NEGATION and TENSE were invisible: "`SEC-FIDO-001`
+  is not BOUNDED" and "`SEC-FIDO-007` is no longer MODELLED-ONLY" were EXIT=0
+  and each pushed the held count UP (11 → 12 → 13), so [`CLAIM_FLOOR`] was
+  satisfiable by lies. The FIRST rule written for that read a four-word window
+  against a flat list of markers, and an independent review measured what it
+  bought: 2 of 24 false claims refused, and 6 of 12 TRUE sentences reddened —
+  "was raised to BOUNDED", "has not stopped being BOUNDED". [`FLIP`] counts
+  flippers and denies on an ODD count, which is what lets a double negative
+  assert again; [`DATED`] takes a bare tense only where it touches the word.
+  Re-measured on the constructed corpus that broke it, now in the tree as
+  `test_claims_gate.LIES` and `TRUTHS`: 23 of 25 refused, 0 of 14 true sentences
+  reddened. The two that escape are `ESCAPES` — a negator standing BEFORE the
+  id, and one standing after the status word. MODALITY stays out: adding
+  `would|could|should|may|might` reddens `CHANGELOG.md`'s "its `status` would
+  have read `BOUNDED`", a true sentence about what the DERIVATION would say;
+* the corpus of 66 real pages barely checks any of that, and "0 false positives
+  over the corpus" would be precision this row does not have: 11 sites reach the
+  rule at all and none of them is negated, so the first rule's window reported
+  the same 0 findings at every width from 1 to 14 — a knob no measurement could
+  move, which is why there is no window now. The one thing the real corpus does
+  check is the clause split, and only since the window went (below). The rest of
+  the discrimination is measured on the constructed corpus, which is why that
+  corpus is in the tree rather than in a comment;
+* most of this can be DELETED with the `published claims` row byte-identical,
+  and a reader must not take that row's green as evidence of it. Measured:
+  [`FLIP`] neutered to a pattern matching nothing, and the branch reverted to
+  `held += 1`, each give EXIT=0 and the same summary — only `pytest (gate
+  scripts)` sees the difference. [`CLAUSE`] is the exception and only since the
+  word window went: neutered, the shipped tree REDDENS on `CHANGELOG.md`'s "It
+  closes nothing and moves no status — the row stays `BOUNDED`", which is the
+  one place a real page depends on where a clause ends;
 * the vocabulary is CASE-SENSITIVE, so a lower-case `proven` in prose stays
   prose. That is a trade taken on a measurement: case-folding reports 45
   refusals over this corpus and almost every one is an ordinary word
@@ -73,13 +100,29 @@ import tomllib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 REGISTRY = pathlib.Path("assurance/properties.toml")
 
+#: A `-` that may carry a hard-wrap. It replaces a normalising join that DELETED
+#: the newline, and with it every reported line number after it — measured at 6
+#: files and up to 12 lines on `docs/protocol.md`, and a guard whose whole output
+#: is a citation cannot ship that. Matching across the break leaves offsets exact.
+SOFT = r"-(?:\n[ \t]*)?"
+
+
+def soft(word: str) -> str:
+    """A literal `word` with every `-` allowed to carry a hard-wrap.
+
+    Words only — applied to a PATTERN it rewrites the `-` inside `[A-Z]`, which
+    is a character-range error and how this was caught.
+    """
+    return word.replace("-", SOFT)
+
+
 #: A registered property id, in the three shapes the registry uses:
 #: `SEC-FIDO-001`, the clause rows `SEC-FIDO-006A`, and the liveness rows
 #: `SEC-FIDO-L01` — which a pattern anchored on a digit misses, and a test over
 #: the registry is what caught that. Narrow on purpose otherwise:
 #: `TM-HOST-GATES` and `PLAT-TOOL-004` are other registries' ids and other
 #: rules' business.
-ID = re.compile(r"\bSEC-[A-Z]+-[A-Z]?\d+[A-C]?\b")
+ID = re.compile(r"\bSEC" + SOFT + r"[A-Z]+" + SOFT + r"[A-Z]?\d+[A-C]?\b")
 
 #: The evidence vocabulary a published sentence may put beside an id. The three
 #: the registry actually uses are held against this tuple by a CASE, not by
@@ -113,6 +156,55 @@ CLASSES = (
 #: corpus is hard-wrapped: 14 978 of 29 403 prose lines are 50-95 columns, so
 #: whether a false claim was caught depended on where the author's editor wrapped.
 PARAGRAPH = re.compile(r"\n\s*\n")
+
+#: Clause boundaries. The em-dash is the load-bearing one, measured: without it
+#: `CHANGELOG.md`'s "It closes nothing and moves no status — the row stays
+#: `BOUNDED`" reads its neighbour's `nothing` and reddens. A comma splits ONLY
+#: before a coordinating conjunction, which is the difference between "will not
+#: be re-run, and the row stays BOUNDED" (a new clause, green) and "is not, on
+#: any reading of the evidence, BOUNDED" (a parenthetical, refused) — an
+#: unconditional comma let the second one through. `|`, `[` and `(` are NOT
+#: boundaries: they were, and a markdown link, a parenthesis and a table cell
+#: each emptied the run-up and walked a negation past. A newline is not a
+#: boundary either — this corpus is hard-wrapped.
+CLAUSE = re.compile(r"[.;:!?]|--|—|–|→|,(?=\s*(?:and|but|so|because|which|while|though|yet|or)\b)")
+
+#: An inline HTML tag, removed before the clause is read: `is <em>not</em>
+#: BOUNDED` renders as a negation and read as none.
+TAG = re.compile(r"<[^>\n]{1,80}>")
+
+#: What flips the POLARITY of a clause about a status. Counted, not merely
+#: found, and an ODD count is what denies the row — because the six true
+#: sentences an independent review broke the first version with are double
+#: negatives: "has not stopped being BOUNDED" and "was never anything but
+#: BOUNDED" each carry two flippers and assert the status. Longest first, so
+#: `no longer` is one flipper and not `no` plus a word.
+#:
+#: Evaluated at exactly 11 sites — the ones that would otherwise count as
+#: `held`. Of the 34 status words on the 66 pages the other 23 are inside a
+#: [`SCOPED`] fragment or in a paragraph naming no registered id, and one of
+#: those ("it does not promote MODELLED-ONLY to a proof", `formal/README.md`)
+#: does carry a negator. It is true, and it is out of reach either way.
+FLIP = re.compile(
+    r"\b(?:no longer|no more|nowhere near|anything but|other than|far from"
+    r"|short of|yet to|fails? to|failed to|used to be|stops? being"
+    r"|stopped being|ceases? being|ceased being|never|neither|nor|not|no"
+    r"|hardly|scarcely|barely|without|un|non)\b-?"
+    r"|[a-z]n['’]t\b",
+    re.I,
+)
+
+#: Tense that only reads as another time when it TOUCHES the word. `was` alone
+#: is unusable and that is the measurement, not a guess: it reddens "was raised
+#: to BOUNDED", "was and still is BOUNDED" and "had already been BOUNDED when
+#: the slice opened", all true. Adjacent, none of those fire and "`SEC-FIDO-001`
+#: was BOUNDED" still does. One parenthetical is allowed between, because "was,
+#: until the revert, BOUNDED" is the shape that escaped adjacency and it is a
+#: false claim; a second comma ends it, which is what keeps "was added to the
+#: registry, and the row stays BOUNDED" out.
+DATED = re.compile(
+    r"\b(?:was|were|will be|shall be|will become)(?:\s*,[^,]{0,60},)?\s*$", re.I
+)
 
 #: Registered prose that uses the vocabulary as VOCABULARY. A paragraph
 #: explaining the status ladder — "a Kani harness names it -> BOUNDED; anything
@@ -304,14 +396,16 @@ def normalise(text: str) -> str:
     Markdown emphasis, a zero-width space and the non-ASCII hyphens all render
     identically to what they hide, and each of them walked a literal `PROVEN`
     past the first version: `PRO**VEN**`, `PRO\u200bVEN`, `SEC\u2011FIDO\u2011001`.
-    A hyphen at a line end is joined for the same reason. Case is NOT folded, and
+    A hyphen at a line end is NOT joined here — [`soft`] lets the patterns cross
+    it instead, because joining deleted a newline and every reported line number
+    after it was early by one per join (up to 12 on `docs/protocol.md`, and a
+    guard whose whole output is a citation cannot ship that). Case is NOT folded, and
     that is measured rather than lazy: over this corpus a case-insensitive
     vocabulary reports 45 refusals, and almost every one is an ordinary word —
     "measured", "co-refuted" — so the rule reads the SHOUTED forms the registry
     uses and a lower-case `proven` in prose stays prose.
     """
     text = text.replace("\u200b", "").replace("\u2011", "-").replace("\u2010", "-")
-    text = re.sub(r"-\n[ \t]*", "-", text)
     # `*` and a backtick only. `_` is markdown emphasis too and stripping it was
     # measured to be worse than the hole it closes: it turns
     # `Generated by scripts/evidence_gate.py` into `evidencegate.py`, which
@@ -350,6 +444,39 @@ def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+def run_up(chunk: str, at: int, floor: int) -> str:
+    """The clause that GOVERNS the status word at `at`.
+
+    `floor` is the attributed id's end when the id precedes the word, so a run-up
+    never reaches back past the subject it is about; 0 when the word comes first
+    and the id is the fallback behind it. A WORD window stood here for one
+    revision and it was inert — the shipped corpus reports the same 0 findings at
+    every width from 1 to 14, so the clause split is what bounds this, and a knob
+    no measurement can move is a knob whose mutant nothing kills.
+    """
+    return CLAUSE.split(TAG.sub(" ", chunk[floor:at]))[-1]
+
+
+def flat(word: str) -> str:
+    """A vocabulary match with the hard wrap [`soft`] let it cross taken back out.
+
+    Without it `MODELLED-\nONLY` compares unequal to its own registry status and
+    the true copy is reported as a copy of nothing — the exact inversion this row
+    exists to refuse, introduced by the fix for the line numbers and caught by
+    the case that drives both directions.
+    """
+    return "".join(word.split())
+
+
+def denied(clause: str) -> str | None:
+    """The marker that makes `clause` not ASSERT the status in it, or None."""
+    flips = FLIP.findall(clause)
+    if len(flips) % 2:
+        return flips[-1].strip()
+    dated = DATED.search(clause)
+    return dated.group(0).strip() if dated else None
+
+
 def audit(
     root: pathlib.Path,
     claim_floor: int = CLAIM_FLOOR,
@@ -359,7 +486,7 @@ def audit(
     root = pathlib.Path(root)
     findings: list[str] = []
     status, words = vocabulary(root)
-    vocab = re.compile(r"\b(" + "|".join(re.escape(w) for w in words) + r")\b")
+    vocab = re.compile(r"\b(" + "|".join(soft(w) for w in words) + r")\b")
     pages = corpus(root)
     if len(pages) < corpus_floor:
         findings.append(
@@ -409,15 +536,31 @@ def audit(
                 # puts the subject first; the fallback covers a word in a heading
                 # over a body that names the id.
                 before = [s for s in spans if s[1] <= word.start()]
-                near = min(
+                subject = min(
                     before or spans,
                     key=lambda s: min(abs(s[0] - word.end()), abs(word.start() - s[1])),
-                )[2]
-                if word.group(0) == status[near]:
-                    held += 1
+                )
+                near = subject[2]
+                said = flat(word.group(0))
+                if said == status[near]:
+                    # The registry's word is not the registry's CLAIM when the
+                    # clause denies it or dates it. Reported instead of held, so
+                    # a lie stops paying into [`CLAIM_FLOOR`] as well as passing.
+                    floor = subject[1] if subject[1] <= word.start() else 0
+                    twist = denied(run_up(chunk, word.start(), floor))
+                    if not twist:
+                        held += 1
+                        continue
+                    findings.append(
+                        f"{rel}:{line_of(text, where)}: says `{said}`"
+                        f" beside {near} under `{twist}` — that IS the"
+                        " registered status and the sentence does not assert it,"
+                        " so a negated or re-dated restatement reads as a copy"
+                        " here and as the opposite to a reader"
+                    )
                     continue
                 findings.append(
-                    f"{rel}:{line_of(text, where)}: says `{word.group(0)}` beside"
+                    f"{rel}:{line_of(text, where)}: says `{said}` beside"
                     f" {near}, whose registered status is {status[near]} — a"
                     " hand-written status is a copy, and this one is not a copy of"
                     " anything"

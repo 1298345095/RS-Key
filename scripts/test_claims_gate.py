@@ -492,8 +492,245 @@ def test_a_floor_tracks_the_tree_rather_than_sitting_at_zero(floor):
     assert measured // 2 <= value <= measured, (floor, value, measured)
 
 
-def _measure_held():
-    summary = claims_gate.audit(ROOT)[1]
+# ---- polarity: what a review measured the first rule at ----------------------
+#
+# The hole, measured on the shipped tree without a pipe: `python
+# scripts/claims_gate.py` with "`SEC-FIDO-001` is not BOUNDED." appended to
+# README.md exited 0, and the summary's held count went 11 -> 12; with
+# "`SEC-FIDO-007` is no longer MODELLED-ONLY, and `SEC-FIDO-001` was BOUNDED."
+# it exited 0 at 13. The lie did not merely pass — it PAID INTO the floor whose
+# job is to prove the scanner still reads anything.
+#
+# The FIRST rule for that read a four-word window against a flat marker list. An
+# independent review measured it at 2 of 24 lies refused and 6 of 12 TRUE
+# sentences reddened, which is the worse half — a guard that reddens prose with
+# every right to exist. These three lists ARE that measurement, in the tree
+# rather than in a comment, because the 66 real pages cannot check any of it:
+# they report 0 findings at every setting that was tried.
+
+#: False claims. Each uses the registry's own word about the right id and denies
+#: or re-dates it; every one was appended to `README.md` with the row GREEN.
+LIES = (
+    "`SEC-FIDO-001` is not BOUNDED.",
+    "`SEC-FIDO-001` isn't BOUNDED.",
+    "`SEC-FIDO-001` has never been BOUNDED.",
+    "`SEC-FIDO-001` is far from BOUNDED.",
+    "`SEC-FIDO-001` has yet to be BOUNDED.",
+    "`SEC-FIDO-001` is nowhere near BOUNDED.",
+    "`SEC-FIDO-001` is anything but BOUNDED.",
+    "`SEC-FIDO-001` is hardly BOUNDED.",
+    "`SEC-FIDO-001` fails to be BOUNDED.",
+    "`SEC-FIDO-001` is **not**, on any reading of the evidence, BOUNDED.",
+    "`SEC-FIDO-001` is **not** [BOUNDED](docs/formal.md).",
+    "`SEC-FIDO-001` is **never** (BOUNDED).",
+    "| `SEC-FIDO-001` | **not** achieved | BOUNDED |",
+    "`SEC-FIDO-001` is <em>not</em> BOUNDED.",
+    "`SEC-FIDO-001` **isn't** yet what anyone would call BOUNDED.",
+    "`SEC-FIDO-001` remains un-BOUNDED.",
+    "`SEC-FIDO-001` **stops** being BOUNDED.",
+    "`SEC-FIDO-001` stopped being BOUNDED.",
+    "`SEC-FIDO-001` used to be BOUNDED.",
+    "`SEC-FIDO-001` was BOUNDED.",
+    "`SEC-FIDO-001` **was**, until the revert, BOUNDED.",
+    "`SEC-FIDO-001` will be BOUNDED once the harness lands.",
+    "`SEC-FIDO-007` is no longer MODELLED-ONLY.",
+    "`SEC-FIDO-001` is the authorization property.\nIt is not BOUNDED.",
+)
+
+#: TRUE sentences that must stay green, and the half that matters more: six of
+#: these are what the review broke the first rule with. Three are double
+#: negatives that assert the status, which is why [`claims_gate.FLIP`] counts
+#: parity instead of matching a marker; three carry a past or future auxiliary
+#: about a row that holds the status TODAY, which is why bare tense is only read
+#: where it touches the word.
+TRUTHS = (
+    "`SEC-FIDO-001` was raised to BOUNDED by the reset harness.",
+    "`SEC-FIDO-001` was and still is BOUNDED.",
+    "`SEC-FIDO-001` has not stopped being BOUNDED.",
+    "`SEC-FIDO-001` will stay BOUNDED for as long as the harness carries its name.",
+    "`SEC-FIDO-001` was never anything but BOUNDED.",
+    "`SEC-FIDO-001` had already been BOUNDED when the slice opened,"
+    " and is BOUNDED now.",
+    "`SEC-FIDO-001` is BOUNDED, which is why the slice could close.",
+    "`SEC-FIDO-001` was added to the registry in March and is BOUNDED.",
+    "`SEC-FIDO-001` closes nothing and moves no status — the row stays BOUNDED.",
+    "`SEC-FIDO-001`'s `status` would have read BOUNDED with one harness or four.",
+    "`SEC-FIDO-001` will not be re-run, and the row stays BOUNDED.",
+    "`SEC-STORE-002` rises to BOUNDED.",
+    "`SEC-FIDO-001`'s status is still BOUNDED.",
+    "`SEC-FIDO-001` and `SEC-STORE-002` rise to BOUNDED.",
+)
+
+#: The lies that still walk past, asserted as escaping so the docstring's claim
+#: cannot rot into coverage it does not have. Closing either is welcome and will
+#: redden this case, which is the point of listing them.
+ESCAPES = (
+    # The negator stands BEFORE the id, and the run-up starts at the subject —
+    # which it must: with the floor at 0 the clause reaches into the previous
+    # table cell and `docs/authorization-slice.md` reddens on true prose.
+    ("**No** evidence in this tree makes `SEC-FIDO-001` BOUNDED.", "BOUNDED"),
+    # The negation is AFTER the word. A trailing window would hand the next id's
+    # clause to this one.
+    ("`SEC-FIDO-001` is BOUNDED - except that it is not.", "BOUNDED"),
+)
+
+
+def verdict(sentence, word="BOUNDED"):
+    """What `audit` decides about `sentence`, through the shipped helpers.
+
+    A replica of the two lines in `audit` that read the clause, so 39 sentences
+    cost one fixture copy instead of 39; `test_the_replica_agrees_with_the_row`
+    is what keeps it from drifting away from the thing it stands in for.
+    """
+    text = claims_gate.normalise(sentence)
+    found = claims_gate.ID.search(text)
+    at = text.index(claims_gate.normalise(word))
+    floor = found.end() if found and found.end() <= at else 0
+    return claims_gate.denied(claims_gate.run_up(text, at, floor))
+
+
+@pytest.mark.parametrize("sentence", LIES)
+def test_a_denied_or_re_dated_copy_is_not_a_copy(sentence):
+    word = "MODELLED-ONLY" if "MODELLED-ONLY" in sentence else "BOUNDED"
+    assert verdict(sentence, word), sentence
+
+
+@pytest.mark.parametrize("sentence", TRUTHS)
+def test_a_true_sentence_stays_true(sentence):
+    assert verdict(sentence) is None, (sentence, verdict(sentence))
+
+
+@pytest.mark.parametrize("sentence,word", ESCAPES)
+def test_the_measured_escape_still_escapes(sentence, word):
+    assert verdict(sentence, word) is None, "an escape closed — update ESCAPES"
+
+
+def test_the_replica_agrees_with_the_row(tree):
+    """The one case that costs a fixture: what `verdict` says, the row says. Both
+    directions, because a replica that agreed only on refusals would let every
+    true sentence above be checked by something the gate never runs."""
+    for sentence in LIES[:4] + TRUTHS[:4] + tuple(s for s, _ in ESCAPES):
+        page = tree / PAGE
+        keep = page.read_text()
+        say(tree, sentence)
+        red = any("does not assert it" in f for f in findings(tree))
+        page.write_text(keep)
+        assert red is bool(verdict(sentence)), sentence
+
+
+def test_the_lie_stops_paying_into_the_floor(tree):
+    """The second half of the finding, and the one a verdict column hides: the
+    sentence passed AND raised `held`, so a corpus of nothing but negations
+    satisfied `CLAIM_FLOOR`."""
+    before = _measure_held(tree)
+    say(tree, "`SEC-FIDO-001` is not BOUNDED.")
+    assert _measure_held(tree) == before, "a refused claim still counted as held"
+
+
+def test_the_polarity_count_is_what_saves_the_double_negatives(tree):
+    """The mutant for the parity: read as `any flipper denies`, three TRUE
+    sentences redden — which is exactly the review's finding, reproduced."""
+    say(tree, "`SEC-FIDO-001` has not stopped being BOUNDED.")
+    assert findings(tree) == [], "the control must be green before it is mutated"
+    naive = claims_gate.denied
+
+    def any_flipper(clause):
+        return (claims_gate.FLIP.findall(clause) or [None])[0]
+
+    assert any_flipper is not naive, "the mutant did not take"
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claims_gate, "denied", any_flipper)
+        assert any("does not assert it" in f for f in findings(tree))
+
+
+def test_a_boundary_that_matters_and_one_that_does_not(tree):
+    """The CONTROL, and the previous one was a no-op: `RUN_UP_WORDS = 5` left the
+    row byte-identical, and so did every value from 1 to 30. This pair is not.
+    Dropping `—` from `CLAUSE` reddens a true sentence; dropping `→` changes
+    nothing — so the table measures which boundary does work, not that a constant
+    was retyped."""
+    say(tree, "`SEC-FIDO-001` closes nothing and moves no status — the row stays BOUNDED.")
+    assert findings(tree) == [], "the control must be green before it is mutated"
+    for mark, must_redden in (("|—", True), ("|→", False)):
+        pattern = claims_gate.CLAUSE.pattern.replace(mark, "", 1)
+        assert pattern != claims_gate.CLAUSE.pattern, f"{mark} is not in CLAUSE"
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(claims_gate, "CLAUSE", re.compile(pattern))
+            reported = findings(tree)
+            red = any("does not assert it" in f for f in reported)
+            assert red is must_redden, (mark, reported)
+
+
+def test_the_rule_is_defended_by_pytest_and_by_nothing_else(tree):
+    """Said in the docstring and asserted here: with [`FLIP`] neutered the
+    `published claims` row is byte-identical, so a reader who takes that row's
+    green as evidence of this feature is taking it as evidence of nothing. The
+    docstring first claimed the same of `CLAUSE` and this case refuted it."""
+    baseline = claims_gate.audit(tree)
+    never = re.compile(r"(?!x)x")
+    assert not never.search("is not "), "the neutered pattern still matches"
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claims_gate, "FLIP", never)
+        assert claims_gate.audit(tree) == baseline
+    # The branch itself, reverted: `denied` answering None is `held += 1` again.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claims_gate, "denied", lambda clause: None)
+        assert claims_gate.denied("is not ") is None, "the revert did not take"
+        assert claims_gate.audit(tree) == baseline
+    # And the one that is NOT free, which this case measured rather than assumed:
+    # `CLAUSE` became load-bearing on the real corpus when the word window went.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claims_gate, "CLAUSE", never)
+        assert claims_gate.audit(tree) != baseline
+
+
+def test_a_reported_line_is_the_line_in_the_file(tree):
+    """A guard whose only output is a citation shipped with the citation wrong:
+    `normalise` JOINED a hyphenated line break, deleting the newline, so every
+    finding below one was early — 6 files, and it said `docs/formal.md:266` for
+    268. `soft` crosses the break in the pattern instead."""
+    page = "docs/formal.md"
+    raw = (tree / page).read_text()
+    assert re.search(r"-\n[ \t]*\S", raw), f"{page} carries no hyphen-wrap to drift on"
+    say(tree, "`SEC-FIDO-001` is not BOUNDED.", page=page)
+    lines = (tree / page).read_text().splitlines()
+    want = next(n for n, line in enumerate(lines, 1) if "is not BOUNDED" in line)
+    got = [f for f in findings(tree) if f.startswith(f"{page}:")]
+    assert got and got[0].startswith(f"{page}:{want}:"), (want, got)
+
+
+@pytest.mark.parametrize(
+    "sentence,refused",
+    [
+        ("`SEC-FIDO-007` is MODELLED-\nONLY.", False),
+        ("`SEC-FIDO-001` is MODELLED-\nONLY.", True),
+    ],
+)
+def test_a_status_word_split_by_a_hard_wrap_still_reads(tree, sentence, refused):
+    """What replaced the join has to do the join's job: `MODELLED-ONLY` broken
+    over two lines is still the word, in both directions."""
+    say(tree, sentence)
+    assert bool(findings(tree)) is refused, findings(tree)
+
+
+def test_modality_is_out_because_the_corpus_holds_the_prose_it_would_redden():
+    """The false-positive measurement, kept live rather than asserted in a
+    comment: `would|could|should|may|might` is the obvious next widening and it
+    reddens one real sentence. Anchored by CONTENT — `CHANGELOG.md` moved 105
+    lines under this file mid-session, and both line numbers cited here were
+    stale within the hour."""
+    quoted = "its `status` would have read `BOUNDED`"
+    assert quoted in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), (
+        "the measured sentence moved; re-measure the trade"
+    )
+    line = claims_gate.normalise(quoted)
+    clause = claims_gate.run_up(line, line.index("BOUNDED"), 0)
+    assert not claims_gate.denied(clause), clause
+    assert re.search(r"\b(?:would|could|should|may|might)\b", clause, re.I), clause
+
+
+def _measure_held(root=ROOT):
+    summary = claims_gate.audit(root)[1]
     return int(re.search(r"(\d+) hand-written", summary).group(1))
 
 
