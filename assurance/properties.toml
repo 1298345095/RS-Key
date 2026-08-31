@@ -11,6 +11,18 @@
 # repeated here. That sentence was prose until `scripts/evidence_gate.py`:
 # an eighth key on a row, or a table beside [[property]], is refused there now.
 #
+# There is deliberately no `subject` column splitting correctness from
+# side-channel resistance either. That separation is which REGISTRY a claim lives
+# in — a side-channel claim is a row of assurance/ct_sites.toml, derived from the
+# shipped ELF — and neither allowlist carries a key for the other's claim, which
+# is stricter than the column this would have added: nothing checks that a
+# [[property]] statement is a correctness claim, so the column would separate by
+# convention while the registries separate by what each gate can derive. Driven:
+# `subject` on a row here is exit 1, and widening evidence_gate.WRITTEN_FIELDS to
+# admit it leaves `subject = "banana"` at exit 0, read by nothing and printed
+# nowhere — a column that separates nothing is a weakening wearing the
+# separation's name.
+#
 # One derived column is worth naming because it changes how a status reads.
 # `Co-refuted` counts this property's model mutants whose CODE twin was patched
 # into the real tree and caught by the real suite (`formal/comutants.toml`). That
