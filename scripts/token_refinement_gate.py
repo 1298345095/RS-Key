@@ -12,16 +12,43 @@ an `if`, and the production/test split knew `*_tests.rs` but not
 `#[cfg(test)] mod`. Each miss is silent — the site is simply never discovered, so
 the roster stays "complete" over a shorter list.
 
-Two shapes are still not discovered, and both were measured rather than assumed:
-a fid bound to a local before the write (`let fid = EF_PIN; fs.put(fid, ..)`) and
-a permission mask behind a helper taking `permissions: u8`. The coarse rules that
-would catch them — "names a token fid and calls any writer", "hands
-`paut.permissions` to anything" — cost 5 and 1 false owners on today's tree, so
-what is here refuses to guess and this paragraph is the record.
+The 2026-08-31 rescan closed four more of the same class, and it is the same
+lesson a fifth time — each one was a set the tree spells and this file did not.
+A probe of 23 write spellings against the fixture found 8 MISSED, in four causes,
+and only the first two had ever been written down anywhere:
+
+  * `let fid = EF_PIN; fs.put(fid, ..)` — the fid one `let` away from the write;
+  * `let f = 0x1000u16 + 0x80; fs.put(f, ..)` — the same, ARITHMETIC, and named
+    by nothing anywhere: it spells neither `EF_PIN` nor `0x1080`;
+  * a permission mask behind a helper taking `permissions: u8`, or one `let`
+    away (`let p = paut.permissions; p & PERM_MC`);
+  * `*st = rsk_fido::FidoState::new()` — the whole token replaced, spelling
+    neither `self` nor a `.paut.`, in a crate the writer axes could not see.
+
+Five shapes a §7.7 review drove through are STATED EXCLUSIONS rather than rules,
+and none of them exists in this tree today — they are rot holes, not live unowned
+writers: a fid rebuilt with `u16::from_be_bytes`, a write inside a macro body, a
+write inside a closure, a helper taking `&mut PinUvAuthToken`, and a gate helper
+taking `&PinUvAuthToken`. The last two look cheap and are not: deriving the token
+struct's NAME from its fields resolves to `AssertionState`, which shares
+`last_used_ms` with it — measured, and it produced a false owner
+(`getassertion.rs::arm_get_next_assertion`) on the first run. A correct rule needs
+the name `token_fields` already hardcodes, which would be a third spelling of the
+one thing this file exists to spell once.
+
+The coarse rules the previous paragraph refused — "names a token fid and calls
+any writer", "hands `paut.permissions` to anything" — cost 5 and 1 false owners,
+and that refusal was right. What replaced them is not a coarser rule but a
+narrower one: the LOCAL actually passed to the writer is resolved against the
+`let` that bound it (folding integer arithmetic, so the second shape above is
+found by evaluation and not by a pattern), and the permission clause requires a
+caller to hand the live byte in. Measured on this tree: 0 false owners from
+either, and one real unowned writer from the fourth.
 """
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 import tomllib
@@ -74,7 +101,10 @@ UNITS = (
 #: measured counts so ordinary movement does not trip them and a derivation that
 #: stopped reading does.
 FLOORS = {
-    "volatile_writer": 6,
+    # 7 and not 6: the roster grew to 11 when the whole-token clause learned to
+    # read the state type off its `paut` field, and a floor left at the old
+    # slack would let the new clause rot back out again unreported.
+    "volatile_writer": 7,
     "persistent_writer": 8,
     "outcome_producer": 5,
     "walk_owner": 3,
@@ -106,11 +136,47 @@ RECEIVER = r"(?:[^,;()]|\([^()]*\))*?,\s*"
 PUBLIC = re.compile(r"\s*pub(?:\([^)]*\))?\s")
 COLUMN_ROW = re.compile(r"^\|\s*\d+\s*\|\s*`([^`]+)`\s*\|")
 WHOLE = re.compile(r"\*self\s*=[^=]")
-MAC = r"(?:\.|::)verify_token\s*\("
-# The persistent `pcmr` grant: an authorization that never touches `paut`, so
-# neither the MAC clause nor the permission clause can see it. Still a hand-named
-# pair, and still the one hand-list left in this file.
-GRANT = ("credmgmt.rs", "authorized_by_ppuat", "load_ppuat")
+#: `Self` means the token's owner only in the file that declares it, so the same
+#: write one crate over has to name the TYPE — and that name is derived, off the
+#: struct carrying `pub paut`, never spelled here.
+WHOLE_TYPED = r"\*\s*[\w.]*\w\s*=\s*(?:\w+\s*::\s*)*{state}\b"
+#: The swap primitives, which replace the token with no `=` on the left of it.
+SWAP = r"\b(?:replace|swap)\s*\([^;]*?\b{state}\s*::\s*\w+\s*\("
+#: Any whole-value write through a dereference. Meaningless on its own — it is
+#: paired with `state_holders`, which decides whether the name is the token's.
+DEREF = re.compile(r"\*\s*([a-z_]\w*)\s*=[^=]")
+#: The session MAC, anchored on the token FIELD instead of on a method name: the
+#: one place a `paut` field leaves `state.rs` as a call argument IS the
+#: `pinUvAuthParam` check, so the method (`verify_token`) and the primitive it
+#: bottoms out in (`pinproto::verify`) both fall out of one anchor. That deleted
+#: the last two hand-lists in this file — the second was a `(file, function,
+#: callee)` triple naming the persistent `pcmr` grant, which touches no `paut` at
+#: all and which the primitive now finds by what it MACs over. Measured: 5
+#: production callers of the primitive, 1 of them over a token record.
+MAC_ANCHOR = r"((?:\w+\s*::\s*)+\w+)\s*\(\s*[^,()]*,\s*&\s*self\.paut\.(?:{fields})\b"
+LET = re.compile(r"\blet\b")
+#: Rust's literal suffixes, so `0x1000u16 + 0x80` reaches an integer folder as
+#: `0x1000 + 0x80`. Underscores survive — Python's own literals take them.
+SUFFIX = re.compile(r"\b(0[xXbBoO][0-9A-Fa-f_]+|\d[\d_]*)(?:u|i)(?:8|16|32|64|128|size)\b")
+#: Arithmetic and nothing else. A `Name` node is what makes `EF_RP + i` fold to
+#: nothing, and that is the whole reason this costs no false owner: a fid built
+#: out of a runtime value is not a constant fid.
+FOLDABLE = (
+    ast.Expression,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Constant,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.LShift,
+    ast.RShift,
+    ast.BitOr,
+    ast.BitAnd,
+    ast.BitXor,
+    ast.USub,
+    ast.UAdd,
+)
 
 
 def functions(text: str) -> list[tuple[str, str]]:
@@ -139,11 +205,198 @@ def functions(text: str) -> list[tuple[str, str]]:
     return found
 
 
-def production_sources(root: Path) -> list[Path]:
-    base = root / FIDO
+def bindings(body: str) -> list[tuple[int, list[str], str, str]]:
+    """(offset, names bound, type annotation, right-hand side) per `let`.
+
+    Bracket-aware rather than `[^;]*`, in both halves: `let mut a: [u8; 32] = ..`
+    carries a semicolon in the type and `let Some(t) = f() else { return; };` one
+    in the block, and a regex stopping at the first `;` reads the first as having
+    no initialiser at all and the second as ending before its own `=`.
+
+    The OFFSET is what lets a reader ask which binding governs a given use, and
+    the annotation is how a name declares the token's owner without an rhs that
+    spells it (`let st: FidoState = ...`).
+    """
+    found = []
+    for start in LET.finditer(body):
+        depth, cursor, split = 0, start.end(), None
+        while cursor < len(body):
+            char = body[cursor]
+            if char in "([{":
+                depth += 1
+            elif char in ")]}":
+                depth -= 1
+            elif depth <= 0 and char == ";":
+                break
+            elif depth <= 0 and char == "=" and body[cursor + 1 : cursor + 2] not in ("=", ">"):
+                split = cursor if split is None else split
+            cursor += 1
+        if split is None:
+            continue
+        head = body[start.end() : split].split(":", 1)
+        names = [w for w in re.findall(r"\b[a-z_]\w*\b", head[0]) if w != "mut"]
+        found.append((start.start(), names, head[1] if len(head) > 1 else "", body[split + 1 : cursor]))
+    return found
+
+
+def bound_locals(body: str, carries, before: int | None = None) -> set[str]:
+    """Every local transitively bound from a declaration `carries(annotation, rhs)` accepts.
+
+    Transitive because `let a = EF_PIN; let b = a;` puts the fid two hops from
+    the write, and a one-hop rule is a rule about how the author spaced it.
+
+    LAST BINDING BEFORE THE USE wins, and both halves of that matter. Without
+    "last", `let f = EF_PIN; let f = EF_RP; fs.put(f, ..)` is a false owner —
+    the gate would demand a disposition for a write of the RP record. Without
+    "before the use", the repair overshoots the other way and
+    `let f = EF_PIN; fs.put(f, ..); let f = EF_RP;` stops being found at all,
+    which is the same rule losing a real writer to make a cosmetic one go away.
+    """
+    latest: dict[str, tuple[str, str]] = {}
+    for at, names, annotation, rhs in bindings(body):
+        if before is not None and at >= before:
+            continue
+        for name in names:
+            latest[name] = (annotation, rhs)
+    keyed: set[str] = set()
+    while True:
+        # The two halves stay APART all the way down: `carries` folds the rhs as
+        # an expression, and `" = " + rhs` is not one — prefixing the annotation
+        # cost the arithmetic clause its only case, silently, until the table said so.
+        grown = {
+            name
+            for name, (annotation, rhs) in latest.items()
+            if name not in keyed
+            and (
+                carries(annotation, rhs)
+                or any(w in keyed for w in re.findall(r"\b[a-z_]\w*\b", rhs))
+            )
+        }
+        if not grown:
+            return keyed
+        keyed |= grown
+
+
+def folds_to(expression: str, values: set[int]) -> bool:
+    """Whether a Rust integer expression evaluates to one of `values`.
+
+    Folded and not matched, because `0x1000u16 + 0x80` IS `EF_PIN` and spells
+    neither of its two discoverable names. Only literals and arithmetic: a shift
+    is bounded because two short literals can otherwise ask for a number no
+    machine finishes, and anything carrying a Name folds to nothing at all.
+    """
+    try:
+        tree = ast.parse(SUFFIX.sub(r"\1", expression).strip(), mode="eval")
+    except (SyntaxError, ValueError):
+        return False
+    for node in ast.walk(tree):
+        if not isinstance(node, FOLDABLE):
+            return False
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.LShift, ast.RShift)):
+            if not isinstance(node.right, ast.Constant) or not 0 <= node.right.value <= 64:
+                return False
+        if isinstance(node, ast.Constant) and (
+            not isinstance(node.value, int) or abs(node.value) > 0xFFFF_FFFF
+        ):
+            return False
+    return eval(compile(tree, "<fid>", "eval"), {"__builtins__": {}}) in values  # noqa: S307
+
+
+def parameters(body: str) -> dict[str, str]:
+    """{name: declared type} out of a function's OWN signature parens.
+
+    Bounded to the signature, so a mask on a local is not read as a mask on
+    something a caller could hand in — that distinction is the whole precision of
+    the permission clause below. The TYPE is carried because a parameter is how
+    the token's owner arrives at the board half: `fido_state: &RefCell<FidoState>`
+    is what makes `*st = ..` a whole-token write two `let`s later.
+    """
+    start = body.find("(")
+    if start < 0:
+        return {}
+    depth, cursor = 0, start
+    while cursor < len(body):
+        if body[cursor] == "(":
+            depth += 1
+        elif body[cursor] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        cursor += 1
+    signature, declared, depth, last = body[start + 1 : cursor], {}, 0, 0
+    for index, char in enumerate(signature + ","):
+        if char in "([{<":
+            depth += 1
+        elif char in ")]}>":
+            depth -= 1
+        elif char == "," and depth <= 0:
+            name, _, kind = signature[last:index].partition(":")
+            name = name.strip().removeprefix("mut ").strip()
+            if re.fullmatch(r"[a-z_]\w*", name):
+                declared[name] = kind
+            last = index + 1
+    return declared
+
+
+#: A `const` item is a fid spelling no `let` reader can see: it lives outside every
+#: `fn`, so `bindings()` walks straight past `const ALIAS: u16 = 0x1080;` and the
+#: `fs.put(ALIAS, ..)` under it is discovered by nothing. Folded to the VALUE, so
+#: `rsk-piv`'s own `EF_PIN = 0xD180` is not one of these by name.
+CONST_ITEM = re.compile(r"\bconst\s+([A-Z][A-Z0-9_]*)\s*:[^=;]*=\s*([^;]*);")
+
+
+def key_aliases(root: Path, values: set[int]) -> set[str]:
+    """Every scanned `const` whose value IS a token fid, under whatever name."""
+    found = set()
+    for path in scanned_sources(root):
+        text = NOT_CODE.sub(" ", path.read_text(encoding="utf-8"))
+        found |= {
+            name for name, rhs in CONST_ITEM.findall(text) if folds_to(rhs, values)
+        }
+    return found
+
+
+def state_holders(body: str, state: str, before: int | None = None) -> set[str]:
+    """The names in this body whose TYPE is the token's owner.
+
+    Parameters first, then transitively through `let`, which is the chain the
+    board half actually writes: `fido_state: &RefCell<FidoState>` →
+    `let mut st = fido_state.borrow_mut()` → `*st = ..`. Derived this way the
+    clause stops caring what the RIGHT-hand side spells, so `*st = Default::default()`
+    is the same finding as `*st = FidoState::new()` — and the first names no type
+    at all, which is why a right-hand-side rule cannot see it.
+    """
+    if not state:
+        return set()
+    named = re.compile(rf"\b{state}\b")
+    holders = {name for name, kind in parameters(body).items() if named.search(kind)}
+
+    def carries(annotation: str, rhs: str) -> bool:
+        return any(
+            named.search(text) or any(w in holders for w in re.findall(r"\b[a-z_]\w*\b", text))
+            for text in (annotation, rhs)
+        )
+
+    while True:
+        grown = bound_locals(body, carries, before) - holders
+        if not grown:
+            return holders
+        holders |= grown
+
+
+def scanned_sources(root: Path) -> list[Path]:
+    """Every production `.rs` of the units the axes are derived over.
+
+    ONE exclusion set for the writer axes and the guard axes, because there were
+    two and they differed. And `UNITS`, not `rsk-fido` alone: measured 2026-08-31,
+    `rsk-device`'s `AppletHandler::new` replaces the whole session token at
+    power-up and was owned by nobody, because the writer axes could not see the
+    crate at all — the guard axes had scanned it since the day they were written.
+    """
     return sorted(
         path
-        for path in base.rglob("*.rs")
+        for unit, _ in UNITS
+        for path in (root / unit).rglob("*.rs")
         if not path.name.endswith(("_tests.rs", "_kani.rs"))
         and path.name not in {"generated_token_edges.rs", "state_assurance.rs"}
     )
@@ -261,14 +514,59 @@ def store_writers(root: Path) -> set[str]:
 
 def catalogue(root: Path) -> dict[tuple[str, str], str]:
     found = {}
-    for path in production_sources(root):
+    for path in scanned_sources(root):
         rel = str(path.relative_to(root))
         for name, body in functions(path.read_text(encoding="utf-8")):
             found[(rel, name)] = body
     return found
 
 
-def discovered_volatile(code: dict, fields: list[str], seen: list[str], owner: str) -> tuple[set, set]:
+def state_owner(root: Path) -> tuple[str, str | None]:
+    """The struct that owns the session token, read off its `pub paut` field.
+
+    A FINDING and not a traceback if the anchor moves, for `lock_vocabulary`'s
+    reason and one more of its own: an empty type name turns `WHOLE_TYPED` into
+    `\\*\\s*[\\w.]*\\w\\s*=`, which owns every dereferencing assignment in three
+    crates — a derivation that stopped reading would report the tree as unowned
+    rather than as unscanned.
+    """
+    text = (root / STATE).read_text(encoding="utf-8")
+    for found in re.finditer(r"pub struct (\w+) \{(.*?)\n\}", text, re.S):
+        if re.search(r"\n\s*pub paut\s*:", found.group(2)):
+            return found.group(1), None
+    return "", f"state: {STATE} declares no struct with a `pub paut` field — the whole-token write is derived from it"
+
+
+def mac_vocabulary(root: Path, fields: list[str]) -> tuple[str, str, str | None]:
+    """(the method that MACs the session token, the primitive it calls, a problem)."""
+    anchor = re.compile(MAC_ANCHOR.format(fields="|".join(fields)))
+    for name, body in functions((root / STATE).read_text(encoding="utf-8")):
+        if found := anchor.search(body):
+            return name, re.sub(r"\s+", "", found.group(1)), None
+    return "", "", f"outcome: {STATE} hands no `paut` field to a MAC — the token check and its primitive are both read off that call"
+
+
+def self_owners(root: Path, state: str) -> set[str]:
+    """The scanned files where `Self` MEANS the token's owner.
+
+    `*self = Self::new()` is only a token write inside an `impl` of that type, and
+    the type is derived — so a second `impl FidoState` in a new file is covered
+    without an edit here, while `*self = Self::new()` in any other impl stays
+    what it is: a write of something else entirely.
+    """
+    if not state:
+        return set()
+    impl = re.compile(rf"\bimpl\b[^\n{{]*\b{state}\b")
+    return {
+        str(path.relative_to(root))
+        for path in scanned_sources(root)
+        if impl.search(path.read_text(encoding="utf-8"))
+    }
+
+
+def discovered_volatile(
+    code: dict, fields: list[str], seen: list[str], owners: set[str], state: str
+) -> tuple[set, set]:
     """(every writer of a token field, the subset α observes)."""
     every = re.compile(
         rf"\.paut(?:\.(?:{'|'.join(fields)}))?\s*{ASSIGN}"
@@ -280,57 +578,188 @@ def discovered_volatile(code: dict, fields: list[str], seen: list[str], owner: s
     visible = re.compile(rf"\.paut\.(?:{'|'.join(seen)})\s*{ASSIGN}")
     # `FidoState::reset` is `*self = Self::new()`, which replaces the token
     # wholesale — every abstract bit at once, and not one `.paut.` in sight.
-    whole = {site for site, body in code.items() if site[0] == owner and WHOLE.search(body)}
+    # `Self` only means the token's owner in the file that declares it; one crate
+    # over the same write names the TYPE, and `crates/rsk-device/src/ctap.rs:122`
+    # is that write at every power-up.
+    typed = re.compile(WHOLE_TYPED.format(state=state)) if state else None
+    # `mem::replace(st, FidoState::new())` moves the same bits with no `=` in
+    # sight. Scoped to the swap primitives naming the type, NOT to the type
+    # anywhere: `RefCell::new(FidoState::new())` at `firmware/src/main.rs:1147`
+    # BUILDS the one session cell at boot and replaces nothing, and a rule reading
+    # `FidoState::new` alone owns it. Measured: this alternative adds 0 sites.
+    swapped = re.compile(SWAP.format(state=state)) if state else None
+
+    def replaces_the_whole_token(site: tuple[str, str], body: str) -> bool:
+        if site[0] in owners and WHOLE.search(body):
+            return True
+        if typed and typed.search(body):
+            return True
+        if swapped and swapped.search(body):
+            return True
+        # `*st = Default::default()` names no type at all, so nothing above can
+        # see it. Answered from the LEFT-hand side instead: `st` is derived to be
+        # the token's owner through its parameter type, and then what is assigned
+        # into it does not matter.
+        return any(
+            found.group(1) in state_holders(body, state, found.start())
+            for found in DEREF.finditer(body)
+        )
+
+    whole = {site for site, body in code.items() if replaces_the_whole_token(site, body)}
     writers = {site for site, body in code.items() if every.search(body)} | whole
     return writers, {site for site in writers if visible.search(code[site])} | whole
 
 
-def discovered_outcomes(code: dict, perms: list[str], seen: list[str]) -> tuple[set, set]:
+def record_vocabulary(code: dict, keys: set[str]) -> tuple[re.Pattern, set[int], set[str]]:
+    """(names a token record, the fids as NUMBERS, the functions that read one).
+
+    One derivation for three clauses that each needed it: the persistent axis's
+    own `naming`, the fid folder, and the grant clause below — which asks what a
+    MAC was taken OVER and answers it with the same "this expression reaches a
+    token record" test.
+    """
+    alternation = "|".join(sorted(keys, key=len, reverse=True))
+    mentions = re.compile(rf"\b(?:{alternation})\b")
+    values = {int(key, 16) for key in keys if key.lower().startswith("0x")}
+    return mentions, values, {site[1] for site, body in code.items() if mentions.search(body)}
+
+
+def discovered_outcomes(
+    code: dict,
+    perms: list[str],
+    seen: list[str],
+    vocabulary: tuple[re.Pattern, set[int], set[str]],
+    method: str,
+    primitive: str,
+) -> tuple[set, set]:
     """(every authorization producer, the subset α observes).
 
-    Two independent queries, unioned: the token-MAC check every command gate
-    calls, and a mask of `paut.permissions` against any `PERM_*`. They name the
-    same six sites, which is the evidence that neither spelling is the only door
-    — and a seventh that checked the MAC and forgot the mask would be a bypass
-    the mask query alone could not see.
+    Independent queries, unioned: the token-MAC check every command gate calls,
+    and a mask of `paut.permissions` against any `PERM_*`. They name the same six
+    sites, which is the evidence that neither spelling is the only door — and a
+    seventh that checked the MAC and forgot the mask would be a bypass the mask
+    query alone could not see.
+
+    Two more were added after a 2026-08-31 probe measured them MISSED, and both
+    ask the same question one hop out: the mask may be on a local bound from the
+    live byte (`let p = paut.permissions; p & PERM_MC`), or on a PARAMETER of a
+    helper a caller hands the live byte to. Requiring the hand-off is what makes
+    the second precise — the coarse "hands `paut.permissions` to anything" cost a
+    false owner, and this costs none, measured, while still owning the pair.
     """
-    masks = rf"\.paut\.permissions\s*[&|^]\s*\(?\s*(?:{'|'.join(perms)})"
-    every = re.compile(rf"{MAC}|{masks}|(?:{'|'.join(perms)})\s*[&|^]\s*[\w.]*\.paut\.permissions")
+    mentions, _, readers = vocabulary
+    joined = "|".join(perms)
+    live = re.compile(r"\.paut\.permissions\b")
+    masks = rf"\.paut\.permissions\s*[&|^]\s*\(?\s*(?:{joined})"
+    clauses = [masks, rf"(?:{joined})\s*[&|^]\s*[\w.]*\.paut\.permissions"]
+    if method:
+        clauses.append(rf"(?:\.|::){method}\s*\(")
+    every = re.compile("|".join(clauses))
     visible = re.compile(rf"\.paut\.permissions\s*[&|^]\s*\(?\s*(?:{'|'.join(seen)})")
-    grant = {
+    masked = re.compile(
+        rf"\b([a-z_]\w*)\s*[&|^]\s*\(?\s*(?:{joined})\b|\b(?:{joined})\s*[&|^]\s*\(?\s*([a-z_]\w*)\b"
+    )
+    #: The live byte masked against a NAME, which is the half of the pair the
+    #: `masked` pattern above cannot express: there the constant is spelled and
+    #: the byte is the variable, here it is the other way round.
+    against = re.compile(
+        r"\.paut\.permissions\s*[&|^]\s*\(?\s*([a-z_]\w*)\b"
+        r"|\b([a-z_]\w*)\s*[&|^]\s*\(?\s*[\w.]*\.paut\.permissions\b"
+    )
+
+    def masks_one_of(body: str, names: set[str]) -> bool:
+        return any((found[0] or found[1]) in names for found in masked.findall(body))
+
+    producers = {site for site, body in code.items() if every.search(body)}
+    producers |= {
         site
         for site, body in code.items()
-        if site[0].endswith(GRANT[0]) and site[1] == GRANT[1] and GRANT[2] in body
+        for found in masked.finditer(body)
+        if (found.group(1) or found.group(2))
+        in bound_locals(body, lambda _a, rhs: bool(live.search(rhs)), found.start())
     }
-    producers = {site for site, body in code.items() if every.search(body)} | grant
+    # The MIRROR of the clause above, and the fifth spelling of the same cause:
+    # the live byte can be in the local, or the PERMISSION can. Taught one and
+    # left blind to the other, `let need = PERM_MC; paut.permissions & need`
+    # slipped — a review found it, not this file.
+    constant = re.compile(rf"\b(?:{joined})\b")
+    producers |= {
+        site
+        for site, body in code.items()
+        for found in against.finditer(body)
+        if (found.group(1) or found.group(2))
+        in bound_locals(body, lambda _a, rhs: bool(constant.search(rhs)), found.start())
+    }
+    gates = {site for site, body in code.items() if masks_one_of(body, parameters(body))}
+    for gate in gates:
+        calls = re.compile(rf"\b{gate[1]}\s*\(([\s\S]*?)\)")
+        for caller, body in code.items():
+            if caller != gate and any(live.search(f.group(1)) for f in calls.finditer(body)):
+                producers |= {gate, caller}
+    # The persistent `pcmr` grant: an authorization that never touches `paut`, so
+    # no clause above can see it. Found by what the MAC is taken OVER — a local
+    # bound from a token record, or from a function that reads one — which is why
+    # 4 of the primitive's 5 production callers (they MAC under an ECDH secret)
+    # are not here. It was a hand-named triple until this replaced it.
+    grant = set()
+    if primitive and readers:
+        key = re.compile(rf"{re.escape(primitive)}\s*\(\s*[^,()]*,\s*&?\s*(?:mut\s+)?([a-z_]\w*)")
+
+        def from_a_record(_annotation: str, rhs: str) -> bool:
+            return bool(mentions.search(rhs)) or any(
+                word in readers for word in re.findall(r"\b[a-z_]\w*\b", rhs)
+            )
+
+        for site, body in code.items():
+            if any(
+                found.group(1) in bound_locals(body, from_a_record, found.start())
+                for found in key.finditer(body)
+            ):
+                grant.add(site)
+    producers |= grant
     return producers, {site for site in producers if visible.search(code[site])} | grant
 
 
-def discovered_persistent(code: dict, writers: set[str], keys: set[str]) -> tuple[set, set]:
+def discovered_persistent(
+    code: dict,
+    writers: set[str],
+    keys: set[str],
+    vocabulary: tuple[re.Pattern, set[int], set[str]],
+) -> tuple[set, set]:
     """(every writer of a token record, the fid-parameter helpers among them).
 
-    Three clauses, because a token record is written three ways: the fid is named
-    here, the fid arrives as a parameter, or the fid is named here and handed to
-    something whose parameter it becomes. The middle one covers `reset::sweep`,
-    whose fid arrives as a *predicate* — `sweep(ctx, is_fido_gate_fid)`.
+    Four clauses, because a token record is written four ways: the fid is named
+    here, the fid arrives as a parameter, the fid is named here and handed to
+    something whose parameter it becomes, or the fid sits in a LOCAL. The third
+    covers `reset::sweep`, whose fid arrives as a *predicate* —
+    `sweep(ctx, is_fido_gate_fid)`.
+
+    The fourth was measured MISSED on 2026-08-31, in two spellings: `let fid =
+    EF_PIN; fs.put(fid, ..)` and `let f = 0x1000u16 + 0x80; fs.put(f, ..)`, the
+    second of which spells no discoverable name at all. Resolved against the
+    binding rather than guessed from the mention — "names a token fid and calls
+    any writer" costs 5 false owners on this tree and this costs 0.
     """
     call = rf"(?:\.|::)(?:{'|'.join(sorted(writers, key=len, reverse=True))})\s*\("
     alternation = "|".join(sorted(keys, key=len, reverse=True))
     named = re.compile(rf"{call}\s*(?:{RECEIVER})?(?:[a-z_]+::)*(?:{alternation})\b")
     parameterised = re.compile(rf"{call}\s*(?:{RECEIVER})?[a-z_]\w*\s*[,).]")
-    mentions = re.compile(rf"\b(?:{alternation})\b")
+    localised = re.compile(rf"{call}\s*(?:{RECEIVER})?([a-z_]\w*)\s*[,).]")
+    mentions, values, naming = vocabulary
 
     generic = {site for site, body in code.items() if parameterised.search(body)}
-    naming = {site[1] for site, body in code.items() if mentions.search(body)}
 
     def carries_a_key(arguments: str) -> bool:
         return bool(mentions.search(arguments)) or any(
             word in naming for word in re.findall(r"\b([a-z_]\w*)\b", arguments)
         )
 
+    def is_a_fid(_annotation: str, rhs: str) -> bool:
+        return bool(mentions.search(rhs)) or folds_to(rhs, values)
+
     reached, handing = set(), set()
     for site in generic:
-        calls = re.compile(rf"\b{site[1]}\s*\(([^;]*?)\)", re.S)
+        calls = re.compile(rf"\b{site[1]}\s*\(([\s\S]*?)\)")
         for caller, body in code.items():
             if caller == site:
                 continue
@@ -339,7 +768,13 @@ def discovered_persistent(code: dict, writers: set[str], keys: set[str]) -> tupl
                     reached.add(site)
                     handing.add(caller)
     direct = {site for site, body in code.items() if named.search(body)}
-    return direct | reached | handing, reached
+    local = {
+        site
+        for site, body in code.items()
+        for found in localised.finditer(body)
+        if found.group(1) in bound_locals(body, is_a_fid, found.start())
+    }
+    return direct | local | reached | handing, reached
 
 
 #: The channel test IS the walk guard: a `CredMgmtState` method that compares the
@@ -418,34 +853,29 @@ def guard_sites(root: Path, guards: list[str], kind: str | None) -> set[tuple[st
     call = re.compile(r"\b(?:" + "|".join(guards) + r")\s*[(<]") if guards else None
     named = re.compile(rf"\b{kind}\b") if kind else None
     found: set[tuple[str, str]] = set()
-    for unit, _ in UNITS:
-        for path in sorted((root / unit).rglob("*.rs")):
-            # The SAME exclusion `production_sources` applies, so the guard scan
-            # and the writer scan agree about what production is. They differed:
-            # this one read `state_assurance.rs` and `generated_token_edges.rs`,
-            # which the writer axes deliberately do not.
-            if path.name.endswith(("_tests.rs", "_kani.rs")) or path.name in {
-                "generated_token_edges.rs",
-                "state_assurance.rs",
-            }:
-                continue
-            rel = str(path.relative_to(root))
-            for name, body in functions(path.read_text(encoding="utf-8")):
-                if (
-                    name in guards
-                    or (call and call.search(body))
-                    or (named and named.search(body))
-                ):
-                    found.add((rel, name))
+    # `scanned_sources`, so the guard scan and the writer scan agree about what
+    # production is out of ONE definition. They had two and they differed: this
+    # one read `state_assurance.rs` and `generated_token_edges.rs`, which the
+    # writer axes deliberately do not.
+    for path in scanned_sources(root):
+        rel = str(path.relative_to(root))
+        for name, body in functions(path.read_text(encoding="utf-8")):
+            if name in guards or (call and call.search(body)) or (named and named.search(body)):
+                found.add((rel, name))
     return found
 
 
 def foreign_writers(root: Path, writers: set[str], keys: set[str]) -> list[str]:
-    """Token-record writes outside `rsk-fido`, which the scan otherwise assumes away.
+    """Token-record writes outside the SCANNED units, which the axes assume away.
 
     Scoped by the import rather than by the name: `rsk-piv` defines its own
     `EF_PIN` (0xD180 against FIDO's 0x1080), so a name-only sweep of the tree
     reports three PIV sites that write a different record entirely.
+
+    `UNITS` and not `FIDO` alone since 2026-08-31: `rsk-device` and `firmware`
+    are on the persistent axis proper now, and a site reported by both rules
+    reads as two sites — one message per write, or the roster is a count of
+    spellings.
     """
     call = rf"(?:\.|::)(?:{'|'.join(sorted(writers, key=len, reverse=True))})\s*\("
     alternation = "|".join(sorted(keys, key=len, reverse=True))
@@ -454,10 +884,19 @@ def foreign_writers(root: Path, writers: set[str], keys: set[str]) -> list[str]:
     # reaches the same record, and a glob import names neither.
     imports = re.compile(r"rsk_fido::consts\b")
     findings = []
-    for base in (root / "crates", root / "firmware"):
+    # `tools/` is in the bases, and that is a DECISION rather than a default: the
+    # emulator holds a live `FidoState` and is the phase-4 recording apparatus —
+    # every trace-linked claim in the programme rests on it — so a token write in
+    # there is exactly the write nobody would see. It matched 0 files' writes when
+    # it was added; leaving it out silently is what let `rsk-device` hide.
+    # `rsk-mgmt`/`rsk-oath`/`rsk-openpgp` are reached by the same walk and match
+    # nothing, because the scope is the IMPORT and they do not take it.
+    for base in (root / "crates", root / "firmware", root / "tools"):
         for path in sorted(base.rglob("*.rs")):
             rel = path.relative_to(root)
-            if rel.is_relative_to(FIDO) or path.name.endswith(("_tests.rs", "_kani.rs")):
+            if any(rel.is_relative_to(unit) for unit, _ in UNITS) or path.name.endswith(
+                ("_tests.rs", "_kani.rs")
+            ):
                 continue
             text = path.read_text(encoding="utf-8")
             if not imports.search(text):
@@ -555,7 +994,12 @@ TABLES = (
 )
 
 
-def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per axis
+def audit(root: Path, floors: dict[str, int] | None = None) -> tuple[list[str], str]:  # noqa: C901 — one clause per axis
+    # A PARAMETER, because the fixture is one member per family and the shipped
+    # numbers are calibrated on the checkout: a case that reassigns the module
+    # global instead leaves it reassigned for whatever runs next in the process,
+    # and the arms that falsify the REAL floors then falsify a stand-in.
+    floors = FLOORS if floors is None else floors
     root = Path(root)
     data = tomllib.loads((root / MANIFEST).read_text(encoding="utf-8"))
     findings: list[str] = []
@@ -584,10 +1028,19 @@ def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per
     fields, perms = token_fields(root), permissions(root)
     seen_fields, seen_perms = abstraction(root)
     writers = store_writers(root)
-    volatile, volatile_seen = discovered_volatile(code, fields, seen_fields, str(STATE))
-    outcomes, outcomes_seen = discovered_outcomes(code, perms, seen_perms)
     spellings = key_spellings(root, keys)
-    persistent, generic = discovered_persistent(code, writers, spellings)
+    spellings |= key_aliases(root, {int(k, 16) for k in spellings if k.lower().startswith("0x")})
+    vocabulary = record_vocabulary(code, spellings)
+    state, state_problem = state_owner(root)
+    method, primitive, mac_problem = mac_vocabulary(root, fields)
+    findings.extend(problem for problem in (state_problem, mac_problem) if problem)
+    volatile, volatile_seen = discovered_volatile(
+        code, fields, seen_fields, self_owners(root, state), state
+    )
+    outcomes, outcomes_seen = discovered_outcomes(
+        code, perms, seen_perms, vocabulary, method, primitive
+    )
+    persistent, generic = discovered_persistent(code, writers, spellings, vocabulary)
     kind, lock_fields, lock_methods, lock_problem = lock_vocabulary(root)
     if lock_problem:
         findings.append(lock_problem)
@@ -613,13 +1066,13 @@ def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per
     for axis in AXES:
         label = axis.removesuffix("_writer").removesuffix("_producer").removesuffix("_owner")
         entries = data.get(axis, [])
-        if len(found[axis][0]) < FLOORS[axis]:
+        if len(found[axis][0]) < floors[axis]:
             # Reported BESIDE the comparison, never instead of it. Skipping the
             # comparison made a deleted guard read as a broken reader — the same
             # failure one register over from a red run nobody read the reason for.
             findings.append(
                 f"{label}: {len(found[axis][0])} site(s) derived, under the floor of"
-                f" {FLOORS[axis]} — the derivation stopped reading the tree, and every"
+                f" {floors[axis]} — the derivation stopped reading the tree, and every"
                 " rule below passes over the empty set"
             )
         compare_axis(label, found[axis][0], owners(entries), findings)
@@ -657,8 +1110,8 @@ def audit(root: Path) -> tuple[list[str], str]:  # noqa: C901 — one clause per
     return findings, summary
 
 
-def main() -> int:
-    findings, summary = audit(ROOT)
+def main(floors: dict[str, int] | None = None) -> int:
+    findings, summary = audit(ROOT, floors)
     if findings:
         print("token-refinement-gate:", file=sys.stderr)
         for finding in findings:
