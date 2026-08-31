@@ -10,7 +10,7 @@ TraceSteps == 74
 BoundaryPcs == {0, 1, 2, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 27, 28, 35, 36, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 72, 74}
 BetaMutationBoundary == 19
 AlphaMutationBoundary == 20
-OutcomeBoundaryPcs == {9, 19, 20, 27, 28, 35, 36, 41, 47, 48, 53, 54, 58}
+OutcomeBoundaryPcs == {9, 19, 20, 27, 28, 35, 36, 41, 47, 48, 53, 54, 58, 60, 72}
 OutcomeMutationBoundary == 9
 GateBoundaryPcs == {11, 13, 43, 44, 50, 51, 74}
 
@@ -1389,6 +1389,8 @@ BoundaryOutcomeRaw(i) ==
       [] i = 53 -> "Authorized"
       [] i = 54 -> "Authorized"
       [] i = 58 -> "Authorized"
+      [] i = 60 -> "Rejected"
+      [] i = 72 -> "Authorized"
       [] OTHER -> CHOOSE x : FALSE
 
 BoundaryOutcomeB(i) ==
@@ -1405,6 +1407,8 @@ BoundaryOutcomeB(i) ==
       [] i = 53 -> "Authorized"
       [] i = 54 -> "Authorized"
       [] i = 58 -> "Authorized"
+      [] i = 60 -> "Rejected"
+      [] i = 72 -> "Authorized"
       [] OTHER -> CHOOSE x : FALSE
 
 GateKind(i) ==

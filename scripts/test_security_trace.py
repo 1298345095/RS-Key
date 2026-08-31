@@ -4,6 +4,8 @@
 import copy
 import json
 import pathlib
+import shutil
+import subprocess
 import sys
 
 import pytest
@@ -780,3 +782,245 @@ def test_the_fields_the_recording_never_varies_are_the_registered_ones():
         "builtin_uv",
     }
     assert named <= constant, sorted(named - constant)
+
+
+# --- stage 4's "no NO-OPINION on outcome boundaries", and the table that ------
+# --- proves the row it lives in can go red -----------------------------------
+
+
+def test_the_shrug_classes_are_at_the_counts_they_excuse(tmp_path):
+    """AT the count, not merely above it — `run_count_gate`'s measured lesson:
+    "a cap with headroom is a cap nothing has to move". This is what catches a
+    cap WIDENED in the source, which the `check.sh` row below cannot: raising one
+    leaves the recording under it and the row green, so the pin lives here."""
+    report = security_trace.generate(events(), tmp_path / "TraceSecurityData.tla")
+    for name, (why, cap) in security_trace.NO_OPINION_EXEMPTIONS.items():
+        assert report["no_opinion"][name] == cap, (name, report["no_opinion"][name], cap)
+        # The registry's other half: a class that buys silence without saying why
+        # is a class nobody is reading. `run_count_gate.LABEL_WORDS` is 8.
+        assert len(why.split()) >= 8, name
+    # DERIVED from the caps, not typed beside them: a re-recording then moves the
+    # class it actually changed and nothing else.
+    want = sum(cap for _why, cap in security_trace.NO_OPINION_EXEMPTIONS.values())
+    assert sum(report["no_opinion"].values()) == want, report["no_opinion"]
+
+
+def test_the_audit_floor_is_a_parameter_and_not_a_global_a_case_lowers():
+    """Driven with a SMALLER registry passed in, rather than by monkeypatching the
+    shipped caps down — which is how three ceilings one file over shipped never
+    having been exercised against the tree they ship with."""
+    shrugs = [(1, 0, "only-class"), (2, 0, "only-class")]
+    security_trace.audit_no_opinion(shrugs, {"only-class": ("because measured", 2)})
+    with pytest.raises(SystemExit, match=r"exemption grew: only-class=2 > 1"):
+        security_trace.audit_no_opinion(shrugs, {"only-class": ("because measured", 1)})
+    with pytest.raises(SystemExit, match="not registered"):
+        security_trace.audit_no_opinion(shrugs, {})
+
+
+def test_an_unexcused_shrug_names_the_event_and_the_direction_c_answered():
+    """The message carries C's side, because a red run is not evidence until you
+    know which way it fell — 2 of 24 co-refutation kills in this tree were kills
+    for the inverse defect, and a verdict column hides that either way."""
+    with pytest.raises(SystemExit, match=r"event 36 \(C=Rejected\), event 39 \(C=Authorized\)"):
+        security_trace.audit_no_opinion([(36, 0x31, None), (39, 0x00, None)])
+
+
+def test_a_power_cycle_carrying_a_status_is_not_the_pseudo_command_excused():
+    """`tools/emu/src/device.rs:752-753` passes the literal 0 as the status of a
+    replug, so `delta_c` of it is a placeholder, not the device answering — and
+    THAT is the class's whole reason, so the arm asserts it.
+
+    This case used to pin the hole instead: it asserted 0x36 was excused too, over
+    an arm that never read the byte. Measured then: a power cycle carrying 0x31
+    left the row green at 15/18. The widest arm is the one with no bare-stutter
+    requirement, so it is the one that has to check its own premise.
+    """
+    event = copy.deepcopy(clay())
+    event["command_raw"] = security_trace.POWER_CYCLE
+    event["outcome_raw"] = 0x00
+    assert security_trace.no_opinion_class(event, {"PowerCut"}) == "pseudo-command"
+    for raw in (0x31, 0x36):
+        event["outcome_raw"] = raw
+        with pytest.raises(SystemExit, match="a power cycle answered"):
+            security_trace.no_opinion_class(event, {"PowerCut"})
+
+
+def test_the_two_newly_mapped_boundaries_now_refuse_their_inverse_defects():
+    """What the mapping bought beyond closing the criterion, pinned.
+
+    A shrug is not just missing evidence — it disables `R4b-event`'s VIOLATION arm
+    at that boundary. Before `WrongPin` and `ResetFinish` were mapped, a device
+    that wiped the store and answered `0x30`, or that moved BOTH PIN counters and
+    answered `0x00`, replayed green. Both are disagreements now, and the message
+    says which way each fell rather than only that something fell.
+    """
+    reset = copy.deepcopy(resets()[0])
+    reset["outcome_raw"] = 0x30  # wiped, and then claimed NOT_ALLOWED
+    with pytest.raises(SystemExit, match=r"violation — B=\['Authorized'\], C=Rejected"):
+        security_trace.generate([reset], pathlib.Path("/dev/null"))
+
+    event = copy.deepcopy(wrong_pin())
+    event["outcome_raw"] = 0x00  # both counters moved, and then answered OK
+    assert security_trace.event_consensus(event, {"WrongPin"}) == "VIOLATION"
+
+
+def test_a_boundary_where_real_actions_ran_has_no_excuse_at_all():
+    """The bare-stutter coupling, which is BELT and not the mechanism.
+
+    Measured, against the claim this docstring first made: deleting the check
+    leaves the `check.sh` row GREEN, and dropping `WrongPin` on top of it reddens
+    at `refusal-is-a-disabled-action=2 > 1` — the CAP — rather than at the
+    unexcused list. So the caps are what catch an unmapped action today; this
+    holds the shape that would still catch one if a cap were widened.
+    """
+    event = copy.deepcopy(clay())
+    event["command_raw"] = 0x04
+    assert security_trace.no_opinion_class(event, {"Stutter"}) == "unmodelled-command"
+    assert security_trace.no_opinion_class(event, {"Stutter", "Tick"}) is None
+    assert security_trace.no_opinion_class(event, {"WrongPin"}) is None
+
+
+# --- the mutation table, driven through the `check.sh` row itself -------------
+
+#: What the row copies into its own work directory, plus what the mapper reads
+#: back out of `formal/`. A throwaway tree rather than the real one, because
+#: `ROOT = Path(__file__).resolve().parents[1]` is how the script finds `formal/`
+#: — so a copy at the same relative depth IS the row, and the real checkout is
+#: never patched by a test that another agent could be running rows against.
+ROW_FORMAL = (
+    "floors.txt", "TraceSecurityData.tla", "RSKeySecurityState.tla",
+    "RSKeyTokenView.tla", "TraceSecurity.tla",
+)
+
+
+class Row:
+    """The `security trace refinement` row of `check.sh`, over a copied tree."""
+
+    def __init__(self, root):
+        self.root = root
+        real = pathlib.Path(__file__).parents[1]
+        (root / "scripts").mkdir(parents=True)
+        (root / "formal/traces").mkdir(parents=True)
+        shutil.copy2(real / "scripts/security_trace.py", root / "scripts")
+        for name in ROW_FORMAL:
+            shutil.copy2(real / "formal" / name, root / "formal" / name)
+        for cfg in sorted((real / "formal").glob("TraceSecurity*.cfg")):
+            shutil.copy2(cfg, root / "formal" / cfg.name)
+        shutil.copy2(TRACE, root / "formal/traces" / TRACE.name)
+
+    def edit(self, old, new, count=1):
+        """Patch the copied mapper, failing loudly if the anchor did not resolve.
+
+        A `str.replace` that matches nothing leaves the fixture UNPATCHED and the
+        case then proves nothing while reading green — measured in this tree
+        before, which is why every row below goes through here.
+        """
+        path = self.root / "scripts/security_trace.py"
+        text = path.read_text()
+        assert text.count(old) == count, f"anchor {old!r} appears {text.count(old)}x, not {count}"
+        path.write_text(text.replace(old, new))
+
+    def run(self, flag="--check-data"):
+        """The row's own command, argument for argument."""
+        return subprocess.run(
+            [sys.executable, str(self.root / "scripts/security_trace.py"), flag,
+             str(self.root / "formal/TraceSecurityData.tla"),
+             str(self.root / "formal/traces" / TRACE.name)],
+            capture_output=True, text=True, check=False,
+        )
+
+
+#: (id, patch, expected exit, expected message). A GREEN row is `0` and its
+#: message must NOT appear; a red one is `1` and the message is what says the row
+#: fell for the defect this case models rather than for something adjacent.
+SHRUG_MUTANTS = [
+    # The finding itself, restored: an action with a live B interpretation that
+    # nothing maps. `@TraceSecurityOutcomesMin` is BLIND to it — 14 over a floor
+    # of 13 — which is why the rule is per-event and not another count.
+    ("wrong-pin-unmapped", ('    "WrongPin": "Rejected",\n', ""), 1,
+     "no-opinion on event 36 (C=Rejected)"),
+    ("reset-finish-unmapped", ('    "ResetFinish": "Authorized",\n', ""), 1,
+     "no-opinion on event 39 (C=Authorized)"),
+    # The class derivations, one command and one subcommand: both are read off the
+    # event's own fields, so narrowing either leaves a real boundary unexcused.
+    ("get-next-assertion-unregistered",
+     ("MODEL_SILENT_COMMANDS = {0x04, 0x08}", "MODEL_SILENT_COMMANDS = {0x04}"), 1,
+     "no-opinion on event 18 (C=Authorized)"),
+    ("get-pin-retries-unregistered",
+     ("MODEL_SILENT_SUBCOMMANDS = {0x01, 0x02}", "MODEL_SILENT_SUBCOMMANDS = {0x02}"), 1,
+     "no-opinion on event 35 (C=Authorized), event 37 (C=Authorized)"),
+    # The cap, and its direction. Lowering it by one can only go red if the cap is
+    # AT the count — headroom would absorb it, which is the defect the equality
+    # test above pins from the other side.
+    ("cap-lowered-by-one", ("        10,\n", "        9,\n"), 1,
+     "exemption grew: unmodelled-command=10 > 9"),
+    # And the registry is READ, not decoration: a class the derivation still
+    # returns but nobody registered is a reason nobody wrote down.
+    ("class-deregistered", ('    "unmodelled-command": (', '    "unregistered-name": ('), 1,
+     "no-opinion class ['unmodelled-command'] is not registered"),
+    # CONTROLS. The first two REWRITE EXECUTING CODE on the audited path and must
+    # stay green; a table whose only controls are a comment and a dict-key
+    # reorder proves nothing, because neither ever executes differently — which
+    # is what the first two of these were until it was pointed out.
+    #
+    # The accumulation runs once per shrug on every run of the row, and the
+    # refusal test is what event 33 is classified by, so both are reached.
+    ("control-accumulator-rewritten",
+     ("    counted: dict[str, int] = {}\n"
+      "    for _seq, _raw, excuse in shrugs:\n"
+      "        counted[excuse] = counted.get(excuse, 0) + 1\n",
+      "    counted = {name: sum(1 for _s, _r, e in shrugs if e == name)\n"
+      "               for _s, _r, name in shrugs}\n"), 0,
+     "no-opinion"),
+    ("control-refusal-test-rewritten",
+     ('    if event["outcome_raw"] != 0x00:\n        return "refusal-is-a-disabled-action"',
+      '    if event["outcome_raw"] not in (0x00,):\n        return "refusal-is-a-disabled-action"'), 0,
+     "no-opinion"),
+    # And the spelling baseline, kept for what it actually shows and nothing more:
+    # a pure comment edit does not move the row.
+    ("control-comment-rewritten",
+     ("    The order is narrow-first, and what it separates is measured",
+      "    The ordering here is narrow-first, and what it splits is measured"), 0,
+     "no-opinion"),
+]
+
+
+@pytest.mark.parametrize("name,patch,code,message", SHRUG_MUTANTS,
+                         ids=[m[0] for m in SHRUG_MUTANTS])
+def test_the_check_sh_row_falls_for_each_shrug_mutant(tmp_path, name, patch, code, message):
+    row = Row(tmp_path)
+    row.edit(*patch)
+    done = row.run()
+    assert done.returncode == code, (done.returncode, done.stdout[-800:], done.stderr[-800:])
+    if code:
+        assert message in done.stderr, done.stderr[-800:]
+    else:
+        assert message not in done.stderr, done.stderr[-800:]
+        assert "GREEN commands=40" in done.stdout, done.stdout[-800:]
+
+
+def test_the_unpatched_copy_of_the_row_is_green(tmp_path):
+    """The table's own baseline: without a patch the copied tree is the shipped
+    row, so every red above is the mutation and not the copying."""
+    done = Row(tmp_path).run()
+    assert done.returncode == 0, done.stderr[-800:]
+    assert "no-opinion: pseudo-command=1/1" in done.stdout, done.stdout[-800:]
+
+
+def test_the_arm_that_was_a_bare_pass_is_what_catches_the_defect(tmp_path):
+    """The wiring, proven the only way it can be: put the arm back to `pass`, keep
+    the defect, and watch the row go GREEN.
+
+    A guard whose call site nothing exercises can be deleted with the suite still
+    green. `wrong-pin-unmapped` above shows the defect caught; this shows what
+    catches it. The data module is regenerated first because the defect moves it
+    and a stale-data refusal would be a red for the wrong reason — which is
+    exactly the routine `--keep-data` regeneration that made the retreat free.
+    """
+    row = Row(tmp_path)
+    row.edit('    "WrongPin": "Rejected",\n', "")
+    row.edit("                shrugs.append(", "                _ = (")
+    assert row.run("--keep-data").returncode == 0
+    done = row.run()
+    assert done.returncode == 0, done.stderr[-800:]
+    assert "outcomes=14" in done.stdout, done.stdout[-800:]
