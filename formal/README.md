@@ -1774,7 +1774,7 @@ so the kill measured a defence in depth rather than the modelled defect. It now
 widens both layers, and `put_data_c4_refuses_a_user_status` drives the command
 so the outer gate is asserted too.
 
-The live roster is **73 entries: 69 executable patches killed, four unreachable
+The live roster is **76 entries: 72 executable patches killed, four unreachable
 with recorded evidence, zero gaps.**
 
 ## The sixth module — `RSKeyAdminSurface.tla`
@@ -2547,7 +2547,7 @@ describes. Falsified through the row itself, exit codes taken with no pipe:
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `209 generated configuration(s) reproduce byte-for-byte, 1 hand-written` | 0 |
+| the tree as it stands | `215 generated configuration(s) reproduce byte-for-byte, 1 hand-written` | 0 |
 | one `BootCarryMut_*.cfg` deleted | `… writes it and formal/ does not have it` | **1** |
 | `MaxWeak = 2` → `1` inside one generated file | `differs … line 5: generator writes '    MaxWeak = 2', the tree has '    MaxWeak = 1'` | **1** |
 | the same edit made in the *generator* instead | 13 rows `differs …` — every `Boot*` configuration | **1** |
@@ -2659,7 +2659,7 @@ to itself.
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `209 configuration(s) held to 64 entries (25 wildcard families covering 170), 6 ratchets, 1 exempt, 1 counterfactual repair(s)` | 0 |
+| the tree as it stands | `215 configuration(s) held to 64 entries (25 wildcard families covering 176), 6 ratchets, 1 exempt, 1 counterfactual repair(s)` | 0 |
 | `SeamMut_*.cfg` `RED` → `GREEN` | `… requires GREEN, but the configuration switches BugAdminOpensKeyOps on and so owes RED` | **1** |
 | the `SeamSolo_*.cfg` row deleted | `no verdict entry in formal/floors.txt and no registered exemption` | **1** |
 | a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 14 configuration(s) first `` | **1** |
@@ -2843,7 +2843,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-POL-003` | `AttributeChangeInvalidatesTheKey` | MODELLED-ONLY | `RSKeyAppletPolicies` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-POL-004` | `OathCredentialNeedsItsGates` | MODELLED-ONLY | `RSKeyAppletPolicies` | — | 1 | 2 | 2 | 0 | 0 | 0 |
 | `SEC-POL-005` | `OtpSlotMutationNeedsItsCode` | MODELLED-ONLY | `RSKeyAppletPolicies` | — | 1 | 1 | 1 | 0 | 0 | 0 |
-| `SEC-POL-006` | `OtpCounterNeverRepeats` | MODELLED-ONLY | `RSKeyAppletPolicies` | — | 1 | 1 | 1 | 0 | 0 | 0 |
+| `SEC-POL-006` | `OtpCounterNeverRepeats` | MODELLED-ONLY | `RSKeyAppletPolicies` | — | 1 | 4 | 4 | 0 | 0 | 0 |
 | `SEC-ADM-001` | `AdminSurfaceAlwaysReachable` | MODELLED-ONLY | `RSKeyAdminSurface` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-ADM-002` | `PrivilegedOpNeedsPresence` | MODELLED-ONLY | `RSKeyAdminSurface` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-ADM-003` | `DisableSetSurvivesLockWrite` | MODELLED-ONLY | `RSKeyAdminSurface` | — | 1 | 1 | 1 | 0 | 0 | 0 |
@@ -3127,25 +3127,35 @@ than a settled abstraction.
   whole capacity here, and the module's own precondition is two; a frame carries
   a chunk rather than payload bytes because none of the three properties looks
   at byte contents.
-- **The OTP use counter runs to a handful of steps** (`CounterMax`) where
-  the record's is `0x7FFF`, and it is ONE scalar: `OtpUse` is a single `+1`
-  with no session byte beside it, no second slot and no failing write, so a
-  repeat needing any of those three has no state here to appear in at all.
-  What the model does check is that the counter never repeats and never runs
-  backwards over its own domain; a defect that only appears near the real
-  ceiling — a wrap, a saturating add, a rollover into the flag byte — is out
-  of reach the same way.
+- **The OTP use counter runs to a handful of steps** (`CounterMax`) where the
+  record's is `0x7FFF`, and the session to a single wrap (`SessionMax`) where
+  the record's is a byte. Two of the three things this bullet used to say had
+  no state to appear in now do — a session beside the counter, and a second
+  slot (`Slots`) to move a record to — and a mutant falls on each. The third
+  does not: `OtpUse` types and steps in one action, so a press whose advance
+  the store REFUSES has no failing arm here, and neither has the warm reset,
+  which restarts the session over an unchanged counter and is a real repeat
+  the source page carries as a residual. Nor does the top of the range: a
+  defect needing the real ceiling, or more sessions than one wrap, still has
+  nowhere here to appear.
   **Disposition: bounded-elsewhere** — `formal/scopes.txt`
   `RSKeyAppletPolicies/CounterMax` (minimum 1, measured on
-  `OtpCounterNeverRepeats`); `crates/rsk-otp/src/counter_kani.rs`
-  `use_counter_climbs_and_stops_at_the_ceiling`. RSKeyAppletPolicies/CounterMax
-  is the counter's whole range in the model, and the roster's mutants all fire
-  at one step, so the arithmetic is checked at a domain the firmware's own is
-  far wider than. The three halves the model has no state for are bounded at
-  source instead: use_counter_climbs_and_stops_at_the_ceiling quantifies over
-  every session byte and both stepped writers across the whole 0x7FFF domain,
-  and which writers it does NOT reach is the derived roster of
-  assurance/otp_counter_writers.toml rather than a sentence anywhere.
+  `OtpCounterNeverRepeats`); `formal/scopes.txt`
+  `RSKeyAppletPolicies/SessionMax` (minimum 1, measured on
+  `OtpCounterNeverRepeats`); `formal/scopes.txt` `RSKeyAppletPolicies/Slots`
+  (minimum 2, measured on `OtpCounterNeverRepeats`);
+  `crates/rsk-otp/src/counter_kani.rs`
+  `use_counter_climbs_and_stops_at_the_ceiling`. The three scopes are the replay
+  position's own domain, one row each: RSKeyAppletPolicies/CounterMax is the
+  persisted half's range, RSKeyAppletPolicies/SessionMax is the volatile half's,
+  and RSKeyAppletPolicies/Slots is the set a record can be moved between. Every
+  mutant of the roster fires at the recorded minimum of each, so the arithmetic
+  is checked at a domain the firmware's own is far wider than. What no scope of
+  this model reaches is bounded at source instead:
+  use_counter_climbs_and_stops_at_the_ceiling quantifies over every session byte
+  and both stepped writers across the whole 0x7FFF domain, and which writers it
+  does NOT reach is the derived roster of assurance/otp_counter_writers.toml
+  rather than a sentence anywhere.
 - **The PIN comparison is a nondeterministic boolean** (`correct`), the
   counters run to a single step (`Max`), and OpenPGP's admin path from PW3 to
   PW1 is deliberately outside the recovery graph because it gates on a live

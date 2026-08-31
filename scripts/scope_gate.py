@@ -116,6 +116,11 @@ MEASURED_MINIMA = {
     # what `scopes.txt` records is that the mutants fire there. The witness is the
     # one that checks `NoBufferOverrun`, which is the invariant the row names.
     ("RSKeyTransport", "Cap"): (2, "TransSolo_BugInitLenUnchecked.cfg"),
+    # The Yubico OTP replay position is indexed two different ways -- the use
+    # counter by RECORD, the session counter by SLOT -- so the swap defect needs
+    # a second slot to have somewhere to move a record to. Re-measured at one
+    # slot: the witness explores its whole space with no counterexample.
+    ("RSKeyAppletPolicies", "Slots"): (2, "PolicySolo_BugOtpSwapKeepsSession.cfg"),
 }
 
 

@@ -198,7 +198,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 42
+SCOPE_CEILING = 41
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -468,8 +468,8 @@ SCOPED = {
         "names all seven rows it\nwould blind",
     ): "how many `floors.txt` rows carry a fourth column, a property of that file",
     # Reached by widening a published unit into the vocabulary the shape scan
-    # already enumerates: `72 entries` is the roster, a sentence two commits in
-    # this series have now had to hand-correct — 69 -> 71 -> 72.
+    # already enumerates: `76 entries` is the roster, a sentence four commits in
+    # this series have now had to hand-correct — 69 -> 71 -> 72 -> 73 -> 76.
     (
         "formal/README.md",
         "**31 of 31 mutants are caught",
@@ -478,26 +478,22 @@ SCOPED = {
     "claim, and the generated roster line carries the same 30",
     (
         "docs/formal.md",
-        "73 entries: all 69 executable patches are killed",
+        "76 entries: all 72 executable patches are killed",
     ): "the whole-tree roster restated in the page that introduces the phase-2 "
     "table, whose generated region beside it gives the phase-2 line and not this "
     "total",
+    # `` `NoStatusAfterARefusedAuth` | 73 states `` stood here while the roster
+    # read 73 and one lattice mutant explored 73 states. At 76 the coincidence is
+    # gone, the cell is under no rule, and the entry retired as it predicted.
     (
         "formal/README.md",
-        "`NoStatusAfterARefusedAuth` | 73 states |",
-    ): "a coincidence and not a copy: the co-mutant roster is 73 entries and this is "
-    "the state count of one lattice configuration. The pair that went before it was "
-    "`30 of 30 mutants` against `30 states`, which the roster growing to 31 dissolved "
-    "— so this registration is the same shape and will dissolve the same way",
-    (
-        "formal/README.md",
-        "**73 entries: 69 executable patches killed",
+        "**76 entries: 72 executable patches killed",
     ): "the co-mutant roster restated where its composition is broken down, which the "
-    "generated line beside it does not give — and the copy that read 69, then 71, "
-    "until each of two commits in this series re-measured it. The second time the "
-    "roster grew and nothing said so: the registration held the sentence and the "
-    "sentence had stopped being true, which is the exact half a registered "
-    "fragment cannot check",
+    "generated line beside it does not give — the copy that read 69, then 71, 72 and "
+    "73, re-measured by hand in four commits of this series. Its own claim that a "
+    "registered fragment cannot check whether its sentence is still true is REFUTED "
+    "at 76: the region began printing `76-entry`, every fragment carrying 73 stopped "
+    "exempting anything, and all three went red in one run",
     (
         "formal/README.md",
         "`ok — 191 configuration(s)` and exited 0",

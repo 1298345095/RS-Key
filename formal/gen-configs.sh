@@ -624,7 +624,9 @@ echo "wrote Lattice.cfg and ${#LATTICE_BUGS[@]} x 2 lattice configs"
 # so this complements the lattice without inventing protocol state.
 POLICY_BUGS=(BugPivPolicyIgnored BugPivAlwaysDoesNotSpend
              BugPgpAttributeKeepsKey BugOathCodeIgnored BugOathTouchIgnored
-             BugOtpCodeIgnored BugOtpCounterRepeats)
+             BugOtpCodeIgnored BugOtpCounterRepeats
+             BugOtpPressTypesUnpersisted BugOtpBootKeepsPosition
+             BugOtpSwapKeepsSession)
 
 policy_target() {
   case "$1" in
@@ -635,6 +637,9 @@ policy_target() {
     BugOathTouchIgnored)          echo OathCredentialNeedsItsGates ;;
     BugOtpCodeIgnored)            echo OtpSlotMutationNeedsItsCode ;;
     BugOtpCounterRepeats)         echo OtpCounterNeverRepeats ;;
+    BugOtpPressTypesUnpersisted)  echo OtpCounterNeverRepeats ;;
+    BugOtpBootKeepsPosition)      echo OtpCounterNeverRepeats ;;
+    BugOtpSwapKeepsSession)       echo OtpCounterNeverRepeats ;;
   esac
 }
 POLICY_INV=(PivOperationNeedsSlotPolicy PivAlwaysSpendsFreshness
@@ -648,6 +653,11 @@ emit_policy() { # $1 = cfg, $2 = switch (""), $3 = 1 for solo
     echo "SPECIFICATION Spec"
     echo "CONSTANTS"
     echo "    CounterMax = 2"
+    # The session wraps at SessionMax, which is where the persisted half moves;
+    # a second slot is what a swap needs to re-pair a record with the wrong
+    # session. Both minima are measured and recorded in formal/scopes.txt.
+    echo "    SessionMax = 1"
+    echo "    Slots = {1, 2}"
     for b in "${POLICY_BUGS[@]}"; do
       if [ "$b" = "$on" ]; then echo "    $b = TRUE"; else echo "    $b = FALSE"; fi
     done
