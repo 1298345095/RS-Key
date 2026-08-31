@@ -14,13 +14,15 @@
 (*    dump until a compaction lap pushes it off the medium. `EF_HARDENED`    *)
 (*    is the marker that says the lap has run (crates/rsk-fs/src/lib.rs:26-46);*)
 (*    the boot runs the lap iff the marker is ABSENT and sets it only after  *)
-(*    `compact()` returns Ok (firmware/src/main.rs:618-629) -- marker AFTER  *)
-(*    scrub, so a torn lap re-runs. Every LAZY re-key after the lap must     *)
-(*    re-arm it (`request_rescrub`) or its superseded copy stays readable    *)
-(*    forever: audit run-35 found FOUR OF FIVE lazy re-keys skipping that,   *)
-(*    and the sweep landed at crates/rsk-fido/src/clientpin.rs:814-816 and   *)
-(*    :1117-1119, crates/rsk-piv/src/lib.rs:1321-1324,                       *)
-(*    crates/rsk-oath/src/lib.rs:1185, crates/rsk-openpgp/src/pin.rs:340.    *)
+(*    `compact()` returns Ok (crates/rsk-fs/src/lib.rs:49-67) -- marker      *)
+(*    AFTER scrub, so a torn lap re-runs. Every LAZY re-key after the lap    *)
+(*    must re-arm it (`request_rescrub`) or its superseded copy stays        *)
+(*    readable forever: audit run-35 found FOUR OF FIVE lazy re-keys         *)
+(*    skipping that, and the sweep landed at                                 *)
+(*    crates/rsk-fido/src/clientpin.rs:814-816,                              *)
+(*    crates/rsk-fido/src/clientpin.rs:1218-1220,                            *)
+(*    crates/rsk-piv/src/lib.rs:1321-1324, crates/rsk-oath/src/lib.rs:1185,  *)
+(*    crates/rsk-openpgp/src/pin.rs:340.                                     *)
 (*                                                                           *)
 (* 2. THE SCRATCH-WORD LOCK CARRY. The clientPIN soft lock rides a warm      *)
 (*    reset in WATCHDOG.scratch2 (firmware/src/pin_lock.rs) so a host-       *)
@@ -33,11 +35,14 @@
 (*    PARTIAL one, which that mutant cannot express.                         *)
 (*                                                                           *)
 (* WHY A SEVENTH MODULE. firmware/ is the one workspace member with no host  *)
-(* tests by construction -- the lap's marker order and the scratch decode    *)
-(* are checked at build time and on hardware, nowhere in between. "Model     *)
-(* where you cannot measure" is this tree's stated rule, and these two       *)
-(* machines are its purest case: the model is the only instrument that can   *)
-(* exercise their interleavings at all.                                      *)
+(* tests by construction, and the scratch decode is checked at build time    *)
+(* and on hardware, nowhere in between. "Model where you cannot measure" is  *)
+(* this tree's stated rule, and these two machines are its purest case: the  *)
+(* model is the only instrument that can exercise their interleavings at     *)
+(* all. The lap's marker ORDER was in that class until it was lifted into    *)
+(* crates/rsk-fs, which is where its code twin now lands -- an exclusion     *)
+(* reasoned about the MODULE had been covering a rule that never had to      *)
+(* live in firmware/ at all.                                                 *)
 (*                                                                           *)
 (* WHAT IS ABSTRACTED. The device is OTP-provisioned (`mkek.is_some()` --    *)
 (* a pre-OTP board never laps and has nothing to scrub). `weak` counts       *)
@@ -62,8 +67,9 @@ CONSTANTS
     \* no future boot will ever scrub it. The shipped tree clears the marker at
     \* every one of the five sites; the switch removes the re-arm.
     BugRekeyKeepsTheMarker,
-    \* The marker written on a lap that did NOT complete: firmware/src/main.rs:628
-    \* short-circuits `fs.compact().is_ok()` BEFORE the `fs.put(EF_HARDENED)`,
+    \* The marker written on a lap that did NOT complete:
+    \* crates/rsk-fs/src/lib.rs:64 short-circuits `fs.compact().is_ok()`
+    \* BEFORE the `fs.put(EF_HARDENED)`,
     \* so a torn or failed lap leaves the marker absent and the next boot
     \* retries. The switch sets the marker regardless -- the same
     \* write-order family as the store module's delete and the PIN flows'
@@ -200,7 +206,7 @@ Spec == Init /\ [][Next]_vars
 \* the marker standing over its new leftover, and the lap that claims completion
 \* it did not earn. While it holds, "marker absent => a future boot scrubs" is
 \* the liveness half, carried by the boot gate's own retry (a failed compact
-\* leaves the marker unset, firmware/src/main.rs:628).
+\* leaves the marker unset, crates/rsk-fs/src/lib.rs:64).
 MarkerNeverLies == ~(marker /\ weak > 0)
 
 \* THE WHOLE LOCK RIDES: while serving, the in-RAM lock equals the scratch word.

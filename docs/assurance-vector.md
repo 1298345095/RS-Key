@@ -31,8 +31,8 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 ## What a release may say
 
 - **56 of 59** security properties are ASSERTED by at least one finite TLA+ configuration whose recorded verdict is GREEN, and hold exhaustively over that configuration's constants.
-- **42 of 59** carry a model mutant whose code twin `formal/comutants.toml` records as patched into the real tree and killed. That verdict is re-driven by the weekly `comutate run`, not by the gate that writes this page.
-- **31 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
+- **44 of 59** carry a model mutant whose code twin `formal/comutants.toml` records as patched into the real tree and killed. That verdict is re-driven by the weekly `comutate run`, not by the gate that writes this page.
+- **33 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
 - **10 of 59** are checked by a configuration that ACCEPTS a recorded session, and **10** by one that must REFUSE a negative one.
 - **11 of 59** carry at least one Kani harness named after them. That is all `BOUNDED` keys on — a harness NAME, not the `#[kani::proof]` attribute, not a bound, not a `cfg` — so it points at the bundle's method table and is never the proof itself.
 - Rows carrying a dated raw evidence bundle: **11 of 59**; of those, still ahead of every input they are about: **0**.
@@ -106,8 +106,8 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-DISP-001` | `ConfirmNamesTheOperation` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 0 | 30 | — | MODELLED-ONLY |
 | `SEC-DISP-002` | `StaleTouchApprovesNothing` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 0 | 30 | — | MODELLED-ONLY |
 | `SEC-DISP-003` | `OnlyAllowConfirms` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 0 | 30 | — | MODELLED-ONLY |
-| `SEC-BOOT-001` | `MarkerNeverLies` | 3 of 11 | 0 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-BOOT-002` | `TheWholeLockRides` | 3 of 8 | 0 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-BOOT-001` | `MarkerNeverLies` | 3 of 11 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-BOOT-002` | `TheWholeLockRides` | 3 of 8 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-TRANS-001` | `NoCrossChannelSplice` | 1 of 5 | 1 | 0 of 0 | 2 | 0 | 10 | 0 | — | BOUNDED |
 | `SEC-TRANS-002` | `NoSequenceGap` | 1 of 5 | 1 | 0 of 0 | 1 | 0 | 10 | 0 | — | BOUNDED |
 | `SEC-TRANS-003` | `NoBufferOverrun` | 1 of 5 | 1 | 0 of 0 | 1 | 0 | 10 | 0 | — | BOUNDED |
@@ -289,7 +289,7 @@ For the commit that carries this page — which is why no commit is named here: 
 
 | Tier | Command | Taken | Against | Host |
 |---|---|---|---|---|
-| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-31 | `9cafee7` | Apple M5 Pro (18 cores) |
-| `safety` | `./formal/run-tlc.sh safety` | 2026-08-31 | `9cafee7` | Apple M5 Pro (18 cores) |
+| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-31 | `95b850d` | Apple M5 Pro (18 cores) |
+| `safety` | `./formal/run-tlc.sh safety` | 2026-08-31 | `95b850d` | Apple M5 Pro (18 cores) |
 
 **Raw evidence bundles:** `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-006A`, `SEC-FIDO-006B`, `SEC-FIDO-006C`, `SEC-FIDO-007`, `SEC-FIDO-008` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-006A`, `SEC-FIDO-006B`, `SEC-FIDO-006C`, `SEC-FIDO-007`, `SEC-FIDO-008`.

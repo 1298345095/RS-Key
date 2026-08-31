@@ -615,18 +615,15 @@ async fn main(spawner: Spawner) {
         rsk_fido::credential::migrate_rp_seal(&dev, &mut fs);
         let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);
         let _ = rsk_openpgp::scan_files(&dev, &mut fs, &mut rng);
-        // One-shot at-rest hardening. The seal migrations above re-key every secret
-        // from the chip-serial root to the OTP root, but the log-structured store
-        // keeps the superseded chip-serial-sealed copies (notably the pre-OTP seed)
-        // recoverable from a flash dump until the page is reclaimed. Scrub them with
-        // a full GC lap the first time we boot with the OTP key present. Gated on a
-        // flash marker so it runs once and crash-safely: an interrupted lap leaves
-        // `EF_HARDENED` unset and re-runs next boot (the lap is idempotent), and a
-        // device provisioned OTP-first pays it once with nothing to scrub. It is a
-        // multi-second stall — deliberately before USB attach, at an attended
-        // provisioning boot. See `flash_storage::FlashStorage::compact`.
-        if mkek.is_some() && !fs.has_data(rsk_fido::consts::EF_HARDENED) && fs.compact().is_ok() {
-            let _ = fs.put(rsk_fido::consts::EF_HARDENED, &[1u8]);
+        // One-shot at-rest hardening: the seal migrations above leave the superseded
+        // chip-serial-sealed copies recoverable from a flash dump until a GC lap
+        // reclaims the page. The marker, the write order and the crash-safety are
+        // `rsk_fs::run_at_rest_lap`; here because the lap is a multi-second stall
+        // that belongs before USB attach, at an attended provisioning boot, and
+        // because the OTP gate is ours — a pre-OTP board has nothing weaker to
+        // supersede. See `flash_storage::FlashStorage::compact`.
+        if mkek.is_some() {
+            rsk_fs::run_at_rest_lap(&mut fs);
         }
     }
     // PHY carries the boot-default LED brightness + steady (PicoForge's global LED
@@ -697,7 +694,7 @@ async fn main(spawner: Spawner) {
     config.max_power = 100;
     config.max_packet_size_0 = 64;
     // bcdDevice build counter; also surfaced on the trusted-display Firmware screen.
-    let device_release: u16 = 0x09B8;
+    let device_release: u16 = 0x09B9;
     config.device_release = device_release;
 
     let mut builder = Builder::new(

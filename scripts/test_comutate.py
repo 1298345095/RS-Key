@@ -411,6 +411,19 @@ def test_a_collision_reddens_the_lint(tree):
     red(tree, "are one roster key")
 
 
+def test_an_unregistered_boot_mutant_reddens_the_lint(tree):
+    # The prefix TUPLE, not `roster()`. `BootMut_*` matched no entry of it for the
+    # family's whole life, so three switches sat outside the closed world in BOTH
+    # directions while this suite and the `check.sh` row printed ok — a mutant
+    # configuration nothing could ever ask about. Driven through `lint()`, because
+    # that is the half that was uncovered: take the tuple entry back out and the
+    # three real entries read as stale instead, the same hole in the other colour.
+    (tree / "formal" / "BootMut_BugBoot.cfg").write_text(
+        "SPECIFICATION Spec\nINVARIANTS\n    TypeOK\n    MarkerHolds\n"
+    )
+    red(tree, "BootMut_BugBoot.cfg has no comutant entry")
+
+
 def test_an_unpaired_solo_reddens_the_lint(tree):
     # A Solo file whose family has no mutant of that name. `solo_invariant` keeps
     # the LAST family whose Solo exists, so this steals the invariant BugStore is

@@ -45,6 +45,38 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The boot-hardening module's three mutation switches are co-mutants now, and
+  the exclusion that hid them was covering two sites nobody had opened.**
+  `formal/comutants.toml` pairs every model mutant with a real Rust patch that
+  must make a named host test fail — 76 entries, and not one of them was
+  `RSKeyBootHardening`'s. The mechanism was worse than an omission:
+  `comutate.py`'s `PREFIXES` closes the world over the prefixes it lists, and
+  `BootMut_` matched none, so the family was invisible in BOTH directions — no
+  "configuration without an entry", no "entry without a configuration" — while
+  `scripts/comutate.py --lint` printed ok on every gate run.
+
+  The exclusion's stated ground was that two of the three defended sites live in
+  `firmware/`, which has no host tests by construction. **One did.** The
+  scratch-word carry's model conjunct is `Boot`'s `lock' = recorded`, and that
+  assignment is `restore_pin_lock` in `crates/rsk-fido/src/state.rs:449-452`;
+  `firmware/src/pin_lock.rs` holds the register encode, not the restore. The
+  marker-after-lap order really was in `firmware/` — where a patch scores
+  `build-broke` and never a kill — which is why the entry under *Changed* moved
+  it first.
+
+  All three measure `killed`, each failure read for its DIRECTION rather than
+  its colour: the marker SURVIVES a re-key that should have cleared it; the
+  marker is PRESENT over a torn lap; a live sub-limit batch is ERASED by the
+  restore (`left: 0 right: 2`). `BugPartialLockCarry` is patched conditionally
+  on `engaged` for that reason — the model's switch diverges only at
+  `recorded = "batch"`, and an unconditional drop killed on an assertion whose
+  model image is unchanged behaviour, which is a kill for the wrong reason. The
+  roster is **79 entries: 75 executable patches killed, four unreachable**, and
+  `SEC-BOOT-001` / `SEC-BOOT-002` leave `co = 0` for 2 and 1.
+
+  `scripts/test_comutate.py` drives an unregistered `BootMut_*.cfg` through
+  `lint()` so the prefix tuple is wiring a test holds, not prose.
+
 - **The bounds table is emitted from the bundles instead of typed beside them.**
   Stage 4's exit asks that the scope table's content be *derived* from the slice
   bundle. It was not: fourteen rows sat under `The bounds` in
@@ -437,6 +469,29 @@ and to the statuses it quotes.
   not arrived.
 
 ### Changed
+
+- **The at-rest scrub lap left the boot glue, because the property it carries
+  could not be measured where it lived.** `MarkerNeverLies` (SEC-BOOT-001) is
+  about a write ORDER — the `EF_HARDENED` marker is written only after a
+  `compact()` that returned `Ok`, so a torn lap leaves it absent and the next
+  boot retries. That order sat in `firmware/src/main.rs`, the one workspace
+  member with no host tests by construction, so no code-level mutation could
+  ever falsify it: a patch that compiles firmware scores `build-broke`, which is
+  not a kill.
+
+  The gate, the lap and the ordered `put` are `rsk_fs::run_at_rest_lap` now;
+  `firmware/` keeps the OTP gate (`mkek.is_some()` is a firmware value) and the
+  placement of the stall before USB attach. Behaviour is unchanged — the
+  short-circuit chain becomes an early return plus the same `is_ok()` guard.
+
+  What is new is that it can now go red.
+  `the_at_rest_lap_writes_its_marker_only_after_a_completed_scrub` drives a
+  `Storage` whose `compact()` fails on demand and reads the marker's absence off
+  the MEDIUM, past `Fs`'s present cache — a cache-level check passes over a
+  write that never happened. Driven with the real defect (the `is_ok()`
+  short-circuit dropped) it is the only test that falls, and it falls in the
+  direction of the defect rather than its inverse: *a torn lap claimed
+  completion*, the marker PRESENT over a failed lap.
 
 - **An adversarial review of the whole fidelity-debt stage returned CHANGED, and
   three of its findings are fixed here.**

@@ -354,11 +354,12 @@ and it is worth exactly three rows — not a claim about the other 75.
 All three code halves are closed now, each proved by driving its real mutation
 with the whole suite watched: `requesting_a_rescrub_clears_the_hardened_marker`,
 `a_deselect_drops_the_validate_unlock`, `a_deselect_drops_the_pin_status`, one
-failure each, always the intended test. Note what the first one means for M7's
-recorded exclusion: co-refutation skips `RSKeyBootHardening` because `firmware/`
-has no host tests, and that is still true — but `request_rescrub` lives in
-`crates/rsk-fs`, is host-testable, and had no test. The exclusion was reasoned
-about the module and quietly covered a crate it did not have to.
+failure each, always the intended test. Note what the first one meant for M7's
+recorded exclusion: co-refutation skipped `RSKeyBootHardening` because
+`firmware/` has no host tests — but `request_rescrub` lives in `crates/rsk-fs`,
+is host-testable, and had no test. The exclusion was reasoned about the module
+and quietly covered a crate it did not have to. That thread is pulled to its end
+below: the module's three switches are registered co-mutants now.
 
 The completed sweep is 4 357 mutants, **716 MISSED, 98 on a cited line**. Eight
 of the 98 are triaged so far, taken from the PIN and selection paths because
@@ -1782,7 +1783,7 @@ so the kill measured a defence in depth rather than the modelled defect. It now
 widens both layers, and `put_data_c4_refuses_a_user_status` drives the command
 so the outer gate is asserted too.
 
-The live roster is **76 entries: 72 executable patches killed, four unreachable
+The live roster is **79 entries: 75 executable patches killed, four unreachable
 with recorded evidence, zero gaps.**
 
 ## The sixth module — `RSKeyAdminSurface.tla`
@@ -1906,8 +1907,10 @@ superseded weak copy readable in a raw flash dump until a compaction lap pushes
 it off the medium. `EF_HARDENED` says the lap has run
 (`crates/rsk-fs/src/lib.rs:26-46`); the boot runs it iff the marker is absent
 and writes the marker only after `compact()` returns Ok
-(`firmware/src/main.rs:618-629`) — marker AFTER scrub, the same write-order
-family as the store's delete and the PIN flows' revoke. Every *lazy* re-key
+(`crates/rsk-fs/src/lib.rs:49-67`) — marker AFTER scrub, the same write-order
+family as the store's delete and the PIN flows' revoke. The boot glue keeps only
+the OTP gate and the placement of the stall (`firmware/src/main.rs:618-627`).
+Every *lazy* re-key
 after the lap must re-arm it: **audit run-35 found four of five sites skipping
 exactly that**, and the swept sites are the module's citations.
 
@@ -1933,18 +1936,46 @@ erases, so the strong form is available.
 `Boot.cfg` is **GREEN, exhaustive over 24 distinct states at depth 5**, no dead
 action.
 
-**Co-refutation is deliberately out for this module and the exclusion is
-load-bearing**: two of the three defended sites live in `firmware/`, which
-`cargo test` cannot reach — that is M7's point, not its weakness. The one
-host-testable family — the lazy re-keys — got direct code-level closure
-instead: `pin_verifier_and_pinwrapped_seed_migrate_at_verify` (rsk-fido) and
-`kbase_migration_reseals_slots_and_pin_falls_back` (rsk-piv) now pin
+**Co-refutation was deliberately out for this module, and the exclusion turned
+out to be covering two sites nobody had opened.** The stated ground was that two
+of the three defended sites live in `firmware/`, which `cargo test` cannot
+reach. One did. The scratch-word carry's model conjunct is `Boot`'s
+`lock' = recorded`, and that assignment is `restore_pin_lock` in
+`crates/rsk-fido/src/state.rs:449-452` — `firmware/src/pin_lock.rs` holds the
+register encode, not the restore. The marker-after-lap order really was in
+`firmware/`, where a patch could never have scored a kill anyway (a build
+failure is `build-broke`, not a kill), so it was lifted into
+`rsk_fs::run_at_rest_lap` with the host test the patch must break, and the
+firmware keeps only the OTP gate and the placement of the stall.
+
+All three switches are registered co-mutants now, each measured `killed` and
+each failure read for its direction rather than its colour:
+`BugRekeyKeepsTheMarker` (`requesting_a_rescrub_clears_the_hardened_marker`,
+`crates/rsk-fs/src/fs_tests.rs:384` — the marker SURVIVED),
+`BugMarkerBeforeScrub`
+(`the_at_rest_lap_writes_its_marker_only_after_a_completed_scrub`,
+`crates/rsk-fs/src/fs_tests.rs:445` — the marker is PRESENT over a torn lap,
+read off the medium past `Fs`'s cache), `BugPartialLockCarry`
+(`pin_lock_round_trips_and_boot_leaves_it_alone` at
+`crates/rsk-fido/src/state_tests.rs:134`, `left: 0 right: 2` — a live batch
+ERASED by the restore). The last is patched CONDITIONALLY on `engaged`, because
+the model's switch diverges only at `recorded = "batch"`: an unconditional drop
+also fires where the model says the restore is correct, and killed on
+`crates/rsk-fido/src/state_tests.rs:119`, an assertion whose model image is
+unchanged behaviour.
+
+The lazy re-keys also carry their earlier direct closure:
+`pin_verifier_and_pinwrapped_seed_migrate_at_verify` (rsk-fido) and
+`kbase_migration_reseals_slots_and_pin_falls_back` (rsk-piv) pin
 `EF_HARDENED` cleared after the migration, and each was proved able to fail by
 removing its own site's re-arm in a worktree — the first probe removed the
 *panel* site by mistake and the fido test rightly stayed green, which doubles
 as the asserts' specificity check. The panel path's own twin
 (`spend_and_verify_pin_at`, the fourth PIN door) and the OATH/OpenPGP site
-asserts remain open, recorded here rather than implied.
+asserts remain open, recorded here rather than implied — as does
+`crates/rsk-device/src/ctap_tests.rs:101-123`, which drives only
+`engaged: true, mismatches: 3` and stays green under `BugPartialLockCarry`, so
+nothing asserts that the BOOT WIRING carries a sub-limit batch.
 
 **The open hardware assumption, and what running it the other way cost.**
 `PowerOnClearsScratch2` was a named Boolean `ASSUME` that every generated Boot
@@ -2859,8 +2890,8 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-DISP-001` | `ConfirmNamesTheOperation` | MODELLED-ONLY | `RSKeyTrustedDisplay` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-DISP-002` | `StaleTouchApprovesNothing` | MODELLED-ONLY | `RSKeyTrustedDisplay` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-DISP-003` | `OnlyAllowConfirms` | MODELLED-ONLY | `RSKeyTrustedDisplay` | — | 1 | 1 | 1 | 0 | 0 | 0 |
-| `SEC-BOOT-001` | `MarkerNeverLies` | MODELLED-ONLY | `RSKeyBootHardening` | — | 1 | 2 | 0 | 0 | 0 | 0 |
-| `SEC-BOOT-002` | `TheWholeLockRides` | MODELLED-ONLY | `RSKeyBootHardening` | — | 1 | 1 | 0 | 0 | 0 | 0 |
+| `SEC-BOOT-001` | `MarkerNeverLies` | MODELLED-ONLY | `RSKeyBootHardening` | — | 1 | 2 | 2 | 0 | 0 | 0 |
+| `SEC-BOOT-002` | `TheWholeLockRides` | MODELLED-ONLY | `RSKeyBootHardening` | — | 1 | 1 | 1 | 0 | 0 | 0 |
 | `SEC-TRANS-001` | `NoCrossChannelSplice` | BOUNDED | `RSKeyTransport` | — | 1 | 1 | 1 | 2 | 0 | 0 |
 | `SEC-TRANS-002` | `NoSequenceGap` | BOUNDED | `RSKeyTransport` | — | 1 | 1 | 1 | 1 | 0 | 0 |
 | `SEC-TRANS-003` | `NoBufferOverrun` | BOUNDED | `RSKeyTransport` | — | 1 | 1 | 1 | 1 | 0 | 0 |

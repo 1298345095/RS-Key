@@ -463,8 +463,8 @@ SCOPED = {
         "names all seven rows it\nwould blind",
     ): "how many `floors.txt` rows carry a fourth column, a property of that file",
     # Reached by widening a published unit into the vocabulary the shape scan
-    # already enumerates: `76 entries` is the roster, a sentence four commits in
-    # this series have now had to hand-correct — 69 -> 71 -> 72 -> 73 -> 76.
+    # already enumerates: `79 entries` is the roster, a sentence five commits in
+    # this series have now had to hand-correct — 69 -> 71 -> 72 -> 73 -> 76 -> 79.
     (
         "formal/README.md",
         "**31 of 31 mutants are caught",
@@ -473,22 +473,24 @@ SCOPED = {
     "claim, and the generated roster line carries the same 30",
     (
         "docs/formal.md",
-        "76 entries: all 72 executable patches are killed",
+        "79 entries: all 75 executable patches are killed",
     ): "the whole-tree roster restated in the page that introduces the phase-2 "
     "table, whose generated region beside it gives the phase-2 line and not this "
     "total",
     # `` `NoStatusAfterARefusedAuth` | 73 states `` stood here while the roster
-    # read 73 and one lattice mutant explored 73 states. At 76 the coincidence is
-    # gone, the cell is under no rule, and the entry retired as it predicted.
+    # read 73 and one lattice mutant explored 73 states. At 76 the coincidence was
+    # gone, the cell fell under no rule, and the entry retired as it predicted; the
+    # boot family takes the roster to 79 and it stays gone.
     (
         "formal/README.md",
-        "**76 entries: 72 executable patches killed",
+        "**79 entries: 75 executable patches killed",
     ): "the co-mutant roster restated where its composition is broken down, which the "
     "generated line beside it does not give — the copy that read 69, then 71, 72 and "
     "73, re-measured by hand in four commits of this series. Its own claim that a "
     "registered fragment cannot check whether its sentence is still true is REFUTED "
     "at 76: the region began printing `76-entry`, every fragment carrying 73 stopped "
-    "exempting anything, and all three went red in one run",
+    "exempting anything, and all three went red in one run — the boot family moved it "
+    "again, to 79",
     (
         "formal/README.md",
         "`ok — 191 configuration(s)` and exited 0",

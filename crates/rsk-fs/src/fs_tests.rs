@@ -387,6 +387,83 @@ fn requesting_a_rescrub_clears_the_hardened_marker() {
     );
 }
 
+/// A `Storage` whose compaction lap fails on demand, counting the laps it ran. A
+/// backend that always compacts cannot tell "the marker lands after a completed
+/// scrub" from "the marker lands regardless", which is the whole of the order.
+struct TearableCompact {
+    inner: RamStorage,
+    tears: bool,
+    laps: u32,
+}
+impl TearableCompact {
+    fn new(tears: bool) -> Self {
+        Self {
+            inner: RamStorage::new(),
+            tears,
+            laps: 0,
+        }
+    }
+}
+impl Storage for TearableCompact {
+    fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+        self.inner.read(fid, buf)
+    }
+    fn write(&mut self, fid: u16, data: &[u8]) -> Result<()> {
+        self.inner.write(fid, data)
+    }
+    fn remove(&mut self, fid: u16) -> Result<()> {
+        self.inner.remove(fid)
+    }
+    fn size(&mut self, fid: u16) -> Option<usize> {
+        self.inner.size(fid)
+    }
+    fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+        self.inner.for_each_key(f)
+    }
+    fn compact(&mut self) -> Result<()> {
+        self.laps += 1;
+        if self.tears {
+            Err(Error::MemoryFatal)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[test]
+fn the_at_rest_lap_writes_its_marker_only_after_a_completed_scrub() {
+    // `MarkerNeverLies` — SEC-BOOT-001 at the code level. The order lived in
+    // `firmware/`, which no host test reaches, so `BugMarkerBeforeScrub` had no code
+    // twin: a torn lap that sets the marker anyway is never re-run, and the weak
+    // copies it left ride under it forever.
+    let mut torn = Fs::new(TearableCompact::new(true));
+    crate::run_at_rest_lap(&mut torn);
+    let mut medium = torn.into_storage();
+    assert_eq!(medium.laps, 1, "an absent marker did not run the lap");
+    // Past `Fs`'s present cache: the marker's absence has to be true of the MEDIUM,
+    // since a cache-level check passes over a write that never happened.
+    assert!(
+        !medium.exists(crate::EF_HARDENED),
+        "a torn lap claimed completion, so no later boot ever scrubs what it left"
+    );
+
+    // A completed lap does claim it, and the marker then gates the next boot's stall.
+    let mut done = Fs::new(TearableCompact::new(false));
+    crate::run_at_rest_lap(&mut done);
+    assert!(
+        done.into_storage().exists(crate::EF_HARDENED),
+        "a completed lap left no marker, so every boot pays the stall again"
+    );
+    let mut again = Fs::new(TearableCompact::new(false));
+    crate::run_at_rest_lap(&mut again);
+    crate::run_at_rest_lap(&mut again);
+    assert_eq!(
+        again.into_storage().laps,
+        1,
+        "the marker did not gate the second boot"
+    );
+}
+
 #[test]
 fn a_boot_scan_registers_every_dynamic_key_and_neither_shared_record() {
     // The registry `scan` rebuilds is the capacity budget every later `put`

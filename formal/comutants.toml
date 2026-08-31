@@ -1541,3 +1541,63 @@ replace = """
 slice = ["cargo", "test", "-p", "rsk-fido"]
 expect = "killed"
 note = "EF_MINPINLEN[1], and the only mutant here whose MODEL half had to be built before the code half could be compared: `RSKeySecurityState` carried three conjuncts where `clientpin.rs` has four, so until `gate.forceChange` existed there was nothing for this patch to be the twin of (PLAT-MODEL-010). The direction was read at both levels rather than taken from the colour. TLC: setPIN, a token with `acfg`, ConfigOp sets the flag, and GetPinToken fires AGAIN at depth 8 — a token ISSUED over a standing gate, not a refusal wearing another code. The host tests fall the same way and were read rather than counted: FOUR fall, and both named ones report `Ok(52)` — a 52-byte token response SERVED — against `Err(PinInvalid)` (`forced_pin_change_blocks_tokens_until_change_pin`, crates/rsk-fido/src/clientpin_tests.rs:1239) and `Err(PinPolicyViolation)` (`forced_pin_change_0x09_is_policy_violation`, crates/rsk-fido/src/clientpin_tests.rs:1303). The other two are the faulted-probe twins of the same door. The UV door at crates/rsk-fido/src/clientpin.rs:493-495 is a SECOND site this patch leaves standing, so the kill is attributed to the PIN doors alone."
+
+# ---- batch 8: the boot family, and the exclusion that covered it -------------
+#
+# `BootMut_*` matched no `PREFIXES` entry, so `roster()` did not see it and the
+# lint was green in BOTH directions over three switches nobody had to register.
+# The stated reason was that two of the three sites live in `firmware/`, which
+# `cargo test` cannot reach. One did: the scratch-word carry's model conjunct is
+# `Boot`'s `lock' = recorded`, and that assignment is `restore_pin_lock` in
+# `rsk-fido`. The marker-after-lap order genuinely was in `firmware/src/main.rs`
+# — where a patch scores `build-broke` and never a kill — so it was lifted into
+# `rsk_fs::run_at_rest_lap` first, with the host test the patch must break.
+# All three or none: the prefix admits the whole family at once.
+
+[comutant.BugRekeyKeepsTheMarker]
+status = "patch"
+file = "crates/rsk-fs/src/lib.rs"
+find = """
+pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
+    let _ = fs.delete(EF_HARDENED);
+}
+"""
+replace = """
+pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
+    let _ = fs;
+}
+"""
+slice = ["cargo", "test", "-p", "rsk-fs"]
+expect = "killed"
+note = "audit run-35, shipped at four of five sites: a lazy re-key leaves EF_HARDENED standing over the weak copy it just superseded, so no future boot ever scrubs it. The DEFINITION is patched, not the eight call sites, because it dominates all of them — patching sites would leave the oath and openpgp halves unmeasured and over-anchor the entry to an enumeration that grows. Direction read at both levels: TLC's counterexample is `LazyRekey` at `marker = TRUE` reaching `weak = 1`, a marker standing over a leftover, and the host failure is `requesting_a_rescrub_clears_the_hardened_marker` (crates/rsk-fs/src/fs_tests.rs:384) reporting `a rescrub request must clear the marker, or the lap never runs again` — the marker SURVIVED, not a spurious clear."
+
+[comutant.BugMarkerBeforeScrub]
+status = "patch"
+file = "crates/rsk-fs/src/lib.rs"
+find = """
+    if fs.compact().is_ok() {
+        let _ = fs.put(EF_HARDENED, &[1u8]);
+    }
+"""
+replace = """
+    let _ = fs.compact();
+    let _ = fs.put(EF_HARDENED, &[1u8]);
+"""
+slice = ["cargo", "test", "-p", "rsk-fs"]
+expect = "killed"
+note = "the `compact().is_ok()` short-circuit dropped: a torn lap claims completion and the weak copies it left ride under a set marker forever. This is the switch the module's exclusion was really about, and it had no code twin until the order left `firmware/src/main.rs` for `rsk_fs::run_at_rest_lap` — a firmware-compiling patch is classified `build-broke`, which is not a kill. Direction: the host failure is `the_at_rest_lap_writes_its_marker_only_after_a_completed_scrub` (crates/rsk-fs/src/fs_tests.rs:445) reporting `a torn lap claimed completion, so no later boot ever scrubs what it left` — read off the MEDIUM past `Fs`'s present cache, and the marker is PRESENT over a failed lap rather than absent after a good one."
+
+[comutant.BugPartialLockCarry]
+status = "patch"
+file = "crates/rsk-fido/src/state.rs"
+find = """
+        self.needs_power_cycle = lock.engaged;
+        self.new_pin_mismatches = lock.mismatches;
+"""
+replace = """
+        self.needs_power_cycle = lock.engaged;
+        self.new_pin_mismatches = if lock.engaged { lock.mismatches } else { 0 };
+"""
+slice = ["cargo", "test", "-p", "rsk-fido"]
+expect = "killed"
+note = "the half carry `firmware/src/pin_lock.rs:18-21` names as the laundering: the engaged flag rides the warm reset and the mismatch batch is dropped, so a host stops at two wrong PINs, reboots, and restarts the batch. The security module's BugSoftLockLostOnWarmReset drops BOTH halves; this drops one, which that mutant cannot express. CONDITIONAL on `engaged` deliberately, and re-measured for it: the model's switch is `lock' = IF BugPartialLockCarry /\\ recorded = \"batch\" THEN \"clear\" ELSE recorded`, so it diverges only at `\"batch\"`. An unconditional `= 0` also fires at `\"engaged\"`, where the model says the restore is CORRECT, and kills on crates/rsk-fido/src/state_tests.rs:119 with `left: PinLock { engaged: true, mismatches: 0 }` against `right: ... mismatches: 3 }` — an assertion whose model image is unchanged behaviour. Conditional, the kill lands where the counterexample does: `pin_lock_round_trips_and_boot_leaves_it_alone` fails at crates/rsk-fido/src/state_tests.rs:134 with `left: 0 right: 2` — a live batch of two ERASED by the restore, which is the laundering, not a batch a restore invented. The slice stays at `rsk-fido` because the patch is on the DEFINITION the model's `lock' = recorded` conjunct is; `crates/rsk-device`'s boot-wiring twin (`a_warm_boot_carries_the_soft_lock_in`, crates/rsk-device/src/ctap_tests.rs:101-123) drives only `engaged: true, mismatches: 3` and stays GREEN under this patch — its own comment already records that gap — so widening the slice by a whole crate would measure nothing more. Direction read, not taken from the colour."

@@ -46,6 +46,26 @@ pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
     let _ = fs.delete(EF_HARDENED);
 }
 
+/// Run the one-shot at-rest scrub lap: iff [`EF_HARDENED`] is absent, drive a full
+/// [`Fs::compact`] to push every superseded pre-OTP-sealed copy off the medium, and
+/// set the marker only if that lap returned `Ok`. Marker AFTER scrub, so a torn or
+/// failed lap leaves it absent and the next boot retries; the lap is idempotent, and a
+/// failed marker write is the same fail-safe, so its error is deliberately dropped.
+///
+/// The caller owns the OTP gate: a pre-OTP board has no stronger root to re-key to and
+/// nothing to scrub. It is a multi-second stall, so the caller runs it at boot, before
+/// USB attach. The write ORDER is the property this refines, and `firmware/` has no
+/// host tests, which is why the order lives here rather than in the boot glue.
+/// Refines `RSKeyBootHardening!MarkerNeverLies` — SEC-BOOT-001.
+pub fn run_at_rest_lap<S: Storage>(fs: &mut Fs<S>) {
+    if fs.has_data(EF_HARDENED) {
+        return;
+    }
+    if fs.compact().is_ok() {
+        let _ = fs.put(EF_HARDENED, &[1u8]);
+    }
+}
+
 /// The metadata side-store EF: one blob, shared by every applet.
 #[cfg(not(kani))]
 pub const EF_META: u16 = 0xE010;

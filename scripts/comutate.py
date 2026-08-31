@@ -11,25 +11,32 @@ catches them too. Three green checkers over three slightly different systems is
 the failure mode this whole apparatus exists for, and the difference between
 the two answers is a measured abstraction gap with a file and line attached.
 
-The roster is `Mut_*`, `StoreMut_*`, `AdminMut_*`, `DispMut_*`, `TransMut_*` and —
-since the applet batch — `SeamMut_*`, `LatMut_*` and `PolicyMut_*`. That batch was
-the answer to a measured skew: 31 of the first 43 patches landed in `rsk-fido`,
-`rsk-device` and `rsk-fs`, and the four applet crates that four of the nine
-modules are written about held ZERO. "TLC is green over the applets" was
-therefore fidelity nobody had measured, not fidelity measured and found good.
+The roster is `Mut_*`, `StoreMut_*`, `AdminMut_*`, `DispMut_*`, `TransMut_*`, —
+since the applet batch — `SeamMut_*`, `LatMut_*`, `PolicyMut_*`, and `BootMut_*`.
+The applet batch was the answer to a measured skew: 31 of the first 43 patches
+landed in `rsk-fido`, `rsk-device` and `rsk-fs`, and the four applet crates that
+four of the nine modules are written about held ZERO. "TLC is green over the
+applets" was therefore fidelity nobody had measured, not fidelity measured and
+found good.
 
-Four families remain DELIBERATELY out, because an exclusion stated here is a
+`BootMut_*` was the FOURTH exclusion until its three switches were registered,
+and how it fell is the point of writing exclusions down. The stated ground was
+that two of its three defended sites live in `firmware/`, which has no host
+tests by construction. Only one did: the scratch-word carry's model conjunct is
+`lock' = recorded`, and that assignment is `restore_pin_lock` at
+crates/rsk-fido/src/state.rs:449-452 — `firmware/src/pin_lock.rs` holds the
+register encode, not the restore. The marker-after-lap order really was in
+`firmware/`, where a patch could not have scored a kill in any case since a
+build failure is classified `build-broke` below, so it was lifted into
+`crates/rsk-fs` to be measurable at all. An exclusion reasoned about the MODULE
+read as covering three sites nobody had opened, and `roster()` matching no
+prefix made that reading unfalsifiable in BOTH directions. `test_comutate.py`
+drives an unregistered `BootMut_*.cfg` through `lint()` now, so the tuple below
+is wiring a test holds rather than prose.
+
+Three families remain DELIBERATELY out, because an exclusion stated here is a
 plan and one implied by a glob is a hole:
 
-* `BootMut_*` — two of its three defended sites live in `firmware/` (the
-  marker-after-lap order in main.rs:625-626, the scratch-word carry in
-  pin_lock.rs), which has no host tests by construction: `cargo test` cannot
-  exercise them, and modelling exactly that gap is M7's stated point. The one
-  host-testable site family — the lazy re-keys' `request_rescrub` re-arm —
-  carries direct asserts in the migration tests instead
-  (`pin_verifier_and_pinwrapped_seed_migrate_at_verify` and PIV's
-  `kbase_migration_reseals_slots_and_pin_falls_back` pin EF_HARDENED cleared;
-  each proved able to fail by removing its own site's re-arm in a worktree).
 * `LiveMut_*` and `FairMut_*` — these are not defect switches. They break a
   LIVENESS property or the fairness shape under it, and the code-level question
   co-refutation asks ("does the same defect fail a host test?") has no meaning
@@ -112,7 +119,7 @@ def load(root: pathlib.Path):
 
 
 #: The mutant-config prefixes this file's closed world covers, and the Solo
-#: prefix each pairs with. Boot, liveness and fairness prefixes are deliberately
+#: prefix each pairs with. Liveness and fairness prefixes are deliberately
 #: absent — see the module docstring.
 PREFIXES = (
     ("Mut_", "Solo_"),
@@ -123,6 +130,7 @@ PREFIXES = (
     ("SeamMut_", "SeamSolo_"),
     ("LatMut_", "LatSolo_"),
     ("PolicyMut_", "PolicySolo_"),
+    ("BootMut_", "BootSolo_"),
 )
 
 
@@ -130,8 +138,10 @@ def roster(root: pathlib.Path) -> dict[str, str]:
     """bug name -> its mutant configuration's filename, over every prefix.
 
     `startswith` is anchored, so `Mut_` does not swallow `StoreMut_*.cfg` or
-    `SeamMut_*.cfg` (an 'S' is not an 'M'), and no prefix matches `BootMut_`,
-    `LiveMut_` or `FairMut_`.
+    `SeamMut_*.cfg` (an 'S' is not an 'M'), `BootMut_` does not swallow the
+    `BootCarryMut_*.cfg` and `BootInductionMut_*.cfg` that re-arm the same three
+    switches under other bounds — they would collide on the roster key — and no
+    prefix matches `LiveMut_` or `FairMut_`.
 
     The keys are bug names with the prefix stripped, so two families sharing a
     bug name would silently collapse to one entry — see `prefix_collisions`,
