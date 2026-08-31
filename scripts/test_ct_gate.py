@@ -131,6 +131,92 @@ LITERAL = f"""{CHAIN}
 10000304:\td004      \tbeq.n\t10000310
 """
 
+#: A second frame under the SAME outermost one, so the block below is next in
+#: address order without being reachable from the comparator's — which is the
+#: whole point: the frame check alone does not separate them.
+OTHER = f"inlined by {PIN}:97 (_ZN11rsk_openpgp3pin9check_pin17h0000000000000001E)"
+
+#: The comparator's loop, then an unconditional `b`, then a block that branches
+#: on a register the comparator happened to leave in `r4`. Copied in shape from
+#: `OtpApplet::process` at 0x10036fb0/0x10036fe0/0x10036ff8, where the branch is
+#: `apdu.p1 == P1_CHAL_HMAC_SLOT1 || …` — an attacker's own APDU byte. Nothing
+#: falls through the `b`, so the load is not a definition this branch can read.
+ACROSS_BLOCKS = f"""{CHAIN}
+10000400:\t5cc4      \tldrb\tr4, [r0, r3]
+{CHAIN}
+10000402:\t4066      \teors\tr6, r4
+{CHAIN}
+10000404:\t2b06      \tcmp\tr3, #6
+{CHAIN}
+10000406:\td1fb      \tbne.n\t10000400
+{OTHER}
+10000408:\te707      \tb.n\t10000500
+{OTHER}
+1000040a:\tf004 0022 \tand.w\tr0, r4, #34
+{OTHER}
+1000040e:\t2838      \tcmp\tr0, #56
+{OTHER}
+10000410:\td155      \tbne.n\t10000500
+"""
+
+#: The other direction of the same rule, and the one that matters more: a store
+#: on the far side of a `b` must NOT excuse the load as a reload of it.
+STORE_ACROSS_BLOCKS = f"""{OTHER}
+10000600:\tf88d 0098 \tstrb.w\tr0, [sp, #152]
+{OTHER}
+10000604:\te707      \tb.n\t10000700
+{CHAIN}
+10000606:\tf89d 0098 \tldrb.w\tr0, [sp, #152]
+{CHAIN}
+1000060a:\t2800      \tcmp\tr0, #0
+{CHAIN}
+1000060c:\td005      \tbeq.n\t10000618
+"""
+
+#: The oracle a coarse barrier hid, in the shape a real build gave it: two secret
+#: bytes loaded into CALLEE-saved registers, a libcall, then the early exit's
+#: compare. AAPCS makes `bl` preserve `sl`/`fp`, and the call returns, so the
+#: `cmp` is on the only path. Copied from `ct_eq` at 0x1006afa0..0x1006afb8 in a
+#: firmware built with `copy_from_slice` inside the accumulate loop.
+CALL_KEEPS_CALLEE_SAVED = f"""{CHAIN}
+10000800:\tf816 ab01 \tldrb.w\tsl, [r6], #1
+{CHAIN}
+10000804:\tf814 bb01 \tldrb.w\tfp, [r4], #1
+{CHAIN}
+10000808:\tf04b fcfb \tbl\t100b69a8
+{CHAIN}
+1000080c:\t45d3      \tcmp\tfp, sl
+{CHAIN}
+1000080e:\td10b      \tbne.n\t10000820
+"""
+
+#: The same shape over CALLER-saved registers, which the call may have destroyed.
+#: Without it `clobbers` could return False for everything and the case above
+#: would still pass — a guard nothing exercises.
+CALL_CLOBBERS_CALLER_SAVED = f"""{CHAIN}
+10000900:\tf816 0b01 \tldrb.w\tr0, [r6], #1
+{CHAIN}
+10000904:\tf814 1b01 \tldrb.w\tr1, [r4], #1
+{CHAIN}
+10000908:\tf04b fcfb \tbl\t100b69a8
+{CHAIN}
+1000090c:\t4288      \tcmp\tr1, r0
+{CHAIN}
+1000090e:\td10b      \tbne.n\t10000920
+"""
+
+#: `cbz` is CONDITIONAL: the next instruction is on the path, so a walk that
+#: stops there loses a load it should have reached.
+CBZ_IS_NOT_A_STOP = f"""{CHAIN}
+10000a00:\tf816 ab01 \tldrb.w\tsl, [r6], #1
+{CHAIN}
+10000a04:\tb11a      \tcbz\tr2, 10000a10
+{CHAIN}
+10000a06:\tf1ba 0f00 \tcmp.w\tsl, #0
+{CHAIN}
+10000a0a:\td10b      \tbne.n\t10000a20
+"""
+
 SITE = {"CT-CMP-001": {"symbol": "rsk_crypto::mac::ct_eq", "class": "comparator"}}
 NO_FLOORS = {"run_floor": 0, "branch_floor": 0, "reasoned_floor": 0}
 
@@ -209,6 +295,65 @@ def test_a_literal_pool_load_is_not_a_buffer_read():
     assert violations == []
 
 
+def test_a_definition_on_the_far_side_of_a_barrier_is_not_a_definition():
+    """The false positive that reddened the row, in the shape the image had it.
+
+    A backward walk over the linear address order is a question about control
+    flow, and past an unconditional `b` it answers with a block that has no edge
+    to the use. The verdict then follows the block layout: nothing about the
+    comparator or its callers changed, an unrelated OTP commit moved
+    `cmd_configure`'s inlined copy near two PUBLIC branches in `cmd_calculate`,
+    and both were reported as reading its operand load.
+
+    Driven: with `last_definition` back to stepping OVER a barrier, this case
+    falls on `violations == []` reporting `(0x10000410, 'bne', 'cmp r0, #56',
+    'ldrb r4, [r0, r3]')` — the image's own finding, in the direction that
+    invents one rather than the inverse that hides one.
+    """
+    violations, _, branches, _, _ = observed(ACROSS_BLOCKS)
+    assert branches == 1, branches  # only the loop's back edge is inside the run
+    assert violations == []
+
+
+def test_a_call_does_not_hide_a_load_in_a_callee_saved_register():
+    """The narrowing an independent review caught, and the reason the stop is a
+    REGISTER question. Bundling every transfer into one barrier took a genuine
+    oracle out of the row: measured on a real build, the rule before reported it
+    and the bundled rule reported 0."""
+    violations, _, _, _, _ = observed(CALL_KEEPS_CALLEE_SAVED)
+    assert len(violations) == 1, violations
+    assert violations[0][1] == "bne"
+    assert violations[0][3].startswith("ldrb"), violations[0][3]
+
+
+def test_a_call_does_hide_a_load_in_a_caller_saved_register():
+    """The other half, so `clobbers` is a rule and not a constant: AAPCS lets the
+    callee destroy r0-r3/ip/lr, so a definition before the call is not what the
+    compare read."""
+    violations, _, _, _, _ = observed(CALL_CLOBBERS_CALLER_SAVED)
+    assert violations == [], violations
+
+
+def test_a_conditional_branch_is_not_a_stop():
+    """`cbz` falls through, so the walk must cross it."""
+    violations, _, _, _, _ = observed(CBZ_IS_NOT_A_STOP)
+    assert len(violations) == 1, violations
+    assert violations[0][3].startswith("ldrb"), violations[0][3]
+
+
+def test_a_store_on_the_far_side_of_a_barrier_does_not_excuse_the_load():
+    """Same rule, and this is the direction that could hide a finding: a match
+    here EXCUSES the load, so a store the flow cannot have executed would excuse
+    a genuine buffer read.
+
+    Driven: with the barrier stop removed from `reload_of_a_store`, this case
+    falls on `0 == 1` — the load excused, the finding gone."""
+    violations, _, branches, _, _ = observed(STORE_ACROSS_BLOCKS)
+    assert branches == 1
+    assert len(violations) == 1, violations
+    assert violations[0][3].startswith("ldrb ")
+
+
 def test_the_width_suffix_is_stripped_before_the_flag_set_is_consulted():
     """The defect this gate shipped with for one run: `cmp.w` was not in the set,
     the walk-back skipped the public bound and landed on the secret `eors`, and
@@ -250,11 +395,13 @@ def test_each_floor_reports_its_own_shortfall(floors, word):
 
 def test_the_shipped_floors_are_parameters_and_not_globals():
     """A case cannot patch them down: the defaults bind at `def` time, so the
-    values the row runs with are the ones in the module."""
+    values the row runs with are the ones in the module. Pinned, so a floor moves
+    in a diff that says why — the reasoned one went 15 -> 20 when a review
+    measured that 15 against 24 let nine branches go silently unasked."""
     assert (ct_gate.RUN_FLOOR, ct_gate.BRANCH_FLOOR, ct_gate.REASONED_FLOOR) == (
         30,
         20,
-        15,
+        20,
     )
 
 
@@ -302,16 +449,34 @@ def test_the_image_arms_were_driven_by_hand():
 
     | arm | attributed runs | branches | secret-dependent | row |
     |---|---|---|---|---|
-    | shipped | 39 | 26 | 0 | EXIT=0 |
-    | early exit in `ct_eq` (`if diff != 0`) | 60 | 27 | 27 | EXIT=1 |
-    | early exit on ONE BIT (`if diff & 0x80 != 0`) | 59 | 27 | 32 | EXIT=1 |
-    | `cmd_update` back to a slice `!=`, `cmd_configure` untouched | 39 | 26 | 0 | EXIT=1, `cmd_update` inlines no site |
+    | shipped | 39 | 25 | 0 | EXIT=0 |
+    | early exit in `ct_eq` (`if diff != 0`) | 59 | 27 | 27 | EXIT=1 |
+    | early exit on ONE BIT (`if diff & 0x80 != 0`) | 58 | 27 | 27 | EXIT=1 |
+    | `cmd_update` back to a slice `!=`, `cmd_configure` untouched | 38 | 24 | 0 | EXIT=1, `cmd_update` inlines no site |
+    | early exit with a `copy_from_slice` before it | 3 | 3 | 1 | EXIT=1, `0x1006afb8` |
 
     The last two are the arms an independent review used to refute the first
     version of this gate: at depth-1 taint the bit test reported 0 and passed,
     and keyed on the outermost frame the bypass beside a surviving call reported
     0 and passed. Both now redden, and the fourth reddens with the right message
     rather than on a floor.
+
+    The fifth arm is the one an independent review built, and it is why the stop
+    is a REGISTER question. Its `copy_from_slice` puts `bl __aeabi_memset4`
+    between the two secret loads and the early exit's `cmp fp, sl`; `fp`/`sl` are
+    callee-saved, so the call preserves them and the fall-through is the only
+    path. A stop at every transfer reported 0 over it while the rule before this
+    one reported 1 — measured on a real build, and the four arms above all sit
+    BEFORE any transfer, so not one of them could have caught that.
+
+    Re-driven when the walks were confined to the path, because a rule that stops
+    earlier is exactly the change that could blind the row to its own mutant: all
+    four arms answer as before, and the shipped one is 0 over 24 branches traced
+    to a definition (floor 20). The counts moved from the
+    previous recording because the IMAGE moved — two OTP commits — not the rule;
+    that is also what surfaced the defect, `ct_eq`'s inlined copy landing within
+    64 instructions of two public branches in `cmd_calculate` across two `b.n`
+    and a `bl`.
 
     `mac.rs` and `rsk-otp/src/lib.rs` restored byte-identical (sha256 compared)
     and the control re-run green after each rebuild.

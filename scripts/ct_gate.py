@@ -17,9 +17,11 @@ just built:
 * **No branch anywhere depends on a byte a registered site loaded.** For every
   conditional branch in `.text`, the flag-setting instruction it reads is found,
   and each register that instruction reads is traced back to its last
-  definition. A definition that is a LOAD FROM A BUFFER — a `ldr*` whose base is
-  not `sp` — whose own inline chain names a registered site makes the branch
-  secret-dependent, and one such branch fails the row.
+  definition. A definition that is a LOAD FROM A BUFFER whose own inline chain
+  names a registered site makes the branch secret-dependent, and one such branch
+  fails the row. (This line read "a `ldr*` whose base is not `sp`" for three
+  revisions after `buffer_load` stopped asking that: the base test it does make
+  is `pc`, and the spill question is `reload_of_a_store`'s, by ADDRESS.)
 
   The taint hangs on the LOAD and not on the branch, and that is the whole
   difference between this rule and the one that shipped first here. Restricted to
@@ -37,6 +39,15 @@ just built:
   `bgt`, a real secret-dependent early exit, and the depth-1 rule reported zero.
   The mutant that WAS caught was caught only because LLVM folded it back into a
   compare of two loads — a property of the optimiser, not of the rule.
+
+  The trace follows the PATH, and that is the fourth thing this shipped wrong —
+  see `leaves_the_block` / `clobbers`. Walking the linear address order past an
+  unconditional transfer answers with a definition no path to the branch can
+  have executed, so the verdict became a function of block layout: two branches
+  in `rsk-otp` whose operands are not bytes the comparator loaded were reported
+  the day an unrelated OTP change moved the comparator's inlined copy to within
+  64 instructions of them. The over-correction is recorded beside the rule,
+  because bundling every transfer into one stop hid a real oracle.
 * **The caller set is derived, not listed.** EVERY first-party frame the chains
   name — not just the outermost — is held against `assurance/ct_sites.toml` BOTH
   WAYS: a surface that stops routing through the comparator disappears from the
@@ -75,12 +86,21 @@ secret bytes into a stack slot and then compares them there reads its own store
 and is not flagged. Nothing in the audited sites does that — the comparator
 indexes both operands in place — but the rule cannot see it if one starts.
 
+The second limit, from `leaves_the_block`: the walk is LINEAR and stops at an
+unconditional transfer, so a load whose block JUMPS to the branch's rather than
+falling into it is out of reach. Stepping over that transfer would reach it —
+and would equally reach every unrelated block sitting between them, which is
+what made two branches over non-comparator bytes look secret. That direction
+buys an accident, not a reach. It is the ONLY class the walk stops at blind: a
+call stops it for a caller-saved register and nothing else, and a `cbz` does not
+stop it at all.
+
 The mutant this row exists to catch is an early exit inside the accumulate loop
 (`if diff != 0 { return false; }`): the accumulator and the barrier vanish and
 the loop becomes a `memcmp`, with the two secret bytes reaching a `cmp` that
 governs a branch. Driven through the row's own command after a rebuild: the
-shipped tree reports 0 secret-dependent branches over 39 attributed runs and 26
-conditional branches, EXIT=0; with the early exit compiled in, 27 over 60 runs,
+shipped tree reports 0 secret-dependent branches over 39 attributed runs and 25
+conditional branches, EXIT=0; with the early exit compiled in, 27 over 59 runs,
 EXIT=1.
 The mutant that does NOT work, and is recorded so nobody re-tries it: deleting
 the `black_box` — the page itself says the barrier "does not change the code
@@ -203,10 +223,17 @@ STORE = re.compile(r"^str(b|h|d)?$")
 #: Floors, and they are PARAMETERS of `audit` rather than globals a case patches
 #: down — `run_count_gate.SCAN_FLOOR` shipped the other way and its own docstring
 #: says the shipped value was therefore never checked against the shipped tree.
-#: Measured on this tree: 39 attributed runs, 26 conditional branches examined.
+#: Measured on this tree: 39 attributed runs, 25 conditional branches examined,
+#: 24 traced to a definition.
+#:
+#: The reasoned floor sat at 15 against a measurement of 24, so nine branches
+#: could go silently unasked — and a change that narrowed the walk is exactly
+#: what it was there to catch. It is 20 now, the same ~20% under the measurement
+#: the other two carry (39/30, 25/20); tighter would redden on the next
+#: unrelated code motion, which moved this count 26 -> 24 over two commits.
 RUN_FLOOR = 30
 BRANCH_FLOOR = 20
-REASONED_FLOOR = 15
+REASONED_FLOOR = 20
 
 
 def demangle(symbol: str) -> str:
@@ -353,10 +380,52 @@ def runs(stream, symbol):
     return out
 
 
-#: Where a backward walk stops. A call clobbers the caller-saved registers, an
-#: unconditional transfer means the fall-through is not how we got here, and a
-#: change of enclosing function means we left the frame entirely.
+#: Where the FLAG-SETTER search stops — `walk_back`'s rule, and only its. A call
+#: may leave any flags, an unconditional transfer means the fall-through is not
+#: how we got here, and a change of enclosing function means we left the frame.
+#: The data-flow walks want a finer question and ask `leaves_the_block` /
+#: `clobbers` instead: a call CLOBBERS caller-saved registers, which is a rule
+#: about a register and not a place to stop.
 BARRIER = re.compile(r"^(bl|blx|bx|b|pop|cbz|cbnz)$")
+
+#: Where a DATA-FLOW walk stops, and it is a REGISTER question rather than only a
+#: mnemonic one. `BARRIER` bundles four classes and only two of them end a
+#: fall-through: `bl`/`blx` return, and `cbz`/`cbnz` are conditional, so for both
+#: the next instruction IS on the path. Stopping at all four was measured to hide
+#: a real oracle — an early exit whose two secret bytes reach `cmp fp, sl` across
+#: a `bl __aeabi_memset4`, with `fp`/`sl` callee-saved so the call cannot have
+#: touched them. A review built it, and the coarse rule reported 0 where the
+#: rule before this one reported 1. Over the shipped image the two rules are put
+#: 16698 branch-register questions and differ on 1250: `bl` 833, `cbz` 337,
+#: `blx` 53, `cbnz` 27, and nothing else. `b`/`bx`/`pop {..,pc}` cannot differ —
+#: both rules stop there — so the whole behaviour change is the unsound half.
+#:
+#: What the finer rule is FOR, since a stop that reaches nothing is not one: an
+#: `OtpApplet` branch at `crates/rsk-otp/src/lib.rs:717` and the `CFG_HMAC_LT64`
+#: test below it were reported as reading the comparator's operand load, on the
+#: strength of a walk that crossed two `b.n` into `cmd_configure`'s inlined copy.
+#: Neither operand is a byte the comparator loaded. Nothing about `ct_eq` or its
+#: callers had changed: two OTP commits moved that copy to within 64 instructions
+#: of them, and the same rule is green on the image built before those commits.
+LEAVES_BLOCK = re.compile(r"^(b|bx)$")
+CALL = re.compile(r"^(bl|blx)$")
+
+#: AAPCS: a call may clobber these and must preserve r4-r11. Spelled with the
+#: aliases objdump prints, because `ip` and `r12` are the same register.
+CALLER_SAVED = {"r0", "r1", "r2", "r3", "r12", "ip", "lr"}
+
+
+def leaves_the_block(mnemonic, operands):
+    """Whether control cannot reach the next instruction by falling through."""
+    if LEAVES_BLOCK.match(mnemonic):
+        return True
+    return mnemonic == "pop" and "pc" in REGISTER.findall(operands or "")
+
+
+def clobbers(mnemonic, register):
+    """Whether a call here may have destroyed `register` on the way to the use."""
+    return bool(CALL.match(mnemonic)) and register in CALLER_SAVED
+
 
 
 def walk_back(stream, index, want, limit=64):
@@ -374,14 +443,21 @@ def walk_back(stream, index, want, limit=64):
 
 
 def last_definition(stream, index, register):
-    """(position, instruction) of the nearest write to `register` before `index`."""
+    """(position, instruction) of the nearest write to `register` before `index`.
+
+    Within the block: a definition on the far side of a barrier is not one this
+    use could have read, and crediting it makes the verdict a function of how the
+    linker laid the blocks out.
+    """
     frame = stream[index][3][-1] if stream[index][3] else None
     for step in range(index - 1, max(-1, index - 65), -1):
         addr, mnemonic, operands, chain = stream[step]
         if (chain[-1] if chain else None) != frame:
             return None
-        if mnemonic in FLAG_ONLY or BARRIER.match(mnemonic):
+        if mnemonic in FLAG_ONLY:
             continue
+        if leaves_the_block(mnemonic, operands) or clobbers(mnemonic, register):
+            return None
         written = REGISTER.search(operands.split(",")[0]) if operands else None
         if written and written.group(1) == register:
             return step, stream[step]
@@ -431,7 +507,12 @@ def flag_setter(mnemonic):
 
 
 def reload_of_a_store(stream, index):
-    """Whether the load at `index` reads back an address this frame already wrote."""
+    """Whether the load at `index` reads back an address this frame already wrote.
+
+    Same block as the store, for the same reason as `last_definition` — and here
+    the direction matters more, because a match EXCUSES the load: a store the
+    control flow cannot have executed would excuse a genuine buffer read.
+    """
     load = stream[index]
     address = ADDRESS.search(load[2])
     if not address:
@@ -440,6 +521,8 @@ def reload_of_a_store(stream, index):
     for step in range(index - 1, max(-1, index - 64), -1):
         addr, mnemonic, operands, chain = stream[step]
         if (chain[-1] if chain else None) != frame:
+            return False
+        if leaves_the_block(mnemonic, operands):
             return False
         if STORE.match(mnemonic) and ADDRESS.search(operands or "") == None:
             continue
