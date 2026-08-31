@@ -158,11 +158,17 @@ obligation = "the invariant over the whole reachable space of the shipped consta
 method = "model-check"
 artifact = "formal/RSKeySecurityState.tla::NoLiveTokenWithoutPinRecord + Shipped.cfg::NoLiveTokenWithoutPinRecord"
 bound_rps = 2
+stops_rps = "nothing this invariant can express — `tok.live => pin.set` names two booleans and no relying party. What two costs is reach alone"
 bound_channels = 2
+stops_channels = "nothing this invariant can express; what two costs is reach — a falsifying state first arising over a third concurrent channel is not in the set searched"
 bound_max_retries = 8
+stops_max_retries = "nothing by shrinking: eight IS the shipped ladder, and this constant is ON this property's path, because the only producer of the antecedent is reachable only through a successful PIN attempt. So the approach runs at full shipped depth here and is reduced on all three arms below"
 bound_mismatch_limit = 3
+stops_mismatch_limit = "nothing by shrinking, for the same reason as the ladder it pairs with — three IS the shipped mismatch limit and the antecedent's approach passes through it"
 bound_max_clock = 1
+stops_max_clock = "any falsifying state that needs a second unit of elapsed time"
 bound_reset_window = 0
+stops_reset_window = "the in-window arm. At zero the reset that clears the PIN record is reached only outside the power-up window"
 shipped_relation = "MaxRetries and MismatchLimit ARE the shipped MAX_PIN_RETRIES (8) and PIN_MISMATCH_LIMIT (3) at crates/rsk-fido/src/consts.rs; RPs and Channels are 2 against an unbounded device; MaxClock 1 is the smallest value at which Tick is not dead; ResetWindow 0 runs the window closed only. FOUR of the six are off this property's path — `tok.live => pin.set` names two booleans and no constant — but two are NOT, and that is the difference from the counterpart: MaxRetries and MismatchLimit bound the PIN-attempt ladder, and `GetPinToken` (the only producer of the antecedent) is reachable only THROUGH a successful PinAttempt. A ladder of 8 is the shipped one, so the antecedent's own approach is at full shipped depth here and reduced on the three arms below"
 cfg = "none"
 features = "none"
@@ -172,11 +178,17 @@ obligation = "the same invariant on the arm of AlwaysUvShipped the default image
 method = "model-check"
 artifact = "AlwaysUv.cfg::NoLiveTokenWithoutPinRecord"
 bound_rps = 2
+stops_rps = "a falsifying state that first arises over a third relying party, on the alwaysUv arm"
 bound_channels = 2
+stops_channels = "a falsifying state that first arises over a third concurrent channel, on the alwaysUv arm"
 bound_max_retries = 2
+stops_max_retries = "the six rungs between two and the shipped eight, and it costs more here than for the counterpart property: the ladder is on the antecedent's approach path, so this arm reaches a live token over a shallower PIN-attempt sequence than the image has"
 bound_mismatch_limit = 1
+stops_mismatch_limit = "the two mismatches between one and the shipped three, on the same approach path"
 bound_max_clock = 1
+stops_max_clock = "any falsifying state needing a second unit of elapsed time, on this arm"
 bound_reset_window = 0
+stops_reset_window = "the in-window arm, on this arm as on the shipped one"
 shipped_relation = "the retry ladder is REDUCED here and the shipped one is not — 8:3 becomes 2:1 (formal/AlwaysUv.cfg:6-7) — because the arm buys the alwaysUv reachability question and Shipped.cfg is the row that is about the ladder. It matters MORE for this property than for the counterpart: the ladder is on the antecedent's approach path, so this arm reaches `tok.live` over a shallower PIN-attempt sequence than the shipped image has. What it buys is that the guard whose inertness this invariant licenses — `~(gate.alwaysUv /\\ ~pin.set)` at RegisterStart:935 and AssertStart:1056 — is checked on the arm where `gate.alwaysUv` is the compiled default, which is the only arm where that conjunct can be reached with a live guard"
 cfg = "none"
 features = "none"
@@ -186,10 +198,15 @@ obligation = "the same invariant with the permission domain widened to all sixte
 method = "model-check"
 artifact = "PermWide.cfg::NoLiveTokenWithoutPinRecord"
 bound_rps = 1
+stops_rps = "the second relying party. One is the price this row pays for the wide permission domain, and it is harmless to this implication, which names no relying party at all"
 bound_channels = 2
+stops_channels = "a falsifying state that first arises over a third concurrent channel, on the wide-permission arm"
 bound_max_retries = 2
+stops_max_retries = "the six rungs between two and the shipped eight, on the approach to the antecedent"
 bound_mismatch_limit = 1
+stops_mismatch_limit = "the two mismatches between one and the shipped three, on that same approach"
 bound_perm_subsets = 16
+stops_perm_subsets = "nothing — sixteen is the whole four-bit domain and this axis is a WIDENING. What it does not buy is reach on this property: `tok.live` is a flag and not a set, so the permission domain is off the implication and this row is a second arm of a standing boolean rather than new depth"
 shipped_relation = "WidePerms draws `ps` from `SUBSET Perms` rather than from PermSets' five, so the sixteen are the whole four-bit domain and this bound is not a shrink — it is the widening PLAT-MODEL-001 exists for. RPs falls to 1 to pay for it (formal/PermWide.cfg:4), which is a REAL narrowing on this row and a harmless one: the implication names no rp, and `GetPinToken`'s `r \\in RPs \\cup {NoRp}` only decides which credential a token is bound to. The permission set is likewise off the implication — `tok.live` is a flag, not a set — so what this row buys is a second arm of a standing boolean rather than new reach on the property"
 cfg = "none"
 features = "none"
@@ -199,10 +216,15 @@ obligation = "the same invariant with EF_MINPINLEN's forced-PIN-change gate mode
 method = "model-check"
 artifact = "ForceChange.cfg::NoLiveTokenWithoutPinRecord"
 bound_rps = 1
+stops_rps = "the second relying party, dropped on this arm as on the wide-permission one and harmless for the same reason"
 bound_channels = 2
+stops_channels = "a falsifying state that first arises over a third concurrent channel, on the forced-change arm"
 bound_max_retries = 2
+stops_max_retries = "the six rungs between two and the shipped eight, on the approach to the antecedent"
 bound_mismatch_limit = 1
+stops_mismatch_limit = "the two mismatches between one and the shipped three, on that same approach"
 bound_gate_bits = 5
+stops_gate_bits = "any gate state the record's five fields cannot hold. Five is a count of the MODEL's own structure and not a compressed shipped constant — the reset's gate-record list is five as well, and the two fives are not the same five"
 shipped_relation = "ForceChangeModelled TRUE puts `gate.forceChange` in play, and it is the one standing boolean of the three that lands directly on this property's antecedent: PLAT-MODEL-010 records that the flag REFUSES token issuance after a correct PIN, so this arm is the only one where a successful PinAttempt does not reach `tok' = [live |-> TRUE, …]`. The five gate bits are the record fields `gate` carries (ppuat, ppuatStale, alwaysUv, backupSealed, forceChange), which is a count of the model's own structure and not a compressed shipped constant — the reset's own gate-record list is five too (reset.rs:223) and the two fives are not the same five"
 cfg = "none"
 features = "none"
@@ -212,10 +234,15 @@ obligation = "non-degeneracy: the invariant CAN go red, the red names it rather 
 method = "model-check"
 artifact = "Solo_NoLiveTokenWithoutPinRecord.cfg::BugStateResetAfterWipe"
 bound_invariants = 2
+stops_invariants = "anything about the rest of the invariant set — and the isolation is not optional here: the two structural facts are kept out of the all-invariants block, and the Mut_ twin under this same switch is recorded going RED on a sibling's name"
 bound_armed_switches = 1
+stops_armed_switches = "any defect needing two switches at once. One armed switch is what makes this the only place in the tree where this property is observed to fail"
 bound_counterexample_states = 12
+stops_counterexample_states = "nothing — twelve is the counterexample's MEASURED length and not a bound the configuration imposes. What it carries is the evidence: the falsifying state is reached only after the gate sweep, which is the untagged half"
 bound_rps = 2
+stops_rps = "a falsifying state that first arises over a third relying party, on the one row where this invariant is seen to fail"
 bound_channels = 2
+stops_channels = "a falsifying state that first arises over a third concurrent channel, on that same row"
 shipped_relation = "the configuration checks TypeOK and this invariant and NOTHING else (formal/Solo_NoLiveTokenWithoutPinRecord.cfg:50-52) and arms BugStateResetAfterWipe alone with every other Bug* FALSE — measured, `armed_count` over that file is 1. It is needed here for the reason formal/gen-configs.sh:109-114 gives in as many words: the two structural facts are kept OUT of ALL_INV so a mutant reports the first invariant it violates, and formal/runs.toml:93 records Mut_BugStateResetAfterWipe.cfg going RED on a SIBLING's name under the same switch. So this is the only place in the tree where this property is observed to fail. The twelve states are the counterexample's length and not a bound the configuration imposes — a review-shaped bound in a model-check row, and it is here because the depth is the evidence: the falsifying state is reached only after ResetSweepGates, which is the untagged half"
 cfg = "none"
 features = "none"
@@ -225,11 +252,17 @@ obligation = "the production side: which sites own each half of the implication,
 method = "review"
 artifact = "crates/rsk-fido/src/clientpin.rs::issue_token + crates/rsk-fido/src/state.rs::begin_using_token + crates/rsk-fido/src/reset.rs::reset"
 bound_tagged_owners = 1
+stops_tagged_owners = "any owner outside the one tagged site — and which HALF it is on: the tag sits on the antecedent, and the half with the recorded history is the consequent. This is a count of SITES and not a shrink of a shipped constant, because a review has no other unit"
 bound_antecedent_sites = 4
+stops_antecedent_sites = "an antecedent site the review did not open. Four were read, one of them the record gate the door runs first, and a count of sites says which they are and never that the order between them holds"
 bound_consequent_sites = 5
+stops_consequent_sites = "anything about what a consequent site DOES. Five sites clear or overwrite the record, and the count names them without saying that each leaves the implication standing"
 bound_production_token_callers = 1
+stops_production_token_callers = "coverage of the caller outside a shipped image. One in-image caller is counted; the `cfg(test)` site is counted apart, so no bound here credits it"
 bound_files_in_argument = 5
+stops_files_in_argument = "anything in a sixth file — and the measurement is the point: the slice page estimated ONE file, the tag's, which is the antecedent half only"
 bound_crates = 2
+stops_crates = "a site outside the two crates, including any other holder of the record the consequent names"
 shipped_relation = "the four antecedent sites are the definition (state.rs:506), its one in-image caller (clientpin.rs:425), the door above it (clientpin.rs:345) and the record gate that door runs first (clientpin.rs:685-693); the five consequent sites are reset.rs:66, the phase-2 sweep at :83, the membership predicate at :200-224, `Fs::factory_wipe` at rsk-fs/src/fs.rs:447 and the overwriting writer at clientpin.rs:840-841. Five files over two crates, against the ONE file `docs/authorization-slice.md:462-467` estimated (`crates/rsk-fido/src/clientpin.rs`) — the estimate named the tag's file, which is the antecedent half only, and the half with the recorded history is in a file it did not name. THIS BOUND IS A COUNT OF SITES, not a shrink of a shipped constant, because a review has no other unit; the same weakness the counterpart recorded, at the same group"
 cfg = "none — every site above is unconditional production code except conformance/mod.rs:165, which is cfg(test) and is counted apart in `owners_antecedent` rather than in these bounds"
 features = "none"
@@ -239,10 +272,15 @@ obligation = "the code twin: what the `co = 1` column credits, which configurati
 method = "mutation"
 artifact = "formal/comutants.toml::BugStateResetAfterWipe + scripts/comutate.py::solo_invariants + crates/rsk-fido/src/reset_tests.rs::a_torn_reset_never_leaves_the_session_running_on_a_wiped_seed"
 bound_patch_hunks = 2
+stops_patch_hunks = "any defect the two hunks cannot express. They move one call behind another in the shipped file, which is the historical regression and not the class it belongs to"
 bound_patched_files = 1
+stops_patched_files = "a defect that has to span two files"
 bound_credited_configurations = 1
+stops_credited_configurations = "the credit under the older attribution path. The single-answer resolver names a sibling's configuration for this bug, so without the by-invariant reading this kill is credited to SEC-FIDO-006 alone"
 bound_tests_asserting_the_token_half = 0
+stops_tests_asserting_the_token_half = "everything the co-refutation column implies about THIS property. Zero tests assert the token half: the twin's one falling test asserts a seed field, and the only test that asserts both `EF_PIN` gone and the permissions cleared tears nothing, so the mutant leaves it green — the kill is credited here and is not a kill of this invariant"
 bound_slice_crates = 1
+stops_slice_crates = "any test outside the one crate the slice runs — and this row was not re-driven here, so the verdict it records is the tree's own recorded status"
 shipped_relation = "the patch moves `ctx.state.reset()` from ahead of the flash work to behind `ensure_seed` (formal/comutants.toml:364-377) — the E76 regression, in the shipped file — and `expect = \"killed\"` is a RECORDED verdict in that file's own status vocabulary. The one credited configuration is Solo_NoLiveTokenWithoutPinRecord.cfg, reached only because `comutate.solo_index` reads solo-style configurations BY INVARIANT NAME; `comutate.solo_invariant`, the older single-answer path, resolves this bug to Solo_BugStateResetAfterWipe.cfg and answers ResetNeverWeakensSurvivingState, so the kill is credited to SEC-FIDO-006 alone. AND THE FOURTH BOUND IS THE FINDING: ZERO tests in this tree assert the token half. The twin's one falling test asserts `state.keydev_dec.is_none()`; the only test that asserts both `!fs.has_data(EF_PIN)` and `paut.permissions == 0` tears nothing, so the mutant leaves it green. This row was NOT re-run here — `comutate.py run` patches a shared working tree and other agents are in it — so the verdict this bundle records for it is the tree's own recorded status, and the mutation group says so"
 cfg = "none"
 features = "none — the slice formal/comutants.toml names is `cargo test -p rsk-fido` on the default feature set"
@@ -252,9 +290,13 @@ obligation = "the two arguments that rest on this invariant, and the measurement
 method = "review"
 artifact = "formal/RSKeySecurityState.tla::ConfigGuard + formal/README.md::NoLiveTokenWithoutPinRecord + formal/gen-configs.sh::EXTRA_INV"
 bound_dependent_model_sites = 3
+stops_dependent_model_sites = "any site outside the module that rests on this sentence. Three model sites were read; the Rust that carries the same conjunct is not in the count"
 bound_measured_inert_conjuncts = 1
+stops_measured_inert_conjuncts = "the inertness of any other guard. One conjunct was measured, by removing it from both call sites at once, and no other guard in the module has been checked the same way"
 bound_states_changed_by_removal = 0
+stops_states_changed_by_removal = "anything about the INVARIANT. The zero says the GUARD disables nothing; the invariant itself has a reachable falsifying state the moment one switch is armed, and reading the zero as a claim about the property is the confusion this row exists to refuse"
 bound_transitions_changed_by_removal = 0
+stops_transitions_changed_by_removal = "the currency of the measurement. Both zeros are the review's, recorded in `formal/README.md` and not re-taken here — no TLC run was performed for this bundle"
 shipped_relation = "three sites in the module rest on this sentence: `ConfigGuard` at :1091 carries no `pin.set` conjunct because config.rs:243-245 tests the MAC and PERM_ACFG and nothing else, and the two `~(gate.alwaysUv /\\ ~pin.set)` conjuncts at :935 and :1056 are kept only because the Rust has them. formal/README.md:929-935 records the measurement: removed from BOTH call sites the reachable space is bit-identical AND the transition count is unchanged, so the conjunct disables nothing. THE DISTINCTION THIS ROW EXISTS FOR: it is the GUARD that is inert, not the invariant. The invariant has a reachable falsifying state — 98 069 distinct, depth 12 — the moment one switch is armed. The two zeros are that measurement's, taken by the review formal/README.md records and NOT re-taken here; no TLC run was performed for this bundle"
 cfg = "none"
 features = "none"
@@ -472,13 +514,17 @@ registered = "yes — assurance/assumptions.toml AlwaysUvShipped, and assurance/
 
 # ---- 8. Mutation verdicts ----------------------------------------------------
 
-# NINE rows and none disposed, against a floor of eight. FOUR are the recorded
-# safety tier's TLC verdicts — the logs above are their unedited output — and
-# FIVE are gate-level mutants driven here, in this tree, against the real
-# scripts. What is NOT here is a code-level row: `comutate.py run` patches
-# crates/rsk-fido/src/reset.rs in a working tree several agents are writing in,
-# so it was not run, and a `verdict` for a run nobody made is the one thing this
-# group may not contain.
+# NINE rows and none disposed, against `bundle_gate.VERDICT_FLOOR` of eight —
+# and the floor is cleared by the GATE rows. FOUR of the nine are about the
+# model or the code; FIVE mutate the derivations and this file. Drop the five
+# and the group is at four, under the floor: what `VERDICT_FLOOR` measures here
+# is how many things were driven, not how many of them were driven at the
+# property. FOUR are the recorded safety tier's TLC verdicts — the logs above
+# are their unedited output — and FIVE are gate-level mutants driven here, in
+# this tree, against the real scripts. What is NOT here is a code-level row:
+# `comutate.py run` patches crates/rsk-fido/src/reset.rs in a working tree
+# several agents are writing in, so it was not run, and a `verdict` for a run
+# nobody made is the one thing this group may not contain.
 
 [[mutation]]
 level = "B"
@@ -591,72 +637,95 @@ expires_on_schema_change = "assurance/properties.toml's field set, formal/comuta
 # same module under the same `-Xmx4g`, used the way that file uses it — as the
 # value that bounds every process in the row.
 
+# THE HUMAN COLUMN IS A RECONSTRUCTION, AND ITS AGGREGATE DOES NOT FIT THE
+# WINDOW IT IS DATED IN. The ten rows below total 268 human_minutes, and the six
+# bundles this one arrived with total 1709 — 28.5 hours, every one of them
+# stamped `freshness.measured = 2026-08-30` inside a window that runs from
+# `31c21a7` (2026-08-30 22:03:52 +0300) to `b185fc3` (2026-08-31 01:24:37),
+# which is 3 h 21 min. NO TIMER PRODUCED ANY OF THEM: they are attended time
+# reconstructed after the fact, and every `basis` below says so in its own row
+# rather than leaving a reader to find this paragraph. They are kept because
+# they are the only cost signal the programme has, not because they are
+# measurements.
+#
+# AND THE SHIPPED BOUND IS NOT THE ONE `SEC-FIDO-002` CARRIES over a
+# byte-identical artifact — `317703de…`, the same log in six directories. 2940
+# MiB is a `/usr/bin/time -l` SAMPLE of a DIFFERENT run — the log at
+# `assurance/bundle/logs/SEC-FIDO-007/tlc-Shipped.log` has its own sha256, its
+# own seed and its own closing line, so the figure bounds THAT process and is
+# carried across to this one. `SEC-FIDO-002` bounds the same log with 3705
+# instead — the JVM ceiling the banner states, derived from the artifact rather
+# than transferred to it, and the larger of the two. Neither is this run's RSS.
+# The unit is MiB, which is checkable: the sibling writes the same sample as
+# 3083 at `assurance/bundle/SEC-FIDO-007.toml:572`, and that is 2940 MiB in
+# decimal MB.
+
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-008/tlc-Shipped.log"
 human_minutes = 4
 runner_seconds = 1913
 peak_memory_mb = 2940
-basis = "runner is the recorded tier's own timer at formal/runs.toml:66, which scripts/run_count_gate.py holds against TLC's closing sentence in the same file; human is attended time reading the log and its banner. Peak is the sibling bundle's sampled Shipped figure, carried as a bound — nothing was sampled here"
+basis = "runner is the recorded tier's own timer at formal/runs.toml:66, which scripts/run_count_gate.py holds against TLC's closing sentence in the same file; human is attended time — RECONSTRUCTED after the fact, not measured — reading the log and its banner. Peak is the sibling bundle's sampled Shipped figure (2940 MiB, which is 3 082 813 440 B), carried as a bound — nothing was sampled here"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-008/tlc-AlwaysUv.log"
 human_minutes = 3
 runner_seconds = 519
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:67; human is attended time, reconstructed. Peak is the same carried bound and not a measurement of this run"
+basis = "runner from formal/runs.toml:67; human is attended time RECONSTRUCTED after the fact, not measured. Peak is the same carried bound in MiB and not a measurement of this run"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-008/tlc-PermWide.log"
 human_minutes = 5
 runner_seconds = 553
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:68; human is attended time and carries reading PermWide.cfg's constants apart from AlwaysUv's, which is where the RPs = {r1} narrowing was found. Peak is the carried bound"
+basis = "runner from formal/runs.toml:68; human is attended time — RECONSTRUCTED after the fact, not measured — and carries reading PermWide.cfg's constants apart from AlwaysUv's, which is where the RPs = {r1} narrowing was found. Peak is the carried bound in MiB"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-008/tlc-ForceChange.log"
 human_minutes = 5
 runner_seconds = 177
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:69; human is attended time and carries reading PLAT-MODEL-010 to decide that this arm lands on the antecedent rather than beside it. Peak is the carried bound"
+basis = "runner from formal/runs.toml:69; human is attended time — RECONSTRUCTED after the fact, not measured — and carries reading PLAT-MODEL-010 to decide that this arm lands on the antecedent rather than beside it. Peak is the carried bound in MiB"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-008/tlc-Solo_NoLiveTokenWithoutPinRecord.log"
 human_minutes = 14
 runner_seconds = 3
 peak_memory_mb = 2940
-basis = "runner is the runner's own wall clock at formal/runs.toml:135, which is 3 s against TLC's `Finished in 02s` in the log because it includes JVM start-up; the log is the second source and both are in this bundle. Human is the largest per-log figure here and is attended time over the twelve-state trace, its final state's two variables, and checking the derived-name comparison against this configuration. Peak is the carried bound"
+basis = "runner is the runner's own wall clock at formal/runs.toml:135, which is 3 s against TLC's `Finished in 02s` in the log because it includes JVM start-up; the log is the second source and both are in this bundle. Human is the largest per-log figure here and is attended time RECONSTRUCTED after the fact rather than measured, over the twelve-state trace, its final state's two variables, and checking the derived-name comparison against this configuration. Peak is the carried bound in MiB"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-008/tlc-Mut_BugStateResetAfterWipe.log"
 human_minutes = 5
 runner_seconds = 2
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:93; human is attended time, and it is where the attribution finding was read rather than assumed. Peak is the carried bound"
+basis = "runner from formal/runs.toml:93; human is attended time — RECONSTRUCTED after the fact, not measured — and it is where the attribution finding was read rather than assumed. Peak is the carried bound in MiB"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-008/tlc-Solo_BugStateResetAfterWipe.log"
 human_minutes = 3
 runner_seconds = 2
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:124; human is attended time, reconstructed. Peak is the carried bound"
+basis = "runner from formal/runs.toml:124; human is attended time RECONSTRUCTED after the fact, not measured. Peak is the carried bound in MiB"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-008/tlc-Solo_RamNeverOutlivesFlashSeed.log"
 human_minutes = 4
 runner_seconds = 1
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:136; human is attended time over comparing the two depths, which is what makes this row a control rather than a repetition. Peak is the carried bound"
+basis = "runner from formal/runs.toml:136; human is attended time — RECONSTRUCTED after the fact, not measured — over comparing the two depths, which is what makes this row a control rather than a repetition. Peak is the carried bound in MiB"
 
 [[cost]]
 artifact = "the analytical half — groups 1, 3 and 7, which produced no run of their own"
 human_minutes = 115
 runner_seconds = 0
 peak_memory_mb = 0
-basis = "attended time, reconstructed from this session's work log: reading the invariant and the four actions it is about in formal/RSKeySecurityState.tla, auditing both halves of the implication across five production files in two crates, reading CTAP 2.3 §6.5's rule in the Rust that implements it, reading assurance/threat_clauses.toml's own tracing rule against TM-HOST-GATES, and deriving the seven premises. It is the largest single figure in this bundle. The zeros are honest — no process ran"
+basis = "the human figure is attended time RECONSTRUCTED from this session's work log and no timer produced it: reading the invariant and the four actions it is about in formal/RSKeySecurityState.tla, auditing both halves of the implication across five production files in two crates, reading CTAP 2.3 §6.5's rule in the Rust that implements it, reading assurance/threat_clauses.toml's own tracing rule against TM-HOST-GATES, and deriving the seven premises. It is the largest single figure in this bundle. The zeros are honest — no process ran"
 
 [[cost]]
 artifact = "the measured half that produced no log of its own — the gate derivations, the trace measurement and the five driven gate mutants"
 human_minutes = 110
 runner_seconds = 24
 peak_memory_mb = 2940
-basis = "human is attended time over reading the contract and both worked bundles, deriving the five gate lines live, the cfg-exclusion and trace measurements, driving the five gate mutants against the real scripts and restoring this file byte-identically after each, and validating with bundle_gate.audit_one. Runner is the wall clock of those Python invocations and is a LOWER BOUND: the individual calls were not timed and that is not recoverable. Peak is the same carried bound as every row above, and is the honest shape — nothing in this bundle was sampled"
+basis = "human is attended time — RECONSTRUCTED after the fact, not measured — over reading the contract and both worked bundles, deriving the five gate lines live, the cfg-exclusion and trace measurements, driving the five gate mutants against the real scripts and restoring this file byte-identically after each, and validating with bundle_gate.audit_one. Runner is the wall clock of those Python invocations and is a LOWER BOUND: the individual calls were not timed and that is not recoverable. Peak is the same carried bound in MiB as every row above, and is the honest shape — nothing in this bundle was sampled"

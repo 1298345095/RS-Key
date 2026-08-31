@@ -45,12 +45,14 @@
 [property]
 id = "SEC-FIDO-002"
 invariant = "NoCrossTransportTouchConsumption"
-# `assurance/properties.toml:98-102`, verbatim, and it is a NEGATIVE statement in
-# both halves: never applied, neither a confirm nor a cancel. What it does not
-# say — and stage 4's scope note is explicit that it must not be read as saying —
-# is that a CCID or an OTP ceremony is correctly DELIVERED. That is the positive
-# formalisation, it belongs to §8B and stage 6, and nothing below is evidence for
-# it. Read `subjects_absent` and `s_positive_half` together before citing this row.
+# `assurance/properties.toml:101` is the FIRST sentence of `statement` below and
+# is verbatim; the two after it are this bundle's own scope note and stand in no
+# registry. The registry sentence is NEGATIVE in both halves: never applied,
+# neither a confirm nor a cancel. What it does not say — and stage 4's scope
+# note is explicit that it must not be read as saying — is that a CCID or an OTP
+# ceremony is correctly DELIVERED. That is the positive formalisation, it
+# belongs to §8B and stage 6, and nothing below is evidence for it. Read
+# `subjects_absent` and `s_positive_half` together before citing this row.
 statement = "A presence decision produced for one transport is never applied to another — neither a confirm nor a cancel. The obligation is NEGATIVE and it ranges over all four wait owners; that a CCID, OTP or on-panel ceremony is correctly SERVED is a different claim and is not made here."
 subjects = ["requirement", "abstract model", "Rust source"]
 subjects_absent = ["FFI", "binary", "hardware", "integration"]
@@ -66,22 +68,25 @@ requirement = [
   "and NOTHING states the OTP or on-panel halves: the Yubico OTP frame protocol is not a FIDO specification and an on-panel ceremony is this device's own, so two of the four owners have no external requirement to be checked against",
 ]
 threat_clause = "docs/threat-model.md#TM-HOST-TWO-TRANSPORTS"
-# AND THE CLAUSE LINKS RATHER THAN COVERS. Read at docs/threat-model.md:209-228:
-# it establishes the PREMISE this property exists for — CTAP2 and U2F are served
+# AND THE CLAUSE LINKS RATHER THAN COVERS. Read at docs/threat-model.md:228-248,
+# the whole bullet and not the enabled-applications one that ends at :227: it
+# establishes the PREMISE this property exists for — CTAP2 and U2F are served
 # over CCID as well as CTAPHID, so a second, easier path reaches the same applet
-# — and then makes a claim about SHARED SESSION STATE, not about scoped presence.
-# Its one adjacent sentence, "Every operation still spends the same PIN, the same
-# pinUvAuthToken and the same physical touch", runs the OTHER way round from this
-# property: it says the touch requirement cannot be skipped by changing transport,
-# where this property says a touch produced for one transport may not be consumed
-# by another. Its pinned test, `both_transports_answer_from_one_session_state`
-# (crates/rsk-device/src/ccid_tests.rs:734), is about `&RefCell<FidoState>` — and
-# presence arbitration is not in `FidoState` at all; it is a `static Arbiter` in
-# `rsk-device`. The clause also names TWO transports where the invariant ranges
-# over four owners: `grep -n "cancel\|cross-transport\|arbitrat"
-# docs/threat-model.md` returns NOTHING, and the OTP keyboard and the on-panel
-# ceremony appear nowhere on the page.
-threat_clause_reading = "LINKS, does not cover. The clause is the reachability premise plus a shared-state claim; the property is a scoping rule about a presence DECISION, and the page states no such rule anywhere. Worse in the direction that matters for a lock: `assurance/threat_clauses.toml:193-196` gives this clause a `where` line and NO `rests_on` pin, so the only content-locked text is its first line — the sentence about the same physical touch, the nearest thing on the page to this property, can be reworded with the threat gate green. What would fix it is a clause of its own naming the presence decision and the four owners; `crates/rsk-device/src/presence.rs:4-21` already carries the argument in prose, which is the wrong place for a threat-model premise — the same shape PLAT-THREAT-001 is open on for the channel id"
+# — and then makes a claim about SHARED SESSION STATE, not about scoped
+# presence. Its one adjacent sentence, at :234-235, "Every operation still
+# spends the same PIN, the same pinUvAuthToken and the same physical touch",
+# runs the OTHER way round from this property: it says the touch requirement
+# cannot be skipped by changing transport, where this property says a touch
+# produced for one transport may not be consumed by another. Its pinned test,
+# `both_transports_answer_from_one_session_state`
+# (crates/rsk-device/src/ccid_tests.rs:734), is about `&RefCell<FidoState>` —
+# and presence arbitration is not in `FidoState` at all; it is a `static
+# Arbiter` in `rsk-device`. The clause also names TWO transports where the
+# invariant ranges over four owners:
+# `grep -n "cancel\|cross-transport\|arbitrat" docs/threat-model.md` returns
+# NOTHING, and the OTP keyboard and the on-panel ceremony appear nowhere on the
+# page.
+threat_clause_reading = "LINKS, does not cover. The clause is the reachability premise plus a shared-state claim; the property is a scoping rule about a presence DECISION, and the page states no such rule anywhere. Worse in the direction that matters for a lock: `assurance/threat_clauses.toml:216-218` gives this clause a `where` line and NO `rests_on` pin, so the only content-locked text is its first line — the sentence about the same physical touch, the nearest thing on the page to this property, can be reworded with the threat gate green. What would fix it is a clause of its own naming the presence decision and the four owners; `crates/rsk-device/src/presence.rs:4-21` already carries the argument in prose, which is the wrong place for a threat-model premise — the same shape PLAT-THREAT-001 is open on for the channel id"
 # The three genuine `Refines … — SEC-FIDO-002` tags the registry greps for, all
 # in one file and all on the ARBITER rather than on the wait.
 owners_tagged = [
@@ -163,11 +168,17 @@ obligation = "tier B: the invariant over the whole reachable space of the shippe
 method = "model-check"
 artifact = "formal/RSKeySecurityState.tla::NoCrossTransportTouchConsumption Shipped.cfg"
 bound_rps = 2
+stops_rps = "nothing this invariant can express — it names pres.granted, pres.cancelBy, pres.scope and the ghost, and no constant. What two costs it is reach alone: a falsifying presence state that first arises over a third relying party is not in the set searched"
 bound_channels = 2
+stops_channels = "nothing this invariant can express, and note which arity this is NOT: the transport count is `Owners`, a five-element set fixed in the module, so no .cfg can widen it. What two costs is reach — a cross-transport consumption that first arises over a third concurrent channel is not in the set searched"
 bound_max_retries = 8
+stops_max_retries = "nothing at all. The ladder is off this property's path, and at the shipped value it is not a shrink either; what it buys is that the PIN doors are reachable at the depth the image has"
 bound_mismatch_limit = 3
+stops_mismatch_limit = "nothing at all, for the same reason as the ladder it pairs with — no clause of this invariant names a mismatch counter, and three IS the shipped limit"
 bound_max_clock = 1
+stops_max_clock = "nothing this invariant can express. What one Tick costs is reach: a falsifying state that needs a second unit of elapsed time is not in the set searched"
 bound_reset_window = 0
+stops_reset_window = "nothing this invariant can express. What zero costs is reach: a reset STARTED inside the shipped window is a prefix no run here produces, so a presence decision crossing a transport during a legitimate in-window reset is not in the set searched"
 shipped_relation = "MaxRetries and MismatchLimit ARE the shipped MAX_PIN_RETRIES (8) and PIN_MISMATCH_LIMIT (3); RPs and Channels are 2 against an unbounded device; MaxClock 1 is the smallest value at which Tick is not dead; ResetWindow 0 runs the window closed only. NONE OF THE SIX IS ON THIS PROPERTY'S PATH — the invariant names `pres.granted`, `pres.cancelBy`, `pres.scope` and the ghost, and no constant. What the six buy it is the reachable set a falsifying state would have to appear in; what they cost it is nothing it can express. The bound that IS on its path is not in this list and is not a configuration knob at all: `Owners` is a five-element SET fixed in the module at formal/RSKeySecurityState.tla:144, so the transport arity cannot be widened by a .cfg — AS-XT-2"
 cfg = "none"
 features = "none"
@@ -177,10 +188,15 @@ obligation = "tier B: the other arm of all three registered scope constants, aga
 method = "model-check"
 artifact = "AlwaysUv.cfg PermWide.cfg ForceChange.cfg"
 bound_arms_run = 3
+stops_arms_run = "the fourth standing assumption. Three of the four `scripts/assumption_gate.py` tracks have both arms run against this invariant; PowerOnClearsScratch2 lives in RSKeyBootHardening and no configuration checking this property takes either of its arms, so nothing here says whether a power-on that fails to clear scratch2 can carry a presence decision across a transport"
 bound_rps = 2
+stops_rps = "a falsifying state that first arises over a third relying party, on all three arms"
 bound_channels = 2
+stops_channels = "a falsifying state that first arises over a third concurrent channel, on all three arms"
 bound_max_retries = 2
+stops_max_retries = "nothing — the ladder is off this property's path, so eight rungs down to two is free here in a way it is not for SEC-FIDO-001"
 bound_mismatch_limit = 1
+stops_mismatch_limit = "nothing, for the same reason: no clause names the mismatch counter, so one against the shipped three costs this invariant no term"
 shipped_relation = "three configurations, one per constant: AlwaysUvShipped TRUE (formal/AlwaysUv.cfg), WidePerms TRUE (PermWide.cfg, one relying party) and ForceChangeModelled TRUE (ForceChange.cfg). The retry ladder is REDUCED on all three — 8:3 becomes 2:1 — and for THIS invariant that shrink is free in a way it is not for SEC-FIDO-001, because neither constant appears in the property. What the three rows buy is that of the four standing assumptions `scripts/assumption_gate.py` tracks, THREE have both arms run against this property; the fourth, PowerOnClearsScratch2, lives in RSKeyBootHardening and the overlap with the configurations checking this invariant is ZERO. That is a stronger position than SEC-FIDO-001 and SEC-FIDO-007, which each have one such constant"
 cfg = "none"
 features = "none"
@@ -190,9 +206,13 @@ obligation = "non-degeneracy: the invariant can go red, on a name that is its ow
 method = "model-check"
 artifact = "Solo_BugUnscopedCancel.cfg Solo_BugPanelCancelable.cfg Solo_BugUnscopedOtpCancel.cfg Solo_BugNoDropStaleCancelAtEntry.cfg Solo_BugTouchNotSpent.cfg"
 bound_invariants_checked = 2
+stops_invariants_checked = "anything about the other eight invariants. Each row checks TypeOK and this name alone, which is what makes a RED this property's rather than a sibling's — and the price is that a state falsifying two at once is seen here as falsifying one"
 bound_armed_switches = 1
+stops_armed_switches = "any defect that needs TWO of the model's bug switches at once. One armed switch per row is what attributes the kill, and a cross-term between two injected defects is not a state any of the five reaches"
 bound_isolated_rows = 5
+stops_isolated_rows = "a sixth way for this invariant to fail. Five arms are five defects somebody wrote a switch for, so non-degeneracy is shown for those five and for no failure mode nobody modelled"
 bound_counterexample_depth_max = 7
+stops_counterexample_depth_max = "nothing — the depths are MEASURED trace lengths and not a bound the configurations impose. What they say is that the five land on four different (scope, cancelBy) pairs rather than all tripping on the first; what they cannot say is that a longer trace would find nothing else"
 shipped_relation = "each of the five arms ONE Bug* switch with every other FALSE and checks TypeOK and this invariant and nothing else, which is what tells a kill from a neighbouring invariant's. Unlike SEC-FIDO-007 the Solo rows are not the only place this property is observed to fail: its invariant IS in `formal/gen-configs.sh:105-107`'s ALL_INV, so the five `Mut_` twins that check the whole set report THIS name too — measured, all ten, and that is the `b_mut_twins` row. The four cancel counterexamples land at depths 4, 5, 5 and 5 and the confirm one at 7, on four DIFFERENT (scope, cancelBy) pairs, which is what says each reaches its own boundary rather than all five tripping on the first"
 cfg = "none"
 features = "none"
@@ -202,10 +222,15 @@ obligation = "tier C: the cancel clause at code level — the wait that ends Can
 method = "bounded proof"
 artifact = "crates/rsk-device/src/presence_kani.rs::no_cross_transport_touch_consumption_cancel"
 bound_budget_polls = 3
+stops_budget_polls = "any defect that first appears on a fourth poll. The shipped wait polls for its whole ten-second budget at a 16 ms tick — hundreds of iterations — and every one past the third is outside this harness"
 bound_unwind = 6
+stops_unwind = "nothing beyond the poll budget it covers. At 6 against a budget of 3 the unwinding is slack, so it is not the binding bound on this row and BUDGET_POLLS is; too small would be loud rather than silent, because Kani fails the unwinding assertion"
 bound_scopes = 4
+stops_scopes = "an arbiter handed a scope byte that is none of the four. `scope` is drawn symbolically over the four SCOPE_* values and assumed to be one of them, so a fifth byte reaching the arbiter is outside the proof"
 bound_cancel_producers = 2
+stops_cancel_producers = "a cancel from a producer that is neither host path. Both host cancels are raised or not in every slice, so the interleaving of THOSE two is symbolic and a third source of cancellation is not modelled"
 bound_stale_cancel_arm = 1
+stops_stale_cancel_arm = "the stale-cancel drop at the wait's EXIT. Of the two drops only the one at entry is pinned here; observing the other needs a second wait, which is a unit test's and not this harness's"
 shipped_relation = "BUDGET_POLLS is 3 and the unwind bound 6 (crates/rsk-device/src/presence_kani.rs:20-25), against a shipped wait whose budget is MIN_TIMEOUT_SECS 10 s at a 16 ms poll — about 625 iterations. `scope` is fully symbolic over the four SCOPE_* bytes and both host cancels are raised or not in every slice, so the interleaving is symbolic; what is NOT symbolic is the SCHEDULE, because Kani reads the arbiter's atomics sequentially and says so — AS-XT-1. There is no `cfg(kani)` constant shrink on this path: `git grep -n 'cfg(kani)' crates/rsk-device/src` outside the harness files is one hit, the `mod proofs` hook at presence.rs:260. SEC-FIDO-001's method table says CTAP_MAX_MESSAGE's shrink puts 'all seven presence_kani.rs harnesses' over a two-continuation transport; measured here, that constant is real for the crate build and INERT for these seven — `RESP_CAP` lives in ctap.rs and ccid.rs and none of the seven constructs either"
 cfg = "kani"
 features = "kani-soft"
@@ -215,9 +240,13 @@ obligation = "tier C: the confirm clause, and the premise it reasons from proved
 method = "bounded proof"
 artifact = "crates/rsk-device/src/presence_kani.rs::no_cross_transport_touch_consumption_confirm crates/rsk-device/src/presence_kani.rs::a_hold_that_satisfied_a_ceremony_is_spent_by_it"
 bound_ceremonies = 2
+stops_ceremonies = "a hold that spans three ceremonies. Two is what the harness runs, the second on a finger that never lifted, and the model's TouchConfirm is what covers a longer hold"
 bound_budget_polls = 3
+stops_budget_polls = "any defect that first appears on a fourth poll of either ceremony, the same shrink as the cancel row"
 bound_unwind = 6
+stops_unwind = "nothing beyond the poll budget it covers; at 6 against 3 polls the unwinding is slack on this row too"
 bound_scopes = 4
+stops_scopes = "a ceremony whose scope byte is none of the four. The two scopes are independently symbolic over the four SCOPE_* values, which is the whole alphabet the type admits and nothing outside it"
 shipped_relation = "two ceremonies under independently symbolic scopes, the second running on a finger that never lifted. Stated as one implication rather than an `assume`, so no premise can silently go unreachable, and the premise itself is the second harness rather than an assumption. The Rust proved is STRONGER than the model needs: `spent` carries no owner, so a still-held press confirms for nobody — including the same transport again — while the model's `usedBy` only forbids the CROSS-transport case. Two ceremonies is the bound: a hold spanning three is not proved here and the model's TouchConfirm is what covers it"
 cfg = "kani"
 features = "kani-soft"
@@ -227,12 +256,19 @@ obligation = "the production side: which sites own the decision, whether the tag
 method = "review"
 artifact = "crates/rsk-device/src/presence.rs::request_cancel crates/rsk-device/src/presence.rs::cancel_otp_wait crates/rsk-device/src/presence.rs::pending_for firmware/src/presence.rs::up_pending scripts/assurance_gate.py"
 bound_tagged_owners = 3
+stops_tagged_owners = "any owner outside the three the tag set names. This is a count of SITES and not a shrink of a shipped constant, because a review has no other unit, so what it covers is exactly the sites that were read"
 bound_cancel_writers = 2
+stops_cancel_writers = "nothing by omission on this axis — `cancel_requested.store(true` is exactly two sites and both carry a tag, so both halves of the cancel decision are covered. What a count of sites cannot say is that a future third writer would be noticed"
 bound_scope_writers = 4
+stops_scope_writers = "any scope write outside the four call sites in the worker. The sequencing around a dispatch is the worker's, and reading four sites says which they are and not that the order between them is right"
 bound_credited_files = 2
+stops_credited_files = "the difference between a file and a site. The derived column counts FILE names, so a second owner inside an already-counted file moves nothing — which is why one credited file carrying no tag never reddened a row"
 bound_untagged_credited_files = 1
+stops_untagged_credited_files = "any warning from the derived column about exactly this. One of the two credited files carries no tag and the column still reads 2, so the column cannot distinguish a covered file from a counted one"
 bound_harnesses_in_file = 7
+stops_harnesses_in_file = "the five harnesses the column does not count. Seven live in the proof file and two are credited, so whatever the other five prove is outside every derived number this row feeds"
 bound_harnesses_counted = 2
+stops_harnesses_counted = "any claim that the two counted harnesses are the strongest available. The count is what the column credits, not a judgement about which proofs are load-bearing"
 shipped_relation = "`git grep -n 'cancel_requested.store(true'` is exactly TWO sites — presence.rs:120 inside `request_cancel`'s SCOPE_FIDO test and :131 inside `cancel_otp_wait`'s SCOPE_OTP test — and both carry a tag, so both halves of the cancel decision are covered, which is the thing that had to be confirmed rather than assumed. The four `set_wait_scope` call sites are firmware/src/worker.rs:434, :528, :663 and :665. Two files are credited to the `rust` column and one of them carries no tag; seven harnesses live in the proof file and two are counted. These bounds are counts of SITES and not shrinks of a shipped constant, because a review has no other unit — the same weakness SEC-FIDO-007 recorded about its own review row"
 cfg = "none — every site above is unconditional production code on a button build; the two `cfg(feature = \"display\")` forwarders at firmware/src/presence.rs:263-269 are counted apart and are AS-XT-4's"
 features = "none"
@@ -242,10 +278,15 @@ obligation = "the code twin: the same defect in production Rust, driven to the n
 method = "mutation"
 artifact = "formal/comutants.toml scripts/comutate.py crates/rsk-device/src/presence_tests.rs::w4c_no_cancel_crosses_a_transport_boundary"
 bound_patch_hunks = 1
+stops_patch_hunks = "any defect the one hunk cannot express. A co-refutation patch is a hunk count and not a shrink of a shipped constant, so what is driven is the defect somebody wrote and not the class it belongs to"
 bound_patched_files = 1
+stops_patched_files = "a defect that has to span two files. All five of this property's comutants patch the tagged owner, which is the healthy case; a cross-file ordering defect is not something this apparatus can inject"
 bound_failing_tests = 3
+stops_failing_tests = "which assertion is load-bearing. Three tests fall, and a count of them says the mutant died and not that any one of the three was written for this property"
 bound_owner_canceller_pairs = 6
+stops_owner_canceller_pairs = "the two pairs the sweep excludes — an owner raising its own cancel — and any pair over a transport the four owners do not include"
 bound_comutants_for_this_property = 5
+stops_comutants_for_this_property = "any model switch with no code twin. Five comutants stand against this invariant and the register is what defines the set, so a modelled defect nobody wrote a patch for has no code-level verdict here"
 shipped_relation = "all five of this property's comutants patch ONE file, `crates/rsk-device/src/presence.rs`, which is the tagged owner — the healthy case, and not SEC-FIDO-007's, where the patched file was neither an owner nor tagged. `BugUnscopedCancel` and `BugPanelCancelable` share an ANCHOR (formal/comutants.toml:159-163 and :450-454 quote the same three lines), which the file's own note says in as many words: the model splits the scope test three ways and the code fuses it into one guard. One of the five was re-driven by hand here; the other four are the recorded `expect = \"killed\"`, which `.github/workflows/deep-checks.yml:476-479` re-drives WEEKLY as a gating row and `scripts/check.sh:725` lints on every run. The six pairs are `w4c`'s sweep: four owners × two host-reachable cancels, less the two an owner may raise for itself"
 cfg = "none"
 features = "none — the slice `formal/comutants.toml` names is exactly `cargo test -p rsk-device`, on the default feature set"
@@ -255,10 +296,15 @@ obligation = "the scope disposition: why four build columns are `out-of-scope` a
 method = "review"
 artifact = "assurance/configurations.toml firmware/src/presence.rs::poll_pressed docs/assurance-matrix.md"
 bound_columns_total = 31
+stops_columns_total = "any build outside the thirty-one columns the ledger carries. The disposition is decided per column, so a configuration nobody listed has no cell to be `gap` or `out-of-scope` in"
 bound_columns_out_of_scope = 4
+stops_columns_out_of_scope = "nothing about the four, and that is the point: on a no-touch image no presence decision is produced at all, so a property about where a decision may be applied has no subject. What SURVIVES the disposition is that the arbiter and all three tagged functions ARE compiled into those images — what is absent is the wait, not the arbitration"
 bound_columns_claimed = 3
+stops_columns_claimed = "twenty-seven of the thirty-one. Three columns carry a claim, so the invariant is asserted for three builds and for no other"
 bound_columns_gap = 24
+stops_columns_gap = "everything on those twenty-four columns. A gap is the honest remainder — nobody has judged — and three of them are board columns that move `presence.source` off BOOTSEL, where the decision's producer is not the one this evidence was taken over"
 bound_board_columns_moving_presence = 3
+stops_board_columns_moving_presence = "the three boards themselves. Naming which gap columns change the presence source says where the evidence would have to be retaken and never that it holds there"
 shipped_relation = "this is the only row of the eleven-bundle programme with `out-of-scope` cells, and the disposition is DECIDED rather than open: on the four `no-touch` images `ButtonWait::wait` — the sole caller of `set_up_pending(true)` on a non-display build — is never called, because `ButtonPresence::wait` is `cfg(not(feature = \"no-touch\"))` and `request`/`request_ceremony` return `Presence::Confirmed` outright (firmware/src/presence.rs:202-258). So no presence DECISION is produced at all, and a property about where a decision may be applied has no subject. `gap` would say nobody has judged; `out-of-scope` says the claim is not made, which is the true state — and the tree already treats those builds that way, `firmware/Cargo.toml` saying 'Never ship a no-touch build' and `release-build.yml` refusing to release one. NOTE WHAT SURVIVES: `Arbiter` and all three tagged functions ARE compiled into those images; what is absent is the wait, not the arbitration. The 24 `gap` cells are the honest remainder and three of them are board columns that move `presence.source` off BOOTSEL"
 cfg = "none"
 features = "none — `no-touch` is the feature the four columns add, and no evidence in this bundle was built with it"
@@ -534,6 +580,16 @@ registered = "yes — assurance/platform.toml PLAT-TOOL-003, pending, whose `sup
 
 # ---- 8. Mutation verdicts ----------------------------------------------------
 
+# EIGHT rows, which is `bundle_gate.VERDICT_FLOOR` exactly. SIX are model-level
+# — the five solo mutants and the whole-set row — and TWO are code-level; no row
+# here mutates a gate script or this file, so unlike `SEC-FIDO-008`'s group the
+# floor is cleared on the model and the code alone. It is cleared by a margin of
+# nothing, and the eighth row is the weakest of the eight: it carries FOUR
+# comutants as one transcribed verdict, and its own `fell` says so — the driver
+# prints `killed` and not the name of the test that fell, so those four have a
+# verdict and no assertion behind them. Drop that row and the group is at seven,
+# under the floor.
+
 [[mutation]]
 level = "B"
 mutant = "BugUnscopedCancel — `request_cancel`'s `wait_scope == SCOPE_FIDO` test deleted, armed ALONE"
@@ -634,107 +690,130 @@ expires_on_schema_change = "assurance/properties.toml's field set, assurance/con
 # formal/runs.toml, and their `peak_memory_mb` is a CEILING and is labelled as
 # one in every row.
 
+# THE HUMAN COLUMN IS A RECONSTRUCTION, AND ITS AGGREGATE DOES NOT FIT THE
+# WINDOW IT IS DATED IN. The fifteen rows below total 320 human_minutes, and the
+# six bundles this one arrived with total 1709 — 28.5 hours, every one of them
+# stamped `freshness.measured = 2026-08-30` inside a window that runs from
+# `31c21a7` (2026-08-30 22:03:52 +0300) to `b185fc3` (2026-08-31 01:24:37),
+# which is 3 h 21 min. NO TIMER PRODUCED ANY OF THEM: they are attended time
+# reconstructed after the fact, and every `basis` below says so in its own row
+# rather than leaving a reader to find this paragraph. They are kept because
+# they are the only cost signal the programme has, not because they are
+# measurements.
+#
+# AND THE SHIPPED BOUND HERE IS NOT THE ONE THE OTHER FIVE BUNDLES CARRY over a
+# byte-identical artifact — `317703de…`, the same log in six directories. 3705
+# is a CEILING this artifact states about ITSELF, the banner's 3641MB heap plus
+# 64MB offheap, so it is derived from the log rather than transferred to it. The
+# 2940 MiB the five siblings carry is a `/usr/bin/time -l` SAMPLE of a DIFFERENT
+# run: `assurance/bundle/logs/SEC-FIDO-007/tlc-Shipped.log` has its own sha256,
+# its own seed and its own closing line. Neither figure is the RSS of the run
+# that wrote the log below; the ceiling is the larger of the two, and this file
+# takes it because the artifact states it. The units differ with them — the two
+# measured rows here convert DECIMALLY and now say so, where `-004` and `-005`
+# convert the same field in MiB — so every row names its own.
+
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-Shipped.log"
 human_minutes = 4
 runner_seconds = 1913
 peak_memory_mb = 3705
-basis = "runner is run-tlc.sh's own timer as formal/runs.toml records it, not taken here. peak is NOT a measurement and is not offered as one: it is the JVM ceiling this log's own banner states — 3641MB heap and 64MB offheap — which BOUNDS the managed memory of the process that wrote it. The precedent for stating a bound in this field rather than inventing a number is assurance/bundle/SEC-FIDO-007.toml:573; the difference is that this ceiling comes out of the artifact instead of out of a sibling's sample. human is attended time, reconstructed from this session's work log"
+basis = "runner is run-tlc.sh's own timer as formal/runs.toml records it, not taken here. peak is NOT a measurement and is not offered as one: it is the JVM ceiling this log's own banner states — 3641MB heap and 64MB offheap, so 3705 is in the banner's own MB, 3 884 974 080 B read as MiB — which BOUNDS the managed memory of the process that wrote it. The precedent for stating a bound in this field rather than inventing a number is assurance/bundle/SEC-FIDO-007.toml:573; the difference is that this ceiling comes out of the artifact instead of out of a sibling's sample. human is attended time RECONSTRUCTED from this session's work log, which is not a measurement and had no timer behind it"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-AlwaysUv.log"
 human_minutes = 3
 runner_seconds = 519
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, a bound and not a sample. human is attended time, reconstructed"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB, a bound and not a sample. human is attended time RECONSTRUCTED after the fact, not measured"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-PermWide.log"
 human_minutes = 4
 runner_seconds = 553
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, a bound and not a sample. human is attended time and carries checking that the wide permission domain is a scope this invariant cannot express"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB, a bound and not a sample. human is attended time — RECONSTRUCTED after the fact, not measured — and carries checking that the wide permission domain is a scope this invariant cannot express"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-ForceChange.log"
 human_minutes = 3
 runner_seconds = 177
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, a bound and not a sample. human is attended time, reconstructed"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB, a bound and not a sample. human is attended time RECONSTRUCTED after the fact, not measured"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-Solo_BugUnscopedCancel.log"
 human_minutes = 8
 runner_seconds = 1
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records. human is the largest of the five counterexample rows: it carries reading the trace, extracting the final `pres` record, and deciding which direction the failure fell in"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB. human is RECONSTRUCTED attended time, never measured, and is the largest of the five counterexample rows: it carries reading the trace, extracting the final `pres` record, and deciding which direction the failure fell in"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-Solo_BugPanelCancelable.log"
 human_minutes = 5
 runner_seconds = 1
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records. human is attended time over the trace and over checking that the CCID arm of the guard is untouched by this mutant"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB. human is attended time — RECONSTRUCTED after the fact, not measured — over the trace and over checking that the CCID arm of the guard is untouched by this mutant"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-Solo_BugUnscopedOtpCancel.log"
 human_minutes = 5
 runner_seconds = 1
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records. human is attended time over the trace and over the pairing with the row above"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB. human is attended time — RECONSTRUCTED after the fact, not measured — over the trace and over the pairing with the row above"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-Solo_BugNoDropStaleCancelAtEntry.log"
 human_minutes = 6
 runner_seconds = 0
 peak_memory_mb = 3705
-basis = "runner is 0 s in formal/runs.toml — the shortest row of the fourteen; peak is the JVM ceiling this log's banner records. human is attended time and carries reading HostCancelLatched, which is why the entry clear and the exit clear are not interchangeable"
+basis = "runner is 0 s in formal/runs.toml — the shortest row of the fourteen; peak is the JVM ceiling this log's banner records, in that banner's own MB. human is attended time — RECONSTRUCTED after the fact, not measured — and carries reading HostCancelLatched, which is why the entry clear and the exit clear are not interchangeable"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-Solo_BugTouchNotSpent.log"
 human_minutes = 7
 runner_seconds = 1
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records. human is attended time over the seven-state confirm trace, which is the only one of the five whose falsifying step is not a cancel"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB. human is attended time — RECONSTRUCTED after the fact, not measured — over the seven-state confirm trace, which is the only one of the five whose falsifying step is not a cancel"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-Mut_BugUnscopedCancel.log"
 human_minutes = 4
 runner_seconds = 1
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records. human is attended time and is where the attribution contrast with SEC-FIDO-007 was read rather than assumed"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB. human is attended time — RECONSTRUCTED after the fact, not measured — and is where the attribution contrast with SEC-FIDO-007 was read rather than assumed"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/tlc-Mut_BugTouchNotSpent.log"
 human_minutes = 3
 runner_seconds = 1
 peak_memory_mb = 3705
-basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records. human is attended time, reconstructed"
+basis = "runner from formal/runs.toml; peak is the JVM ceiling this log's banner records, in that banner's own MB. human is attended time RECONSTRUCTED after the fact, not measured"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/kani-rsk-device.log.gz"
 human_minutes = 26
 runner_seconds = 11.75
 peak_memory_mb = 497
-basis = "MEASURED HERE: runner and peak are /usr/bin/time -l over the run that wrote this log — 11.75 s real, 496 795 648 B maximum resident set size, of which 2.1 s is solving and the rest is the compile. human is attended time and carries deciding to re-run the tier at all, reading the concurrency warning, and counting the seven harnesses against the column's two"
+basis = "MEASURED HERE: runner and peak are /usr/bin/time -l over the run that wrote this log — 11.75 s real, 496 795 648 B maximum resident set size, which this column carries as 497 MB decimal and is 474 MiB, of which 2.1 s is solving and the rest is the compile. human is attended time — RECONSTRUCTED after the fact, not measured — and carries deciding to re-run the tier at all, reading the concurrency warning, and counting the seven harnesses against the column's two"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-002/comutate-BugUnscopedCancel.log"
 human_minutes = 22
 runner_seconds = 8.2
 peak_memory_mb = 384
-basis = "MEASURED HERE: runner and peak are /usr/bin/time -l over `cargo test -p rsk-device --target aarch64-apple-darwin` in the patched worktree — 8.20 s real, 384 483 328 B maximum resident set size. human is attended time over standing the worktree up, applying the anchor, and reading each of the three assertions for its direction rather than for its colour"
+basis = "MEASURED HERE: runner and peak are /usr/bin/time -l over `cargo test -p rsk-device --target aarch64-apple-darwin` in the patched worktree — 8.20 s real, 384 483 328 B maximum resident set size, likewise decimal — 384 MB, 367 MiB. human is attended time — RECONSTRUCTED after the fact, not measured — over standing the worktree up, applying the anchor, and reading each of the three assertions for its direction rather than for its colour"
 
 [[cost]]
 artifact = "the analytical half — groups 1, 3 and 7, and the scope story, which produced no run of their own"
 human_minutes = 175
 runner_seconds = 0
 peak_memory_mb = 0
-basis = "attended time, reconstructed from this session's work log: reading the model's presence section and its five mutants, the arbiter and the wait, the seven harnesses, the twenty-four unit tests, the threat clause against the property, and the four out-of-scope cells against the cfg arms that justify them. It is the largest single figure here and it is NOT a measurement; the zeros are honest, because no process ran"
+basis = "the human figure is attended time RECONSTRUCTED from this session's work log and no timer produced it: reading the model's presence section and its five mutants, the arbiter and the wait, the seven harnesses, the twenty-four unit tests, the threat clause against the property, and the four out-of-scope cells against the cfg arms that justify them. It is the largest single figure here and it is NOT a measurement; the zeros are honest, because no process ran"
 
 [[cost]]
 artifact = "the two derivation findings and the registry proposals — reading assurance_gate and evidence_gate against each other, and writing the six platform entries the seven new slice ids need"
 human_minutes = 45
 runner_seconds = 3
 peak_memory_mb = 3705
-basis = "human is attended time over the two owner derivations, the ghost gate's module-level INVARIANT, and drafting the platform.toml additions the integrator merges. runner is the gate-derivation time for the five transcribed `gate_*` lines and is a LOWER BOUND — the individual calls were not timed. peak is the JVM ceiling above, which bounds every process in this row"
+basis = "human is attended time — RECONSTRUCTED after the fact, not measured — over the two owner derivations, the ghost gate's module-level INVARIANT, and drafting the platform.toml additions the integrator merges. runner is the gate-derivation time for the five transcribed `gate_*` lines and is a LOWER BOUND — the individual calls were not timed. peak is the JVM ceiling above, in the banner's own MB, which bounds every process in this row"

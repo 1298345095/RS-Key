@@ -148,11 +148,17 @@ obligation = "the invariant over the whole reachable space of the shipped consta
 method = "model-check"
 artifact = "formal/RSKeySecurityState.tla::NoUnmanageableCredential + Shipped.cfg::NoUnmanageableCredential"
 bound_rps = 2
+stops_rps = "every interleaving that needs a second credential for ONE relying party. `store.cred` and `store.rpent` are subsets of RPs, so the cardinality IS this invariant's own domain — two relying parties with one credential each, against a device that holds hundreds over as many; AS-CRED-1 is the row that owns it"
 bound_channels = 2
+stops_channels = "a falsifying state that first arises over a third concurrent channel"
 bound_max_retries = 8
+stops_max_retries = "nothing by shrinking: eight IS the shipped ladder. It is off this property's path and is what makes the doors above the store reachable"
 bound_mismatch_limit = 3
+stops_mismatch_limit = "nothing by shrinking, for the same reason as the ladder it pairs with"
 bound_max_clock = 1
+stops_max_clock = "any falsifying state that needs a second unit of elapsed time"
 bound_reset_window = 0
+stops_reset_window = "the in-window arm. At zero the wipe is reached only outside the power-up window, so an interleaving that begins inside a legitimate in-window reset is not searched"
 shipped_relation = "MaxRetries and MismatchLimit ARE the shipped MAX_PIN_RETRIES (8) and PIN_MISMATCH_LIMIT (3) at crates/rsk-fido/src/consts.rs; MaxClock 1 is the smallest value at which Tick is not dead; ResetWindow 0 runs the window closed only. RPs = 2 IS on this property's path, and that is the difference from SEC-FIDO-007's identical-looking row: `store.cred` and `store.rpent` are SUBSETs of RPs, so the cardinality is the invariant's own domain — two relying parties, one credential each, against a device that holds MAX_RESIDENT_CREDENTIALS (256) credentials over as many RPs. What two buys is that the counterexamples below are not artefacts of a single-RP degeneracy; what it costs is every interleaving that needs a second credential for ONE rp, which is AS-CRED-1"
 cfg = "none"
 features = "none"
@@ -162,10 +168,15 @@ obligation = "the same invariant on the three arms the default image does not bu
 method = "model-check"
 artifact = "AlwaysUv.cfg::NoUnmanageableCredential PermWide.cfg::NoUnmanageableCredential ForceChange.cfg::NoUnmanageableCredential"
 bound_arms = 3
+stops_arms = "any arm of a standing assumption no configuration takes. What the three buy is that all four of the tree's non-mutant configurations assert this invariant, which is the whole of its numerator; none of the three constants they vary is on this property's path, so they buy no depth on it"
 bound_rps = 2
+stops_rps = "every interleaving needing a second credential for one relying party, on the three arms as on the shipped row"
 bound_channels = 2
+stops_channels = "a falsifying state that first arises over a third concurrent channel, on all three arms"
 bound_max_retries = 2
+stops_max_retries = "the six rungs between two and the shipped eight, on the alwaysUv arm — free here, because no clause of this invariant names a retry count"
 bound_mismatch_limit = 1
+stops_mismatch_limit = "the two mismatches between one and the shipped three, and nothing this invariant can express"
 shipped_relation = "the retry ladder is REDUCED on the AlwaysUv arm (formal/AlwaysUv.cfg:6-7, 2:1 against the shipped 8:3) and left alone on the other two. AND NONE OF THE THREE CONSTANTS THE ARMS VARY IS ON THIS PROPERTY'S PATH: AlwaysUvShipped is a gate default, WidePerms is the permission-set cardinality and ForceChangeModelled is a PIN-policy flag, while `store.cred \\subseteq store.rpent` names two store fields and no gate. What the three rows buy is therefore not depth on the invariant but that all four of the tree's non-mutant configurations assert it — which is the whole of the `4 of 40` numerator, and which most MODELLED-ONLY rows do not have"
 cfg = "none"
 features = "none"
@@ -175,9 +186,13 @@ obligation = "non-degeneracy: the invariant CAN go red, in each of the three pla
 method = "model-check"
 artifact = "Solo_BugCredBeforeRp.cfg::BugCredBeforeRp Solo_BugDeleteRpBeforeCred.cfg::BugDeleteRpBeforeCred Solo_BugSeedDoesNotLead.cfg::BugSeedDoesNotLead"
 bound_invariants = 2
+stops_invariants = "anything about the rest of the invariant set. TypeOK and this name alone is what tells these kills from a neighbour's"
 bound_armed_switches = 1
+stops_armed_switches = "any defect needing two switches at once"
 bound_solo_configurations = 3
+stops_solo_configurations = "a fourth ordering. The three switches are the three orderings the shipped tree chose — registration, credential-management delete and the wipe — so an ordering nobody wrote a switch for is not shown to be falsifiable"
 bound_counterexample_depths = 14
+stops_counterexample_depths = "nothing — the depth is the deepest MEASURED trace of the three and not a cap the configurations impose; the other two fall shallower"
 shipped_relation = "each configuration checks TypeOK and this invariant and NOTHING else, and arms exactly one Bug* with every other FALSE — which is what tells these kills from a neighbouring invariant's. The three switches are the three orderings the shipped tree chose: registration (EF_RP before EF_CRED, credential.rs:853 vs :888), credential-management delete (EF_CRED before the count, credmgmt.rs:672 vs :679) and the wipe (the seed before the batch — the `FIDO_SEED_FIDS` loop at reset.rs:75-79, under the comment at :67-69 that says why). The depth bound is the deepest of the three traces, 14 on Solo_BugDeleteRpBeforeCred; the other two fall at 7 and 13. Unlike SEC-FIDO-007, the Solo_ rows are not the ONLY place this property is observed to fail — `formal/gen-configs.sh:185-187` puts a mutant's target invariant FIRST in a Mut_ configuration's INVARIANTS block, so all three Mut_ twins report this name too"
 cfg = "none"
 features = "none"
@@ -187,8 +202,11 @@ obligation = "the historical row: the wipe order this tree had before 0x08BF, ru
 method = "model-check"
 artifact = "Historical_E76.cfg::BugSeedDoesNotLead"
 bound_invariants = 7
+stops_invariants = "clause attribution. Seven invariants are checked at once, so TLC reports the first violated name and a red on this row need not be this property's — which is what the solo rows above exist for"
 bound_armed_switches = 1
+stops_armed_switches = "any defect needing two switches at once — and note what one switch buys here: `diff` shows this configuration and Mut_BugSeedDoesNotLead.cfg to be the same file under two names, so the roster's denominator counts one configuration twice"
 bound_states_before_abort = 1875109
+stops_states_before_abort = "anything about the size of the state space. TLC aborts on the first violation, so the count is where the search stopped; the two names for this one configuration differ in it only because two workers were at different points"
 shipped_relation = "the configuration is the pre-0x08BF tree — `BugSeedDoesNotLead = TRUE` with `FixPpuatRequiresPin = TRUE` — and it is the row that says this invariant is what the E76 fix was FOR. It is also this bundle's first finding about the apparatus rather than the property: `diff formal/Historical_E76.cfg formal/Mut_BugSeedDoesNotLead.cfg` is EMPTY. `formal/gen-configs.sh:295` emits the first as `emit Historical_E76.cfg BugSeedDoesNotLead FALSE TRUE` and `:302`'s loop emits the second with the same four arguments, so the two files are the same configuration under two names and the `cfgs = 40` denominator counts 39 distinct ones. The state counts differ (1 875 109 against 1 875 179) because TLC aborts on the first violation and its two workers were at different points, which is the cleanest available demonstration that the difference is scheduling and not model"
 cfg = "none"
 features = "none"
@@ -198,11 +216,17 @@ obligation = "the production side: which sites own each half, whether the tags r
 method = "review"
 artifact = "crates/rsk-fido/src/credential.rs::credential_store + crates/rsk-fido/src/credmgmt.rs::decrement_rp + …enumerate_rps + crates/rsk-fido/src/passkeys.rs::for_each_rp"
 bound_tagged_owners = 3
+stops_tagged_owners = "any owner outside the three the tag set names. This is a count of SITES and not a shrink of a shipped constant, because a review has no other unit"
 bound_writer_sites = 8
+stops_writer_sites = "a writer in a file the review did not open. Eight entries over four files is what was read, and one entry holds three best-effort rollbacks, so the site count is larger than the entry count"
 bound_reader_sites = 3
+stops_reader_sites = "anything about what a reader DOES with a slot it read. The count names the three browse surfaces and not their agreement — measured, two of them disagree on one skip condition"
 bound_skip_conditions = 3
+stops_skip_conditions = "the invariant itself, and this is the finding: a record that exists and is SKIPPED satisfies `store.rpent` as plain set membership while being exactly what the clause forbids. Three skip conditions are three ways for that to happen, and no model bound reaches any of them"
 bound_files_in_argument = 4
+stops_files_in_argument = "anything in a fifth file"
 bound_crates = 1
+stops_crates = "a site outside rsk-fido. The whole argument is in one crate, so a management surface in another would be outside it"
 shipped_relation = "eight writer entries over four files in ONE crate — ten sites, since one entry holds the three best-effort rollbacks — against the three functions the tag set names; the count is a count of sites and not a shrink of a shipped constant, because a review has no other unit. The three skip conditions are the finding: both browse surfaces drop an EF_RP slot when `fs.read` answers None (credmgmt.rs:364, passkeys.rs:113), when `n < RP_PREFIX || buf[0] == 0` (credmgmt.rs:368, passkeys.rs:117) and when `unseal_rp_id` fails (credmgmt.rs:402, passkeys.rs:122) — and `store.rpent` is plain set membership, so a record that exists and is skipped satisfies the invariant while being exactly what the clause forbids. The two surfaces do not even agree with each other on the third: `enumerate_rps` answers `CtapError::Other` for the WHOLE walk, so one unsealable record hides every other relying party from the host, while `for_each_rp` skips that one and lists the rest"
 cfg = "none — every site above is unconditional production code; the invariant's name appears in no cfg-gated mirror"
 features = "none"
@@ -212,9 +236,13 @@ obligation = "the five sites the tree already records as open in this class, and
 method = "review"
 artifact = "CHANGELOG.md crates/rsk-fido/src/credential.rs::bump_rp crates/rsk-fido/src/credmgmt.rs::delete_credential crates/rsk-fido/src/largeblobext.rs::discard"
 bound_open_sites = 5
+stops_open_sites = "any site in this class the CHANGELOG's list does not name. The five were read from a list the tree already keeps, so the review is exactly as complete as that list is"
 bound_sites_in_the_forbidden_direction = 0
+stops_sites_in_the_forbidden_direction = "nothing about whether the five are harmless. Measured, none can falsify this invariant — every one strands an EF_RP entry OVER a credential that is gone, which is the direction `cred subseteq rpent` does not constrain — so the zero says this property does not reach them and SEC-STORE-006 is where that direction is asserted"
 bound_model_actions_that_can_fail = 0
+stops_model_actions_that_can_fail = "every one of the five leaks. No action of the model can FAIL a flash write, so an `Err` returned by `Fs::put` and a best-effort rollback that itself fails are outside every configuration in this bundle"
 bound_tear_producers = 2
+stops_tear_producers = "a tear anywhere but between two writes that succeeded. Both producers act between successful writes, so the failure mode where the write itself returns an error is not a tear this model can produce"
 shipped_relation = "CHANGELOG.md:444-450 names five sites as open, same class, `so the next sweep starts from a list`: the power-cut window between the RP bump and the credential write; `delete_credential` removing EF_CRED and then answering `NotAllowed` when the EF_RP write fails; `decrement_rp`'s own `let _ = fs.delete(EF_RP + j)`; the trusted-display delete swallowing the same failure; and `largeblobext::discard`. MEASURED AGAINST THE INVARIANT, AND THIS IS THE ANSWER: none of the five can falsify it. Every one strands an EF_RP entry OVER a credential that is gone or never landed — `rpent \\supset cred`, the direction `cred \\subseteq rpent` does not constrain — which is precisely why the shipped order was chosen. What the model hides is therefore not a defect in this property's direction but the five leaks themselves: no action of `RSKeySecurityState` can FAIL a flash write (the two tear producers are `PowerCut`, RSKeySecurityState.tla:1522, and `ResetAborts`, :1484, and both act between two writes that succeeded), so an `Err` returned by `Fs::put` and a best-effort rollback that itself fails are outside every configuration. AS-CRED-3 is the row that owns it, and `SEC-STORE-006 NoSilentOrphan` is where that direction is asserted instead"
 cfg = "none"
 features = "none"
@@ -224,10 +252,15 @@ obligation = "the code twins: the same three defects injected into production Ru
 method = "mutation"
 artifact = "formal/comutants.toml::BugCredBeforeRp + scripts/comutate.py + crates/rsk-fido/src/credential_tests.rs::a_failed_registration_never_leaves_a_credential_without_its_rp"
 bound_registered_twins = 3
+stops_registered_twins = "any model switch with no code twin. Three are registered, one per switch targeting this invariant, so the code-level verdict covers the defects somebody wrote patches for"
 bound_patch_hunks = 2
+stops_patch_hunks = "any defect the two hunks cannot express. They defer one call past one write in the shipped file, which is that defect and not the class it belongs to"
 bound_patched_files = 1
+stops_patched_files = "a defect that has to span two files"
 bound_driven_here = 1
+stops_driven_here = "the other two verdicts as OBSERVATIONS. One of the three was re-driven for this bundle; the other two are transcribed from the register, so their kills are recorded rather than re-measured"
 bound_credited_configurations = 3
+stops_credited_configurations = "what the killing tests are ABOUT. The credit is three because the index reads solo configurations by invariant name; the tests that fall are named for this property's shape and not for the property, and no derived column counts them"
 shipped_relation = "three twins are registered — one per model switch, at formal/comutants.toml:96, :125 and :343 — and all three carry `expect = \"killed\"`, which is a RECORDED verdict per that file's own status vocabulary (:19-21) and not a plan. ONE of the three was re-driven for this bundle, BugCredBeforeRp, whose two hunks defer `bump_rp` past the EF_CRED write in the shipped file; the other two are transcribed from the register and are marked as such in the mutation table. The credit is three because `comutate.solo_index` reads the Solo_ configuration BY INVARIANT NAME (scripts/comutate.py:310-330) and all three switches target this invariant. What the column does NOT say, and the source does: the killing tests are named for this property's shape but not for the property, and no derived column counts them"
 cfg = "none"
 features = "none — the slice is `cargo test -p rsk-fido --lib` on the default feature set, with `--target aarch64-apple-darwin` because the workspace default target is the firmware's"
@@ -576,86 +609,109 @@ expires_on_schema_change = "assurance/properties.toml's field set, formal/comuta
 
 # ---- 10. Measured costs ------------------------------------------------------
 
+# THE HUMAN COLUMN IS A RECONSTRUCTION, AND ITS AGGREGATE DOES NOT FIT THE
+# WINDOW IT IS DATED IN. The twelve rows below total 268 human_minutes, and the
+# six bundles this one arrived with total 1709 — 28.5 hours, every one of them
+# stamped `freshness.measured = 2026-08-30` inside a window that runs from
+# `31c21a7` (2026-08-30 22:03:52 +0300) to `b185fc3` (2026-08-31 01:24:37),
+# which is 3 h 21 min. NO TIMER PRODUCED ANY OF THEM: they are attended time
+# reconstructed after the fact, and every `basis` below says so in its own row
+# rather than leaving a reader to find this paragraph. They are kept because
+# they are the only cost signal the programme has, not because they are
+# measurements.
+#
+# AND THE SHIPPED BOUND IS NOT THE ONE `SEC-FIDO-002` CARRIES over a
+# byte-identical artifact — `317703de…`, the same log in six directories. 2940
+# MiB is a `/usr/bin/time -l` SAMPLE of a DIFFERENT run — the log at
+# `assurance/bundle/logs/SEC-FIDO-007/tlc-Shipped.log` has its own sha256, its
+# own seed and its own closing line, so the figure bounds THAT process and is
+# carried across to this one. `SEC-FIDO-002` bounds the same log with 3705
+# instead — the JVM ceiling the banner states, derived from the artifact rather
+# than transferred to it, and the larger of the two. Neither is this run's RSS.
+# The unit is MiB, which is checkable: the sibling writes the same sample as
+# 3083 at `assurance/bundle/SEC-FIDO-007.toml:572`, and that is 2940 MiB in
+# decimal MB.
+
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-Shipped.log"
 human_minutes = 5
 runner_seconds = 1913
 peak_memory_mb = 2940
-basis = "runner is run-tlc.sh's own timer as formal/runs.toml:66 records it for the tier this log came from; NO process was run for this bundle, so peak is NOT a measurement taken here — it is the figure assurance/bundle/SEC-FIDO-007.toml:523 took with /usr/bin/time -l over the Shipped configuration of this same tier at the same HEAP=4g, and it bounds every TLC process in this bundle. human is attended time, reconstructed"
+basis = "runner is run-tlc.sh's own timer as formal/runs.toml:66 records it for the tier this log came from; NO process was run for this bundle, so peak is NOT a measurement taken here — it is the figure assurance/bundle/SEC-FIDO-007.toml:523 took with /usr/bin/time -l over the Shipped configuration of this same tier at the same HEAP=4g — 2940 MiB, which is 3 082 813 440 B — and it bounds every TLC process in this bundle. human is attended time RECONSTRUCTED after the fact, not measured"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-AlwaysUv.log"
 human_minutes = 2
 runner_seconds = 519
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:67; peak is the Shipped bound described in the row above and not a measurement of this run. human is attended time, reconstructed"
+basis = "runner from formal/runs.toml:67; peak is the Shipped bound in MiB described in the row above and not a measurement of this run. human is attended time RECONSTRUCTED after the fact, not measured"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-PermWide.log"
 human_minutes = 2
 runner_seconds = 553
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:68; peak is the Shipped bound, not a measurement of this run. human is attended time, reconstructed"
+basis = "runner from formal/runs.toml:68; peak is the Shipped bound in MiB, not a measurement of this run. human is attended time RECONSTRUCTED after the fact, not measured"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-ForceChange.log"
 human_minutes = 2
 runner_seconds = 177
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:69; peak is the Shipped bound, not a measurement of this run. human is attended time, reconstructed"
+basis = "runner from formal/runs.toml:69; peak is the Shipped bound in MiB, not a measurement of this run. human is attended time RECONSTRUCTED after the fact, not measured"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-Solo_BugCredBeforeRp.log"
 human_minutes = 11
 runner_seconds = 1
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:107; peak is the Shipped bound and is loose here by three orders of magnitude, which is the honest cost of not re-running the row. human is attended time and carries reading the seven-state counterexample and deciding which direction its final state is"
+basis = "runner from formal/runs.toml:107; peak is the Shipped bound in MiB and is loose here by three orders of magnitude, which is the honest cost of not re-running the row. human is attended time — RECONSTRUCTED after the fact, not measured — and carries reading the seven-state counterexample and deciding which direction its final state is"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-Mut_BugCredBeforeRp.log"
 human_minutes = 6
 runner_seconds = 1
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:76; peak is the Shipped bound, not a measurement of this run. human is attended time and is where the contrast with SEC-FIDO-007's attribution problem was read out of gen-configs.sh rather than assumed"
+basis = "runner from formal/runs.toml:76; peak is the Shipped bound in MiB, not a measurement of this run. human is attended time — RECONSTRUCTED after the fact, not measured — and is where the contrast with SEC-FIDO-007's attribution problem was read out of gen-configs.sh rather than assumed"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-Solo_BugDeleteRpBeforeCred.log"
 human_minutes = 5
 runner_seconds = 8
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:108; peak is the Shipped bound, not a measurement of this run. human is attended time over the fourteen-state trace"
+basis = "runner from formal/runs.toml:108; peak is the Shipped bound in MiB, not a measurement of this run. human is attended time — RECONSTRUCTED after the fact, not measured — over the fourteen-state trace"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-Solo_BugSeedDoesNotLead.log"
 human_minutes = 9
 runner_seconds = 5
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:120; peak is the Shipped bound, not a measurement of this run. human is attended time and carries the ResetAborts reading — that the stranded credential is left openable, which is what separates this trace from the other two"
+basis = "runner from formal/runs.toml:120; peak is the Shipped bound in MiB, not a measurement of this run. human is attended time — RECONSTRUCTED after the fact, not measured — and carries the ResetAborts reading — that the stranded credential is left openable, which is what separates this trace from the other two"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/tlc-Historical_E76.log"
 human_minutes = 14
 runner_seconds = 5
 peak_memory_mb = 2940
-basis = "runner from formal/runs.toml:70; peak is the Shipped bound, not a measurement of this run. human is the largest of the artifact rows and none of it was the log: it is the diff against Mut_BugSeedDoesNotLead.cfg, reading gen-configs.sh's two emit sites, and confirming that the 70-state gap between two runs of one file is scheduling"
+basis = "runner from formal/runs.toml:70; peak is the Shipped bound in MiB, not a measurement of this run. human is RECONSTRUCTED attended time, never measured, and is the largest of the artifact rows and none of it was the log: it is the diff against Mut_BugSeedDoesNotLead.cfg, reading gen-configs.sh's two emit sites, and confirming that the 70-state gap between two runs of one file is scheduling"
 
 [[cost]]
 artifact = "assurance/bundle/logs/SEC-FIDO-005/comutate-BugCredBeforeRp.log"
 human_minutes = 19
 runner_seconds = 11.75
 peak_memory_mb = 944
-basis = "the ONLY row here whose three figures were all taken for this bundle: /usr/bin/time -l over the worktree run reports 11.75 real and 989 593 600 bytes maximum resident set size, which is 944 MiB. human is attended time over applying the hunks, restoring the tree, and reading both assertion messages for their direction rather than taking the exit code"
+basis = "the ONLY row here whose three figures were all taken for this bundle: /usr/bin/time -l over the worktree run reports 11.75 real and 989 593 600 bytes maximum resident set size, which is 944 MiB. human is attended time — RECONSTRUCTED after the fact, not measured — over applying the hunks, restoring the tree, and reading both assertion messages for their direction rather than taking the exit code"
 
 [[cost]]
 artifact = "the analytical half — groups 1, 3, 5 and 7, which produced no run of their own"
 human_minutes = 172
 runner_seconds = 0
 peak_memory_mb = 0
-basis = "attended time over the work that has no artifact: reading the clause and deciding covering-versus-link, the eleven owner sites over four files, the three skip conditions in the two management surfaces, the five open rollback sites against the invariant's direction, and the FixSweepDropsCredsBeforeRpEntries arm count. It is the largest single figure in this bundle and it is NOT a measurement taken by a tool; the zeros are honest, because no process ran"
+basis = "the human figure is attended time RECONSTRUCTED after the fact, never measured, over the work that has no artifact: reading the clause and deciding covering-versus-link, the eleven owner sites over four files, the three skip conditions in the two management surfaces, the five open rollback sites against the invariant's direction, and the FixSweepDropsCredsBeforeRpEntries arm count. It is the largest single figure in this bundle and it is NOT a measurement taken by a tool; the zeros are honest, because no process ran"
 
 [[cost]]
 artifact = "the gate mutations, driven on copies outside the roster"
 human_minutes = 21
 runner_seconds = 9
 peak_memory_mb = 944
-basis = "runner is the wall time of the three audit_one invocations over the mutated copies; human is attended time over writing them, and over choosing to drive them on copies at a path the roster glob cannot see rather than moving a file in a directory other bundles were being written into. peak is the co-refutation row's measured figure, which bounds a Python process reading TOML"
+basis = "runner is the wall time of the three audit_one invocations over the mutated copies; human is attended time — RECONSTRUCTED after the fact, not measured — over writing them, and over choosing to drive them on copies at a path the roster glob cannot see rather than moving a file in a directory other bundles were being written into. peak is the co-refutation row's measured figure, 944 MiB, which bounds a Python process reading TOML"

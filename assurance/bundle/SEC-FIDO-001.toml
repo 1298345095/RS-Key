@@ -81,9 +81,13 @@ obligation = "tier A: the requirement gate over the abstract relation"
 method = "model-check"
 artifact = "formal/RSKeyTokenGate.tla + TokenGate.cfg"
 bound_states = 44
+stops_states = "nothing by omission: the 44 are the WHOLE A domain and the number is a pin that they are reached, not a shrink of them. What no bound on this row can reach is the level above it — that the shipped machine holds no state this eight-boolean record cannot express"
 bound_ops = 11
+stops_ops = "any protected operation the abstract alphabet does not name; and, inside the eleven, every requirement tier A has no vocabulary for — presence, the reset window, the retry counter, an rpId identity — because the oracle answers those TRUE and hands the obligation to tier B"
 bound_outcomes = 3
+stops_outcomes = "the difference between a silent drop and a rejection. The alphabet is Silent, Authorized and Rejected and the invariant reads only the Authorized edges, so a defect that turns one refusal into the other is admitted here"
 bound_relation_tuples = 63888
+stops_relation_tuples = "nothing by omission — the comprehension is enumerated whole. What its size costs is the FORM of the statement: read over the whole of it the predicate names no variable and TLC answers at startup with no counterexample, so the invariant is written as the slice at the current state and the 44 have to be pinned reachable instead"
 shipped_relation = "44 A states is the WHOLE domain, so this bound is not a shrink; the floor is a pin at 44 because the invariant is the relation's slice at the current state"
 cfg = "none"
 features = "none"
@@ -93,21 +97,33 @@ obligation = "tier A: the oracle is not the relation"
 method = "exhaustive sweep"
 artifact = "TokenGateOracle.cfg + TokenGateDisagreement.cfg"
 bound_states = 22
+stops_states = "anything about the other half of the domain. The walk is exactly the set on which the requirement gate and the relation-read gate differ, so on every A state outside it the two definitions agree and this row cannot tell a second definition from the relation read back to itself"
 bound_pairs = 31
+stops_pairs = "nothing by sampling — the 31 are the whole disagreement set, computed by the model rather than chosen. What the count does not say is that any one of them is a defect: it is the measurement that the oracle is a SECOND definition, which the refuted per-FID projection is the reason for"
 shipped_relation = "the disagreement set is exact, not sampled: every (state, op) pair of AStates × Ops is compared"
 cfg = "none"
 features = "none"
 
 [[method]]
-obligation = "tier B: the six invariants over the shipped constants"
+obligation = "tier B: the nine invariants over the shipped constants"
 method = "model-check"
 artifact = "Shipped.cfg"
 bound_rps = 2
+stops_rps = "an rpId-binding defect needing a third relying party. The measured minimum is 1 and no mutant in the roster backs the module's own `>= 2` comment"
 bound_channels = 2
+stops_channels = "a three-channel interleaving, at B"
 bound_max_retries = 8
+stops_max_retries = "nothing individually. The soft lock is unreachable unless MaxRetries exceeds MismatchLimit, so the real constraint is a relation between two constants and a per-constant minimum cannot express it — which is why formal/scopes.txt records `-` for both"
 bound_mismatch_limit = 3
+stops_mismatch_limit = "nothing individually — see stops_max_retries; the pair is what is bounded, not either constant"
 bound_max_clock = 1
+stops_max_clock = "anything about elapsed time. At 0 the Tick action is measured dead, so 1 is the smallest non-degenerate value and not a claim about the clock"
 bound_reset_window = 0
+stops_reset_window = "the INSIDE-the-window arm. RESET_WINDOW_MS (10000) is the shipped value; at 0 the model only ever sees a closed window, so the reset-window clause is exercised on re-opening and never on a legitimate in-window reset"
+bound_symmetry_permutations = "permutations of RPs and Channels"
+stops_symmetry_permutations = "soundness under liveness. Safety configurations only"
+bound_credentials_per_rp = 1
+stops_credentials_per_rp = "anything about slot exhaustion or MAX_RESIDENT_CREDENTIALS (256)"
 shipped_relation = "MaxRetries and MismatchLimit ARE the shipped MAX_PIN_RETRIES (8) and PIN_MISMATCH_LIMIT (3); RPs and Channels are 2 against an unbounded device; ResetWindow 0 exercises the window closed only, so a legitimate in-window reset is never seen; MaxClock 1 is the smallest value at which Tick is not dead"
 cfg = "none"
 features = "none"
@@ -117,9 +133,13 @@ obligation = "tier B: AS-AUTH-2's other arm"
 method = "model-check"
 artifact = "AlwaysUv.cfg"
 bound_rps = 2
+stops_rps = "an rpId-binding defect needing a third relying party, on the alwaysUv arm"
 bound_channels = 2
+stops_channels = "a three-channel interleaving, on the alwaysUv arm"
 bound_max_retries = 2
+stops_max_retries = "the ladder as the image walks it. Two rungs against the shipped eight, so a defect that needs a third failed PIN attempt to be reached is outside this arm's reachable set and Shipped.cfg is the row that runs the ladder"
 bound_mismatch_limit = 1
+stops_mismatch_limit = "the two rungs between one mismatch and the shipped three, and any approach to the soft lock that needs them"
 shipped_relation = "the retry ladder is REDUCED on this arm and the shipped one is not: the arm buys the alwaysUv reachability question, and Shipped.cfg is the row that is about the ladder"
 cfg = "none"
 features = "always-uv (modelled as the compiled default, not built)"
@@ -129,9 +149,13 @@ obligation = "tier C: the walk guard over a symbolic operation sequence"
 method = "bounded proof"
 artifact = "crates/rsk-fido/src/state_kani.rs::no_authorization_bypass_walk_owner"
 bound_sequence = 5
+stops_sequence = "any defect needing a sixth dispatch — Begin, Next, unrelated command, Begin, Next, Next is already six"
 bound_channels = 2
+stops_channels = "a three-channel interleaving. Two is the measured model minimum for BugCmWalkIgnoresChannel; it has never been measured at the code level"
 bound_clock_values = 2
+stops_clock_values = "a leg landing inside the idle window after a partial advance; the window is exercised as open or fully expired, never partially. The two values are T0 and T0 + PUAT_MAX_USAGE_PERIOD_MS (600000)"
 bound_totals = "full symbolic u16 — not a shrink, and saying so is the point"
+stops_totals = "nothing — this one is not a shrink, and saying so is the point of listing it"
 shipped_relation = "5 operations against a device that dispatches unboundedly; Begin/Next/other/Begin/Next/Next is already six"
 cfg = "kani"
 features = "kani-soft"
@@ -141,9 +165,13 @@ obligation = "tier C: the Begin's own decision, at its call site"
 method = "bounded proof"
 artifact = "crates/rsk-fido/src/credmgmt_kani.rs::no_authorization_bypass_rps_begin_at_call_site + …_creds_begin_at_call_site"
 bound_sequence = 1
+stops_sequence = "any defect needing a second dispatch after the Begin; this row proves one Begin out of one starting state and the walk harness (#5) is what covers a sequence"
 bound_channels = 2
+stops_channels = "a three-channel interleaving at the call site"
 bound_symbolic_bytes = 1
+stops_symbolic_bytes = "every pinUvAuthParam whose difference from the genuine MAC is not that one bit — a symbolic-length payload makes the compression function symbolic with it, and one harness over both Begins had not converged after 40 minutes and 8 GiB"
 bound_totals = "full symbolic u16"
+stops_totals = "nothing — not a shrink"
 shipped_relation = "one Begin from one starting state; the pinUvAuthParam is a genuine 32-byte v2 MAC with ONE symbolic bit, because a symbolic-length payload makes the compression function symbolic with it — measured, one harness over both Begins had not converged after 40 minutes and 8 GiB"
 cfg = "kani"
 features = "kani-soft"
@@ -151,10 +179,15 @@ features = "kani-soft"
 [[method]]
 obligation = "the cfg(kani) constant shrinks on this path"
 method = "review"
-artifact = "docs/authorization-slice.md bounds table"
+artifact = "docs/assurance-bounds.md"
 bound_ctap_max_message = 3
+stops_ctap_max_message = "a pinUvAuthParam arriving across more than two continuation frames. Shipped is one INIT plus 128 continuations; rsk-device's RESP_CAP IS this constant, so every harness in rsk-device — including the seven in presence_kani.rs — proves over a transport two frames wide"
 bound_chain_buf_size = 16
+stops_chain_buf_size = "any chained APDU over 16 bytes. Shipped is 2038, and rsk-device's FidoCcidApplet is an rsk_sdk::Applet, so the FIDO applet's CCID chaining is proved at 16"
 bound_resp_chain_cap = 16
+stops_resp_chain_cap = "any chained response over 16 bytes; shipped is 2048"
+bound_cfg_not_kani_assertions = 2
+stops_cfg_not_kani_assertions = "the equality of the two widths the getInfo response and the transport publish. crates/rsk-device/src/ctap.rs gates MAX_MSG_SIZE == RESP_CAP behind cfg(not(kani)), and rsk-usb does the same for the frame-multiple assertion; neither is a proof obligation and both are about the SHIPPED width, so under Kani the two constants are not held equal to each other"
 shipped_relation = "CTAP_MAX_MESSAGE is 129 frames shipped and 3 under cfg(kani), and rsk-device's RESP_CAP IS that constant, so all seven presence_kani.rs harnesses prove over a two-continuation transport; rsk-sdk's CHAIN_BUF_SIZE/RESP_CHAIN_CAP are 2038/2048 shipped and 16 here. What stops being proved: a pinUvAuthParam arriving across more than two continuation frames, and any chained APDU over 16 bytes"
 cfg = "kani"
 features = "kani-soft"
@@ -164,8 +197,11 @@ obligation = "the ghost's completeness"
 method = "exhaustive sweep"
 artifact = "scripts/ghost_gate.py over formal/RSKeySecurityState.tla"
 bound_actions = 21
+stops_actions = "nothing by omission — the 21 are every operator Next reaches, derived on each run rather than listed beside the module. What the equality cannot say is whether an action that records is recording the RIGHT thing; the Solo_ configurations and the code twins are what that is for"
 bound_routes = 24
+stops_routes = "the value written. The rule compares which occurrences of the name exist inside a viol assignment and which policy each consults, never what the recorded name means once the guard is satisfied"
 bound_guards = 11
+stops_guards = "any defect INSIDE a policy operator. The assignment is held to the guard it consults by NAME, so swapping one policy for another is a finding and weakening the body of one is not"
 shipped_relation = "the whole module: every operator Next reaches, and every occurrence of the name inside a viol' assignment"
 cfg = "none"
 features = "none"
@@ -234,13 +270,16 @@ a_disagreement = "TokenGateDisagreement.cfg RED: RequiredGateAgreesWithRelation,
 a_disagreement_set = "31 disagreeing (state, operation) pairs over 22 states, in two families: ClearPin on all 22 (the relation's `pre.pinSet` is a FRAME condition — there was a record to delete — while §6.6's actual gate is the 10 s window and a touch, neither of which tier A can see), and UseCm on 9 of them (§6.8.2 step 4 lets the persistent grant authorize on its own; the relation also demands pinSet, because authorized_by_ppuat refuses a grant with no EF_PIN behind it — the shipped tree being STRICTER than the requirement, which an oracle taken from the code could not have shown)"
 a_mutant = "TokenGateMut_BugUnauthorizedEdge.cfg RED: NoAuthorizationBypassA, 1 s"
 
-# TIER B — the six invariants over the shipped constants, and the assumption's
-# other arm. Shipped.cfg's distinct count is IDENTICAL to the one recorded before
+# TIER B — the nine invariants over the shipped constants, and the assumption's
+# other arm. Nine and not six: six is `ALL_INV`'s size in formal/gen-configs.sh,
+# which is what a Mut_* configuration checks — Shipped.cfg and AlwaysUv.cfg add
+# TypeOK and the two structural facts of EXTRA_INV besides.
+# Shipped.cfg's distinct count is IDENTICAL to the one recorded before
 # `AlwaysUvShipped` was introduced, which is what says the constant changed no
 # behaviour on the arm the image ships.
 b_shipped = "Shipped.cfg GREEN — 986 836 197 states, 77 563 872 distinct, depth 58, 1915 s"
 b_shipped_unchanged = "77 563 872 distinct against 77 563 872 before AlwaysUvShipped — bit-identical, measured rather than argued"
-b_always_uv = "AlwaysUv.cfg GREEN — 273 124 081 states, 23 521 512 distinct, depth 51, 526 s; all six invariants with alwaysUv as the compiled default"
+b_always_uv = "AlwaysUv.cfg GREEN — 273 124 081 states, 23 521 512 distinct, depth 51, 535 s; all nine invariants with alwaysUv as the compiled default. The seconds are the runner's, which is what the cost row below carries; TLC's own closing line in the attached log says 08min 54s = 534 s, and the runner wraps the invocation in `date +%s` so its figure can only be the larger. It read 526 s until 2026-08-31 — a figure neither artifact can produce, corrected to the one the shipped log supports"
 b_mutants = "22 rows, 11 Solo_* and 11 Mut_*, every one RED: NoAuthorizationBypass — BugNoConsumeAfterUp, BugSoftLockLostOnWarmReset, BugWarmResetReopensWindow, BugCmWalkIgnoresChannel, BugConsumeKeepsMcGa, BugNoTouchRequired, BugSetPinOverExisting, BugHostPreemptsLocalWait, BugLocalPinIgnoresBudget, BugUvNotRqdIgnoresRk, BugTokenlessIgnoresAlwaysUv"
 
 # B -> A, the native refinement, and the two negatives that say it can refuse.
@@ -267,7 +306,7 @@ gate_registry = "SEC-FIDO-001   NoAuthorizationBypass                    BOUNDED
 # ---- 6. Raw artifact or log --------------------------------------------------
 
 [[artifact]]
-run = "formal/run-tlc.sh Shipped.cfg — the six invariants over the shipped constants, and the row that says AlwaysUvShipped changed no behaviour"
+run = "formal/run-tlc.sh Shipped.cfg — the nine invariants over the shipped constants, and the row that says AlwaysUvShipped changed no behaviour"
 path = "assurance/bundle/logs/tlc-Shipped.log"
 bytes = 7163
 sha256 = "bfeac29120312065dcfa38913224635887b44aebc942c0094fec3b44b0ff5a6c"
