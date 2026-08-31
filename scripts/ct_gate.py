@@ -89,12 +89,14 @@ generated today", so that arm stays green and is a check that cannot fail.
 
 from __future__ import annotations
 
-import collections
 import pathlib
 import re
 import subprocess
 import sys
 import tomllib
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import elf_gate  # noqa: E402  the producer parser, so the two cannot disagree
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -543,29 +545,29 @@ def observe(root: pathlib.Path, sites, lines=None):
     return out
 
 
-PRODUCER = re.compile(r"DW_AT_producer\s*:\s*(?:\(indirect string.*?\):\s*)?(.+)$", re.M)
-
-
 def toolchain(root: pathlib.Path, elf: pathlib.Path) -> str:
     """What compiled THIS image, out of its own DWARF.
 
     Not `rustc -vV`: a review pointed out that reads the compiler on the path,
     which is the one that would build the image and not the one that did.
     """
-    out = subprocess.run(
-        ["arm-none-eabi-readelf", "--debug-dump=info", str(root / elf)],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    names = collections.Counter(m.group(1).strip() for m in PRODUCER.finditer(out))
+    names = elf_gate.producers(
+        subprocess.run(
+            ["arm-none-eabi-readelf", "--debug-dump=info", "--dwarf-depth=1",
+             str(root / elf)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
     if not names:
         return "unknown"
     # The MAJORITY producer, because the image is not built by one compiler: a
     # prebuilt `cortex-m` asm blob carries a 2021 nightly's string, and picking
-    # the first name alphabetically published that one as "built by".
-    # `scripts/elf_gate.py` holds the whole set; this line names the one that
-    # compiled the sites.
+    # the first name alphabetically published that one as "built by". The SET is
+    # `assurance/image.toml`'s `producers`, checked by `scripts/elf_gate.py` —
+    # which is what this comment claimed while that file had no producer code at
+    # all, so a third compiler was invisible to both. Shared parser, one string.
     return names.most_common(1)[0][0]
 
 

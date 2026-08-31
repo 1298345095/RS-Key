@@ -39,7 +39,11 @@ previous run. 361 orphaned bases, 8.9 GB, inside one day.
 
 import pathlib
 import re
+import shutil
+import subprocess
+import sys
 
+import conftest
 import gate_lines
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -561,6 +565,99 @@ def test_the_pytest_temp_rules_can_go_red():
     assert len(set(seen)) == 1, seen
     # 4. …and the quoting must not be what makes two paths look different
     assert pinned_at('x --basetemp="$T/a"') == pinned_at("x --basetemp=$T/a")
+
+
+# --- the third fact about the set: a case that is collected and does not RUN ---
+
+#: `pytest -q` prints a grey `s` for a skipped case and exits 0, `check.sh` reads
+#: that exit code and nothing else, and [`CASE`] above counts cases as WRITTEN by
+#: design. So a table neutralised to skips satisfies every rule in this file —
+#: the same shape as emptying one, which is measured two rules up. Measured on
+#: `test_elf_gate.py`, 7 of whose 13 cases were `skipif`'d on a built firmware —
+#: a checkout with no `target/` ran the row at `6 passed, 7 skipped`, rc 0.
+#:
+#: `scripts/conftest.py` is the budget, and it is driven here through a real
+#: pytest rather than by calling its function: the hook has to move the EXIT CODE
+#: to reach a `run` row, and a guard whose wiring nothing exercises is one that
+#: can be deleted with the suite still green.
+BUDGET = pathlib.Path("scripts/conftest.py")
+SKIPPING = "import pytest\n\n\ndef test_x():\n    pytest.skip('no subject here')\n"
+PASSING = "def test_x():\n    assert True\n"
+
+
+def suite(tmp_path, body):
+    """One case under the gate suite's own conftest, run the way `check.sh` runs
+    it. Returns (exit code, output) — the code taken from the process, not from
+    a parsed line of its output."""
+    room = tmp_path / "suite"
+    room.mkdir()
+    shutil.copy(HERE / "conftest.py", room / "conftest.py")
+    (room / "test_one.py").write_text(body)
+    done = subprocess.run(
+        [sys.executable, "-m", "pytest", str(room), "-q", "--basetemp", str(tmp_path / "bt")],
+        capture_output=True,
+        text=True,
+    )
+    return done.returncode, done.stdout + done.stderr
+
+
+def test_the_gate_suite_carries_a_skip_budget():
+    """A roster of one, for the same reason as `NAMED`: nothing else in the tree
+    names this file, so without this case deleting it is a green edit."""
+    assert (ROOT / BUDGET).is_file(), BUDGET
+    for hook in ("pytest_runtest_logreport", "pytest_sessionfinish", "verdict"):
+        assert hasattr(conftest, hook), hook
+
+
+def test_a_skipped_case_reddens_the_row(tmp_path):
+    """The direction that matters: the row must not read green over a case that
+    asserted nothing."""
+    code, output = suite(tmp_path, SKIPPING)
+    assert code != 0, output
+    assert "1 skipped case(s) against a budget of 0" in output, output
+
+
+def test_the_same_suite_without_the_skip_stays_green(tmp_path):
+    """The CONTROL. Without it the case above is satisfied by a budget that
+    reddens every run, which is a gate nobody keeps."""
+    code, output = suite(tmp_path, PASSING)
+    assert code == 0, output
+    assert "skipped case(s)" not in output, output
+
+
+def test_the_budget_is_a_parameter_and_not_a_global():
+    """Both numbers are arguments, so a case drives both arms without patching
+    down the value the session it is running in is judged by — and the shipped
+    value is asserted here rather than read from wherever the caller passes it."""
+    assert conftest.SKIP_BUDGET == 0
+    assert conftest.verdict(0, 0) is None
+    assert conftest.verdict(1, 1) is None
+    assert "1 skipped case(s) against a budget of 0" in conftest.verdict(1, 0)
+
+
+def test_the_skip_budget_can_go_red():
+    """The mutation table: one edit per arm to a copy of `scripts/conftest.py`,
+    driven over the one-case suites above through a real pytest, exit code taken
+    from the process. Unmutated: rc 0 on `PASSING`, rc 1 on `SKIPPING`, rc 0 on
+    an `xfail`ing one.
+
+    * `pytest_sessionfinish` deleted → `SKIPPING` back to **rc 0**, and the
+      terminal line still printed: the message is not the guard, the exit code is
+    * `pytest_runtest_logreport` deleted → nothing counts, `SKIPPING` **rc 0**
+    * `verdict`'s `<=` to `<` → the CONTROL falls, `PASSING` **rc 1** at 0 skips,
+      which is the arm that says the budget is not simply "always red"
+    * `SKIP_BUDGET` 0 → 1 → `SKIPPING` **rc 0**: the number is load-bearing, so
+      it is not a place to absorb a case that stopped running
+    * the `wasxfail` cut removed → an `xfail` case counts as a skip, **rc 1** on
+      a suite with nothing wrong with it (the over-reporting direction, which is
+      why the cut is there)
+
+    The third arm is the one worth reading: a guard that cannot go green is
+    indistinguishable from one nobody trusts, and it is the arm the first draft
+    of this table did not have.
+    """
+    assert conftest.verdict(1, 0)
+    assert conftest.verdict(0, 0) is None
 
 
 # --- and the leak neither of those rules can reach: the dev shell's own TMPDIR --

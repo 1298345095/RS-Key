@@ -36,4 +36,21 @@ writable_executable = [".data"]
 allocator = ["__rust_alloc", "__rust_realloc", "__rust_alloc_error_handler"]
 
 vector_section = ".vector_table"
+
+# Every compiler whose output is IN the image, read out of the image's own DWARF
+# (`DW_AT_producer`, one per compile unit) and not out of `rustc -vV`, which
+# names the compiler on the PATH — the one that WOULD build it. Measured on this
+# profile at `9cafee7`: 165 compile units, 164 from the pinned rustc and ONE from
+# a 2021 nightly, the prebuilt `cortex-m` `asm/lib.rs` blob that ships as an
+# object and is never recompiled. `scripts/ct_gate.py` publishes the MAJORITY
+# producer as "built by" and claimed the set was held here while nothing held it,
+# so a third compiler could arrive through a dependency and be invisible to both.
+#
+# A rustc bump moves this list, deliberately: the toolchain the image was built
+# by is a fact worth re-reading, and the pin moving without this moving is the
+# case that would otherwise be silent.
+producers = [
+    "clang LLVM (rustc version 1.96.0 (ac68faa20 2026-05-25))",
+    "clang LLVM (rustc version 1.59.0-nightly (c5ecc1570 2021-12-15))",
+]
 note = "The partition table fences the KV store from BOOTSEL; nothing fenced it from the linker, which is the overlap rule here."

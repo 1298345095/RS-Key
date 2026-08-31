@@ -23,6 +23,12 @@ Two facts this measured that the tree's prose does not carry:
   the keygen sieve step, whose absence from `.data` was measured as a 1.36x
   regression. A blanket "no W+X" rule would be red on a correct image, which is
   why the rule here is "exactly the registered one".
+* **Two compilers built it.** The image's own DWARF names 165 compile units:
+  164 from the pinned rustc and one from a 2021 nightly, the prebuilt `cortex-m`
+  `asm/lib.rs` blob that ships as an object and is never recompiled.
+  `ct_gate.py` publishes the MAJORITY producer as "built by" and said this file
+  held the whole set while this file had no producer code at all, so a THIRD
+  compiler arriving through a dependency was invisible to both.
 
 The scope is the DEFAULT image and it says so: `check.sh` rebuilds this path
 three more times below this row (16 MB, display, no-touch), so a row placed with
@@ -32,6 +38,7 @@ named gap in `assurance/image.toml`, not a silent one.
 
 from __future__ import annotations
 
+import collections
 import pathlib
 import re
 import subprocess
@@ -46,7 +53,15 @@ LINKER = pathlib.Path("firmware/memory.x")
 READELF = "arm-none-eabi-readelf"
 NM = "arm-none-eabi-nm"
 
-HAND_FIELDS = {"profile", "elf", "allocator", "writable_executable", "vector_section", "note"}
+HAND_FIELDS = {
+    "profile",
+    "elf",
+    "allocator",
+    "writable_executable",
+    "vector_section",
+    "producers",
+    "note",
+}
 
 #: `NAME : ORIGIN = 0x…, LENGTH = 123K` out of the linker script. The units the
 #: script actually uses; a new one is a finding rather than a silent zero.
@@ -81,9 +96,23 @@ ALLOCATOR = re.compile(
 GLOBAL_ALLOCATOR = re.compile(r"^\s*#\[global_allocator\]", re.M)
 FIRST_PARTY_RUST = ("crates", "firmware")
 
+#: `DW_AT_producer` off a compile-unit DIE — what compiled each translation unit,
+#: out of the image itself rather than out of `rustc -vV`, which reads the
+#: compiler on the PATH: the one that WOULD build it, not the one that did.
+PRODUCER = re.compile(r"DW_AT_producer\s*:\s*(?:\(indirect string.*?\):\s*)?(.+)$", re.M)
 
-def registry(root: pathlib.Path, findings: list[str]) -> dict:
-    doc = tomllib.loads((root / REGISTRY).read_text(encoding="utf-8"))
+
+def registry(root: pathlib.Path, findings: list[str], text: str | None = None) -> dict:
+    """The hand-written half: which ELF, and what it may contain.
+
+    `text` is the registry, handed in so a case can mutate it without writing to
+    the working tree. The first version of the table did write — and restored in
+    a `finally`, which an interrupt during `pytest (gate scripts)` does not run —
+    the same defect a review had already swept out of `ct_gate`'s table.
+    """
+    doc = tomllib.loads(
+        (root / REGISTRY).read_text(encoding="utf-8") if text is None else text
+    )
     for key in sorted(set(doc) - {"image"}):
         findings.append(f"{REGISTRY}: top-level `{key}` — the file holds `[image]`")
     image = doc.get("image", {})
@@ -108,11 +137,35 @@ def regions(root: pathlib.Path, text: str | None = None) -> dict[str, tuple[int,
     return out
 
 
-def segments(root: pathlib.Path, elf: pathlib.Path):
+def read(root: pathlib.Path, elf: pathlib.Path) -> dict[str, str]:
+    """The four reads of the binary, in ONE place so a case can hand them in.
+
+    That injection point is what stops the mutation table needing a linked image
+    and a cross toolchain — and with them, the wrong image: at the `pytest (gate
+    scripts)` row `target/` holds the NO-TOUCH build (measured: 0 `bootsel`
+    symbols against the default image's 2), while the row this file is the rule
+    for reads the default one, ~250 rows earlier.
+
+    `--dwarf-depth=1` keeps the producer read to the compile-unit DIEs, and it
+    narrows nothing: `DW_AT_producer` is a compile-unit attribute, and both reads
+    were measured over the shipped image at **165 producer rows each** — 0.09 s
+    against a full `.debug_info` dump that is most of `ct_gate`'s ~15 s.
+    """
+    binary = str(root / elf)
+
+    def out(*argv: str) -> str:
+        return subprocess.run(argv, capture_output=True, text=True, check=True).stdout
+
+    return {
+        "phdr": out(READELF, "-lW", binary),
+        "defined": out(NM, "--defined-only", binary),
+        "undefined": out(NM, "-u", binary),
+        "dwarf": out(READELF, "--debug-dump=info", "--dwarf-depth=1", binary),
+    }
+
+
+def segments(out: str):
     """(type, virt, phys, filesz, memsz, flags, sections) per program header."""
-    out = subprocess.run(
-        [READELF, "-lW", str(root / elf)], capture_output=True, text=True, check=True
-    ).stdout
     rows = [
         (
             kind,
@@ -133,14 +186,13 @@ def segments(root: pathlib.Path, elf: pathlib.Path):
     return rows, names, int(entry.group(1), 16) if entry else 0
 
 
-def symbols(root: pathlib.Path, elf: pathlib.Path):
+def producers(out: str) -> collections.Counter:
+    """{compiler: compile units it contributed}, out of the image's own DWARF."""
+    return collections.Counter(m.group(1).strip() for m in PRODUCER.finditer(out))
+
+
+def symbols(defined: str, undefined: str):
     """(defined allocator symbols, undefined symbols)."""
-    defined = subprocess.run(
-        [NM, "--defined-only", str(root / elf)], capture_output=True, text=True, check=True
-    ).stdout
-    undefined = subprocess.run(
-        [NM, "-u", str(root / elf)], capture_output=True, text=True, check=True
-    ).stdout
     found = set()
     for line in defined.splitlines():
         hit = ALLOCATOR.search(line)
@@ -149,19 +201,22 @@ def symbols(root: pathlib.Path, elf: pathlib.Path):
     return found, [line.strip() for line in undefined.splitlines() if line.strip()]
 
 
-def audit(root: pathlib.Path, image=None, linker=None):
+def audit(root: pathlib.Path, image=None, linker=None, raw=None):
+    """`raw` is `read()`'s dict, handed in by a case that has no image to read."""
     findings: list[str] = []
     image = registry(root, findings) if image is None else image
     if findings:
         return findings, ""
     elf = pathlib.Path(image["elf"])
-    if not (root / elf).is_file():
+    if raw is None and not (root / elf).is_file():
         return [f"{elf} — build it first: cargo build --release -p firmware"], ""
 
     try:
         where = regions(root, linker)
-        rows, names, entry = segments(root, elf)
-        allocator, undefined = symbols(root, elf)
+        raw = read(root, elf) if raw is None else raw
+        rows, names, entry = segments(raw["phdr"])
+        allocator, undefined = symbols(raw["defined"], raw["undefined"])
+        compiled = producers(raw["dwarf"])
     except (OSError, subprocess.CalledProcessError, ValueError) as error:
         return [f"{elf}: {error}"], ""
 
@@ -251,11 +306,31 @@ def audit(root: pathlib.Path, image=None, linker=None):
             f" image, first {undefined[0]!r}"
         )
 
+    # What compiled it, held as a SET rather than as counts: a new dependency
+    # moves the unit count on every build and would make this a changelog, while
+    # a compiler nobody chose is the fact stage 11A asks to be enumerated. A
+    # stripped image makes every rule above pass over nothing, so the empty set
+    # is its own finding rather than a vacuous match against an empty registry.
+    if not compiled:
+        findings.append(
+            f"{elf}: no DW_AT_producer in the image — nothing here read a"
+            " compiler, and every rule above just passed over a stripped binary"
+        )
+    elif sorted(compiled) != sorted(image["producers"]):
+        findings.append(
+            f"{elf}: the DWARF producers are {sorted(compiled)}, registered"
+            f" {sorted(image['producers'])} — the image's trusted computing base"
+            " is the set of compilers that wrote it, and a third one arriving"
+            " through a dependency is not a toolchain the pin chose"
+        )
+
     summary = (
         f"elf-gate: ok — {len(loads)} LOAD segment(s) inside {len(where)}"
         f" {LINKER} region(s), {len(wx)} writable-executable as registered,"
         f" {len(allocator)} allocator symbol(s) from"
-        f" {len(declared)} declaration, 0 undefined"
+        f" {len(declared)} declaration, 0 undefined,"
+        f" {sum(compiled.values())} compile unit(s) from"
+        f" {len(compiled)} registered producer(s)"
     )
     return findings, summary
 
