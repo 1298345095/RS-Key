@@ -267,6 +267,10 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-SEAL-003` | The TLA+ clause and its Rust abstraction do not state the same sentenc |
 | platform | `PLAT-SEAL-004` | The shipped image is built without `--features fips-profile`. On that  |
 | platform | `PLAT-SEAL-005` | The marker's SECOND consumer — the on-device recovery-phrase reveal at |
+| platform | `PLAT-STORE-001` | The tear guarantee PLAT-FLASH-001 makes about the silicon holds one la |
+| platform | `PLAT-STORE-002` | The backend's enumeration-completeness flag is honest: `for_each_key`  |
+| platform | `PLAT-STORE-003` | A reboot recovers the committed store: after any number of power cuts  |
+| platform | `PLAT-STORE-004` | `is_counter_fid` is a correct routing table over every FID the firmwar |
 
 ## Review packet
 

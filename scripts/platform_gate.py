@@ -26,10 +26,11 @@ file makes the misclass a red row rather than a spelling.
 The classes differ in how they are DISCHARGED, which is the other half: a model
 constant is discharged by a TLC run, an entry here by a board measurement, a
 vendor erratum, a source audit or an accepted risk with an owner. Nothing here
-can be discharged by anything this repository runs, and on the day it is written
-**two of thirty-three entries are discharged**. The registry says so rather
-than looking populated, and the numbers here are the two the generated page
-prints, so a status that moves has to move both.
+can be discharged by anything this repository runs, and **only a small minority
+of entries is discharged at all**. The count is DERIVED — [`main`] prints it on
+every run and [`render`] opens the generated page with it — because the typed
+copy that stood here read `two of thirty-three` against a registry that had
+grown past sixty, and no rule holds a number a docstring states.
 
 Seven rules, and the first is the one that earns the file:
 
