@@ -63,6 +63,18 @@ fi
 exit 3
 """
 
+#: `comutate.armed_subject` reads the companion pair out of the GENERATOR, so a
+#: fixture without one has no pair and the two-armed control below could not be
+#: told from the two-armed mutant. `BugFooLatch` is a reachability aid for
+#: `BugFooOpens`, not a second defect — the one shape that keeps its credit.
+GENERATOR = """\
+companion_bug() {
+  case "$1" in
+    BugFooOpens) echo BugFooLatch ;;
+  esac
+}
+"""
+
 
 def build(root: pathlib.Path) -> pathlib.Path:
     formal = root / "formal"
@@ -76,9 +88,15 @@ def build(root: pathlib.Path) -> pathlib.Path:
     (formal / "Seams.cfg").write_text(
         "SPECIFICATION Spec\nINVARIANTS\n    TypeOK\n    BarNeverOpens\n"
     )
+    # ARMED, and that is the point: the `mut` column is credited off the switch
+    # this block sets, not off the filename. A fixture whose only solo-style
+    # configuration armed nothing scored `mut = 0` on every row, so every case
+    # below would have measured the same zero before and after its mutation.
     (formal / "Solo_BugFooOpens.cfg").write_text(
-        "SPECIFICATION Spec\nINVARIANTS\n    TypeOK\n    FooStaysClosed\n"
+        "SPECIFICATION Spec\nCONSTANTS\n    BugFooOpens = TRUE\n"
+        "INVARIANTS\n    TypeOK\n    FooStaysClosed\n"
     )
+    (formal / "gen-configs.sh").write_text(GENERATOR)
     # The gate's exemption list is global state, and its stale-exemption arm
     # fires on any tree without this file — which the first fixture proved by
     # going red on it. The file is deliberately in no tier: that is what the
@@ -454,6 +472,86 @@ def test_a_patch_the_suite_is_not_expected_to_catch_is_not_evidence(tmp_path):
         "SPECIFICATION Spec\nINVARIANTS\n    TypeOK\n    SomeInvariant\n", encoding="utf-8")
     assurance_gate.co_refuted.cache_clear()
     assert assurance_gate.co_refuted(tmp_path) == {}
+
+
+# ---- `mut` is credited by the CONSTANTS block, never by the filename ---------
+#
+# Measured before the rule, on a `git archive HEAD` copy of this tree:
+# `StoreSolo_BugMetaWriteTearsBlob.cfg` stripped to `BugMetaWriteTearsBlob =
+# FALSE` — a configuration arming NOTHING, so its run is the shipped model under
+# another filename — left `SEC-STORE-003` at `mut=2`, the whole printed table
+# byte-identical, and the `check.sh` "assurance registry" row at EXIT=0. After,
+# the same strip reads `mut=1` and the row exits 1. Each case here mutates the
+# fixture tree the audit is handed, so nothing is monkeypatched below the entry
+# point, and `edit` refuses an anchor that did not resolve — a `str.replace`
+# that matches nothing returns the string unchanged and the case then measures
+# an unmutated fixture.
+
+
+def solo_cfg(tree: pathlib.Path) -> pathlib.Path:
+    return tree / "formal" / "Solo_BugFooOpens.cfg"
+
+
+def test_a_configuration_that_arms_nothing_is_not_a_mutant(tree, capsys):
+    edit(solo_cfg(tree), "BugFooOpens = TRUE", "BugFooOpens = FALSE")
+    assert assurance_gate.solo_target_counts(tree / "formal") == {}
+    red(tree, capsys, "traceability table is stale")
+
+
+def test_a_configuration_arming_two_unrelated_defects_is_not_a_mutant(tree, capsys):
+    """Two armed switches say which defect FIRED, not which property either
+    breaks — the rule `armed_subject` carries, and the shape the control below
+    holds it against."""
+    edit(
+        solo_cfg(tree),
+        "    BugFooOpens = TRUE\n",
+        "    BugFooOpens = TRUE\n    BugBarSlips = TRUE\n",
+    )
+    assert assurance_gate.solo_target_counts(tree / "formal") == {}
+    red(tree, capsys, "traceability table is stale")
+
+
+def test_a_companion_arm_keeps_the_credit(tree, capsys):
+    """CONTROL — this one must stay GREEN, and it is the same SHAPE as the case
+    above it: two armed switches, one credit or none. What separates them is the
+    generator's companion pair, so the pair proves these cases measure the armed
+    set and not the number of `= TRUE` lines."""
+    edit(
+        solo_cfg(tree),
+        "    BugFooOpens = TRUE\n",
+        "    BugFooOpens = TRUE\n    BugFooLatch = TRUE\n",
+    )
+    assert assurance_gate.solo_target_counts(tree / "formal") == {"FooStaysClosed": 1}
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_a_switch_spelled_neither_true_nor_false_credits_nothing(tree, capsys):
+    """The direction an unreadable switch must fail in. `verdict_gate.Config`
+    files the value under `unreadable` and leaves `armed` empty, so the count
+    DROPS and the row reddens — the opposite reading would publish a mutant
+    nothing arms, which is the defect one spelling mistake away."""
+    edit(solo_cfg(tree), "BugFooOpens = TRUE", "BugFooOpens = TRUEISH")
+    assert assurance_gate.solo_target_counts(tree / "formal") == {}
+    red(tree, capsys, "traceability table is stale")
+
+
+def test_the_shipped_tree_lost_no_credit_to_the_tightening():
+    """CONTROL, on the real tree — the direction this change must NOT fail in.
+    Reading the filename and reading the armed switch agree on every shipped
+    configuration: 87 credits over 48 names, measured on both sides of the fix,
+    so no published `mut` moved. The floor keeps the agreement from being
+    vacuous, since an emptied prefix list would make both readings `{}`."""
+    formal = pathlib.Path(__file__).resolve().parents[1] / "formal"
+    by_name: dict[str, int] = {}
+    for cfg in formal.glob("*.cfg"):
+        if not cfg.name.startswith(assurance_gate.SOLO_CFG_PREFIXES):
+            continue
+        names = assurance_gate.cfg_checked(cfg)
+        if len(names) == 1:
+            by_name[names[0]] = by_name.get(names[0], 0) + 1
+    assert assurance_gate.solo_target_counts(formal) == by_name
+    assert sum(by_name.values()) >= 87 and len(by_name) >= 48
 
 
 # --- the keys the property registry may carry ---------------------------------

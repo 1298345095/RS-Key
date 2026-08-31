@@ -140,33 +140,70 @@ def tla_definitions(formal: pathlib.Path) -> dict[str, str]:
     return defs
 
 
+#: The filename families a mutant run is spelled with. Module-level so the
+#: mutation table can hold the shipped tree against this list instead of copying
+#: it — a second roster is what rots. `BootCarryMut_` is deliberately absent
+#: though it is solo-shaped: it re-runs the SAME three defects on the
+#: assumption's other constant arm, and this column counts defects, not runs.
+SOLO_CFG_PREFIXES = (
+    "Solo_",
+    "SeamSolo_",
+    "StoreSolo_",
+    "LatSolo_",
+    "PolicySolo_",
+    "AdminSolo_",
+    "DispSolo_",
+    "BootSolo_",
+    "TransSolo_",
+    "SoloClause_",
+    "LiveMut_",
+    "FairMut_",
+)
+
+
 def solo_target_counts(formal: pathlib.Path) -> dict[str, int]:
-    """How many single-target mutant configurations aim at each name."""
+    """How many single-target mutant configurations aim at each name.
+
+    A prefix says a configuration is mutant-SHAPED; only its CONSTANTS say
+    whether a defect stands behind the credit. Reading the name alone was the
+    hole: a `StoreSolo_*.cfg` with every `Bug*` switched to FALSE — arming
+    nothing, so its run is the shipped model under another filename — scored the
+    same `mut` as one arming a real defect, and the row published that green.
+    Measured on a copy of this tree: `NoRecordLostToMetaWrite` held `mut=2`
+    across the strip, output byte-identical, EXIT=0.
+
+    `comutate.armed_subject` is the reader and is reused rather than restated —
+    it is the rule [`co_refuted`] already resolves a kill through, and two
+    parsers disagreeing about one file is the defect this column had. It also
+    refuses a configuration arming two unrelated defects, which says which one
+    fired but not which property either breaks.
+
+    Under-crediting is the safe direction, so nothing here guesses: a switch
+    spelled anything but TRUE/FALSE leaves `armed` empty, the count drops, and
+    the generated README goes stale — the row reddens instead of publishing a
+    number nothing arms.
+    """
+    # The sibling next to THIS file, not one under the tree being audited: a
+    # fixture root has no `scripts/`, and the reader must be the shipped one.
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import comutate
+    import verdict_gate
+
+    companion = comutate.companions(formal.parent)
     counts: dict[str, int] = {}
     for cfg in formal.glob("*.cfg"):
-        if not cfg.name.startswith(
-            (
-                "Solo_",
-                "SeamSolo_",
-                "StoreSolo_",
-                "LatSolo_",
-                "PolicySolo_",
-                "AdminSolo_",
-                "DispSolo_",
-                "BootSolo_",
-                "TransSolo_",
-                "SoloClause_",
-                "LiveMut_",
-                "FairMut_",
-                # `BootCarryMut_` is deliberately absent though it is solo-shaped:
-                # it re-runs the SAME three defects on the assumption's other
-                # constant arm, and this column counts defects, not runs.
-            )
-        ):
+        if not cfg.name.startswith(SOLO_CFG_PREFIXES):
             continue
+        # `cfg_checked` and not `Config.targets` for the name: the three
+        # `LiveMut_` configurations aim at a temporal PROPERTY and carry no
+        # INVARIANTS block, which `targets` reads — measured, they are the three
+        # rows swapping readers here would silently drop.
         names = cfg_checked(cfg)
-        if len(names) == 1:
-            counts[names[0]] = counts.get(names[0], 0) + 1
+        if len(names) != 1:
+            continue
+        if comutate.armed_subject(verdict_gate.Config(cfg), companion) is None:
+            continue
+        counts[names[0]] = counts.get(names[0], 0) + 1
     return counts
 
 
