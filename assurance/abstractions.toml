@@ -300,18 +300,29 @@ body = '''
 [[abstraction]]
 id = "NAR-OTP-COUNTER"
 disposition = "bounded-elsewhere"
-cites = ["scopes:RSKeyAppletPolicies/CounterMax"]
+cites = [
+  "scopes:RSKeyAppletPolicies/CounterMax",
+  "test:use_counter_climbs_and_stops_at_the_ceiling",
+]
 why = '''
 RSKeyAppletPolicies/CounterMax is the counter's whole range in the model, and
 the roster's mutants all fire at one step, so the arithmetic is checked at a
-domain the firmware's own is far wider than.
+domain the firmware's own is far wider than. The three halves the model has no
+state for are bounded at source instead:
+use_counter_climbs_and_stops_at_the_ceiling quantifies over every session byte
+and both stepped writers across the whole 0x7FFF domain, and which writers it
+does NOT reach is the derived roster of assurance/otp_counter_writers.toml
+rather than a sentence anywhere.
 '''
 body = '''
 - **The OTP use counter runs to a handful of steps** (`CounterMax`) where
-  the record's is `0x7FFF`. What the model checks is that the counter never
-  repeats and never runs backwards over its own domain; a defect that only
-  appears near the real ceiling — a wrap, a saturating add, a rollover into
-  the flag byte — has no state here to appear in.
+  the record's is `0x7FFF`, and it is ONE scalar: `OtpUse` is a single `+1`
+  with no session byte beside it, no second slot and no failing write, so a
+  repeat needing any of those three has no state here to appear in at all.
+  What the model does check is that the counter never repeats and never runs
+  backwards over its own domain; a defect that only appears near the real
+  ceiling — a wrap, a saturating add, a rollover into the flag byte — is out
+  of reach the same way.
 '''
 
 [[abstraction]]

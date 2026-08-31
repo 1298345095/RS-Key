@@ -25,6 +25,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import tomllib
 
 import pytest
 
@@ -45,6 +46,29 @@ CITED = (
 )
 
 
+def cited_sources(root):
+    """Every `crates/` file a `test:` citation of the shipped ledger resolves to.
+
+    DERIVED, not listed, and that is the difference between this and the tuple
+    above: a `.cfg` the ledger stops citing is a file the fixture copies for
+    nothing, while a `test:` row whose file the fixture does NOT copy reddens
+    four unrelated cases with `the complementary source obligation ... has been
+    deleted` -- a green case failing for a reason that is not the case. Measured:
+    `NAR-OTP-COUNTER` arriving with `crates/rsk-otp/src/counter_kani.rs` did
+    exactly that, while `narrow_gate.py` itself stayed green on the real tree.
+    """
+    where = narrow_gate.test_functions(root)
+    ledger = tomllib.loads((root / narrow_gate.LEDGER).read_text(encoding="utf-8"))
+    return sorted(
+        {
+            where[name]
+            for entry in ledger.get("abstraction", [])
+            for kind, _, name in (str(c).partition(":") for c in entry.get("cites", []))
+            if kind == "test" and name in where
+        }
+    )
+
+
 class Tree:
     """The real ledger, the real page and everything they resolve against."""
 
@@ -59,7 +83,7 @@ class Tree:
             "formal/README.md",
             "formal/scopes.txt",
             "formal/floors.txt",
-            "crates/rsk-device/src/presence_tests.rs",
+            *cited_sources(ROOT),
         ):
             (root / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / rel, root / rel)

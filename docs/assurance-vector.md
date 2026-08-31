@@ -35,7 +35,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 - **31 of the 46** rows the v1 word calls `MODELLED-ONLY` carry such a twin: the word means *no Kani harness*, and never *untested*.
 - **10 of 59** are checked by a configuration that ACCEPTS a recorded session, and **10** by one that must REFUSE a negative one.
 - **11 of 59** carry at least one Kani harness named after them. That is all `BOUNDED` keys on — a harness NAME, not the `#[kani::proof]` attribute, not a bound, not a `cfg` — so it points at the bundle's method table and is never the proof itself.
-- Rows carrying a dated raw evidence bundle: **11 of 59**; of those, still ahead of every input they are about: **3**.
+- Rows carrying a dated raw evidence bundle: **11 of 59**; of those, still ahead of every input they are about: **0**.
 - No property is claimed on more than **10** built image(s) of the configuration ledger; every other column is a gap or out of scope.
 
 ## What a release may not say
@@ -61,14 +61,14 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-REF-005` | `NoAuthorizationBypassA` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-REF-006` | `RequiredGateAgreesWithRelation` | 0 of 1 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-001` | `NoAuthorizationBypass` | 5 of 50 | 12 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (58 input(s) newer) | BOUNDED |
-| `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 5 of 42 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | `31c21a7` stale (2 input(s) newer) | BOUNDED |
-| `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 5 of 45 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | BOUNDED |
-| `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 5 of 39 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (2 input(s) newer) | MODELLED-ONLY |
-| `SEC-FIDO-005` | `NoUnmanageableCredential` | 5 of 40 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (2 input(s) newer) | MODELLED-ONLY |
-| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 5 of 40 | 3 | 0 of 0 | 1 | 0 | 3 | 0 | `31c21a7` stale (2 input(s) newer) | BOUNDED |
-| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` fresh | BOUNDED |
-| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` fresh | BOUNDED |
-| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` fresh | BOUNDED |
+| `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 5 of 42 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | `31c21a7` stale (3 input(s) newer) | BOUNDED |
+| `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 5 of 45 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | `31c21a7` stale (4 input(s) newer) | BOUNDED |
+| `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 5 of 39 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | MODELLED-ONLY |
+| `SEC-FIDO-005` | `NoUnmanageableCredential` | 5 of 40 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | MODELLED-ONLY |
+| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 5 of 40 | 3 | 0 of 0 | 1 | 0 | 3 | 0 | `31c21a7` stale (3 input(s) newer) | BOUNDED |
+| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
+| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
+| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
 | `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (8 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (2 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
@@ -165,11 +165,14 @@ Three spellings of "not current", which used to sit on two different pages and i
 | Kind | Subject | What is outstanding |
 |---|---|---|
 | bundle | `SEC-FIDO-001` | 58 input(s) newer than `f52b720` |
-| bundle | `SEC-FIDO-002` | 2 input(s) newer than `31c21a7` |
-| bundle | `SEC-FIDO-003` | 3 input(s) newer than `31c21a7` |
-| bundle | `SEC-FIDO-004` | 2 input(s) newer than `31c21a7` |
-| bundle | `SEC-FIDO-005` | 2 input(s) newer than `31c21a7` |
-| bundle | `SEC-FIDO-006` | 2 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-002` | 3 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-003` | 4 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-004` | 3 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-005` | 3 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-006` | 3 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-006A` | 1 input(s) newer than `b185fc3` |
+| bundle | `SEC-FIDO-006B` | 1 input(s) newer than `b185fc3` |
+| bundle | `SEC-FIDO-006C` | 1 input(s) newer than `b185fc3` |
 | bundle | `SEC-FIDO-007` | 8 input(s) newer than `3e08f75` |
 | bundle | `SEC-FIDO-008` | 2 input(s) newer than `31c21a7` |
 | bundle | `SEC-ADM-002` | no raw evidence bundle |
@@ -249,7 +252,6 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-CRED-001` | `r \in store.rpent` is read as `the EF_RP record for r is reachable by |
 | platform | `PLAT-CRED-002` | No action of `RSKeySecurityState` can fail a flash write: the model's  |
 | platform | `PLAT-CRED-003` | `KeepOpen` equates `the seed that opens it is gone` with `the record i |
-| platform | `PLAT-CRED-004` | `FixSweepDropsCredsBeforeRpEntries` — the counterfactual repair the mo |
 | platform | `PLAT-TOKEN-001` | `RSKeySecurityState`'s `tok.live` is `FidoState::paut.in_use` and its  |
 | platform | `PLAT-TOKEN-002` | One `pin.set` boolean stands for one record. `EF_DEVICE_PIN`, the trus |
 | platform | `PLAT-TOKEN-003` | `clientpin::issue_token` is the only production maker of a live pinUvA |
@@ -283,7 +285,7 @@ For the commit that carries this page — which is why no commit is named here: 
 
 | Tier | Command | Taken | Against | Host |
 |---|---|---|---|---|
-| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-31 | `b185fc3` | Apple M5 Pro (18 cores) |
-| `safety` | `./formal/run-tlc.sh safety` | 2026-08-31 | `b185fc3` | Apple M5 Pro (18 cores) |
+| `liveness` | `./formal/run-tlc.sh liveness` | 2026-08-31 | `9cafee7` | Apple M5 Pro (18 cores) |
+| `safety` | `./formal/run-tlc.sh safety` | 2026-08-31 | `9cafee7` | Apple M5 Pro (18 cores) |
 
-**Raw evidence bundles:** `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-006A`, `SEC-FIDO-006B`, `SEC-FIDO-006C`, `SEC-FIDO-007`, `SEC-FIDO-008` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-007`, `SEC-FIDO-008`.
+**Raw evidence bundles:** `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-006A`, `SEC-FIDO-006B`, `SEC-FIDO-006C`, `SEC-FIDO-007`, `SEC-FIDO-008` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-006A`, `SEC-FIDO-006B`, `SEC-FIDO-006C`, `SEC-FIDO-007`, `SEC-FIDO-008`.

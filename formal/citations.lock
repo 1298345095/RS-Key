@@ -269,9 +269,9 @@ formal/RSKeyAdminSurface.tla	crates/rsk-rescue/src/lib.rs	141-143	/// Refines `R
 formal/RSKeyAdminSurface.tla	crates/rsk-sdk/src/applet.rs	203-205	pub fn set_enabled(&mut self, mask: u32) {	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-oath/src/lib.rs	574-606	// gated here, before the HOTP counter burns.	fs,
 formal/RSKeyAppletPolicies.tla	crates/rsk-openpgp/src/keypairgen.rs	79-122	let priv_fid = slot_algo_fid(fid);	// sibling reader `info::slot_algo` has the same `attr.len() >= 3` gate.
-formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	440-457	// A slot the medium could not read is not an unprogrammed one: the fold	}
-formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	502-516	// An absent slot is updated by doing nothing, under an OK — so a read the	}
-formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	591-598	// The access code gates a swap's move/delete just as it gates	}
+formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	457-474	// A slot the medium could not read is not an unprogrammed one: the fold	}
+formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	519-533	// An absent slot is updated by doing nothing, under an OK — so a read the	}
+formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	608-615	// The access code gates a swap's move/delete just as it gates	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-piv/src/auth.rs	58-66	fn pin_satisfied(sess: &Session, pinpol: u8) -> bool {	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-piv/src/auth.rs	114-118	/// Refines `RSKeyAppletPolicies!PivAlwaysSpendsFreshness` — SEC-POL-002.	}
 formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ccid.rs	91-109	pub struct CcidApplets<'a, S: Storage, R: rsk_sdk::Rng + 'static, VP: rsk_vendor::Platform> {	enabled_caps: u16,
@@ -543,7 +543,7 @@ formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	326-328	fn deselect(&mut sel
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	344-347	fn select(&mut self, reselect: bool, _fs: &mut Fs<S>, res: &mut ResBuf) -> Sw {	}
 formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	220-224	if idx < n && pw[idx] == 0 {	let mut rec = [0u8; 64];
 formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	796-796	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);
-formal/comutants.toml	crates/rsk-otp/src/lib.rs	594-598	let unmatched =	}
+formal/comutants.toml	crates/rsk-otp/src/lib.rs	611-615	let unmatched =	}
 formal/comutants.toml	crates/rsk-piv/src/auth.rs	63-63	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,
 formal/comutants.toml	crates/rsk-piv/src/auth.rs	115-119	fn spend_pin(&mut self) {	}
 formal/comutants.toml	crates/rsk-piv/src/keygen.rs	600-600	if !sess.has_mgm {	if !sess.has_mgm {

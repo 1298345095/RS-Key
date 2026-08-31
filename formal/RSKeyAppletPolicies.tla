@@ -197,7 +197,7 @@ OathCalculate(touched) ==
 (***************************************************************************)
 (* Yubico OTP. Existing-slot configure, update and swap each state the     *)
 (* stored-six-byte-code rule at their OWN gate, so the citation names all  *)
-(* three (crates/rsk-otp/src/lib.rs:440-457, 502-516, 591-598): a range    *)
+(* three (crates/rsk-otp/src/lib.rs:457-474, 519-533, 608-615): a range    *)
 (* resolving to a prologue reads as a gate nothing checks. Each emitted    *)
 (* OTP advances the combined persisted-use/RAM-session position.           *)
 (***************************************************************************)
