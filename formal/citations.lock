@@ -61,7 +61,20 @@ crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	742-744	if r.is_non
 crates/rsk-fs/src/store_meta_kani.rs	crates/rsk-fs/src/fs.rs	774-774	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
 crates/rsk-fs/src/store_steps_tests.rs	crates/rsk-fs/src/fs.rs	563-563	let meta = self.meta_delete(fid);	let meta = self.meta_delete(fid);
 crates/rsk-piv/src/tests.rs	crates/rsk-fido/src/clientpin.rs	764-764	if !matched && ctx.dev.otp_key.is_some() {	if !matched && ctx.dev.otp_key.is_some() {
+crates/rsk-usb/src/ctaphid.rs	tools/emu/src/hid.rs	52-87	pub fn serve(mut stream: TcpStream, shared: Arc<Shared>) -> io::Result<()> {	}
+crates/rsk-usb/src/ctaphid_tests.rs	crates/rsk-usb/src/ctaphid.rs	425-429	if self.cid != cid {	}
+crates/rsk-usb/src/ctaphid_tests.rs	crates/rsk-usb/src/ctaphid.rs	463-463	let n = CONT_DATA.min(self.bcnt.saturating_sub(self.cur));	let n = CONT_DATA.min(self.bcnt.saturating_sub(self.cur));
+crates/rsk-usb/src/ctaphid_tests.rs	crates/rsk-usb/src/ctaphid.rs	469-469	if self.cur >= self.bcnt {	if self.cur >= self.bcnt {
 crates/rsk-usb/src/secure_pin_kani.rs	crates/rsk-usb/src/secure_pin.rs	96-96	// Force the canonical VERIFY class byte; never honour the host template's CLA.	// Force the canonical VERIFY class byte; never honour the host template's CLA.
+crates/rsk-usb/src/transport_assurance.rs	crates/rsk-usb/src/ctaphid.rs	341-349	pub struct Reassembler {	}
+crates/rsk-usb/src/transport_assurance.rs	crates/rsk-usb/src/ctaphid.rs	405-475	pub fn feed(&mut self, f: &[u8; HID_RPT_SIZE]) -> Outcome {	}
+crates/rsk-usb/src/transport_assurance.rs	crates/rsk-usb/src/ctaphid.rs	463-464	let n = CONT_DATA.min(self.bcnt.saturating_sub(self.cur));	self.msg[self.cur..self.cur + n].copy_from_slice(&f[5..5 + n]);
+crates/rsk-usb/src/transport_refinement_kani.rs	crates/rsk-usb/src/ctaphid.rs	425-429	if self.cid != cid {	}
+crates/rsk-usb/src/transport_refinement_kani.rs	crates/rsk-usb/src/ctaphid.rs	436-438	if bcnt > CTAP_MAX_MESSAGE {	}
+crates/rsk-usb/src/transport_refinement_kani.rs	crates/rsk-usb/src/ctaphid.rs	452-454	if cid != self.cid {	}
+crates/rsk-usb/src/transport_refinement_kani.rs	crates/rsk-usb/src/ctaphid.rs	456-459	if seq != self.seq {	}
+crates/rsk-usb/src/transport_refinement_kani.rs	crates/rsk-usb/src/ctaphid.rs	463-464	let n = CONT_DATA.min(self.bcnt.saturating_sub(self.cur));	self.msg[self.cur..self.cur + n].copy_from_slice(&f[5..5 + n]);
+crates/rsk-usb/src/transport_refinement_kani.rs	crates/rsk-usb/src/ctaphid.rs	621-634	async fn on_frame(&mut self, f: &[u8; HID_RPT_SIZE]) {	}
 formal/README.md	crates/rsk-devconf/src/lib.rs	265-278	// and `read_enabled_caps` reads empty as "no record" and returns	return Ok(());
 formal/README.md	crates/rsk-device/src/ccid.rs	67-74	/// Refines `RSKeyAdminSurface!AdminSurfaceAlwaysReachable` — SEC-ADM-001.	rsk_devconf::CAP_PIV,
 formal/README.md	crates/rsk-device/src/ccid.rs	91-109	pub struct CcidApplets<'a, S: Storage, R: rsk_sdk::Rng + 'static, VP: rsk_vendor::Platform> {	enabled_caps: u16,
@@ -224,13 +237,16 @@ formal/README.md	crates/rsk-sdk/src/applet.rs	374-390	// answered to the AID SP 
 formal/README.md	crates/rsk-sdk/src/applet.rs	379-387	// A disabled applet is skipped, so its AID matches nothing	let reselect = self.current == Some(i);
 formal/README.md	crates/rsk-sdk/src/applet.rs	387-387	let reselect = self.current == Some(i);	let reselect = self.current == Some(i);
 formal/README.md	crates/rsk-ui/src/lib.rs	248-256	/// Refines `RSKeyTrustedDisplay!OnlyAllowConfirms` — SEC-DISP-003.	}
-formal/README.md	crates/rsk-usb/src/ctaphid.rs	386-456	/// Drop an in-progress reassembly (e.g. on a receive timeout).	if seq != self.seq {
-formal/README.md	crates/rsk-usb/src/ctaphid.rs	417-419	// Mid-transaction, an init-type frame that is not CTAPHID_INIT is a	// meaningless in such a frame. A continuation frame whose seq byte has
-formal/README.md	crates/rsk-usb/src/ctaphid.rs	420-420	// the INIT bit set lands here (FIDO conformance HID-1 F-4 corrupts the	// the INIT bit set lands here (FIDO conformance HID-1 F-4 corrupts the
-formal/README.md	crates/rsk-usb/src/ctaphid.rs	431-431	// expected is out of sequence; abort the transaction.	// expected is out of sequence; abort the transaction.
-formal/README.md	crates/rsk-usb/src/ctaphid.rs	433-435	return Outcome::Error(cid, ERR_INVALID_SEQ);	let bcnt = ((f[5] as usize) << 8) | f[6] as usize;
-formal/README.md	crates/rsk-usb/src/ctaphid.rs	437-440	return Outcome::Error(cid, ERR_INVALID_LEN);	self.cmd = cmd;
+formal/README.md	crates/rsk-usb/src/ctaphid.rs	405-475	pub fn feed(&mut self, f: &[u8; HID_RPT_SIZE]) -> Outcome {	}
+formal/README.md	crates/rsk-usb/src/ctaphid.rs	435-435	let bcnt = ((f[5] as usize) << 8) | f[6] as usize;	let bcnt = ((f[5] as usize) << 8) | f[6] as usize;
+formal/README.md	crates/rsk-usb/src/ctaphid.rs	436-436	if bcnt > CTAP_MAX_MESSAGE {	if bcnt > CTAP_MAX_MESSAGE {
+formal/README.md	crates/rsk-usb/src/ctaphid.rs	436-438	if bcnt > CTAP_MAX_MESSAGE {	}
+formal/README.md	crates/rsk-usb/src/ctaphid.rs	452-454	if cid != self.cid {	}
+formal/README.md	crates/rsk-usb/src/ctaphid.rs	456-459	if seq != self.seq {	}
 formal/README.md	crates/rsk-usb/src/ctaphid.rs	584-584	pub async fn run(&mut self) -> ! {	pub async fn run(&mut self) -> ! {
+formal/README.md	crates/rsk-usb/src/ctaphid.rs	875-887	async fn write_frames<S, T, F>(sink: &mut S, cid: u32, cmd: u8, data: &[u8], mut timeout: F)	}
+formal/README.md	crates/rsk-usb/src/ctaphid_tests.rs	449-449	fn write_frames_abandons_when_host_stalls() {	fn write_frames_abandons_when_host_stalls() {
+formal/README.md	crates/rsk-usb/src/ctaphid_tests.rs	471-471	fn write_frames_writes_every_frame_when_host_drains() {	fn write_frames_writes_every_frame_when_host_drains() {
 formal/README.md	firmware/src/main.rs	616-616	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);
 formal/README.md	firmware/src/main.rs	618-629	// One-shot at-rest hardening. The seal migrations above re-key every secret	let _ = fs.put(rsk_fido::consts::EF_HARDENED, &[1u8]);
 formal/README.md	firmware/src/pin_lock.rs	18-21	//! a real power cycle clears it. The *whole* lock moves: carrying the engaged flag	//!
@@ -253,8 +269,9 @@ formal/RSKeyAdminSurface.tla	crates/rsk-rescue/src/lib.rs	141-143	/// Refines `R
 formal/RSKeyAdminSurface.tla	crates/rsk-sdk/src/applet.rs	203-205	pub fn set_enabled(&mut self, mask: u32) {	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-oath/src/lib.rs	574-606	// gated here, before the HOTP counter burns.	fs,
 formal/RSKeyAppletPolicies.tla	crates/rsk-openpgp/src/keypairgen.rs	79-122	let priv_fid = slot_algo_fid(fid);	// sibling reader `info::slot_algo` has the same `attr.len() >= 3` gate.
-formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	439-451	/// P1 = 0x04/0x05: update the flag bytes of an existing config, keeping its	let fid = base + apdu.p2 as u16;
-formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	539-546	// The access code gates a swap's move/delete just as it gates	}
+formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	440-457	// A slot the medium could not read is not an unprogrammed one: the fold	}
+formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	502-516	// An absent slot is updated by doing nothing, under an OK — so a read the	}
+formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	591-598	// The access code gates a swap's move/delete just as it gates	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-piv/src/auth.rs	58-66	fn pin_satisfied(sess: &Session, pinpol: u8) -> bool {	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-piv/src/auth.rs	114-118	/// Refines `RSKeyAppletPolicies!PivAlwaysSpendsFreshness` — SEC-POL-002.	}
 formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ccid.rs	91-109	pub struct CcidApplets<'a, S: Storage, R: rsk_sdk::Rng + 'static, VP: rsk_vendor::Platform> {	enabled_caps: u16,
@@ -450,7 +467,7 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	846-846	if try_backu
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	941-948	// no MSE handshake — and say what the touch actually authorises.	.map_err(|_| CtapError::Other)?;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/vendor.rs	1009-1015	/// `EF_BACKUP_SEALED` marker so the seed can no longer be exported **or** shown as	fs.put(EF_BACKUP_SEALED, &[1]).is_ok()
 formal/RSKeySecurityState.tla	crates/rsk-fs/src/fs.rs	355-358	/// A FID can be yielded MORE THAN ONCE — the log-structured backend walks	/// below does).
-formal/RSKeySecurityState.tla	crates/rsk-usb/src/ctaphid.rs	757-762	// frames during fast/crypto processing would consume — and then	if up_pending() {
+formal/RSKeySecurityState.tla	crates/rsk-usb/src/ctaphid.rs	767-772	// frames during fast/crypto processing would consume — and then	if up_pending() {
 formal/RSKeySecurityState.tla	firmware/src/main.rs	616-616	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);	let _ = rsk_fido::seed::ensure_seed(&dev, &mut fs, &mut rng);
 formal/RSKeySecurityState.tla	firmware/src/presence.rs	99-106	/// User presence via BOOTSEL (default) or a dedicated GPIO button.	}
 formal/RSKeySecurityState.tla	firmware/src/worker.rs	434-434	crate::presence::set_wait_scope(match ex.kind {	crate::presence::set_wait_scope(match ex.kind {
@@ -481,14 +498,17 @@ formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	765-795	pub fn meta_delete(&mut se
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	774-774	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
 formal/RSKeyStore.tla	crates/rsk-fs/src/powercut.rs	43-51	pub fn delete_landed(	}
 formal/RSKeyStore.tla	crates/rsk-fs/src/powercut_model.rs	47-47	fn dead(&self) -> bool;	fn dead(&self) -> bool;
-formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	209-209	#[cfg(not(kani))]	#[cfg(not(kani))]
-formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	333-333	Message(u32, u8),	Message(u32, u8),
-formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	386-456	/// Drop an in-progress reassembly (e.g. on a receive timeout).	if seq != self.seq {
-formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	405-405	pub fn feed(&mut self, f: &[u8; HID_RPT_SIZE]) -> Outcome {	pub fn feed(&mut self, f: &[u8; HID_RPT_SIZE]) -> Outcome {
-formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	417-419	// Mid-transaction, an init-type frame that is not CTAPHID_INIT is a	// meaningless in such a frame. A continuation frame whose seq byte has
-formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	433-435	return Outcome::Error(cid, ERR_INVALID_SEQ);	let bcnt = ((f[5] as usize) << 8) | f[6] as usize;
-formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	437-440	return Outcome::Error(cid, ERR_INVALID_LEN);	self.cmd = cmd;
-formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	565-565	request_cancel: fn(),	request_cancel: fn(),
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	210-210	pub const CTAP_MAX_MESSAGE: usize = INIT_DATA + 128 * CONT_DATA; // 7609	pub const CTAP_MAX_MESSAGE: usize = INIT_DATA + 128 * CONT_DATA; // 7609
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	348-348	in_tx: bool,	in_tx: bool,
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	405-475	pub fn feed(&mut self, f: &[u8; HID_RPT_SIZE]) -> Outcome {	}
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	424-424	if self.in_tx && cmd != CTAPHID_INIT {	if self.in_tx && cmd != CTAPHID_INIT {
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	436-438	if bcnt > CTAP_MAX_MESSAGE {	}
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	452-454	if cid != self.cid {	}
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	456-459	if seq != self.seq {	}
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	584-584	pub async fn run(&mut self) -> ! {	pub async fn run(&mut self) -> ! {
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	875-887	async fn write_frames<S, T, F>(sink: &mut S, cid: u32, cmd: u8, data: &[u8], mut timeout: F)	}
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid_tests.rs	449-449	fn write_frames_abandons_when_host_stalls() {	fn write_frames_abandons_when_host_stalls() {
+formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid_tests.rs	471-471	fn write_frames_writes_every_frame_when_host_drains() {	fn write_frames_writes_every_frame_when_host_drains() {
 formal/RSKeyTrustedDisplay.tla	crates/rsk-display/src/power.rs	55-65	pub(super) fn armed_touch(&mut self) -> Option<rsk_ui::Point> {	}
 formal/RSKeyTrustedDisplay.tla	crates/rsk-display/src/power.rs	56-59	match self.touch.read() {	None
 formal/RSKeyTrustedDisplay.tla	crates/rsk-display/src/presence.rs	91-91	/// Refines `RSKeyTrustedDisplay!ConfirmNamesTheOperation` — SEC-DISP-001.	/// Refines `RSKeyTrustedDisplay!ConfirmNamesTheOperation` — SEC-DISP-001.
@@ -523,7 +543,7 @@ formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	326-328	fn deselect(&mut sel
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	344-347	fn select(&mut self, reselect: bool, _fs: &mut Fs<S>, res: &mut ResBuf) -> Sw {	}
 formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	220-224	if idx < n && pw[idx] == 0 {	let mut rec = [0u8; 64];
 formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	796-796	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);
-formal/comutants.toml	crates/rsk-otp/src/lib.rs	542-546	let unmatched =	}
+formal/comutants.toml	crates/rsk-otp/src/lib.rs	594-598	let unmatched =	}
 formal/comutants.toml	crates/rsk-piv/src/auth.rs	63-63	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,
 formal/comutants.toml	crates/rsk-piv/src/auth.rs	115-119	fn spend_pin(&mut self) {	}
 formal/comutants.toml	crates/rsk-piv/src/keygen.rs	600-600	if !sess.has_mgm {	if !sess.has_mgm {
@@ -542,8 +562,17 @@ formal/gen-configs.sh	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMAT
 fuzz/fuzz_targets/fido_session.rs	crates/rsk-fido/src/state.rs	488-502	/// `resetPinUvAuthToken`: new random token, cleared permissions / flags. The	}
 scripts/comutate.py	firmware/src/main.rs	625-626	// device provisioned OTP-first pays it once with nothing to scrub. It is a	// multi-second stall — deliberately before USB attach, at an attended
 scripts/ct_gate.py	crates/rsk-crypto/src/mac.rs	55-55	if a.len() != b.len() {	if a.len() != b.len() {
+scripts/narrow_gate.py	crates/rsk-device/src/presence.rs	196-196	arb.set_cancel_requested(false);	arb.set_cancel_requested(false);
 scripts/security_trace.py	crates/rsk-fido/src/clientpin.rs	136-136	match req.subcommand {	match req.subcommand {
 scripts/security_trace.py	crates/rsk-fido/src/config.rs	248-248	ctx.state.mark_token_used(ctx.now_ms);	ctx.state.mark_token_used(ctx.now_ms);
 scripts/security_trace.py	crates/rsk-fido/src/consts.rs	400-400	pub const RESET_WINDOW_MS: u64 = 10_000;	pub const RESET_WINDOW_MS: u64 = 10_000;
 scripts/security_trace.py	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+scripts/security_trace.py	tools/emu/src/device.rs	752-753	crate::security_trace::POWER_CYCLE,	0,
+scripts/test_security_trace.py	tools/emu/src/device.rs	752-753	crate::security_trace::POWER_CYCLE,	0,
+scripts/test_token_refinement_gate.py	crates/rsk-device/src/ctap.rs	122-122	*st = rsk_fido::FidoState::new();	*st = rsk_fido::FidoState::new();
+scripts/test_token_refinement_gate.py	crates/rsk-fido/src/credential.rs	919-919	let fid = EF_RP + i;	let fid = EF_RP + i;
+scripts/test_token_refinement_gate.py	firmware/src/main.rs	1147-1147	let fido_state_ref = FIDO_STATE.init(RefCell::new(rsk_fido::FidoState::new()));	let fido_state_ref = FIDO_STATE.init(RefCell::new(rsk_fido::FidoState::new()));
+scripts/token_refinement_gate.py	crates/rsk-device/src/ctap.rs	122-122	*st = rsk_fido::FidoState::new();	*st = rsk_fido::FidoState::new();
+scripts/token_refinement_gate.py	firmware/src/main.rs	1147-1147	let fido_state_ref = FIDO_STATE.init(RefCell::new(rsk_fido::FidoState::new()));	let fido_state_ref = FIDO_STATE.init(RefCell::new(rsk_fido::FidoState::new()));
 scripts/trace_map.py	crates/rsk-sdk/src/applet.rs	387-387	let reselect = self.current == Some(i);	let reselect = self.current == Some(i);
+tools/emu/src/hid.rs	crates/rsk-usb/src/ctaphid.rs	621-634	async fn on_frame(&mut self, f: &[u8; HID_RPT_SIZE]) {	}

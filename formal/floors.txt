@@ -146,9 +146,13 @@ TraceSecurityBadPinSet.cfg           RED     -       -       R4cGateAnswers
 \* 12 until the recording carried the clientPIN SUBCOMMAND: a token re-issued with
 \* the permissions it already holds moves no raw field, so it arrived as a bare
 \* stutter and was indistinguishable from the `getKeyAgreement` that shares that
-\* footprint. Measured both ways -- with the rule 13, with `TOKEN_SUBCOMMANDS`
-\* emptied 12 -- because a mapping that retreats to NO-OPINION costs nothing and
-\* reads exactly as green without a floor here.
+\* footprint. Measured both ways at the time -- with the rule 13, with
+\* `TOKEN_SUBCOMMANDS` emptied 12.
+\* IT IS 15 NOW (`WrongPin` and `ResetFinish` joined `OUTCOME_BY_ACTION`) and this
+\* number is deliberately NOT moved with it. Measured: drop ONE and the count is
+\* 14, drop BOTH and it is exactly 13 -- green either way. So a floor here is not
+\* what makes a retreat to NO-OPINION cost something; `audit_no_opinion`'s
+\* per-event rule is, and this stays a floor in this file's own sense.
 @TraceSecurityOutcomesMin 13
 \* Tier A's requirement half (RSKeyTokenGate). The first floor is a PIN at 44
 \* and not a third: NoAuthorizationBypassA is asserted over the relation's SLICE
@@ -194,7 +198,45 @@ Fairness.cfg                         GREEN   2000000
 \* its class glob is exactly what `scripts/verdict_gate.py` rejects, because
 \* nothing in this tree can tell first-match from last-match. The header above
 \* advertises that mechanism; the gate forbids it, and the gate wins.
-Historical_*.cfg                     RED     -
+\* THE HISTORICAL FAMILY IS SPELT OUT AND NOT A GLOB, because its members no
+\* longer owe the same verdict. `Historical_E77.cfg` is E77's tree with both ends
+\* of the fix out and it is RED. `Historical_E76.cfg` is not the pre-0x08BF tree
+\* any more: that file was BYTE-IDENTICAL to `Mut_BugSeedDoesNotLead.cfg` from
+\* 301c53a -- one experiment under two names, and every derived `cfgs`
+\* denominator counting it twice -- so it carries the COUNTERFACTUAL now, the
+\* pre-0x08BF tree with `FixSweepDropsCredsBeforeRpEntries` applied. That is the
+\* repair the model proposed and 0x08BF did not take, and until this row nothing
+\* in the tree ever passed the constant TRUE: every configuration that assigned
+\* it assigned it FALSE, so the conjunct it guards could be deleted with every
+\* recorded verdict unchanged. GREEN here is what makes it load-bearing -- delete the
+\* conjunct at RSKeySecurityState.tla:1405 and this file behaves as
+\* `Mut_BugSeedDoesNotLead.cfg` does, which is RED.
+\*
+\* THE FLOOR IS ARGUED, NOT MEASURED, AND NOTHING HERE CAN CHECK THAT. Driven:
+\* the verdict column flipped to RED, the floor below as it stands, and the same
+\* floor with a dozen more digits on it ALL pass the merge gate; only a GREEN
+\* with no floor is refused. So this number is an ASSERTION about a run nobody
+\* has made, and if the tier comes back RED the repair is a one-line edit here
+\* that the gate will accept without a murmur. RE-DERIVE IT from the first
+\* recorded run, to a third of the measured count, the way every other GREEN row
+\* in this file was set -- until then it is a placeholder wearing a ratchet's
+\* clothes.
+\*
+\* It is Shipped.cfg's own number because that is the one thing about this
+\* configuration that could be known before running it: its transition relation
+\* is Shipped.cfg's with the seed-lead guards REMOVED and one conjunct added to a
+\* disjunct that is DEAD on the shipped tree, so the reachable set is a superset.
+\* The dead-disjunct half rests on `ram = FALSE` through the whole sweep, and
+\* that is not a property of `KeepOpen` -- it holds because `BugStateResetAfterWipe`
+\* is FALSE here, which is what lets ResetConfirmed's `ram' = FALSE` stand
+\* (RSKeySecurityState.tla:1310). With the RAM copy gone, the seed's delete
+\* empties `store.rpent`, so `\E r \in store.rpent` can never fire on Shipped and
+\* the added conjunct removes nothing it had. Arm that switch and the argument
+\* goes with it.
+\* RE-DERIVE IT from the first recorded run, to a third of the measured count,
+\* the way every other GREEN row here was set.
+Historical_E76.cfg                   GREEN   20000000
+Historical_E77.cfg                   RED     -
 Mut_*.cfg                            RED     -
 Solo_*.cfg                           RED     -
 SoloClause_*.cfg                     RED     -

@@ -292,8 +292,8 @@ split three ways, and the split is the point.
 
 | | |
 |---|---|
-| **Equivalent, not a defect** | `ctaphid.rs:420` `\|` → `^` on `(f[5] << 8) \| f[6]` — disjoint bits, the two operators agree |
-| **Fail-safe direction** | `ctaphid.rs:431` `>` → `>=` refuses an exactly-maximum message: stricter, so `NoBufferOverrun` still holds. `fs.rs:203` and `fs.rs:251` `\|=` → `&=` clear *decided* bits, which sends more reads to the reliable backend |
+| **Equivalent, not a defect** | `ctaphid.rs:435` `\|` → `^` on `(f[5] << 8) \| f[6]` — disjoint bits, the two operators agree |
+| **Fail-safe direction** | `ctaphid.rs:436` `>` → `>=` refuses an exactly-maximum message: stricter, so `NoBufferOverrun` still holds. `fs.rs:203` and `fs.rs:251` `\|=` → `&=` clear *decided* bits, which sends more reads to the reliable backend |
 | **Model-blind** | the dynamic-file registry in `scan` (`fs.rs:256` and `fs.rs:259`, three mutants), `try_has_data`'s zero-length test (`fs.rs:347`), `factory_wipe`'s 64-key batch bound (`fs.rs:469`), the registry retain in `delete` (`fs.rs:569`), and **`meta_delete`'s fault guard (`fs.rs:772`)** |
 
 The last one was worth the exercise on its own. `Fs::meta_add_reserve` refuses a
@@ -2003,7 +2003,7 @@ bring-up order are M8's transport territory.
 ## The ninth module — `RSKeyTransport.tla`
 
 `rsk-usb` was the last workspace member no module covered, and the CTAPHID
-frame reassembler (`crates/rsk-usb/src/ctaphid.rs:386-456`) is a genuine
+frame reassembler (`crates/rsk-usb/src/ctaphid.rs:405-475`) is a genuine
 sequence machine — `in_tx` carries across the frames of a multi-frame message.
 It is already unit-tested and fuzzed, and that is exactly the point of also
 modelling it: every one of those exercises a *single* `feed`, or a fuzzer's
@@ -2014,13 +2014,13 @@ assert and a sampling fuzzer does not prove.
 
 - `NoCrossChannelSplice` — a continuation on a channel other than the
   in-progress transaction's is `CHANNEL_BUSY`, the owner's transaction left
-  intact (`crates/rsk-usb/src/ctaphid.rs:433-435`); one host application's bytes
+  intact (`crates/rsk-usb/src/ctaphid.rs:452-454`); one host application's bytes
   must never assemble into another's message;
 - `NoSequenceGap` — an out-of-order continuation aborts rather than filling the
-  gap (`:437-440`); the reassembler never completes a message the host did not
+  gap (`:456-459`); the reassembler never completes a message the host did not
   send in that order;
 - `NoBufferOverrun` — an INIT declaring more than `CTAP_MAX_MESSAGE` is refused
-  (`:417-419`), and the chunk count never passes the ceiling; in a `no_std`
+  (`:436-438`), and the chunk count never passes the ceiling; in a `no_std`
   image passing it is an out-of-bounds write, so this one is **structural** (the
   other two are ghosts — a splice and a desync leave no trace in the completed
   message, they are steps).
@@ -2041,11 +2041,18 @@ consecutive zero-gap batch**: `cont_wrong_cid_busy`, `wrong_seq_aborts` and
 payload bytes — the three properties never look at contents; a `CTAPHID_INIT`
 mid-transaction is a legal resync (a takeover, not a splice: B's fresh buffer
 holds B's chunks). The bounded IN-endpoint write that fixed the runtime
-interface wedge (0x075D, `TX_TIMEOUT_MS`) is a liveness property of the async
-`run` loop (`crates/rsk-usb/src/ctaphid.rs:584`), already guarded by the
-`FrameSink` seam's own mutation-tested regression; the CCID and keyboard framing
-and the `secure_pin`
-codec are single-step, Kani-proved and unit-tested.
+interface wedge (0x075D, `TX_TIMEOUT_MS`) is a liveness property, and **no
+liveness proof is claimed from CTAPHID evidence**. It lives on `write_frames`
+(`crates/rsk-usb/src/ctaphid.rs:875-887`), the response path, where two host
+regressions pin the abandon and the drain
+(`crates/rsk-usb/src/ctaphid_tests.rs:449,471`) — not on the async `run` loop
+(`crates/rsk-usb/src/ctaphid.rs:584`), which neither of them enters. No mutation
+record stands behind either: `write_frames`, `FrameSink` and `TX_TIMEOUT` appear
+in none of `formal/comutants.toml`, `formal/floors.txt` or `formal/runs.toml`,
+and `scripts/comutate.py` excludes liveness switches from the roster by design.
+CCID framing and the `secure_pin` codec are single-step, Kani-proved and
+unit-tested; keyboard framing is unit-tested only —
+`crates/rsk-usb/src/kbd.rs` has no Kani harness.
 
 ## Phase 4 — trace validation: recorded sessions replayed against the model
 
@@ -2649,7 +2656,7 @@ to itself.
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `209 configuration(s) held to 63 entries (26 wildcard families covering 172), 6 ratchets, 1 exempt` | 0 |
+| the tree as it stands | `209 configuration(s) held to 64 entries (25 wildcard families covering 170), 6 ratchets, 1 exempt, 1 counterfactual repair(s)` | 0 |
 | `SeamMut_*.cfg` `RED` → `GREEN` | `… requires GREEN, but the configuration switches BugAdminOpensKeyOps on and so owes RED` | **1** |
 | the `SeamSolo_*.cfg` row deleted | `no verdict entry in formal/floors.txt and no registered exemption` | **1** |
 | a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 14 configuration(s) first `` | **1** |
@@ -2878,7 +2885,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `rsk-slip39` | pure | `crates/rsk-slip39/src/kani.rs`<br>`crates/rsk-slip39/src/tests.rs` | — |
 | `rsk-store` | state-partial | `RSKeyStore` | the Storage contract it implements — atomic append, an enumeration-completeness flag — is taken as RSKeyStore's backend assumption; the two-partition counter/main ring, is_counter_fid routing, wear and page reclaim, and compact are backend mechanics the model abstracts. |
 | `rsk-ui` | state-partial | `RSKeyTrustedDisplay` | hit_confirm's disjoint Allow/Deny zones are the modelled seam (OnlyAllowConfirms's Rust owner); rendering, fonts and the settings codec are pure functions under their own 12 Kani proofs and render tests — no screen-transition state lives in this crate (the ceremony state machine is rsk-display's). |
-| `rsk-usb` | state-partial | `RSKeyTransport` | the CTAPHID reassembler's channel/sequence/length state machine is modelled (M8); the async transport loop's bounded-write liveness (the 0x075D wedge fix) is guarded by the FrameSink seam's own mutation-tested regression, and the CCID/keyboard framing and secure_pin codec are single-step, Kani-proved and unit-tested. |
+| `rsk-usb` | state-partial | `RSKeyTransport` | the CTAPHID reassembler's channel/sequence/length state machine is modelled (M8), and SEC-TRANS-001..003 are tagged on feed and on the dispatcher that consumes its Outcome. The async transport loop's bounded-write liveness (the 0x075D wedge fix) is NOT proved: two host regressions cover write_frames, the response path, and no mutation record stands behind them. CCID framing and the secure_pin codec are single-step, Kani-proved and unit-tested; keyboard framing is unit-tested only — kbd.rs has no Kani harness. |
 | `rsk-vendor` | state-partial | `RSKeySecurityState` | ConfigOp/plat in the security model; the config-write pipeline it shares with rsk-devconf (persist_dev_conf) is RSKeyAdminSurface now. Still open: UNLOCK is modelled wider than its real gate (mse_ready + lock_engaged). |
 | `rsk-wipe` | out-of-scope | — | flash-erase utility, runs once in a maintainer's hands; not part of the runtime security argument. |
 <!-- assurance-table:end -->
@@ -2946,20 +2953,38 @@ abstractions producing traces the firmware cannot follow.
 Anything here can hide a real defect, so each one is a standing question rather
 than a settled abstraction.
 
+<!-- narrow-roster:start -->
+<!-- Generated by scripts/narrow_gate.py --write; do not edit. -->
 - **One credential per relying party**, `MAX_RESIDENT_CREDENTIALS` = 2 rather
-  than 256, two RPs, two channels. The retry pair is **no longer** narrower:
-  `MaxRetries` : `MismatchLimit` is the shipped 8 : 3 now, bought with symmetry,
-  so "a defect that needs the sixth retry" is in reach and finds nothing. What
+  than 256, two RPs, two channels. The retry pair is narrower in some runs and
+  not others, and the difference is the configuration: `MaxRetries` :
+  `MismatchLimit` is the shipped 8 : 3 in `Shipped.cfg` and the mutant family
+  generated from it, so "a defect that needs the sixth retry" is in reach
+  THERE and finds nothing — while `AlwaysUv`, `PermWide`, `ForceChange`,
+  `Fairness` and `Liveness` run 2 : 1 and `TokenRefinement` runs 1 : 1, which
+  is the same relation one size down and not the shipped pair. What
   remains narrow is the cardinality: a defect needing a third credential or a
   third channel is still out of reach, and `formal/scopes.txt` records what the
   roster actually needs — two channels (`BugCmWalkIgnoresChannel` is GREEN at
   one), and, measured rather than assumed, **one** relying party, which every
   mutant here fires at. Nothing in the roster probes above two anywhere. That is
   a measurement of the roster, not a proof about defects it does not contain.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt`
+  `RSKeySecurityState/Channels` (minimum 2, measured on
+  `NoAuthorizationBypass`); `formal/scopes.txt` `RSKeySecurityState/RPs`
+  (minimum 1, measured on `NoUnmanageableCredential`). The cardinality is
+  bounded where it was measured: `RSKeySecurityState/Channels` records the two
+  channels `BugCmWalkIgnoresChannel` needs, and `RSKeySecurityState/RPs` the
+  single relying party every mutant of this roster fires at, so narrowing either
+  below its recorded minimum is a red row rather than a quieter run.
 - **Permission sets are the five a host actually requests**, not all 16 subsets
   (`PermSets`); `largeBlobWrite` is modelled as the empty set that
   `consume_after_user_presence` leaves behind. A defect reachable only from an
   unusual permission combination is not modelled.
+  **Disposition: bounded-elsewhere** — `assurance/assumptions.toml` `WidePerms`.
+  The five subsets are the narrow arm of a standing assumption rather than a
+  claim about the code: `WidePerms` runs the other arm over all sixteen, so the
+  eleven a host can also obtain are covered by a configuration that can fail.
 - **The wait's scope is modelled as the owner of an open touch wait**, where the
   worker sets it around the whole dispatch (`Arbiter::set_wait_scope`). The
   review showed this is exactly as narrow as it sounds: the cancel is dropped at
@@ -2967,9 +2992,22 @@ than a settled abstraction.
   `:230`), so removing either alone leaves the model green — a reviewer trusting
   one citation would see nothing fall. The Kani harness has the same blind spot
   and says so; the unit test `w8_…` is what pins the drop at exit.
+  **Disposition: bounded-elsewhere** — `crates/rsk-device/src/presence_tests.rs`
+  `w8_a_cancel_that_raced_in_does_not_leak_into_the_next_wait`. The model and
+  the Kani harness share the blind spot, and the unit test
+  `w8_a_cancel_that_raced_in_does_not_leak_into_the_next_wait` is the
+  complementary source obligation that pins the drop at the exit of a wait;
+  registering it is what stops that test being deleted with every model row
+  still green.
 - **The button build only** (`presence.shows_confirm() = FALSE`), so the reset
   window always applies; a display build bypasses it by design (`reset.rs:37`)
   and that path is unmodelled.
+  **Disposition: open-obligation** — `assurance/configurations.toml` — the
+  `firmware-display` settling question. The display build's presence path is not
+  modelled here at all, and the obligation is open where it belongs: the
+  `firmware-display` column of the build-configuration matrix carries the
+  settling question a panel that bypasses the reset window has to be answered
+  in.
 - **A registration with a PIN set and no token — CLOSED, and what is left of it
   is one conjunct.** CTAP 2.1 §6.1.2 steps 7/10 serve a NON-discoverable
   credential on presence alone even where a PIN is set
@@ -2988,12 +3026,33 @@ than a settled abstraction.
   token-lessly with a PIN set) and `Solo_BugTokenlessIgnoresAlwaysUv.cfg`
   (§6.1.2 steps 6.2/6.4 dropped), each RED on `NoAuthorizationBypass`, each with
   a code co-mutant in the same function.
-- **`largeBlobs`, `getNextAssertion`, the MSE seed-backup channel, built-in UV
-  and the trusted-display flows are absent.** They carry their own
-  channel-ownership rules (`state.rs:33-51`, `:326-333`) that this model does
-  not check — the most obvious place to extend it.
+  **Disposition: closed** — `formal/Solo_BugUvNotRqdIgnoresRk.cfg` (required
+  RED); `formal/Solo_BugTokenlessIgnoresAlwaysUv.cfg` (required RED). Both
+  halves are falsifiable in the tree: `Solo_BugUvNotRqdIgnoresRk.cfg` and
+  `Solo_BugTokenlessIgnoresAlwaysUv.cfg` are required RED, so the closure rests
+  on two configurations that must fall rather than on the paragraph that says it
+  closed.
+- **`largeBlobs`, `getNextAssertion`, the MSE seed-backup channel and built-in
+  UV are absent.** They carry their own channel-ownership rules
+  (`state.rs:33-51`, `:326-333`) that this model does not check — the most
+  obvious place to extend it. The trusted-display ceremony is NOT on that list
+  and used to be: `RSKeyTrustedDisplay` models the panel's Approve/Deny with
+  its own configurations in the safety tier. What stays absent is its meeting
+  with the rules above — no configuration here runs a panel ceremony and a
+  CTAPHID channel together.
+  **Disposition: open-obligation** — `assurance/configurations.toml` — the
+  `largeblob-ext` settling question; `assurance/platform.toml` `PLAT-MODEL-011`
+  (pending). The absent flows are owed elsewhere and still owed: `largeblob-ext`
+  is a build column whose settling question is open, and `PLAT-MODEL-011`
+  carries the vendor seed-export surface `EF_DEVICE_PIN` gates — neither is
+  closed, and this row says which of the two kinds of not-closed each one is.
 - **Two transports** (CTAPHID, CCID). `SCOPE_OTP` and the on-panel
   `SCOPE_NONE` ceremonies are not modelled.
+  **Disposition: accepted** — `assurance/threat_clauses.toml`
+  `TM-HOST-TWO-TRANSPORTS`. Two transports is the threat model's own scope:
+  `TM-HOST-TWO-TRANSPORTS` is the clause the CTAPHID and CCID pair is stated in,
+  and the OTP and on-panel ceremonies are outside what any property here is
+  claimed about.
 - **OATH's access-code REMOVAL is modelled now — CLOSED, and the closure proves
   the diagnosis.** The hole stood recorded for two revisions: an ungated removal
   is *definitionally* invisible to `NoStatusOutsideItsSelection`, whose
@@ -3005,18 +3064,133 @@ than a settled abstraction.
   diagnosis predicted: the action adds no new kind of state, while
   `BugRemoveCodeUnvalidated` falls RED in 71 — a violation no state
   predicate could ever have seen, caught by the step recorder.
+  **Disposition: closed** — `formal/SeamSolo_BugRemoveCodeUnvalidated.cfg`
+  (required RED). The step recorder is what closed it, and
+  `SeamSolo_BugRemoveCodeUnvalidated.cfg` is required RED — so an ungated
+  removal no state predicate could ever have seen now has a configuration that
+  falls over it.
 - **The two assignment-shaped holes are closed.** `NoKeyOpOnTheAdminStatus`
   now asserts `fresh = pfresh` and, while OpenPGP is selected under one-shot
   PW1, `held["pw1"] = psig`. `BugPinFreshOutlivesPin`,
   `BugPinFreshNotSpent` and `BugSigPinNotSpent` therefore fall structurally in
   42, 45 and 212 distinct states; they no longer depend on their own `viol`
   assignment to report the defect.
+  **Disposition: closed** — `formal/SeamSolo_BugPinFreshOutlivesPin.cfg`
+  (required RED); `formal/SeamSolo_BugPinFreshNotSpent.cfg` (required RED);
+  `formal/SeamSolo_BugSigPinNotSpent.cfg` (required RED). All three are
+  structural now: `SeamSolo_BugPinFreshOutlivesPin.cfg`,
+  `SeamSolo_BugPinFreshNotSpent.cfg` and `SeamSolo_BugSigPinNotSpent.cfg` are
+  required RED without their own `viol` assignment, which is the difference
+  between a defect the invariant sees and one the mutant announces.
 - **Three of `is_fido_gate_fid`'s FIVE records are modelled** — `EF_PIN`,
   `EF_ALWAYS_UV` and `EF_BACKUP_SEALED`. `EF_DEVICE_PIN` and `EF_MINPINLEN` are
   absent. It was six until `eab4b5c` moved `EF_PAUTHTOKEN` out: the predicate's
   own rule is "records whose *absence* is permissive", a grant is a permission,
   so its absence is restrictive, and it was the one member that never met the
   rule. It is a secret here now, swept in phase 1.
+  **Disposition: open-obligation** — `assurance/platform.toml` `PLAT-MODEL-009`
+  (pending); `assurance/platform.toml` `PLAT-MODEL-011` (pending). The two
+  absent records are registered questions rather than an omission:
+  `PLAT-MODEL-009` is `EF_MINPINLEN`'s floor and disclosure list and
+  `PLAT-MODEL-011` is `EF_DEVICE_PIN`'s gated surface, both still pending in the
+  platform ledger.
+- **The flash layer holds two records** (`Fids`), and stands for `Fs` over a
+  `Storage` backend with none of the applets, the seal, `rsk-store`'s
+  two-partition ring, wear or reclaim in it — and no value bytes beyond "which
+  of two distinct values". A defect needing a third record, a second partition
+  or a particular byte pattern is out of reach.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt` `RSKeyStore/Fids`
+  (minimum 2, measured on `NoRecordLostToMetaWrite`). RSKeyStore/Fids is where
+  the flash layer's two records are recorded, and the minimum is the one
+  BugMetaAddDropsOnFault needs: one fid to write, one whose record must survive
+  the write.
+- **Two CTAPHID channels at the reassembler.** One owns the transaction and
+  one splices into it, which is exactly what a cross-channel splice needs and
+  no more. A defect that needs a third channel — an interleaving of two
+  intruders, or a channel table that fills — is not reachable at this scope.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt`
+  `RSKeyTransport/Channels` (minimum 2, measured on `NoCrossChannelSplice`).
+  RSKeyTransport/Channels records the two the reassembler needs — one to own the
+  transaction and one to splice into it — which is the minimum
+  BugContIgnoresChannel falls at.
+- **A frame carries a CHUNK, not payload bytes, and the buffer holds three
+  of them** where CTAPHID's real message is a hundred and twenty-nine frames.
+  The properties look only at which channel a chunk came from, whether it
+  arrived in order and how many the buffer holds, so a defect in byte handling
+  — an offset, a length field, a partial copy — is invisible here by
+  construction.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt` `RSKeyTransport/Cap`
+  (minimum 2, measured on `NoBufferOverrun`). RSKeyTransport/Cap is the buffer's
+  whole capacity here, and the module's own precondition is two; a frame carries
+  a chunk rather than payload bytes because none of the three properties looks
+  at byte contents.
+- **The OTP use counter runs to a handful of steps** (`CounterMax`) where
+  the record's is `0x7FFF`. What the model checks is that the counter never
+  repeats and never runs backwards over its own domain; a defect that only
+  appears near the real ceiling — a wrap, a saturating add, a rollover into
+  the flag byte — has no state here to appear in.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt`
+  `RSKeyAppletPolicies/CounterMax` (minimum 1, measured on
+  `OtpCounterNeverRepeats`). RSKeyAppletPolicies/CounterMax is the counter's
+  whole range in the model, and the roster's mutants all fire at one step, so
+  the arithmetic is checked at a domain the firmware's own is far wider than.
+- **The PIN comparison is a nondeterministic boolean** (`correct`), the
+  counters run to a single step (`Max`), and OpenPGP's admin path from PW3 to
+  PW1 is deliberately outside the recovery graph because it gates on a live
+  PW3 session. The cryptography, the PIN bytes and the wire framing are
+  elsewhere; a defect in the comparison itself cannot be seen from here.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt`
+  `RSKeyRetryLattice/Max` (minimum 1, measured on `NoAuthWhenBlocked`).
+  RSKeyRetryLattice/Max is the counter ceiling every mutant of that module fires
+  at, and the secret is abstracted to matched or not-matched, so the model is
+  the arithmetic around a comparison's answer.
+- **The capability mask is a set of opaque capabilities**, not the 16-bit
+  `USB_ENABLED` bitmask, and the clamp to the supported set is enforced by
+  construction rather than checked. The config-lock TLV is present only as the
+  class of write that carries no capability change, and its
+  unsealed-disclosure hole is a data-handling property that stays in the strip
+  function's unit tests.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt`
+  `RSKeyAdminSurface/Caps` (minimum 1, measured on
+  `DisabledAppletNeverDispatches`). RSKeyAdminSurface/Caps is one opaque
+  capability, which is what every mutant of the admin surface fires at, and the
+  clamp to the supported set is modelled by construction rather than checked.
+- **The boot scrub counts superseded weak-sealed copies without naming which
+  record each one shadows** (`MaxWeak`), and the device is assumed
+  OTP-provisioned — a pre-OTP board never laps and has nothing to scrub. A
+  defect that depends on WHICH record a stale copy belongs to is not
+  expressible.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt`
+  `RSKeyBootHardening/MaxWeak` (minimum 1, measured on `MarkerNeverLies`).
+  RSKeyBootHardening/MaxWeak is one superseded copy, the scope every mutant of
+  the boot module fires at, and the count does not name which record each
+  shadows.
+- **The reset window is modelled at its narrowest** (`ResetWindow` at its
+  floor): the model asks whether a reset is refused outside the window at all,
+  not how long the window is. The firmware's is a ten-second timer, so a
+  defect in the timing itself — a clock that does not advance, a window that
+  reopens — is a question about a duration this scope does not carry.
+  **Disposition: bounded-elsewhere** — `formal/scopes.txt`
+  `RSKeySecurityState/ResetWindow` (minimum 0, measured on
+  `NoAuthorizationBypass`). RSKeySecurityState/ResetWindow is recorded at its
+  floor and measured against NoAuthorizationBypass, so the window is modelled at
+  its narrowest rather than at the duration the firmware waits.
+- **No modelled action can fail a flash write.** The only tears are a power
+  cut and an aborted reset BETWEEN two writes that succeeded, so a store that
+  answers `Err` — and a best-effort rollback that fails in its turn — is
+  outside every configuration the FIDO properties are checked on.
+  **Disposition: open-obligation** — `assurance/platform.toml` `PLAT-CRED-002`
+  (pending). PLAT-CRED-002 is the registered form of this and is still pending:
+  no action of the module can fail a flash write, so an Err from a put, and a
+  best-effort rollback that itself fails, are outside every configuration.
+- **`reset()` is the only modelled deleter of the PIN record, and it is not
+  the only one.** `Fs::factory_wipe` bypasses it entirely, so every invariant
+  that reads "the PIN record is gone" is about one of the two ways it can go.
+  **Disposition: open-obligation** — `assurance/platform.toml` `PLAT-TOKEN-004`
+  (pending). PLAT-TOKEN-004 is the registered form and is still pending: the
+  modelled reset is not the only deleter of the PIN record, and no configuration
+  in this tree runs the path that bypasses it.
+<!-- narrow-roster:end -->
 
 ### Liveness — three properties, and what is deliberately NOT asserted
 
@@ -3154,9 +3328,12 @@ the built-in-UV door), read by the command's own parser through
 boundary — `16_always_uv_gate`'s second `acfg` token, over a live token already
 holding `{acfg}` — and B now answers `Authorized` there instead of shrugging.
 **Measured both ways, because nothing else would have noticed:** outcome
-boundaries are 13 with the rule and 12 with `TOKEN_SUBCOMMANDS` emptied, and
-`@TraceSecurityOutcomesMin` is the floor that makes a retreat to `NO-OPINION`
-cost something. The narrow arm is checked too — an issuance door that ends with
+boundaries were 13 with the rule and 12 with `TOKEN_SUBCOMMANDS` emptied. They are
+**15** now, and the claim that `@TraceSecurityOutcomesMin` is what makes a retreat
+to `NO-OPINION` cost something is **refuted**: drop `WrongPin` and `ResetFinish`
+from `OUTCOME_BY_ACTION` and the count lands on exactly 13, the floor, still green.
+What costs something is `audit_no_opinion` — a shrug on a non-gate boundary dies
+unless one of four registered classes excuses it by the event's own fields. The narrow arm is checked too — an issuance door that ends with
 no live token, or with permissions `PermSets` has no member for, goes back to the
 stutter rather than to a guess.
 
