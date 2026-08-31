@@ -741,6 +741,15 @@ run "slice evidence bundle"    python scripts/bundle_gate.py
 # NAME. This derives six axes apart, rebuilds the word from two of them, and
 # writes the public page so a release sentence cannot outrun the axes.
 run "evidence vector"          python scripts/evidence_gate.py
+# And the bundles' OTHER half: the numbers each obligation was measured at. The
+# row above floors them at 2 per method row and 24 per bundle -- on COUNT and
+# TYPE, never on value -- while the scope table a reader actually reads was
+# fourteen rows typed by hand into docs/authorization-slice.md that nothing read.
+# Six mutations proved it: a docs bound moved while the bundle stood still, the
+# bundle moved while the docs stood still, a row renamed after a constant that
+# does not exist, a row deleted -- exit 0 on all eight gates. This writes all 295
+# from assurance/bundle/*.toml and refuses a second table anywhere.
+run "bundle bounds table"      python scripts/bounds_gate.py
 # And what the pages SAY a run was. Seven were stale the day this row landed --
 # `safety` published as 190 rows against a tier of 195, the model's state space
 # at 63% of the measured count in the paragraph the docs call the one to quote,

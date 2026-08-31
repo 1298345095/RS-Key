@@ -326,26 +326,26 @@ board.
 
 ## The bounds
 
-Every shrink, and what each stops proving. `formal/scopes.txt` already records
-the measured per-constant minima and which invariant each was measured against;
-this table adds the consequence column, which that file does not carry.
+Every shrink, and what each stops proving, is now [the bounds page](assurance-bounds.md):
+generated from `assurance/bundle/*.toml` by `scripts/bounds_gate.py` and
+byte-diffed on every gate run. Fourteen rows stood here instead, and they were
+this stage's own exit criterion failing on its own page — no script read them,
+so a bound moved here while the bundle stood still was green on all eight gates,
+as was the reverse, as was a row named after a constant that does not exist.
 
-| Bound | Value | What stops being proved |
-|---|---|---|
-| Kani sequence length, `state_kani.rs` | 5 operations | any defect needing a sixth dispatch — Begin, Next, unrelated command, Begin, Next, Next is already six |
-| Kani channel alphabet | two, `C1`/`C2` | a three-channel interleaving. Two is the measured model minimum for `BugCmWalkIgnoresChannel`; it has never been measured at the code level |
-| Kani clock alphabet | two values, `T0` and `T0` + `PUAT_MAX_USAGE_PERIOD_MS` (`600000`) | a leg landing inside the idle window after a partial advance; the window is exercised as open or fully expired, never partially |
-| Kani leg totals | full symbolic `u16` | nothing — this one is not a shrink, and saying so is the point of listing it |
-| `cfg(kani)` constant shrinks reachable from this path | **three, in two crates on the path** | `rsk-usb`'s `CTAP_MAX_MESSAGE` drops from one INIT plus 128 continuation frames to one plus **two**, and `crates/rsk-device/src/ctap.rs` defines its `RESP_CAP` as exactly that constant — so every harness in `rsk-device`, including the seven in `presence_kani.rs`, runs on a transport two frames wide. `rsk-sdk`'s `CHAIN_BUF_SIZE` and `RESP_CHAIN_CAP` drop from 2038 and 2048 to **16**, and `rsk-device`'s `FidoCcidApplet` is an `rsk_sdk::Applet`, so the FIDO applet's CCID chaining is proved at 16 bytes. What stops being proved is every authorization decision whose input does not fit: a `pinUvAuthParam` arriving across more than two continuation frames, and any chained APDU over 16 bytes. **This row said "none" and was wrong** — the census is `grep -rn -A3 'cfg(kani)\|cfg(not(kani))' --include='*.rs' crates firmware \| grep -E 'const \|static '`, which finds 14 sites across four crates |
-| `cfg(not(kani))` compile-time assertions | two on the path | `crates/rsk-device/src/ctap.rs` gates `MAX_MSG_SIZE == RESP_CAP` behind `#[cfg(not(kani))]`, and `rsk-usb` does the same for the frame-multiple assertion. Neither is a proof obligation, and both are about the **shipped** width, so under Kani the two constants the getInfo response and the transport publish are not held equal to each other |
-| the **new** at-call-site harness | to be chosen | not yet a bound, and naming it is part of the work: the sequence length over `cred_mgmt`'s subcommand alphabet, the symbolic-byte budget for the `pinUvAuthParam` the MAC is verified over, the `cfg`/feature set, and whether `authorize_cm`'s two arms are both reached. Bundle group 3 requires this as structured data; the row is here so its absence is visible rather than assumed |
-| model `Channels` | 2 | the same three-channel case, at B |
-| model `RPs` | 2 | an rpId-binding defect needing a third relying party. The measured minimum is 1 and no mutant in the roster backs the module's own ">= 2" comment |
-| model `MaxClock` | 1 | anything about elapsed time. At 0 the `Tick` action is measured dead, so 1 is the smallest non-degenerate value and not a claim about the clock |
-| model `ResetWindow` | 0 | the *inside*-the-window arm. `RESET_WINDOW_MS` (`10000`) is the shipped value; at 0 the model only ever sees a closed window, so the reset-window clause is exercised on re-opening and never on a legitimate in-window reset |
-| model `MaxRetries` / `MismatchLimit` | 8 / 3 | nothing individually. The soft lock is unreachable unless `MaxRetries` exceeds `MismatchLimit`, so the real constraint is a relation between two constants and a per-constant minimum cannot express it — which is why `formal/scopes.txt` records `-` for both |
-| model symmetry | permutations of `RPs` and `Channels` | soundness under liveness. Safety configurations only |
-| model credential cardinality | one per relying party | anything about slot exhaustion or `MAX_RESIDENT_CREDENTIALS` (`256`) |
+`formal/scopes.txt` still records the measured per-constant minima and which
+invariant each was measured against. What the generated page adds is the
+attribution — which property, which `[[method]]` obligation, which artifact —
+and the consequence, which is the column worth keeping and the one that has to
+travel *with* the number rather than beside it. So it is carried per bound in
+the bundle, `stops_<name>` next to `bound_<name>`, the way `shipped_relation`
+already travels with a method row.
+
+Three rows that stood here name no bundle key at all: the two `cfg(not(kani))`
+compile-time assertions on the path, the safety-only symmetry argument, and the
+one-credential-per-relying-party cardinality. Their absence from the generated
+page is what "derived from the bundle" costs — a consequence with no measured
+bound behind it was a sentence this page asserted on its own authority.
 
 ## The mutants
 

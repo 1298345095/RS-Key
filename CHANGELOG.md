@@ -45,6 +45,40 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The bounds table is emitted from the bundles instead of typed beside them.**
+  Stage 4's exit asks that the scope table's content be *derived* from the slice
+  bundle. It was not: fourteen rows sat under `The bounds` in
+  `docs/authorization-slice.md`, `grep -rn "authorization-slice" scripts/*.py`
+  found no reader, and six mutations driven across eight gates were exit 0 on
+  every one — a docs bound moved from 5 to 9999 while the bundle still said 5,
+  a docs `model Channels` moved to 77 while the `.cfg` still assigned 2, both
+  bundle values moved while the docs stood still, a row renamed after a constant
+  that does not exist, and a row deleted outright.
+
+  `scripts/bounds_gate.py` now writes `docs/assurance-bounds.md` from
+  `assurance/bundle/*.toml` and byte-diffs it, the shape `evidence_gate.py`
+  already uses. It renders **every** `bound_*` key of **every** bundle —
+  attributed to its property, its `[[method]]` obligation and its artifact — and
+  which bundles those are is measured rather than chosen: all eight are
+  `p0-launch` rows of `assurance/configurations.toml`, and the nine rows of that
+  tranche with no bundle are derived onto the page rather than listed in it.
+
+  Two things it deliberately does not hide. The consequence column — *what stops
+  being proved* — belongs per bound and is carried as `stops_<name>` beside
+  `bound_<name>`, the way `shipped_relation` already travels with a method row;
+  **no bundle carries one yet**, so the page prints the shortfall as a number and
+  falls back to each row's `shipped_relation` printed under its table. And three
+  of the fourteen deleted rows named no bundle key at all — the two
+  `cfg(not(kani))` compile-time assertions, the symmetry argument and the
+  credential cardinality — so they are gone rather than silently kept, which is
+  what "derived from the bundle" costs. A fourth was stale: the at-call-site
+  harness row still read "to be chosen" while the bundle recorded its four
+  bounds.
+
+  The guard closes the parallel-writing direction too, in both spellings: the
+  slice page's section must carry no table of its own and must say where the
+  table went, and the table's header may appear in no other tracked markdown.
+
 - **The two applet-policy properties with no threat behind them have one.**
   `SEC-POL-003` (a key surviving a change of its slot's algorithm attribute) and
   `SEC-POL-006` (a Yubico OTP's replay position) were `[[untraced]]`
