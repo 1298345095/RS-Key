@@ -190,10 +190,16 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   this cycle has already used. The boot bump's is not, and cannot be: it is
   retried, and a refusal that outlasts the retries is dropped, leaving the last
   cycle's positions typeable again. **That one needs no fault at all** — `Fs::put`
-  answers `NoMemory` on a full store — and nothing inside the applet can close it,
-  since boot has no one to report to and a press cannot tell a stale counter from
-  a fresh one; closing it means carrying the failure out to the applet, and a test
-  pins the repeat until that lands. So is the boot *read* dropped, though only
+  answers `NoMemory` on a full store. **It is a choice and not a limit**, and the
+  page will not dress it as one: the device could deny the press instead of typing
+  a position it cannot move past, and two ways of doing that were built and
+  measured. One carries the boot pass's failure out to the applet; the other keeps
+  it in the applet entirely, by making the first press of each slot in a power
+  cycle perform the advance itself and refuse if the store will not take it. What
+  is shipped is the *other* arm of the same choice — keep typing — because a store
+  that cannot be written to would otherwise silence every slot on the key, and
+  which of those two costs more is a decision for the maintainer rather than a
+  fact about the code. A test pins the repeat, so whichever arm lands is visible. So is the boot *read* dropped, though only
   where the medium keeps refusing: a sealed read that faults is retried, and a
   slot the retries never reach is skipped by the bump entirely — which is the
   faulted-read clause above wearing this applet's clothes. A press answers that

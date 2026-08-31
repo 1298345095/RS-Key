@@ -188,6 +188,27 @@ and to the statuses it quotes.
   overwrite that path. The other profiles are a named gap in the registry, not a
   silent one.
 
+  **…and what compiled it is held too, after an audit found the sentence that
+  said so was false.** `ct_gate.py` published the MAJORITY DWARF producer as
+  "built by" and its comment said `elf_gate.py` held the whole set; `elf_gate.py`
+  had no producer code at all. Measured on a default-profile build: **165 compile
+  units, 164 from the pinned rustc and one from a 2021 nightly** — the prebuilt
+  `cortex-m` `asm/lib.rs` blob — so a third compiler arriving through a
+  dependency was invisible to both. `assurance/image.toml` holds the set, the row
+  derives it from the image (`--dwarf-depth=1`, 0.09 s) and reddens on any
+  difference in either direction, and the two scripts now share one parser.
+
+  Two defects in the mutation table itself, both from the same audit: 7 of its 13
+  cases were `skipif`'d on a built firmware — `6 passed, 7 skipped`, **rc 0**, in
+  a checkout with no `target/` — and in the gate they read the NO-TOUCH image the
+  later rows leave behind, not the one the row certifies. One case also wrote
+  `assurance/image.toml` and restored it in a `finally`. The cases run on
+  recorded tool output and a handed-in registry now: **19, none skipping, none
+  touching the tree**, with the row's position in `check.sh` held as its own
+  case. `scripts/conftest.py` is the general answer — `pytest scripts` fails when
+  any case skips, since a table neutralised to skips was green in every rule the
+  repo had.
+
 - **The model's five permission subsets were a scope claiming to be a
   description, and both halves of stage 2 п.7 now answer for it.** `PermSets`
   carried five of the sixteen subsets of its four permission elements with a
@@ -2658,6 +2679,29 @@ and to the statuses it quotes.
 
 ### Security
 
+- **The delete guard that shipped one commit ago raised `6581` over erases that
+  had completed.** `Fs::delete` drops the shared `EF_META` record *first* and
+  removes the value anyway, so its `Err` folds two states: the value gone with a
+  record standing over it, and the medium refusing the removal. An OTP slot
+  carries no `EF_META` head of its own, so on any device that has metadata at all
+  — every provisioned one — a faulted read of *somebody else's* blob made
+  `CONFIGURE`-with-an-all-zero-config answer `6581` for a slot that really was
+  erased. Measured before the fix: `sw = 0x6581` with the record already gone from
+  the medium, where the pre-guard build answered `0x9000` correctly.
+
+  The three delete sites read the record back now (`slot_still_live`) and refuse
+  only when it is still there. A probe that cannot answer counts as live, because
+  once the value may be in flash the alarm is the safe direction — and that
+  direction has its own test, since a read-back that collapsed a faulted probe to
+  *gone* would answer `9000` over a record the medium still holds. Both arms and
+  the false alarm are driven: three mutations, three kills, one saying `6581` over
+  a completed erase, one `9000` over an unperformed delete, one `9000` over a
+  record still in flash.
+
+  Found by a re-review of the previous commit rather than by the gate — a guard
+  that is too strict fails in the direction no `let _ =` sweep looks at.
+  **bcdDevice → 0x09B8.**
+
 - **A faulted flash read spelled *unprogrammed slot*, so an unauthenticated
   `SLOT_SWAP` destroyed both records.** `Storage::read` answers `None` for a
   value that is absent and for one it could not serve, and `rsk-otp` reads a
@@ -2690,7 +2734,8 @@ and to the statuses it quotes.
 
   **The write half of the replay window, which the read half does not cover.**
   The Yubico position is a pair, and both halves reach flash. The press's write —
-  the 15-bit advance owed when the one-byte session counter wraps — was
+  the 15-bit advance, owed on a virgin slot's FIRST press (its stored tail is
+  zero) and thereafter when the one-byte session counter wraps — was
   `let _ = put_slot(…)`: measured, the press after a refused one re-typed
   `(use 1, session 0)`, this power cycle's FIRST position, because the slot reads
   the old counter back and pairs it with a session it has already used. A press
@@ -2702,19 +2747,24 @@ and to the statuses it quotes.
   What is NOT claimed, and one of these is more reachable than anything above. A
   boot-bump write the store refuses **for good** still leaves the counter where it
   was, and the next cycle re-types the last one's positions — `Fs::put` answers
-  `NoMemory` on a full store, so this needs no fault at all. Nothing in the applet
-  can close it: boot has no one to report to and a press cannot tell a stale
-  counter from a fresh one, so closing it means carrying the failure out to the
-  applet through `firmware/src/main.rs`. It is **pinned by a test that asserts the
-  repeat** rather than described, and that test goes red the day it is closed. The
-  same is true of a medium that keeps refusing a boot READ, and of the swap's torn
-  half, which is older and unchanged. Eleven mutations, eleven kills, each read
-  for direction — every failure says a mutation happened that should have been
-  refused, a position was re-typed, or a `9000` stood over something that did not
-  happen; none says something should have succeeded. Six functions keep a
-  collapsing probe on purpose and the list is now written down in one place at
-  `read_slot_m`, so a seventh arrives unlisted rather than unnoticed.
-  **bcdDevice → 0x09B7.**
+  `NoMemory` on a full store, so this needs no fault at all. **That is a choice
+  and not a limit.** Two closures were built and measured — one carrying the boot
+  pass's failure out to the applet, one keeping it in the crate by making the
+  first press of a slot do the advance itself and deny the press if the store
+  refuses — and what ships is the other arm of the same choice, because a store
+  that cannot be written to would otherwise silence every slot on the key. It is
+  **pinned by a test that asserts the repeat**, and that pin now binds the boot
+  pass's `()` so wiring an outcome through it is a compile error rather than a
+  green test. The same choice does not arise for a medium that keeps refusing a
+  boot READ, or for the swap's torn half, which is older and unchanged. Twelve
+  mutations, twelve kills, each read for direction — every failure says a mutation
+  happened that should have been refused, a position was re-typed, or a `9000`
+  stood over something that did not happen; none says something should have
+  succeeded. Two of the twelve are killed by the same assertion, and one is a
+  liveness kill (`left: 0`, `right: 1`) — correct here, and named because that is
+  the shape an inverse-defect kill hides in. The collapsing-probe roster written
+  at `read_slot_m` is 7 functions / 11 probes; the first cut of it said six and
+  named a function that does not exist. **bcdDevice → 0x09B7.**
 
 - **`SLOT_SWAP` moved a Yubico OTP record and left half of its replay position
   behind.** The position a validation server orders OTPs by is a PAIR: the

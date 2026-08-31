@@ -446,36 +446,36 @@ why = "TERMINATE DF's sweep, secrets before every record scan_files re-seeds. Op
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 468
-call = "} else if fs.delete(fid).is_err() {"
+line = 485
+call = "} else if fs.delete(fid).is_err() && slot_still_live(fs, fid) {"
 verb = "delete"
 answer = "read"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "must-read"
-why = "the reply is status(), recomputed from flash in the same response — so a slot that did not go still reported CONFIG_VALID and the host was told without being told. It answers 6581 now. OTP fids carry no EF_META head, so an Err here is the backend refusing the removal: the slot secret is still in flash."
+why = "the reply is status(), recomputed from flash in the same response — so a slot that did not go still reported CONFIG_VALID and the host was told without being told. It answers 6581 now, but only after reading the record back: this Err folds TWO states and only one of them is this applet's. `delete` drops the EF_META record FIRST and removes the value anyway, so a faulted read of that shared blob answers Err over a slot that really went — and an OTP fid carries no head of its own, which makes that arm somebody else's record being unreadable. The read-back separates them; a probe that cannot answer counts as live."
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 606
-call = "if fs.delete(fid1).is_err() {"
+line = 623
+call = "if fs.delete(fid1).is_err() && slot_still_live(fs, fid1) {"
 verb = "delete"
 answer = "read"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "must-read"
-why = "the swap's first half, under the same self-reporting status() reply. It stands BEFORE the arm that copies this record to the other slot, so reading the answer here also stops a refused delete leaving one public id in two slots — the replay the RAM session counter cannot cover."
+why = "the swap's first half, under the same self-reporting status() reply. It stands BEFORE the arm that copies this record to the other slot, so reading the answer here also stops a refused delete leaving one public id in two slots — the replay the RAM session counter cannot cover. Same two-state Err as the configure site and the same read-back: refusing on the metadata half alone would abort a swap over a blob this fid does not own."
 
 [[site]]
 file = "crates/rsk-otp/src/lib.rs"
-line = 621
-call = "if fs.delete(fid2).is_err() {"
+line = 638
+call = "if fs.delete(fid2).is_err() && slot_still_live(fs, fid2) {"
 verb = "delete"
 answer = "read"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "must-read"
-why = "and its second. Both slots' valid bits come off flash in the response that acknowledges the swap. Here the record write has already landed, so the answer buys the report and not the state: the duplicate stands either way, and that torn half is stated in docs/threat-model.md."
+why = "and its second. Both slots' valid bits come off flash in the response that acknowledges the swap. Here the record write has already landed, so the answer buys the report and not the state: the duplicate stands either way, and that torn half is stated in docs/threat-model.md. Read back like its sibling — the Err names two states, and only a record still on the medium is worth a 6581 here."
 
 [[site]]
 file = "crates/rsk-piv/src/files.rs"

@@ -247,13 +247,23 @@ impl<'a> OtpApplet<'a> {
     ///
     /// A read the medium refused reads as an absent slot here. The four gates
     /// that decide on the answer take [`try_read_slot_m`](Self::try_read_slot_m).
-    /// Six functions keep the collapse on purpose, and this is the whole list, so
-    /// a new one arrives unlisted rather than unnoticed: `button_ticket` (types
-    /// nothing), `status_bytes` (two probes, the valid/touch bits),
-    /// `cmd_status_ext`, `cmd_chal` (an empty 9000 body), `Applet::select` (two
-    /// `has_data`, the latched `config_seq`) and `apply_scanmap` (falls back to
-    /// ASCII). None overwrites material or opens a gate; each costs a status
-    /// field, a fallback, or an emission that does not happen.
+    ///
+    /// **7 functions / 11 probes keep the collapse on purpose** — 10 under
+    /// `strict-config`, where `apply_scanmap` is compiled out. The list is written
+    /// down so a new one arrives unlisted rather than unnoticed, and NOTHING
+    /// checks it: no gate in the tree derives this roster, so a name here can rot
+    /// (it did — `cmd_chal` was not a function) with every row green.
+    /// `button_ticket` (1, types nothing) · `status_bytes` (2, the valid/touch
+    /// bits) · `cmd_status_ext` (1) · [`cmd_calculate`](Self::cmd_calculate) (1,
+    /// an empty 9000 body) · `Applet::select` (2 `has_data`, the latched
+    /// `config_seq`) · `apply_scanmap` (1, falls back to ASCII) ·
+    /// [`migrate_seal`] (3: two `seal_read` and one `fs.read_key`).
+    ///
+    /// The last is the one worth reading twice, because its cost is not a status
+    /// field: a faulted probe there leaves a legacy PLAINTEXT slot unsealed for
+    /// that boot, silently, and the pass runs again next boot rather than
+    /// recording anything. It stays collapsing because the alternative — writing
+    /// on a probe it could not complete — is the one that destroys the record.
     fn read_slot_m<S: Storage>(
         &self,
         fs: &mut Fs<S>,
@@ -327,6 +337,13 @@ impl<'a> OtpApplet<'a> {
             // measured, an in-cycle repeat at the very next press. So a refused
             // write types nothing and leaves the RAM half where the stored one is,
             // which retries the press rather than replaying it.
+            //
+            // How often this arm runs depends on the slot: a Yubico-OTP slot owes
+            // a write on its FIRST press (the stored tail is zero) and then only
+            // at each session wrap, but an OATH-HOTP slot moves its factor on
+            // EVERY press — so a store that keeps refusing denies every HOTP press
+            // for as long as it refuses. That is a denial of service and it
+            // recovers cleanly; emitting the code twice would not.
             if !self.put_slot(fs, fid, &rec) {
                 return None;
             }
@@ -465,7 +482,7 @@ impl<'a> OtpApplet<'a> {
             if !self.put_slot(fs, fid, &rec) {
                 return Sw::MEMORY_FAILURE;
             }
-        } else if fs.delete(fid).is_err() {
+        } else if fs.delete(fid).is_err() && slot_still_live(fs, fid) {
             // An all-zero config deletes the slot. The reply is `status()`, taken
             // back off flash — so a slot that did not go reports itself VALID
             // under a 9000, which is the host being told without being told.
@@ -603,7 +620,7 @@ impl<'a> OtpApplet<'a> {
                 }
             }
             None => {
-                if fs.delete(fid1).is_err() {
+                if fs.delete(fid1).is_err() && slot_still_live(fs, fid1) {
                     return Sw::MEMORY_FAILURE;
                 }
             }
@@ -618,7 +635,7 @@ impl<'a> OtpApplet<'a> {
                 // A swallowed refusal here left this slot's record standing while
                 // the arm above copied it to the other one: one public id in two
                 // slots, holding one session counter, under a 9000.
-                if fs.delete(fid2).is_err() {
+                if fs.delete(fid2).is_err() && slot_still_live(fs, fid2) {
                     return Sw::MEMORY_FAILURE;
                 }
             }
@@ -960,6 +977,19 @@ impl<S: Storage> Applet<Fs<S>> for OtpApplet<'_> {
     }
 }
 
+/// Whether the record is still on the device after a delete answered `Err`.
+///
+/// That `Err` folds two states, and only one of them is this applet's:
+/// `Fs::delete` drops the EF_META record FIRST and removes the value anyway, so a
+/// faulted read of that shared blob answers `Err` over a slot that really did go.
+/// An OTP slot carries no head of its own (`assurance/deleters.toml`), which
+/// makes that arm somebody else's record being unreadable — reporting `6581` for
+/// it is a false alarm over a completed delete. A probe that cannot answer counts
+/// as live, because the alarm is the safe direction once the value may be there.
+fn slot_still_live<S: Storage>(fs: &mut Fs<S>, fid: u16) -> bool {
+    fs.try_has_key(KeyFid::new(fid)) != Ok(false)
+}
+
 /// Read+unseal a slot file; `Ok(Some(len))` only when it holds at least a full
 /// config. Legacy plaintext (pre-seal) fails GCM authentication and reads as
 /// `Ok(None)` until [`migrate_seal`] re-seals it at boot; `Err` is a medium that
@@ -1017,12 +1047,21 @@ pub fn migrate_seal<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng)
 
 /// Attempts the boot bump spends on one slot, per side, before giving up on it.
 /// What the retry is for is a SINGLE-SHOT refusal — the fault a fixture arms with
-/// one call, and the only kind either side recovers from — so the number that
-/// matters is that it is not 1; any value above that is arbitrary, and 3 was
-/// chosen because 4 slots × 3 is not a boot stall. It does NOT close a refusal
-/// that persists: `Fs::put` answers `NoMemory` on a full store, and a bump that
-/// never lands leaves the last cycle's positions typeable again. That residual is
-/// stated in docs/threat-model.md and pinned by a test.
+/// one call, and the only kind either side recovers from — so the only value that
+/// is wrong is 1. Everything above it is arbitrary and nothing pins an upper
+/// bound: measured, 0 is killed by three tests while 2 and 255 both survive the
+/// whole suite. 3 is chosen because 4 slots × 3 is not a boot stall.
+///
+/// It does NOT close a refusal that persists — `Fs::put` answers `NoMemory` on a
+/// full store — and that residual is a CHOICE, not a limit this frame cannot
+/// escape. Two closures were built and measured. One carries the failure out:
+/// `power_up_bump` returns a stale-slot bitmask the applet is told about. One
+/// stays here: a per-slot "bumped this cycle" flag on `OtpApplet`, with the first
+/// press of a slot performing [`counter::boot_use_counter`]'s write itself and
+/// answering `None` if the store refuses. What ships is the other arm — keep
+/// typing — because a store that cannot be written to would otherwise silence
+/// every slot on the key. docs/threat-model.md states it that way, and a test
+/// pins the repeat so whichever arm lands is visible.
 const BUMP_TRIES: u8 = 3;
 
 /// Boot-time use-counter bump: on power-up, advance the 16-bit use counter of

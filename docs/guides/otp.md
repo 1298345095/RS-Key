@@ -225,8 +225,14 @@ stops the presses.
 - **A press types nothing** → the slot is empty, or it's a challenge-response
   slot (those never type). `ykman otp info` shows which. A programmed typing slot
   can also stay silent if the key could not store the counter step that press
-  owed — it will not type a code it cannot move past. Re-plug and try again; if it
-  persists the store is full or failing.
+  owed — it will not type a code it cannot move past. Press it again: a Yubico-OTP
+  slot owes that step on its first press and then rarely, an OATH-HOTP slot owes
+  it on every press, so a failing store silences HOTP until it recovers. **Do not
+  re-plug to clear it** — that starts a new power cycle, and if the store is
+  refusing writes the key cannot advance its counter across one either, so what
+  comes back is the previous cycle's codes. Free space first
+  (`rsk status` shows it); a key whose store is genuinely failing needs
+  re-provisioning.
 - **`ykman otp calculate` returns `CONDITIONS_NOT_SATISFIED` / waits forever** →
   the slot is `--touch`. Press the button.
 - **Overwrite/delete refused** → the slot has an access code. Pass it with
@@ -237,11 +243,14 @@ stops the presses.
 - **A configure / update / swap / `set-scan-map` fails where the same command
   worked a moment ago** → the key could not read, or could not write, a slot it
   had to touch, so it refused rather than treat an unreadable slot as an empty
-  one. Retry. A command refused **before** it moved anything leaves the slots
-  exactly as they were, which is the usual case — but `swap` writes the two slots
-  one after the other, so one refused partway can leave the copy that already
-  landed standing, and both slots showing the same public id. Check with
-  `ykman otp info` and re-run the swap.
+  one. **Check what actually happened before retrying — the refusal does not tell
+  you.** A read refused at the gate stops before anything moves and leaves the
+  slots untouched, but a refusal that comes from the *write* half does not: a slot
+  DELETE is reported failed if the key still finds the record afterwards, and a
+  `swap` writes its two slots one after the other, so one refused partway can
+  leave the copy that already landed standing with both slots showing the same
+  public id. `ykman otp info` shows which case you are in; re-run the command from
+  there.
 - **KeePassXC on Linux says `Hardware key USB error: Pipe error`, or
   `ykchalresp` fails while `ykman otp calculate` works** → firmware older than
   bcdDevice `0x0859` enumerated the FIDO interface first, and these tools address
