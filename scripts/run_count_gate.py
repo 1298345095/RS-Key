@@ -198,7 +198,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 41
+SCOPE_CEILING = 40
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -383,11 +383,6 @@ SCOPED = {
         "**77 563 872 at depth 58**",
     ): "the count on the far side of a before/after comparison with the reduced scope, "
     "where dropping it would leave the comparison with one side",
-    (
-        "formal/README.md",
-        "**45 253 generated / 2 268 distinct states at depth 14**",
-    ): "`Policies.cfg`'s own row, quoted in the sentence that argues the four applets "
-    "fit in one module — the Results table has it, and the argument needs it here",
     (
         "formal/README.md",
         "GREEN over 10 720 348 distinct\nstates at the liveness constants",
