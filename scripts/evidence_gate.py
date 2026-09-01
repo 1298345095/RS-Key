@@ -400,6 +400,14 @@ def comutant_patch_files(root, name):
     two, because five carry no tag — which `docs/authorization-slice.md` had
     already recorded. A freshness axis built on the tagged two calls evidence
     fresh over an edit to the very code the kill was measured against.
+
+    The skip is `comutate.anchor_shape_problems` and not a second reading of the
+    registry's schema. This file's own was `"site" not in entry and "file" not in
+    entry`, which is the entry with no anchors AND HALF of the entry with a
+    broken one: measured on the shipped registry with `find` deleted from
+    `BugTokenSurvivesPinChange`, this row exited 1 on `KeyError: 'find'` raised
+    inside `comutate.patch_sites` — the same traceback the `comutants lint` row
+    gave, in a gate that does not own the file.
     """
     src = root / "formal" / "comutants.toml"
     if not src.is_file():
@@ -408,7 +416,7 @@ def comutant_patch_files(root, name):
     out = set()
     for bug in assurance_gate.co_refuted(root).get(name, []):
         entry = entries.get(bug, {})
-        if "site" not in entry and "file" not in entry:
+        if comutate.anchor_shape_problems(bug, entry):
             continue
         for path, _find, _replace in comutate.patch_sites(entry):
             if (root / path).is_file():

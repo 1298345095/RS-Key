@@ -389,6 +389,27 @@ def patch_sites(entry: dict):
         n += 1
 
 
+def anchor_fields(where: str, what: str, holder: dict, keys) -> list[str]:
+    """The anchor keys `holder` does not answer with a non-empty string.
+
+    Both forms read `file` and `find` by SUBSCRIPT, and only the `[[site]]` half
+    was ever held to answering them: a flat entry missing `file` left the gate row
+    printing `KeyError: 'file'` out of `patch_sites`, and `find = ["a", "b"]` —
+    the shape an author reaches for when one anchor is not enough — a `TypeError`
+    out of `str.count`. A traceback is not a finding: it names a line of this
+    file and not the entry a reader has to go fix.
+    """
+    out: list[str] = []
+    for key in keys:
+        value = holder.get(key)
+        if not isinstance(value, str) or not value:
+            out.append(
+                f"{where}: {what} has no {key!r} — an anchor field is a non-empty"
+                f" string and this one is {value!r}"
+            )
+    return out
+
+
 def anchor_shape_problems(bug: str, entry: dict) -> list[str]:
     """The ways an entry's anchors are silently not applied.
 
@@ -398,6 +419,11 @@ def anchor_shape_problems(bug: str, entry: dict) -> list[str]:
     nothing; and an entry carrying both forms would have its flat half ignored
     entirely. A cap of three anchors used to make the first two impossible by
     construction — lifting it is what puts them in reach.
+
+    The rest is the same asymmetry read the other way: the `[[site]]` half's own
+    fields were validated and the flat half's were not, so the form MOST entries
+    use was the one whose holes came out as a traceback. [`anchor_fields`] is one
+    rule over both.
     """
     where = f"comutants.toml [{bug}]"
     out: list[str] = []
@@ -414,11 +440,28 @@ def anchor_shape_problems(bug: str, entry: dict) -> list[str]:
                     f"{where}: carries both a [[site]] array and a top-level "
                     f"{key!r} — the flat half would never be applied"
                 )
-        for i, site in enumerate(entry["site"], 1):
-            for key in ("file", "find"):
-                if not site.get(key):
-                    out.append(f"{where}: site {i} has no {key!r}")
+        sites = entry["site"]
+        # `[comutant.X.site]` with ONE bracket pair is a table, not an array of
+        # them, and the walk below then reads its KEYS as sites — `'str' object
+        # has no attribute 'get'`, out of the rule written to report the hole.
+        if not isinstance(sites, list) or not all(isinstance(s, dict) for s in sites):
+            out.append(
+                f"{where}: `site` is {type(sites).__name__} and not an array of"
+                " tables — `[[comutant.X.site]]` takes two bracket pairs, and one"
+                " makes it a table whose keys the walk would read as sites"
+            )
+            return out
+        for i, site in enumerate(sites, 1):
+            out.extend(anchor_fields(where, f"site {i}", site, ("file", "find")))
         return out
+    out.extend(
+        anchor_fields(
+            where,
+            "the flat form",
+            entry,
+            ("file", "find", *(f"find{n}" for n in sorted(numbered))),
+        )
+    )
     if numbered and sorted(numbered) != list(range(2, max(numbered) + 1)):
         out.append(
             f"{where}: anchors {sorted(numbered)} are not contiguous from 2 — "
