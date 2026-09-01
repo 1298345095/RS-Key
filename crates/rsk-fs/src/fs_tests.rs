@@ -373,10 +373,10 @@ fn a_faulted_ef_meta_read_never_rebuilds_the_blob_from_empty() {
 
 #[test]
 fn requesting_a_rescrub_clears_the_hardened_marker() {
-    // `MarkerNeverLies` — SEC-BOOT-001 at the code level. Every lazy re-key must
-    // re-arm the at-rest lap, and run-35 found four of five sites skipping it.
-    // The model catches the removal (`BugRekeyKeepsTheMarker`); nothing here did,
-    // so the one place the re-arm actually happens was asserted by no test.
+    // `MarkerNeverLies` — SEC-BOOT-001 at the code level. Every lazy re-key or
+    // delete of a pre-OTP record must re-arm the at-rest lap, and run-35 found
+    // four of five re-key sites skipping it. The model catches the removal
+    // (`BugRekeyKeepsTheMarker`); nothing here did, so the re-arm was untested.
     let mut fs = fs();
     fs.put(crate::EF_HARDENED, b"\x01").unwrap();
     assert!(fs.has_data(crate::EF_HARDENED));

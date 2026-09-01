@@ -29,18 +29,18 @@ pub use storage::Storage;
 /// one-shot [`Fs::compact`] scrubs them. The marker gates that lap to the first OTP boot
 /// and makes it crash-safe (absent ⇒ re-run; the lap is idempotent).
 ///
-/// Lives here, not in an applet, because **any** applet that lazily re-keys a pre-OTP
-/// record after the lap has already run must clear it ([`request_rescrub`]) — otherwise
-/// its superseded chip-serial-rooted copy stays readable in a flash dump forever.
+/// Lives here, not in an applet, because **any** applet that lazily re-keys *or deletes*
+/// a pre-OTP record after the lap has already run must clear it ([`request_rescrub`]) —
+/// a tombstone is an append too, so either way the chip-serial copy stays dumpable.
 pub const EF_HARDENED: u16 = 0xCE14;
 
 /// Re-arm the one-shot at-rest scrub: clear [`EF_HARDENED`] so the next boot runs the
-/// compaction lap again. Call from any lazy migration that re-keys a record off the
-/// pre-OTP (chip-serial) root *after* the lap has already run — the migration is an
-/// append, so the pre-OTP copy it supersedes stays readable in a flash dump until a lap
-/// reclaims its page, and without this the lap never runs again. Deferring to the next
-/// boot is deliberate: the lap is a multi-second stall that must not land inside a host
-/// command, and it is idempotent, so an interrupted one simply re-runs.
+/// compaction lap again. Call from any lazy migration that re-keys a pre-OTP record off
+/// that root *after* the lap has already run, and from any that deletes one — a
+/// tombstone appends like a re-seal, so both leave the pre-OTP copy readable in a flash
+/// dump until a lap reclaims its page, and without this the lap never runs again.
+/// Deferring to the next boot is deliberate: the lap is a multi-second stall that must
+/// not land inside a host command, and it is idempotent, so an interrupted one re-runs.
 /// Refines `RSKeyBootHardening!MarkerNeverLies` — SEC-BOOT-001.
 pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
     let _ = fs.delete(EF_HARDENED);

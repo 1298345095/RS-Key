@@ -449,7 +449,7 @@ source = ["docs/threat-model.md#TM-HOST-INTENT"]
 id = "SEC-BOOT-001"
 name = "MarkerNeverLies"
 status = "MODELLED-ONLY"
-statement = "EF_HARDENED present means no superseded weak-sealed copy awaits the scrub: the lap sets the marker only after a completed compaction, and every lazy re-key re-arms it — audit run-35 found four of five sites skipping the re-arm."
+statement = "EF_HARDENED present means no superseded weak-sealed copy awaits the scrub: the lap sets the marker only after a completed compaction, and every lazy re-key or delete of a pre-OTP record re-arms it — a delete only appends a tombstone, so it supersedes without erasing. Audit run-35 found four of five re-key sites skipping the re-arm."
 source = ["docs/threat-model.md#TM-THIEF-REMNANT-SCRUB"]
 
 [[property]]
