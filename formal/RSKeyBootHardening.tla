@@ -21,7 +21,7 @@
 (*    skipping that, and the sweep landed at                                 *)
 (*    crates/rsk-fido/src/clientpin.rs:814-816,                              *)
 (*    crates/rsk-fido/src/clientpin.rs:1218-1220,                            *)
-(*    crates/rsk-piv/src/lib.rs:1321-1324, crates/rsk-oath/src/lib.rs:1185,  *)
+(*    crates/rsk-piv/src/lib.rs:1321-1324, crates/rsk-oath/src/lib.rs:1190,  *)
 (*    crates/rsk-openpgp/src/pin.rs:340.                                     *)
 (*                                                                           *)
 (* 2. THE SCRATCH-WORD LOCK CARRY. The clientPIN soft lock rides a warm      *)

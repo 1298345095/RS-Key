@@ -219,6 +219,68 @@ fn a_successful_change_does_not_open_the_safe() {
     assert!(safe_open(&mut app, &mut fs), "the new PIN opens it");
 }
 
+/// A PIN set before the OTP burn is stored under the chip-serial root, and CHANGE
+/// re-keys it to the OTP one. That is a lazy re-key after the boot lap has latched,
+/// so the copy it supersedes stays offline-brute-forceable in the flash ring until
+/// something re-arms the lap — the rule audit run-35 wrote, which the sibling
+/// VERIFY already keeps and this command did not.
+#[test]
+fn a_change_after_the_otp_burn_rearms_the_at_rest_lap() {
+    let mut fs = new_fs();
+    let rng = RefCell::new(CountRng(7));
+    let touch = RefCell::new(AlwaysConfirm);
+
+    // Pre-burn: SET PIN stores v1 under the NO-OTP (chip-serial) kbase.
+    {
+        let mut app = OathApplet::new(SERIAL, [0x22; 32], None, &rng, &touch);
+        assert_eq!(
+            run(
+                &mut app,
+                &mut fs,
+                &apdu(INS_SET_PIN, 0, 0, &tlv(TAG_PASSWORD, b"1234"))
+            )
+            .0,
+            Sw::OK
+        );
+    }
+    let nootp = Device {
+        serial_hash: &[0x22; 32],
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let mut rec = [0u8; OTP_PIN_REC_V1];
+    assert_eq!(fs.read(EF_OTP_PIN, &mut rec), Some(OTP_PIN_REC_V1));
+    assert_eq!(
+        &rec[2..],
+        &nootp.pin_derive_verifier(b"1234")[..],
+        "the record CHANGE is about to supersede is chip-serial-rooted",
+    );
+
+    // The one-shot at-rest lap has already run on this device, so the CHANGE
+    // below supersedes that copy AFTER the only pass that could reclaim it.
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    assert_eq!(change(&mut app, &mut fs, b"1234", b"5678"), Sw::OK);
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "CHANGE re-keyed the verifier off the chip-serial root and must re-arm \
+         the at-rest lap: the copy it superseded is readable in a flash dump",
+    );
+
+    // …and it really did re-key: the standing record is the OTP-arm one.
+    let otp = Device {
+        otp_key: Some(&TEST_MKEK),
+        ..nootp
+    };
+    assert_eq!(fs.read(EF_OTP_PIN, &mut rec), Some(OTP_PIN_REC_V1));
+    assert_eq!(
+        &rec[2..],
+        &otp.pin_derive_verifier(b"5678")[..],
+        "the new verifier is stored under the OTP arm",
+    );
+}
+
 /// The OTP-PIN gate is `has_data(EF_OTP_PIN)`, and `Fs::has_data` answers the same
 /// `false` for "the owner never set one" and for a probe the flash could not
 /// serve. On a code-less applet `select()` leaves `validated` true unconditionally,

@@ -2734,6 +2734,33 @@ and to the statuses it quotes.
 
 ### Security
 
+- **OATH's PIN CHANGE is a lazy pre-OTP re-key too, and run-35's sweep did not
+  reach it.** That sweep re-armed the at-rest scrub in FIDO clientPIN, the
+  display device PIN, PIV and OATH — but OATH's `0xB2` VERIFY only. `0xB3`
+  CHANGE writes the same fresh v1 verifier over the same record, and
+  `otp_pin_matches` explicitly accepts a v1 stored *before* the OTP burn, so a
+  PIN set on a pre-OTP board and changed after it superseded a verifier rooted
+  in the public chip serial — brute-forceable offline from a flash dump — while
+  `EF_HARDENED` stayed latched and no boot ever swept the displaced copy. The
+  legacy `[counter, double_hash_pin]` layout CHANGE upgrades is the same story.
+  `cmd_change_otp_pin` re-arms the lap now, after the store write and in the
+  sibling's shape.
+
+  Measured, not argued: the new test in `crates/rsk-oath/src/otp_pin_tests.rs`
+  reads the record back before the CHANGE to prove it is chip-serial-rooted,
+  latches the marker, and fails on today's code at the marker assertion — the
+  marker SURVIVES a re-key that should have cleared it, which is the missing-
+  re-arm direction and not its inverse. Two mutants kill it (the call deleted;
+  the call swapped for a marker *read*), and two controls that are not no-ops
+  stay green: the re-arm moved ahead of the store write, and a refused store
+  answering `6985` instead of `6581`.
+
+  A class sweep of both applet crates found no other site still missing it: the
+  OpenPGP verifier writers all funnel through `commit_staged_dek` /
+  `migrate_pin_kbase`, which re-arm, and `cmd_set_otp_pin` mints only where no
+  record exists, superseding nothing. The boot-time migrations do not need it —
+  they run before `run_at_rest_lap`, not after. **bcdDevice → 0x09BA.**
+
 - **The delete guard that shipped one commit ago raised `6581` over erases that
   had completed.** `Fs::delete` drops the shared `EF_META` record *first* and
   removes the value anyway, so its `Err` folds two states: the value gone with a

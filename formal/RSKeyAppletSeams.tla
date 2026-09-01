@@ -119,7 +119,7 @@ VARIABLES
     \* only status here that is a two-part thing.
     fresh,
     \* Whether OATH has an access code provisioned. It decides what a SELECT
-    \* means: `validated = !code_set` (crates/rsk-oath/src/lib.rs:1234-1238), so
+    \* means: `validated = !code_set` (crates/rsk-oath/src/lib.rs:1239-1243), so
     \* a code-less applet is unlocked by design and only a provisioned one has a
     \* status a SELECT can take away.
     oathCodeSet,
@@ -176,7 +176,7 @@ Init ==
 \* Every status an applet owns, gone. This is `Session::reset`
 \* (crates/rsk-piv/src/lib.rs:199-203), `pin::Session::reset`
 \* (crates/rsk-openpgp/src/pin.rs:67-80) and OATH's `deselect`
-\* (crates/rsk-oath/src/lib.rs:1200-1204) -- three functions, one meaning.
+\* (crates/rsk-oath/src/lib.rs:1205-1209) -- three functions, one meaning.
 ClearedFor(h, a) ==
     [r \in Refs |-> IF RefOwner(r) = a
                       THEN (r = "oathCode" /\ ~oathCodeSet) ELSE h[r]]
@@ -193,7 +193,7 @@ AllCleared == [r \in Refs |-> r = "oathCode" /\ ~oathCodeSet]
 \* 800-73-4 pt2 3.1.1 makes it a `shall`, OpenPGP 3.4.1 4.2 says access status
 \* holds until a select to a DIFFERENT DF, and a YubiKey 5.7.4 was measured
 \* keeping all of it). OATH does not: it ignores the flag and re-locks
-\* (crates/rsk-oath/src/lib.rs:1208), which is a recorded, deliberate asymmetry
+\* (crates/rsk-oath/src/lib.rs:1213), which is a recorded, deliberate asymmetry
 \* rather than an oversight -- it has no oracle reading behind it.
 Reselect(a) ==
     /\ sel = a
@@ -298,7 +298,7 @@ PgpChangeRefused(r) ==
     /\ refused' = r
     /\ UNCHANGED << sel, fresh, pfresh, oneShotSig, oathCodeSet, viol >>
 
-\* OATH VERIFY PIN (crates/rsk-oath/src/lib.rs:1172-1187) clears BOTH flags at
+\* OATH VERIFY PIN (crates/rsk-oath/src/lib.rs:1177-1192) clears BOTH flags at
 \* entry and re-sets them only on success: `validated` is reachable THROUGH the
 \* OTP PIN as well as through the access code, so one bool carries two
 \* provenances and both have to fall.

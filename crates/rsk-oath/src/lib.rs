@@ -1154,7 +1154,12 @@ impl<'a> OathApplet<'a> {
         if let Err(sw) = self.spend_and_match_otp_pin(fs, &mut rec, size, pw) {
             return sw;
         }
-        match fs.put(EF_OTP_PIN, &self.otp_pin_record_v1(new_pw)) {
+        let stored = fs.put(EF_OTP_PIN, &self.otp_pin_record_v1(new_pw));
+        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`; audit run-35): the
+        // record just superseded may be keyed under the pre-OTP arm the public chip
+        // serial derives. After the write, like VERIFY — a refusal can still land.
+        rsk_fs::request_rescrub(fs);
+        match stored {
             Ok(()) => Sw::OK,
             Err(_) => Sw::MEMORY_FAILURE,
         }
