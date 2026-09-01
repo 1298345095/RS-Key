@@ -18,11 +18,16 @@
 (*    AFTER scrub, so a torn lap re-runs. Every LAZY re-key after the lap    *)
 (*    must re-arm it (`request_rescrub`) or its superseded copy stays        *)
 (*    readable forever: audit run-35 found FOUR OF FIVE lazy re-keys         *)
-(*    skipping that, and the sweep landed at                                 *)
+(*    skipping that, and its sweep landed the CALL at                        *)
 (*    crates/rsk-fido/src/clientpin.rs:814-816,                              *)
 (*    crates/rsk-fido/src/clientpin.rs:1218-1220,                            *)
-(*    crates/rsk-piv/src/lib.rs:1321-1324, crates/rsk-oath/src/lib.rs:1190,  *)
-(*    crates/rsk-openpgp/src/pin.rs:340.                                     *)
+(*    crates/rsk-piv/src/lib.rs:1330, crates/rsk-oath/src/lib.rs:1191,       *)
+(*    crates/rsk-openpgp/src/pin.rs:342 -- three of those five used to name  *)
+(*    the comment or the write ABOVE the call, which is what a mechanical    *)
+(*    re-number leaves behind. Run-35's five is a HISTORICAL set, not        *)
+(*    today's: `git grep -n request_rescrub` outside rsk-fs's own            *)
+(*    definition and the tests is the live one, and no count of it is        *)
+(*    written here, because the count is what rotted.                        *)
 (*                                                                           *)
 (* 2. THE SCRATCH-WORD LOCK CARRY. The clientPIN soft lock rides a warm      *)
 (*    reset in WATCHDOG.scratch2 (firmware/src/pin_lock.rs) so a host-       *)
@@ -65,7 +70,9 @@ CONSTANTS
     \* the copy it superseded -- sealed under a root the PUBLIC chip serial
     \* derives -- stays in the flash ring as an offline dictionary target and
     \* no future boot will ever scrub it. The shipped tree clears the marker at
-    \* every one of the five sites; the switch removes the re-arm.
+    \* every lazy re-key; the switch removes the re-arm at its DEFINITION
+    \* (crates/rsk-fs/src/lib.rs:46), which dominates every call site -- so how
+    \* many there are is not a number this model has to carry.
     BugRekeyKeepsTheMarker,
     \* The marker written on a lap that did NOT complete:
     \* crates/rsk-fs/src/lib.rs:64 short-circuits `fs.compact().is_ok()`
@@ -129,6 +136,21 @@ Init ==
 (* re-arm the lap; the FIDO layer moves the soft lock and every move writes  *)
 (* the whole scratch word.                                                   *)
 (***************************************************************************)
+\* THE WRITE/RE-ARM ORDER IS NOT MODELLED, AND THIS IS WHERE IT WOULD BE. The
+\* tree writes the record FIRST and re-arms second at every site; d703c15 names
+\* that as the less fail-safe order. Collapsing the pair into one action leaves
+\* a power cut between them no state to sit in, so "the marker is cleared
+\* before the medium can hold a superseded copy" is unfalsifiable here.
+\* Splitting it free-floating was MEASURED and REFUSED: Boot, BootCarry and
+\* BootInduction fall at depth 2 on the transient, and the three
+\* BugMarkerBeforeScrub rows stop reaching their own defect (26 distinct at
+\* depth 5 -> 2 at depth 2) while still reporting MarkerNeverLies, so the
+\* verdict column cannot see that they died for the wrong reason. A faithful
+\* split needs an in-flight flag and `~(marker /\ weak > 0 /\ ~pending)`;
+\* measured on a scratch module, that is RED at depth 3 on write -> reset and
+\* GREEN on re-arm-first, so the SHIPPED order is the red arm and the row it
+\* belongs in is an expected-RED Historical_* one -- which run-tlc.sh's tier
+\* list names by hand, not by glob.
 LazyRekey ==
     /\ phase = "serving"
     /\ weak < MaxWeak

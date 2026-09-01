@@ -193,7 +193,7 @@ AllCleared == [r \in Refs |-> r = "oathCode" /\ ~oathCodeSet]
 \* 800-73-4 pt2 3.1.1 makes it a `shall`, OpenPGP 3.4.1 4.2 says access status
 \* holds until a select to a DIFFERENT DF, and a YubiKey 5.7.4 was measured
 \* keeping all of it). OATH does not: it ignores the flag and re-locks
-\* (crates/rsk-oath/src/lib.rs:1213), which is a recorded, deliberate asymmetry
+\* (crates/rsk-oath/src/lib.rs:1214), which is a recorded, deliberate asymmetry
 \* rather than an oversight -- it has no oracle reading behind it.
 Reselect(a) ==
     /\ sel = a
