@@ -426,6 +426,29 @@ fn the_scrub_lap_destroys_a_superseded_secret() {
 }
 
 #[test]
+fn the_scrub_lap_destroys_a_deleted_secret() {
+    // The other arm of the same mechanism: `remove_item` rewrites the item header
+    // with a cleared CRC and leaves every payload byte where it was, which is why
+    // deleting a pre-OTP record after the lap owes a `request_rescrub` too.
+    const OLD: &[u8] = b"the-pre-otp-sealed-seed-0123456789";
+    let flash = SharedMock::new();
+    let mut store = mount(&flash);
+    store.write(CRED, OLD).unwrap();
+    store.remove(CRED).unwrap();
+    assert!(
+        flash.contains(MAIN, OLD),
+        "precondition: a delete is a tombstone, so the payload is still in flash"
+    );
+
+    store.compact().unwrap();
+    assert!(
+        !flash.contains(MAIN, OLD),
+        "the deleted copy survived the lap"
+    );
+    assert_eq!(read_vec(&mut store, CRED), None);
+}
+
+#[test]
 fn the_scrub_lap_keeps_every_live_record() {
     // It drives a full ring lap of throwaway writes; live items are migrated ahead
     // of the head, and losing one here is losing a key.

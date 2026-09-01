@@ -1910,9 +1910,9 @@ and writes the marker only after `compact()` returns Ok
 (`crates/rsk-fs/src/lib.rs:49-67`) — marker AFTER scrub, the same write-order
 family as the store's delete and the PIN flows' revoke. The boot glue keeps only
 the OTP gate and the placement of the stall (`firmware/src/main.rs:618-627`).
-Every *lazy* re-key
-after the lap must re-arm it: **audit run-35 found four of five sites skipping
-exactly that**, and the swept sites are the module's citations.
+Every *lazy* re-key **or delete** after the lap must re-arm it — a tombstone
+appends too: **run-35 found four of five re-key sites skipping exactly that**,
+and the swept sites are the module's citations.
 
 **The scratch-word lock carry.** The clientPIN soft lock rides a warm reset in
 `WATCHDOG.scratch2` so a host-requestable reboot cannot launder the

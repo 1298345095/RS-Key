@@ -64,10 +64,10 @@ shipped display-build defects.
 
 `RSKeyBootHardening.tla` models the two machines at the reset line — the
 one-shot at-rest scrub lap (`EF_HARDENED` never lies about superseded
-weak-sealed copies, and every lazy re-key re-arms it) and the scratch-word
-lock carry (a warm reset moves the whole soft lock, never half of it). It
-exists because `firmware/` has no host tests by construction: the model is
-the only instrument that exercises these interleavings. Its
+weak-sealed copies, and every lazy re-key or delete re-arms it) and the
+scratch-word lock carry (a warm reset moves the whole soft lock, never half
+of it). It exists because `firmware/` has no host tests by construction: the
+model is the only instrument that exercises these interleavings. Its
 `PowerOnClearsScratch2` assumption is deliberately explicit and still awaits
 an RP2350 hardware measurement; TLC does not turn it into a hardware fact.
 
