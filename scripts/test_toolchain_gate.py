@@ -350,12 +350,13 @@ def test_a_cargo_package_locked_twice_is_red(tree):
 
 
 def test_one_of_the_workflow_sites_disagreeing_is_red(tree):
-    """M2, and the live hole it closes: `KANI_VERSION` is written three times
-    across two files and `scripts/kani_gate.py` reads one of them, so an edit to
-    the file it does not read is invisible there. The message has to NAME the
+    """M2: `KANI_VERSION` is written three times across two files, so an edit to
+    any one of them has to be visible here. The message has to NAME the
     disagreeing file, or the reader is left grepping — and it names the file's
     OWN spread too, because deep-checks.yml assigns the variable twice and this
-    mutation moves one of the two."""
+    mutation moves one of the two. `scripts/kani_gate.py` asks the same question
+    of the same files now; what is this rule's alone is holding them to the
+    registry's `pin`, which the mutation below drives."""
     tree.edit(gate.WORKFLOWS / "deep-checks.yml", 'KANI_VERSION: "0.67.0"\n    steps:\n      - run: echo "$KANI_VERSION"\n  shrink', 'KANI_VERSION: "0.68.0"\n    steps:\n      - run: echo "$KANI_VERSION"\n  shrink')
     problem = only(tree.problems(), "disagree")
     assert ".github/workflows/deep-checks.yml (0.67.0, 0.68.0)" in problem

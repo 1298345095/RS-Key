@@ -340,7 +340,7 @@ environment = "nix develop, with RUSTFLAGS='--cfg sha2_backend=\"soft\" --cfg po
 
 [[tool]]
 name = "cbmc"
-version = "6.8.0 (cbmc-6.8.0), 64-bit arm64 macos — the banner every harness in the artifact prints"
+version = "6.8.0 (cbmc-6.8.0) 64-bit arm64 macos — the banner it prints; CaDiCaL 2.0.0 is the SAT back end `--sat-solver cadical` selects, read out of the binary itself as `cadical-2.0.0`. Re-measured off ~/.kani/kani-0.67.0/bin/, which also ships kissat 4.0.1 beside it, because the three bundles carrying this row wrote one banner at three different specificities and prose is not a pin (PLAT-TOOL-003)"
 provenance = "a prebuilt binary inside the CBMC/SAT bundle `cargo kani setup` FETCHES, beside kissat 4.0.1; nothing in this tree hashes that bundle, which is the gap PLAT-TOOL-003 names. Not the same as unpinned: the kani-verifier VERSION above is pinned"
 invocation = "driven by cargo kani, not by hand"
 environment = "and it printed its own scope limit: `Kani currently does not support concurrency. The following constructs will be treated as sequential operations: - atomic_load (6) - atomic_store (6)`. AS-XT-1 is the row that owns that sentence"

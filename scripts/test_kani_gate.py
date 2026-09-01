@@ -24,6 +24,11 @@ import pytest
 import gate_lines
 import kani_gate
 
+#: The workflow the fixture writes the `all` tier into. `kani_gate.py` no longer
+#: names it: the pin is read from every workflow now, so a constant pointing at
+#: one of them would say the module still reads one.
+DEEP_YML = kani_gate.WORKFLOWS / "deep-checks.yml"
+
 RUNNER = """#!/usr/bin/env bash
 set -euo pipefail
 FAST="rsk-a rsk-b"
@@ -53,6 +58,8 @@ fi
 CI = """name: ci
 jobs:
   proofs:
+    env:
+      KANI_VERSION: "0.67.0"
     steps:
       - name: prove the fast tier
         run: ./scripts/kani.sh pr
@@ -115,7 +122,7 @@ class Tree:
         self.root = root
         self.write(kani_gate.RUNNER, RUNNER, executable=True)
         self.write(kani_gate.WORKFLOWS / "ci.yml", CI)
-        self.write(kani_gate.PINNED_IN, DEEP)
+        self.write(DEEP_YML, DEEP)
         self.write(kani_gate.DOCS, DOCS)
         for crate, (rel, covers) in PROVEN.items():
             self.write(f"crates/{crate}/{rel}", fixture_harness(covers))
@@ -237,7 +244,7 @@ def test_the_row_commented_out(tree):
 def test_the_row_disabled_after_a_hash(tree):
     """`run: true # ./scripts/kani.sh all` runs the `true`. The hole it shipped with."""
     tree.edit(
-        kani_gate.PINNED_IN,
+        DEEP_YML,
         "run: ./scripts/kani.sh all",
         "run: true # ./scripts/kani.sh all",
     )
@@ -246,7 +253,7 @@ def test_the_row_disabled_after_a_hash(tree):
 
 def test_the_header_comment_alone_does_not_count(tree):
     """The kani lesson: the copies agree over a job that proves nothing."""
-    tree.edit(kani_gate.PINNED_IN, "        run: ./scripts/kani.sh all", "        run: true")
+    tree.edit(DEEP_YML, "        run: ./scripts/kani.sh all", "        run: true")
     assert only(tree.problems(), "no CI row runs the `all` tier")
 
 
@@ -266,7 +273,7 @@ def split_tiers(tree, rows):
     tree.edit(kani_gate.RUNNER, 'TIERS="pr state all"', 'TIERS="pr state all light heavy"')
     tree.edit(kani_gate.RUNNER, "FLOOR_all=3\n", "FLOOR_all=3\nFLOOR_light=2\nFLOOR_heavy=1\n")
     tree.edit(kani_gate.RUNNER, "COVERS_all=4\n", "COVERS_all=4\nCOVERS_light=3\nCOVERS_heavy=1\n")
-    tree.edit(kani_gate.PINNED_IN, "        run: ./scripts/kani.sh all", rows)
+    tree.edit(DEEP_YML, "        run: ./scripts/kani.sh all", rows)
     tree.edit(
         kani_gate.DOCS,
         "./scripts/kani.sh all\n",
@@ -362,8 +369,58 @@ def test_the_docs_pin_drifted(tree):
 
 
 def test_the_workflow_pin_removed(tree):
-    tree.edit(kani_gate.PINNED_IN, 'KANI_VERSION: "0.67.0"', "KANI_VERSION: latest")
+    tree.edit(DEEP_YML, 'KANI_VERSION: "0.67.0"', "KANI_VERSION: latest")
     assert only(tree.problems(), "KANI_VERSION is not pinned")
+
+
+def test_the_pin_is_read_from_every_workflow(tree):
+    """The green direction, and the one that stops the rest going green vacuously.
+
+    A reader that resolved NOTHING would satisfy every case below — there would
+    be no second value to disagree with — so the fixture's two files are asserted
+    to be the two the reader actually found.
+    """
+    assert kani_gate.workflow_pins(tree.root) == {
+        ".github/workflows/ci.yml": ["0.67.0"],
+        str(DEEP_YML): ["0.67.0"],
+    }
+
+
+def test_one_workflow_pin_moved_alone(tree):
+    """The live hole: `KANI_VERSION` is three literals across two files, and this
+    read `deep-checks.yml` only — so moving `ci.yml:155` on its own was exit 0
+    here, measured on the real tree before the change."""
+    tree.edit(kani_gate.WORKFLOWS / "ci.yml", '"0.67.0"', '"0.68.0"')
+    problem = only(tree.problems(), "they disagree")
+    assert problem, tree.problems()
+    assert "ci.yml pins 0.68.0" in problem[0]
+    assert "deep-checks.yml pins 0.67.0" in problem[0]
+
+
+def test_a_second_pin_in_the_same_workflow_disagrees(tree):
+    """deep-checks.yml carries TWO — :354 and :446 — and a `search` reads the first."""
+    tree.edit(
+        DEEP_YML,
+        '      KANI_VERSION: "0.67.0"\n',
+        '      KANI_VERSION: "0.67.0"\n'
+        "  comutants:\n    env:\n"
+        '      KANI_VERSION: "0.68.0"\n    steps:\n      - run: true\n',
+    )
+    problem = only(tree.problems(), "they disagree")
+    assert problem, tree.problems()
+    assert "written 3 time(s) across 2 workflow file(s)" in problem[0]
+
+
+def test_the_same_name_outside_an_env_block_is_not_a_pin(tree):
+    """`with:` takes an argument; only `env:` pins. The reason the reader is
+    `toolchain_gate.env_values` and not a line match."""
+    tree.edit(
+        kani_gate.WORKFLOWS / "ci.yml",
+        "    steps:\n",
+        '    steps:\n      - uses: some/action\n        with:\n'
+        '          KANI_VERSION: "9.9.9"\n',
+    )
+    assert tree.problems() == []
 
 
 def test_the_docs_install_unpinned(tree):
@@ -376,7 +433,7 @@ def test_the_docs_install_unpinned(tree):
 
 def test_a_hand_written_roster_in_the_workflow(tree):
     tree.edit(
-        kani_gate.PINNED_IN,
+        DEEP_YML,
         "run: ./scripts/kani.sh all",
         "run: cargo kani -p rsk-a -p rsk-b -p rsk-c",
     )
@@ -612,7 +669,7 @@ def test_the_full_tier_may_be_split_across_two_rows(tree):
         "COVERS_all=4\nCOVERS_light=3\nCOVERS_heavy=1\n",
     )
     tree.edit(
-        kani_gate.PINNED_IN,
+        DEEP_YML,
         "        run: ./scripts/kani.sh all",
         "        run: ./scripts/kani.sh light\n"
         "      - name: prove the heavy half\n"
@@ -644,7 +701,7 @@ def test_a_split_that_leaves_a_crate_behind_still_fails(tree):
     tree.edit(kani_gate.RUNNER, "FLOOR_all=3\n", "FLOOR_all=3\nFLOOR_light=2\n")
     tree.edit(kani_gate.RUNNER, "COVERS_all=4\n", "COVERS_all=4\nCOVERS_light=3\n")
     tree.edit(
-        kani_gate.PINNED_IN,
+        DEEP_YML,
         "        run: ./scripts/kani.sh all",
         "        run: ./scripts/kani.sh light",
     )

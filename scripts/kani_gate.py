@@ -68,13 +68,12 @@ import subprocess
 import sys
 
 import gate_lines
+import toolchain_gate
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORKFLOWS = pathlib.Path(".github/workflows")
 DOCS = pathlib.Path("docs/testing.md")
 RUNNER = pathlib.Path("scripts/kani.sh")
-#: Where the version CI installs is written down.
-PINNED_IN = pathlib.Path(".github/workflows/deep-checks.yml")
 
 #: Crates with a harness the daily row deliberately does not run, each with the
 #: measured reason. An exclusion is a debt, so it is checked too: one naming a crate
@@ -90,9 +89,12 @@ EXCLUDED = {
 #: the one the coverage question is asked of.
 FULL = "all"
 
-#: The version the workflow pins and the docs tell a reader to install. Kani's
-#: verdicts are version-dependent, so an unpinned local install is a different tool.
-PINNED = re.compile(r'KANI_VERSION:\s*"([\d.]+)"')
+#: The name the workflows pin the prover with. Kani's verdicts are
+#: version-dependent, so an unpinned local install is a different tool.
+PIN_VAR = "KANI_VERSION"
+#: The shape a pin has to have. `latest` is an assignment, not a pin; the quotes
+#: the earlier spelling of this required are YAML's and not part of the value.
+PINNED = re.compile(r"[\d.]+")
 DOC_PIN = re.compile(r"kani-verifier --version ([\d.]+)")
 
 #: An invocation of the tier runner, with or without a `./` and whatever drives it.
@@ -259,6 +261,28 @@ def sources(root):
     for path in sorted((root / WORKFLOWS).glob("*.yml")):
         yield path.relative_to(root), path.read_text(), True
     yield DOCS, (root / DOCS).read_text(), False
+
+
+def workflow_pins(root):
+    """{workflow -> every value its `env:` blocks give [`PIN_VAR`]}.
+
+    EVERY workflow, because the name is assigned three times across two files —
+    ci.yml:155, deep-checks.yml:354 and :446 — and this read deep-checks.yml
+    alone. Measured before the change: moving ci.yml's literal alone was exit 0
+    here, and so was moving deep-checks.yml's SECOND assignment, which a
+    `search` for the first never reached.
+
+    `toolchain_gate.env_values` is the reader rather than a second regex, for the
+    reason `platform_gate` asks `claims_gate.is_generated` instead of re-reading
+    its mapping: it judges the `env:` block structurally, so a `with:` or
+    `inputs:` key of the same name is not taken for a pin, and one reading of a
+    workflow is one answer to what CI installs.
+    """
+    return {
+        str(rel): values
+        for rel, text, is_workflow in sources(root)
+        if is_workflow and (values := toolchain_gate.env_values(text, PIN_VAR))
+    }
 
 
 def blanked(chunk):
@@ -497,14 +521,36 @@ def audit(root):  # noqa: C901 — one clause per failure mode, each named
         problems.append(f"{rel} has a #[kani::proof] or kani::cover! no tier can reach")
     problems += ratchets(root, table, harnesses, covers)
 
-    want = PINNED.search((root / PINNED_IN).read_text())
+    pinned = workflow_pins(root)
+    said = sorted({value for values in pinned.values() for value in values})
+    loose = sorted(
+        f"{rel} ({value})"
+        for rel, values in pinned.items()
+        for value in values
+        if not PINNED.fullmatch(value)
+    )
     got = DOC_PIN.search((root / DOCS).read_text())
-    if not want:
-        problems.append("KANI_VERSION is not pinned in the workflow")
+    if not pinned or loose:
+        problems.append(
+            f"{PIN_VAR} is not pinned in the workflow"
+            + (f": {', '.join(loose)}" if loose else "")
+        )
+    elif len(said) > 1:
+        # The half a one-file read cannot have. Three literals agreeing is what
+        # makes any of them the version CI installs; two that disagree make the
+        # tier a reader copies and the tier CI runs different tools.
+        problems.append(
+            f"{PIN_VAR} is written {sum(len(v) for v in pinned.values())} time(s)"
+            f" across {len(pinned)} workflow file(s) and they disagree — "
+            + "; ".join(
+                f"{rel} pins {', '.join(sorted(set(values)))}"
+                for rel, values in sorted(pinned.items())
+            )
+        )
     elif not got:
         problems.append(f"{DOCS} installs kani-verifier without --version")
-    elif got.group(1) != want.group(1):
-        problems.append(f"{DOCS} installs kani {got.group(1)}, CI pins {want.group(1)}")
+    elif got.group(1) != said[0]:
+        problems.append(f"{DOCS} installs kani {got.group(1)}, CI pins {said[0]}")
 
     summary = (
         f"kani-gate: ok — {len(table)} tiers over {len(listed)} crates, "

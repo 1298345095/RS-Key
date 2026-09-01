@@ -36,9 +36,13 @@ copy that cannot rot silently, rather than a second copy that can.
 3. **`workflow:<file>:<VAR>`** resolves to a real `env:` assignment in that file,
    and every workflow that assigns `VAR` assigns the SAME value. `KANI_VERSION`
    is written three times — .github/workflows/ci.yml:155,
-   .github/workflows/deep-checks.yml:354 and :446 — and scripts/kani_gate.py
-   reads exactly one of those files, so an edit to ci.yml alone is invisible to
-   it today. This rule names the disagreeing files.
+   .github/workflows/deep-checks.yml:354 and :446 — and this rule names the
+   disagreeing files. It is no longer the only holder: `scripts/kani_gate.py`
+   read one of those files and now reads all of them, because the hold here is
+   CONTINGENT and that one is not. Measured: deleting the `cargo-kani` row from
+   the registry and re-running `--write` is exit 0 — 12 tools, 11 resolved, both
+   floors below are still clear — and with it gone, moving ci.yml:155 alone was
+   exit 0 again.
 4. **`unpinned`** is legal only where `pin` names a `PLAT-TOOL*` row of
    assurance/platform.toml whose `status` is still `pending`. Without it the
    registry becomes the quiet place to park a gap: a row saying nothing pins this
@@ -434,9 +438,9 @@ def resolve(name, entry, sources, findings) -> bool:
             f" {sorted(set(mine))}"
         )
         return False
-    # The half scripts/kani_gate.py cannot have: it reads ONE workflow, so the
-    # same variable written three times across two files can disagree with it
-    # green. Every file that assigns the name has to agree.
+    # Every file that assigns the name has to agree. `kani_gate.py` asks the
+    # same question of the same files now; this half is the one that also holds
+    # them to the registry's `pin`, and that half is this gate's alone.
     disagree = sorted(
         f"{rel} ({', '.join(sorted(set(values)))})"
         for rel, values in said.items()

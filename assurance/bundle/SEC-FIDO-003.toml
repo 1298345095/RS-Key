@@ -334,7 +334,7 @@ environment = 'RUSTFLAGS=--cfg sha2_backend="soft" --cfg poly1305_force_soft --c
 
 [[tool]]
 name = "cbmc"
-version = "the one cargo-kani 0.67.0 ships; CaDiCaL as the SAT back end"
+version = "6.8.0 (cbmc-6.8.0) 64-bit arm64 macos — the banner it prints; CaDiCaL 2.0.0 is the SAT back end `--sat-solver cadical` selects, read out of the binary itself as `cadical-2.0.0`. Re-measured off ~/.kani/kani-0.67.0/bin/, which also ships kissat 4.0.1 beside it, because the three bundles carrying this row wrote one banner at three different specificities and prose is not a pin (PLAT-TOOL-003)"
 provenance = "a prebuilt binary inside the CBMC/SAT bundle `cargo kani setup` FETCHES, beside kissat 4.0.1; nothing in this tree hashes that bundle, which is the gap PLAT-TOOL-003 names. Not the same as unpinned: the kani-verifier VERSION above is pinned"
 invocation = "driven by cargo kani, not by hand"
 environment = "the harness bounds are the environment here: 442 checks on the state harness and 1310 on the call-site one"
