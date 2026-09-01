@@ -15,13 +15,12 @@ platform, a tool or an abstraction, and there is no arm to run.
 **Why a second file and not a `class` field on the first.** A discriminator
 inside `assumptions.toml` would pick which rules apply, and the rules it would
 have to switch off are ALL THREE of the mechanical ones that file has — which
-leaves "an entry exists". Measured, on the real gate: an entry for `M7-Q2` there
-answers `in the registry but no configuration assigns it`, so the amendment must
-disable the orphan rule as well as the both-arms and reachability rules; and the
-counterfactual — that gate with the two constant rules skipped for `platform` —
-passes `PowerOnClearsScratch2` pinned nine ways with nothing to falsify it.
-Deleting a constant from that registry instead reddens it at once, so a second
-file makes the misclass a red row rather than a spelling.
+leaves "an entry exists". The `M7-Q2` answer measured above IS the orphan rule, so
+the amendment must disable that as well as the both-arms and reachability rules;
+and the counterfactual — that gate with the two constant rules skipped for
+`platform` — passes `PowerOnClearsScratch2` pinned nine ways with nothing to
+falsify it. Deleting a constant from that registry instead reddens it at once, so
+a second file makes the misclass a red row rather than a spelling.
 
 The classes differ in how they are DISCHARGED, which is the other half: a model
 constant is discharged by a TLC run, an entry here by a board measurement, a
@@ -37,7 +36,7 @@ before the audit, and a red run prints findings on stderr and returns 1. The pag
 is the copy a reader who never runs the gate sees, which is why it is generated
 and not typed.
 
-Seven rules, and the first is the one that earns the file:
+Eight rules, and the first is the one that earns the file:
 
 * **candidates are DERIVED, and every one is claimed.** Five derivations, each
   floored where its source exists and it found nothing:
@@ -62,16 +61,17 @@ Seven rules, and the first is the one that earns the file:
   owner from a closed vocabulary, because "someone should measure this" names
   nobody.
 * **a claim of discharge owes evidence.** Anything but `pending` needs artifacts
-  that are in the tree; a silicon-class discharge needs the stepping it was taken
-  on, a stepping written anywhere here must be a real one whatever the class, and
-  a discharge carrying one owes a raw artifact under `assurance/board/` — because
-  a rule satisfied by any file that merely exists is satisfied by `README.md`,
-  which is what the review reached the hardware axis with. That sentence then
-  stood over the hardware axis ALONE for as long as it was written down: on every
-  other row `evidence = ["README.md"]` was exit 0, measured, and
-  `PLAT-STORE-003`'s own discharge prose records it. [`PROSE_PAGE`] is the other
-  axis's half of it, and it is a weaker rule than the board one — the comment
-  there says which attacks it does not stop rather than leaving them to be found.
+  in the tree; a silicon-class discharge needs the stepping it was taken on, a
+  stepping written anywhere here must be a real one whatever the class, and a
+  discharge carrying one owes a raw artifact under `assurance/board/` — a rule
+  satisfied by any file that merely exists is satisfied by `README.md`, which is
+  what the review reached the hardware axis with. That sentence then stood over
+  that axis ALONE: on every other row `evidence = ["README.md"]` was exit 0,
+  measured, and `PLAT-STORE-003`'s discharge records it. [`PROSE_PAGE`] is the
+  other axis's half, weaker than the board one, and names what it does not stop.
+* **a maintainer-owned row owes a validated RECORD.** `assurance/board/<id>.toml`,
+  its plan half refused empty, its result half refused before the run, `expected`
+  older in git than it, and an outcome the row's status must match BOTH ways.
 * **links resolve.** `supports` names registry properties, `depends_on` and
   `refines` name entries here, `discharges` names constants of the first
   registry — and an entry covering `model:X` must discharge `X`, so the two
