@@ -1449,40 +1449,166 @@ def registry_table(page):
 #: that no longer means alternation. One case, because one helper answers both.
 PIPED_DISCHARGE = r'Run `a | b`, then `git grep -n "x\|y"`.'
 
+#: The fixture's own text for each field [`platform_gate.RENDERED_PROSE`] names,
+#: on the one row (`PLAT-MODEL-001`) whose every cell the cases below read. Both
+#: fields get every case: `cell` at `statement` was DELETABLE with this suite at
+#: 117 passed, because no registry row carries a pipe there and neither pipe case
+#: injected into it — a call site nothing drives is a call site nothing keeps.
+FIXTURE_PROSE = {
+    "statement": 'statement = "A design-page assumption with no bundle row yet."',
+    "discharge": 'discharge = "The store slice."',
+}
 
-def test_a_pipe_in_a_discharge_does_not_end_the_row(tree):
+#: Where each field lands in a rendered row, so a case can read the cell it
+#: poisoned instead of counting cells and hoping. From the header, not typed.
+COLUMN = {"statement": "Statement", "discharge": "Discharged by"}
+
+
+def poisoned_row(tree, field, value):
+    """Poison one field of `PLAT-MODEL-001`, render, and hand back that row.
+
+    Returns `(header, rows, cell)` so a case can assert the shape of the WHOLE
+    table and the content of the ONE cell it wrote — the two halves that a cell
+    count alone and a round-trip alone each miss.
+    """
+    tree.edit("assurance/platform.toml", FIXTURE_PROSE[field], f"{field} = '{value}'")
+    header, rows = registry_table(platform_gate.render(tree.root))
+    assert rows, "the fixture rendered no assumption rows"
+    row = next(r for r in rows if "`PLAT-MODEL-001`" in r[0])
+    return header, rows, row[header.index(f" {COLUMN[field]} ")].strip()
+
+
+@pytest.mark.parametrize("field", sorted(FIXTURE_PROSE))
+def test_a_pipe_in_rendered_prose_does_not_end_the_row(tree, field):
     """A `|` in prose is a cell separator, and the row runs into its neighbours.
 
     Measured before the fix on the real checkout: 72 rows of 7 cells, one of 10
     and one of 9, against a 7-column header — and GFM drops the excess, so two
     rows published a fragment of a grep pattern where the owner belongs and no
     `supports` at all.
+
+    The second assertion is the one this case was missing: deleting the poison
+    left it GREEN, counting seven cells on an un-poisoned fixture and asserting
+    nothing at all. It also refuses the degenerate escape — a `cell` that DROPS
+    the pipe gives seven cells too, and gives a route with no `|` left in it.
     """
-    tree.edit(
-        "assurance/platform.toml",
-        'discharge = "The store slice."',
-        f"discharge = '{PIPED_DISCHARGE}'",
-    )
-    header, rows = registry_table(platform_gate.render(tree.root))
-    assert rows, "the fixture rendered no assumption rows"
+    header, rows, carried = poisoned_row(tree, field, PIPED_DISCHARGE)
     # The count is DERIVED from the header of the same table. A literal 7 here is
     # a second copy of the column count, and a column added to both halves of
     # `render` would leave it asserting the old shape.
     assert [len(row) for row in rows] == [len(header)] * len(rows)
+    assert "|" in carried, carried
 
 
-def test_the_escape_carries_the_route_rather_than_dropping_it(tree):
+@pytest.mark.parametrize("field", sorted(FIXTURE_PROSE))
+def test_the_escape_carries_the_prose_rather_than_dropping_it(tree, field):
     """Seven cells is not enough: deleting the `|` would also give seven.
 
-    The other side of the oracle, and a third source — the row is un-escaped by
-    GFM's own rule (`\\|` is a literal `|`) and compared against the TOML the
-    registry holds, not against `cell`'s own output.
+    The other side of the oracle, un-escaped by GFM's rule that `\\|` is a
+    literal `|` and compared against the TOML the registry holds. That rule is
+    also `cell`'s own inverse, so this case cannot tell the helper's escape from
+    the renderer's — nothing under `scripts/` runs a renderer. What pins the two
+    together is the measurement recorded above [`UNESCAPED_PIPE`], re-taken for
+    this change on thirteen spellings through `mdbook build`, and the `docs` row
+    of `check.sh`, which builds the book on every run. A case that shelled out to
+    mdBook here would hard-require the binary in a suite that is otherwise pure
+    Python — `scripts/conftest.py` allows no skip to soften that — to re-measure
+    what the gate already builds one row over.
+    """
+    _header, _rows, carried = poisoned_row(tree, field, PIPED_DISCHARGE)
+    assert carried.replace("\\|", "|") == PIPED_DISCHARGE
+
+
+# --- and the characters no escape reaches -------------------------------------
+
+
+#: Each with what it costs, measured on the real checkout through mdBook. The
+#: line break is the pipe defect again, past the fix for the pipe defect: with
+#: one in `PLAT-MODEL-002`'s discharge the published row rendered FOUR cells,
+#: Owner and Supports were empty, and `platform_gate.py`, this suite and
+#: `mdbook build` were all exit 0. `\r` is that break plus a red that never
+#: converges — `read_text` folds it to `\n`, so the byte-diff asks forever for a
+#: `--write` that cannot settle it. `</td><td>` exits `mdbook build` **101**, so
+#: the docs row dies rather than reddening with a name; `<script>`, `<br>` and
+#: `<!-- -->` reached the built page as markup a contributor wrote.
+REFUSED = {
+    "line break": "a\\nb",
+    "carriage return": "a\\rb",
+    "table injection": "a</td><td>b",
+    "script": "a<script>alert(1)</script>b",
+    "comment": "a<!-- c -->b",
+}
+
+#: The green arm, and it is the half that says the rule is not "punctuation".
+#: Every one measured at exit 0, seven cells and no markup: `>` (seven real rows
+#: write one), `&` (three do), the fullwidth `｜`, a tab, a leading `#`, a
+#: trailing backslash, and a `|` inside a code span. Widening the rule to any of
+#: them is a diff here rather than a silent tightening.
+RENDERS = ["a > b", "a & b", "a ｜ b", "a\\tb", "# a b", "a b \\\\", "a `x | y` b"]
+
+
+@pytest.mark.parametrize("field", sorted(FIXTURE_PROSE))
+@pytest.mark.parametrize("what", sorted(REFUSED))
+def test_a_character_no_escape_reaches_is_a_finding(tree, field, what):
+    """Named, and it names the field: `check_shape` reads neither."""
+    tree.edit(
+        "assurance/platform.toml", FIXTURE_PROSE[field], f'{field} = "{REFUSED[what]}"'
+    )
+    assert only(tree.problems(), f"`{field}` carries")
+
+
+@pytest.mark.parametrize("what", sorted(REFUSED))
+def test_the_page_refuses_to_be_generated_rather_than_carrying_it(tree, what):
+    """The second guard, and the one `evidence_gate.py` has instead of the first.
+
+    That gate renders the same `statement` into `docs/assurance-vector.md` and
+    never calls `check_shape`, so `cell`'s raise is the whole of what stops the
+    damage there. Both `audit`s catch `ValueError` off their `render`.
     """
     tree.edit(
         "assurance/platform.toml",
-        'discharge = "The store slice."',
-        f"discharge = '{PIPED_DISCHARGE}'",
+        FIXTURE_PROSE["discharge"],
+        f'discharge = "{REFUSED[what]}"',
     )
-    _header, rows = registry_table(platform_gate.render(tree.root))
-    route = next(row for row in rows if "`PLAT-MODEL-001`" in row[0])[4].strip()
-    assert route.replace("\\|", "|") == PIPED_DISCHARGE
+    assert only(tree.problems(), "cannot be generated")
+
+
+@pytest.mark.parametrize("field", sorted(FIXTURE_PROSE))
+@pytest.mark.parametrize("payload", RENDERS)
+def test_a_character_that_renders_is_not_refused(tree, field, payload):
+    tree.edit("assurance/platform.toml", FIXTURE_PROSE[field], f'{field} = "{payload}"')
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_write_refuses_the_page_rather_than_writing_the_damage(tree, capsys):
+    """`--write` runs no rule, so the raise is the only thing standing there.
+
+    A traceback would be the crash this file refuses everywhere else, and a
+    half-written page would be worse: the assertion is that the page on disk is
+    the one that was there before.
+    """
+    tree.edit(
+        "assurance/platform.toml", FIXTURE_PROSE["discharge"], 'discharge = "a<br>b"'
+    )
+    before = (tree.root / platform_gate.ARTIFACT).read_text()
+    assert platform_gate.run(tree.root, write=True) == 1
+    assert (tree.root / platform_gate.ARTIFACT).read_text() == before
+    assert "not written" in capsys.readouterr().err
+
+
+def test_the_owner_is_refused_by_its_vocabulary_and_not_by_an_escape(tree):
+    """Why `render` does not wrap `discharge_owner`, and why that is checkable.
+
+    `OWNERS` is closed and `check_shape` reads it, so the one spelling an escape
+    there would have to survive is already a finding. The commit that added the
+    escape said exactly this and wrapped the field anyway; deleting that call
+    left this suite at 117 passed, because nothing could reach it.
+    """
+    tree.edit(
+        "assurance/platform.toml",
+        'discharge_owner = "contributor"\nstatus = "pending"\nfailure_direction = "coverage: a cardinality',
+        'discharge_owner = "contri|butor"\nstatus = "pending"\nfailure_direction = "coverage: a cardinality',
+    )
+    assert only(tree.problems(), "discharge_owner 'contri|butor' is not one")
+    assert "discharge_owner" not in platform_gate.RENDERED_PROSE

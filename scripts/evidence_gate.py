@@ -872,7 +872,10 @@ def outstanding(root, rows):
             out.append(("bundle", pid, "no raw evidence bundle"))
     for entry in platform_gate.entries(root, []).values():
         if entry.get("status") == "pending":
-            out.append(("platform", entry.get("id", "?"), entry.get("statement", "")[:70]))
+            # RAW, and the cut is on raw text on purpose: escaping first lets
+            # `[:70]` land between the `\` and the `|` it was written for.
+            # [`render`] escapes what this returns — see the comment there.
+            out.append(("platform", entry.get("id", "?"), str(entry.get("statement", ""))[:70]))
     return out
 
 
@@ -1083,8 +1086,11 @@ def render(root, rows=None):
         "| Kind | Subject | What is outstanding |",
         "|---|---|---|",
     ]
+    # HERE and not at [`outstanding`]'s `[:70]`: that runs under `check_rollups`
+    # too, outside `audit`'s try, where the raise is a traceback and not a
+    # finding — measured. The order is still cut-then-escape either way.
     for kind, subject, why in listed:
-        out.append(f"| {kind} | `{subject}` | {why} |")
+        out.append(f"| {kind} | `{subject}` | {platform_gate.cell(why)} |")
     made = packet(root, rows)
     out += [
         "",

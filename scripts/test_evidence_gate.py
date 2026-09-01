@@ -29,6 +29,10 @@ import assurance_gate
 import evidence_gate
 import gate_lines
 import platform_gate
+# The GFM split model and the poison, imported rather than retyped: what splits a
+# markdown row is one fact about one renderer, and the escape both pages use is
+# one function. A second copy is a second answer that agrees until one is redone.
+import test_platform_gate as P
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -923,3 +927,65 @@ def test_a_packet_that_lists_nothing_is_a_finding(monkeypatch):
     findings = []
     evidence_gate.check_rollups(ROOT, rows, findings)
     assert any("reproduces nothing" in f for f in findings), findings
+
+
+# --- the same pipe, one file over ---------------------------------------------
+
+
+def outstanding_table(page):
+    """The `Stale and pending` table as a renderer sees it: header, then rows."""
+    lines = page.splitlines()
+    head = next(i for i, line in enumerate(lines) if line.startswith("| Kind | Subject |"))
+    rows = []
+    for line in lines[head + 2:]:
+        if not line.startswith("| "):
+            break
+        rows.append(P.UNESCAPED_PIPE.split(line)[1:-1])
+    return P.UNESCAPED_PIPE.split(lines[head])[1:-1], rows
+
+
+PENDING_STATEMENT = 'statement = "The tear model is the one the store assumes."'
+
+
+def test_a_pipe_in_a_pending_statement_does_not_end_the_outstanding_row(tree):
+    """This page publishes the SAME registry's prose, with no helper of its own.
+
+    Green today only because no pending statement's first seventy characters
+    carries a pipe — which is a fact about the registry's current text, not a
+    rule, and the row that carried one four columns wide was `PLAT-SOURCE-002`.
+    """
+    tree.edit("assurance/platform.toml", PENDING_STATEMENT,
+              f"statement = '{P.PIPED_DISCHARGE}'")
+    tree.regenerate()
+    header, rows = outstanding_table(evidence_gate.render(tree.root))
+    assert rows, "the fixture rendered no outstanding rows"
+    assert [len(row) for row in rows] == [len(header)] * len(rows)
+    why = next(row for row in rows if "PLAT-FLASH-001" in row[1])[2].strip()
+    assert why.replace("\\|", "|") == P.PIPED_DISCHARGE
+
+
+def test_the_cut_lands_on_raw_prose_and_not_inside_an_escape(tree):
+    """Seventy characters of the REGISTRY's text, not seventy of the escaped text.
+
+    The other order — escape, then `[:70]` — leaves the row ending in half an
+    escape: measured, a trailing lone backslash where the `\\|` was cut in two.
+    """
+    long = "x" * 69 + "| the rest of the sentence"
+    tree.edit("assurance/platform.toml", PENDING_STATEMENT, f"statement = '{long}'")
+    tree.regenerate()
+    _header, rows = outstanding_table(evidence_gate.render(tree.root))
+    why = next(row for row in rows if "PLAT-FLASH-001" in row[1])[2].strip()
+    assert why.replace("\\|", "|") == long[:70]
+
+
+@pytest.mark.parametrize("what", sorted(P.REFUSED))
+def test_a_character_no_escape_reaches_refuses_this_page_too(tree, what):
+    """A finding, not a traceback — and that is why the escape is at the EMIT.
+
+    Measured with it at `outstanding`'s `[:70]` instead: `check_rollups` calls
+    that function OUTSIDE `audit`'s try, so the `ValueError` left `audit` as an
+    uncaught traceback rather than as this page's own named refusal.
+    """
+    tree.edit("assurance/platform.toml", PENDING_STATEMENT,
+              f'statement = "{P.REFUSED[what]}"')
+    assert only(tree.problems(), "cannot be generated")

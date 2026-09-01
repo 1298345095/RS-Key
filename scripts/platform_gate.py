@@ -983,6 +983,7 @@ def audit(root, board_floor=None):
     owner = {}
     for name, entry in sorted(registered.items()):
         check_shape(name, entry, findings)
+        check_cells(name, entry, findings)
         check_evidence(root, name, entry, findings, generated, tree)
         check_links(name, entry, registered, properties, constants, findings)
         for target in entry.get("covers", []):
@@ -1031,6 +1032,61 @@ def audit(root, board_floor=None):
     return findings, summary
 
 
+#: The two fields of a row that reach the page as free prose, and so the two an
+#: escape has an arm for. `class`, `status`, the id, `supports`, the board
+#: outcome and the graph targets are closed vocabularies or ids [`check_shape`]
+#: and [`check_links`] already refuse — and so is `discharge_owner`, which is why
+#: [`render`] passes it through: a clause a rule above it makes unreachable is
+#: decoration, and this file's own commit said so while wrapping it anyway.
+#: `failure_direction` is hand-written prose and is NOT here, because no
+#: generator in this tree renders it: `git grep failure_direction -- scripts/`
+#: answers three hits in this file and none outside a test.
+RENDERED_PROSE = ("statement", "discharge")
+
+#: What such a cell may not carry. A `|` is ESCAPED ([`cell`]); these cannot be,
+#: and every one is measured through mdBook rather than reasoned about:
+#:
+#: * `\n` — a line break ends the row exactly as a bare `|` did. Measured with
+#:   one in `PLAT-MODEL-002`'s discharge: the published row rendered four cells,
+#:   its Owner and its whole `supports` list came off the page, and the gate,
+#:   this suite and `mdbook build` were all **exit 0**. That is the pipe defect
+#:   again, past the fix for the pipe defect.
+#: * `\r` — the same break, plus a red that never converges: `read_text` folds it
+#:   back to `\n`, so the byte-diff finds the page differs from the generator
+#:   FOREVER and asks for a `--write` that cannot settle it. Measured: exit 1
+#:   after `--write`, with a message about committing the result.
+#: * `<` — raw HTML. `</td><td>` exits `mdbook build` **101** ("pop too far"), so
+#:   the docs row dies rather than reddening with a name; `<script>alert(1)</script>`,
+#:   `<br>` and `<!-- -->` all reached the built page as markup, at exit 0.
+#:
+#: NOT `>`: seven rows write one (`->`, `a > b`) and GFM prints `&gt;`. NOT `&`,
+#: which three rows write. Nor the fullwidth `｜`, a tab, a leading `#`, a
+#: trailing `\`, or a `|` inside a code span — all five measured at exit 0, seven
+#: cells, no markup. A clause for a character no row carries and no arm can drive
+#: is the shape this file refuses everywhere else.
+CELL_REFUSED = "\r\n<"
+
+
+def check_cells(name, entry, findings):
+    """The named half of [`cell`]'s refusal, per row and per field.
+
+    Two guards over one rule, and they are not the same guard: this one names the
+    entry and the field, which is what a contributor needs; [`cell`] is what
+    stops the page being WRITTEN, and it is the only half `evidence_gate.py` has
+    — that gate renders the same `statement` into `docs/assurance-vector.md` and
+    never calls [`check_shape`].
+    """
+    for key in RENDERED_PROSE:
+        carried = sorted({c for c in str(entry.get(key, "")) if c in CELL_REFUSED})
+        if carried:
+            findings.append(
+                f"{name}: `{key}` carries {carried} — {ARTIFACT} interpolates it"
+                " into a `|`-delimited row, where a line break takes Owner and"
+                " Supports off the page and `<` publishes raw HTML into it or"
+                " ends the build"
+            )
+
+
 def cell(text):
     r"""A markdown table cell. An unescaped `|` in prose ends the row otherwise.
 
@@ -1044,8 +1100,21 @@ def cell(text):
     `\\in` on the four rows that write one, while `\|` -> `\\|` already renders
     `\|` — restoring the `git grep` alternation `PLAT-MODEL-009` means the
     reader to paste, which this page had been eating.
+
+    [`CELL_REFUSED`] is the half no escape reaches, and it RAISES rather than
+    mangling: [`audit`] catches `ValueError` off [`render`] and so does
+    `evidence_gate.audit`, so both pages refuse to be generated with a named
+    finding, and [`run`] refuses the `--write` rather than writing the damage.
     """
-    return str(text).replace("|", "\\|")
+    text = str(text)
+    carried = sorted({c for c in text if c in CELL_REFUSED})
+    if carried:
+        raise ValueError(
+            f"a table cell carries {carried}, which no escape reaches — a line"
+            " break ends the row as a bare `|` does and `<` opens raw HTML in a"
+            f" published page. In: {text.strip()[:48]!r}"
+        )
+    return text.replace("|", "\\|")
 
 
 def render(root, registered=None):
@@ -1115,7 +1184,7 @@ def render(root, registered=None):
         out.append(
             f"| `{name}` | `{entry.get('class')}` | {cell(entry.get('statement'))} |"
             f" **{entry.get('status')}** | {cell(entry.get('discharge'))} |"
-            f" {cell(entry.get('discharge_owner'))} | {supports} |"
+            f" {entry.get('discharge_owner')} | {supports} |"
         )
     out += [
         "",
@@ -1161,7 +1230,15 @@ def render(root, registered=None):
 
 def run(root, write=False, board_floor=None):
     if write:
-        (root / ARTIFACT).write_text(render(root), encoding="utf-8")
+        # `--write` runs no rule, so [`cell`]'s raise arrives here as the only
+        # thing between a refused character and a damaged page. Named rather than
+        # a traceback, and the page is left alone: nothing half-written.
+        try:
+            page = render(root)
+        except ValueError as error:
+            print(f"platform-gate: {ARTIFACT} not written — {error}", file=sys.stderr)
+            return 1
+        (root / ARTIFACT).write_text(page, encoding="utf-8")
         print(f"platform-gate: wrote {ARTIFACT}")
         return 0
     findings, summary = audit(root, board_floor)
