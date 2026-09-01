@@ -1039,3 +1039,56 @@ def test_a_citing_file_outside_the_code_roots_is_not_read(tree):
     )
     assert "third_party/fork/src/probe.rs" not in code_pages_of(tree)
     assert tree.problems() == []
+
+
+# --- the fourth extension: the bundles cite the GATES, and by line ------------
+
+
+#: A `.py` citation target in the shape the rot actually took: a span that
+#: started inside the function it names and ran past its end onto the blank
+#: below. Six of the eight rotted `.py` citations in the tree were this.
+PY_TARGET = """# SPDX-License-Identifier: AGPL-3.0-only
+def check_rows(rows):
+    return sorted(rows)
+
+"""
+
+
+def test_a_rotted_py_citation_in_a_bundle_is_found(tree, monkeypatch):
+    """`EXTS` was `rs|sh|txt`, so the 32 `.py:NNN` occurrences the bundles carry
+    — 23 distinct, 17 of them naming code their sentence was not about — were not
+    parsed, not resolved, not locked and not drift-detectable. Driven through
+    `main()`: a finding that never reaches an exit code is one the row cannot go
+    red on. Only 6 of the 17 were catchable this mechanically; the rest took a
+    reading."""
+    tree.write("scripts/probe_gate.py", PY_TARGET)
+    tree.edit(BUNDLE_PAGE, "clientpin.rs:4-6", "scripts/probe_gate.py:2-4")
+    assert only(tree.problems(), "whose cited line is blank"), tree.problems()
+    assert tree.run(monkeypatch) == 1
+
+
+def test_taking_py_back_out_of_EXTS_stops_catching_it(tree, monkeypatch):
+    """The deletion arm, and what says the widening is load-bearing rather than
+    decorative: the same rotted citation over the same tree, with `py` out of
+    [`EXTS`] and the reader re-derived from it, is not parsed at all. Green, at
+    exit 0, over a bundle sending its reader to a blank line."""
+    tree.write("scripts/probe_gate.py", PY_TARGET)
+    tree.edit(BUNDLE_PAGE, "clientpin.rs:4-6", "scripts/probe_gate.py:2-4")
+    monkeypatch.setattr(citation_gate, "EXTS", "rs|sh|txt")
+    monkeypatch.setattr(
+        citation_gate, "CITE", citation_gate.cite_pattern(citation_gate.EXTS)
+    )
+    assert tree.problems() == []
+    assert tree.run(monkeypatch) == 0
+
+
+def test_every_extension_in_EXTS_is_read(tree):
+    """The non-weakening arm, derived from `EXTS` rather than transcribed: the
+    widening ADDS. An edit that swapped an extension out instead would leave
+    every citation of it unparsed, and this row green over all of them."""
+    for ext in citation_gate.EXTS.split("|"):
+        found = list(citation_gate.citations(f"the gate (`probe.{ext}:4-6`)"))
+        assert [(c[1], c[2], c[3]) for c in found] == [(f"probe.{ext}", 4, 6)], (
+            ext,
+            found,
+        )

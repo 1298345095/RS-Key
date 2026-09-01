@@ -98,8 +98,8 @@ page is ever padded with citations it does not mean just to clear one number.
 citations another agent's in-flight commits rotted while this guard was being
 written. Each names the commit that broke it and fails once it stops rotting.
 
-It resolves `.rs`, `.sh` and `.txt` citations, and only on `.rs` pages, `.py`
-pages under `scripts/`, the evidence bundles and the named `formal/` ones. The
+It resolves `.rs`, `.sh`, `.txt` and `.py` citations, and only on `.rs` pages,
+`.py` pages under `scripts/`, the evidence bundles and the named `formal/` ones. The
 `scripts/` half was the last substantive citing surface no gate read, and the
 round that swept the reset class found **2 of 2** of `security_trace.py`'s reset
 citations pointing at the wrong line — the same rot rate every surface has had
@@ -456,12 +456,46 @@ def floor_for(page):
 #: citations red at once, because [`SEARCH`] holds five `.rs` directories and a
 #: bare `RSKeySecurityState.tla` resolves in none of them. That is a corpus
 #: widening of its own, with its own repair pass, not a character class.
-EXTS = "rs|sh|txt"
+#:
+#: `.py` was the last of those, and it took exactly that repair pass. The bundles
+#: cite the GATES as finely as they cite the firmware, and the group made all of
+#: it invisible: 32 occurrences of 23 distinct citations in [`BUNDLE_ROOT`],
+#: unresolvable and unlockable, of which **17 named code the citing sentence was
+#: not about**, 6 of them on a blank line: a bounds check finds those 6 and no
+#: more, and only content finds the rest. The family it cites is this
+#: guard's own: three bundles sent a reader to `platform_gate.py:724-753` for
+#: `check_bundles`, which is at `:926-954`, and a commit message defended a code
+#: placement with the rot as its reason. Two side effects, both measured and both
+#: repaired rather than tolerated: `scripts/test_run_tlc.py` joins [`script_pages`]
+#: (its only citation is a `.py` one, and it resolves), and two continuations on
+#: `SEC-FIDO-003.toml:112` lost their binding to a `.py` citation landing between
+#: them and the file they meant -- they name that file outright now.
+#:
+#: WHAT IS STILL BLIND, as a number rather than an impression, counted over the
+#: pages this gate already opens: 270 occurrences of 187 distinct citations over
+#: 12 pages, all in the four extensions the paragraph above refuses plus one
+#: `.log` -- `.toml` 115, `.tla` 78, `.md` 56, `.cfg` 16, `.yml` 4. `.c`, `.h`
+#: and `.S` are ZERO, which is worth writing down because they are the ones a
+#: reader assumes: this tree's non-Rust source is not cited by line at all.
+EXTS = "rs|sh|txt|py"
 DASH = "-\u2010\u2011\u2012\u2013\u2014\u2212"
-CITE = re.compile(
-    rf"(?:(?<![\w/.:-])(?P<file>[\w./-]+\.(?:{EXTS}))|(?<=`)(?=:[^`]*`))"
-    rf":\s*(?P<refs>\d+(?:\s*[{DASH}]\s*\d+)?(?:\s*,\s*\d+(?:\s*[{DASH}]\s*\d+)?)*)"
-)
+
+
+def cite_pattern(exts):
+    """The citation reader for an extension set.
+
+    Built from `exts` rather than written out, for [`row_pattern`]'s reason one
+    group over: taking an extension back out of [`EXTS`] has to take its
+    citations out of the reader too, or the deletion arm removes a name and
+    measures a pattern that still matches.
+    """
+    return re.compile(
+        rf"(?:(?<![\w/.:-])(?P<file>[\w./-]+\.(?:{exts}))|(?<=`)(?=:[^`]*`))"
+        rf":\s*(?P<refs>\d+(?:\s*[{DASH}]\s*\d+)?(?:\s*,\s*\d+(?:\s*[{DASH}]\s*\d+)?)*)"
+    )
+
+
+CITE = cite_pattern(EXTS)
 SPAN = re.compile(rf"(\d+)(?:\s*[{DASH}]\s*(\d+))?")
 
 #: Files whose rows have NAMES, so a line number is the wrong anchor for them,
@@ -479,6 +513,20 @@ SPAN = re.compile(rf"(\d+)(?:\s*[{DASH}]\s*(\d+))?")
 #: undercount that COMMENT carries, which has no key to name. The lock is what
 #: covers those. `SEC-FIDO-006.toml`'s `scripts/check.sh:551` is the same shape
 #: one file over, and it still resolves, is still locked and still drifts.
+#:
+#: `.py` was ASKED and REFUSED, because a Python file looks keyed and is not: the
+#: bundles cite the gates, `def name` reads like a row key, and a name does not
+#: move. Measured over the twenty distinct `.py` citations the bundles carry, by
+#: asking of each whether its span IS a whole top-level definition — 8 are, and a
+#: key would lose nothing on those; 9 sit strictly INSIDE one and would lose which
+#: rule in it the sentence is about; 3 name no single definition at all (a module
+#: docstring, a `#:` comment with its constant, two adjacent functions). Worse
+#: than partial: the key would not be UNIQUE, which is the one rule that makes a
+#: key an anchor. `comutate.py`'s CARGO_TARGET_DIR and RUSTFLAGS citations are two
+#: different claims inside `run_slice`, and the three `29_reset_power_cut.py` ones
+#: are three different assertions inside `main` — five distinct claims collapsing
+#: onto two keys, which is the ambiguous-row failure refused above. So `.py` keeps
+#: the line form, and [`LOCK`] covers all twenty rather than a key covering eight.
 #:
 #: A key function answers None for a line that carries no row, because the second
 #: entry is mostly shell.

@@ -219,7 +219,7 @@ bound_assertions = 1
 stops_assertions = "the same attribution, one rung up. tests/29_reset_power_cut.py:190-194 asserts the old credential's assertion was REFUSED; the refusal could be either gate's and the assertion does not say. The failure MESSAGE prints both option flags, so a human reading a red run could tell — the assertion could not"
 bound_recorded_board_runs = 0
 stops_recorded_board_runs = "everything the board column might have been. No run of that script is recorded anywhere in the tree; `hardware` is 0 on this row's vector, `build` names no board revision because there is no board result to date one, and PLAT-FLASH-001 owns the missing result with `status = \"pending\"`"
-shipped_relation = "both files NAME this clause in their doc comments — fuzz/fuzz_targets/power_cut.rs:29-31 and 29_reset_power_cut.py:12-14 list all three — and neither can report it. So of the four non-zero evidence columns on this row, two are counts of files whose oracles fold this clause into a sibling's. The columns are not wrong; they count what they say they count, which is a file"
+shipped_relation = "both files NAME this clause in their doc comments — fuzz/fuzz_targets/power_cut.rs:29-31 and tests/29_reset_power_cut.py:12-14 list all three — and neither can report it. So of the four non-zero evidence columns on this row, two are counts of files whose oracles fold this clause into a sibling's. The columns are not wrong; they count what they say they count, which is a file"
 cfg = "none"
 features = "none"
 

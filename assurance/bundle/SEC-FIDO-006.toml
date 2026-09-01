@@ -17,7 +17,7 @@
 # and none of them is about the firmware:
 #
 #  * THE PARENT'S GREEN RUNS DO ASSERT ALL THREE CONJUNCTS, and the registry
-#    cannot see it. `scripts/assurance_gate.py:112-125` reads the bare names
+#    cannot see it. `scripts/assurance_gate.py:122-142` reads the bare names
 #    under a configuration's `INVARIANTS` block and never opens the module, so a
 #    conjunction's conjuncts are invisible to it. At `build.commit` each clause
 #    row therefore read `asserted 0 of 1` while the parent read `4 of 40` —
@@ -359,7 +359,7 @@ f_fuzz = "`fuzz = 1` counts fuzz/fuzz_targets/power_cut.rs, whose `reset_probe` 
 t_hil = "`test = 1` counts tests/29_reset_power_cut.py, and this property is the only one of the eleven whose test column is not zero. No board run is recorded anywhere: PLAT-FLASH-001's `discharge` is a PASS of exactly that script and its status is `pending`, `hardware` is 0 on the evidence vector, and `build` records no board revision because there is no board result to name one for"
 
 # THE COMPOSITION ARTEFACT, measured on both sides.
-x_vector_before = "at `build.commit` the four registry rows read: SEC-FIDO-006 `4 of 40` asserted, and SEC-FIDO-006A/006B/006C `0 of 1` each — because `assurance_gate.checked_names` (scripts/assurance_gate.py:112-125) collects the bare names under a configuration's INVARIANTS block and never opens the module, so the only configurations naming a clause were the three SoloClause_* mutants, which floors.txt requires to be RED. Each clause therefore read `asserted 0` over a denominator of one row that must fail"
+x_vector_before = "at `build.commit` the four registry rows read: SEC-FIDO-006 `4 of 40` asserted, and SEC-FIDO-006A/006B/006C `0 of 1` each — because `assurance_gate.checked_names` (scripts/assurance_gate.py:122-142) collects the bare names under a configuration's INVARIANTS block and never opens the module, so the only configurations naming a clause were the three SoloClause_* mutants, which floors.txt requires to be RED. Each clause therefore read `asserted 0` over a denominator of one row that must fail"
 x_vector_after = "and the repair is one line per clause in a GREEN configuration's INVARIANTS block, measured rather than argued: with formal/*.cfg copied to a scratch directory and the three names appended to that copy's Shipped.cfg, `checked_names` returns `['Shipped.cfg', 'SoloClause_<clause>.cfg']` for each and the parent's 40 does not move. Driven again against the working tree after a concurrent agent made exactly that edit: the three rows now derive `cfgs = 2` and `1 of 2` asserted. THE EVIDENCE DID NOT MOVE. The same three conjuncts held over the same 77 563 872 distinct states before the edit and after it; what changed is what a line-reading derivation can see"
 x_vector_reading = "docs/assurance-vector.md already carries the sentence — `for a clause_of row it can be 0 while the parent invariant carrying that clause is asserted` — so the page knows. What it does not carry is the arithmetic: a reader is told the zero may be an artefact and is given nothing to check it with, and the four rows sit adjacent in the table with 4, 0, 0, 0 in the same column"
 
