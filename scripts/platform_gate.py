@@ -76,10 +76,10 @@ Seven rules, and the first is the one that earns the file:
   `refines` name entries here, `discharges` names constants of the first
   registry — and an entry covering `model:X` must discharge `X`, so the two
   registries cannot drift into two answers about the same constant.
+* **a cell stays a cell.** A line break in `statement` or `discharge` takes Owner
+  and Supports off the published row; a `<` publishes raw HTML or ends the build.
 * **the page is generated.** `docs/platform-assumptions.md` is written from the
   entries and byte-diffed, so a status cannot move without the diff that says so.
-  That is what "not silently" means here: the flip is cheap, its visibility is
-  what this buys.
 
 `contradicts` is the one link kind of stage 1B п.3 left out. No pair in this
 registry contradicts another, so the field would have no instance — and a rule

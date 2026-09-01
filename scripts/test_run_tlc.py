@@ -723,9 +723,14 @@ def test_the_recorded_verdict_of_a_properties_only_row_is_accepted(fake_tlc, cfg
 #: takes a `floors.txt` row naming something for a configuration that checks no
 #: invariant, and `verdict_gate.check_reasons` (scripts/verdict_gate.py:619-634)
 #: refuses every filling of that column: `TypeOK`, a property name, and a name the
-#: configuration does not check. Named as well as numbered on purpose — `EXTS` in
-#: `citation_gate.py` is `rs|sh|txt`, so no `.py` line citation in this tree is
-#: checked by anything.
+#: configuration does not check. Named as well as numbered on purpose: `EXTS` in
+#: `citation_gate.py` gained `py` in the repair pass, so the span above is locked
+#: by content now — but a lock reports a span that MOVED, and only the name says
+#: what to look for once it has. What the widening still does not reach, measured
+#: over the pages that gate opens: 270 citations across 12 pages into `.toml`
+#: (115), `.tla` (78), `.md` (56), `.cfg` (16), `.yml` (4) and `.log` (1) — one
+#: of them this file's own `.log`. `.c`, `.h` and `.S` are ZERO: no non-Rust
+#: source in this tree is cited by line at all.
 DELETION_ARMS = [
     (
         "names_a_property",
