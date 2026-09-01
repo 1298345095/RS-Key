@@ -563,11 +563,18 @@ run "constant-time sites in the image" python scripts/ct_gate.py
 # and the allocator surface of the DEFAULT image, before the three builds below
 # overwrite it with another profile's.
 run "image segments and allocator" python scripts/elf_gate.py
-# Third reader of the same window, and it needs it most: 20 of the 44 owners
-# assurance/token_refinement.toml names have NO symbol — they survive only as an
-# inlined call site in this image's DWARF — and three MUST be absent from it.
-# Both answers are profile-specific, so a row below the rebuilds would read them
-# off the no-touch binary.
+# Third reader of the same window: 21 of the 44 owners assurance/token_refinement.toml
+# names have NO symbol — they survive only as an inlined call site in this image's
+# DWARF — and three MUST be absent from it. Which profile it reads is the DISPLAY
+# build below, not the no-touch one: measured over both binaries, the no-touch
+# image (sha cb1830ac…) gives all 44 dispositions and call-site counts of the
+# default image (08dad541…) unchanged, so the earlier claim here that "both
+# answers are profile-specific" was false in the direction it was written for.
+# The display build at line ~600 is what moves them — 17 symbol / 21 inlined /
+# 6 absent — and there this row FALSE-ALARMS: rsk-display links, its two
+# clientpin.rs doors bind, and their `unlinked-crate` rows read as stale
+# exemptions. Recorded rather than handled: the row's window is above that build,
+# and those two absences are absences OF THE DEFAULT IMAGE.
 run "registered owners in the shipped image" python scripts/owner_binding_gate.py
 # The 16 MB geometry is the one that broke: the store used to end at the top of
 # the XIP window, where the bootrom's RP2350-E10 absolute block lives, and

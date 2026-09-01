@@ -21,16 +21,30 @@
 # Each owner's disposition — `symbol`, `inlined`, `absent` — is derived from the
 # image and never stored: a stored disposition is a value whose only source is
 # the moment somebody typed it, which is what assurance/toolchain.toml's header
-# records this tree having already paid for.
+# records this tree having already paid for. An owner the source declares more
+# than once (`state.rs::reset`, four of them) is EVERY function of that name, all
+# owed, and its disposition is the weakest of theirs — a sibling with a symbol
+# does not put a function that is nowhere into the image.
 #
-# The build digest is derived on every run and never stored, and that is
-# measured rather than tidy: this image's own DWARF carries
-# `DW_AT_comp_dir: /Users/maxmur/Code/RS-Key` and dependency paths under
-# `/Users/maxmur/.cargo`, so its sha256 is a fact about one machine's checkout.
-# A digest written down here would be unreadable to CI and to a third party, and
-# a rule keyed on it would be red everywhere but on the machine that typed it.
-# So the ARTIFACT and the COMMAND are hand-written — they are decisions — and the
-# digest that stamps the run is measured from them.
+# ---- NO BUILD HASH IS STORED, AND NONE IS CHECKED ----------------------------
+#
+# Said plainly because the omission is a decision and not an oversight: there is
+# no hash field in this file, assurance/image.toml carries no `sha`/`hash`/
+# `digest` either, and the artifact is pinned by PATH alone. This image's own
+# DWARF carries `DW_AT_comp_dir: /Users/maxmur/Code/RS-Key` and dependency paths
+# under `/Users/maxmur/.cargo`, so its sha256 is a fact about one machine's
+# checkout: a digest written down here would be unreadable to CI and to a third
+# party, and a rule keyed on it would be red everywhere but on the machine that
+# typed it. So the ARTIFACT and the COMMAND are hand-written — they are
+# decisions — and owner_binding_gate.digest() derives the stamp from the bytes it
+# just read, which is a receipt for WHICH file this run judged and no more.
+#
+# What that leaves open is the exit criterion's other half — that the bytes on a
+# device are the bytes this row audited — and it is NOT closed here. The
+# `bit-for-bit` row below carries the rebuild half (a workflow that runs it), and
+# assurance/platform.toml's PLAT-TOOLCHAIN-001 carries the compile half; both
+# stay open in their own registries rather than being answered by a digest in
+# this one.
 #
 # ---- The two subjects, and the third this file may NOT carry ------------------
 #
@@ -73,9 +87,26 @@ statement = "The published images rebuild bit-identical per platform, per flake.
 #
 # The contract is that EVERY registered owner is in the image; these are the
 # exemptions, and each carries a `basis` the gate re-derives from the tree rather
-# than believing. The four bases are disjoint by construction — `unreached`
-# refuses a site that is cfg-gated, a trait's provided body, or a `const fn`, so
-# a row cannot be re-labelled with a neighbouring basis and stay green.
+# than believing. The five bases are disjoint by construction — `unreached`
+# refuses a site that is cfg-gated, a trait's provided body, a `const fn`, or
+# called at all — so a row cannot be re-labelled with a neighbouring basis and
+# stay green.
+#
+# `unlinked-crate` is a fifth because `unreached` was measured to be the wrong
+# WORD for two of these rows: its caller scan was token_refinement_gate's own
+# three directories, 71 files, and both `clientpin.rs` doors are called from
+# crates/rsk-display — a fourth. The scan is 244 files now, and what makes those
+# two absent is not that nobody calls them but that their caller's crate is
+# outside the default image's dependency closure, which the gate walks from
+# firmware/Cargo.toml. An owner called from a LINKED crate can no longer be
+# registered absent on either word.
+#
+# Both rows are absences OF THE DEFAULT IMAGE and say nothing about the display
+# one. Measured against `--features display` (17 symbol / 21 inlined / 6 absent):
+# rsk-display links, both doors bind as `inlined`, and this file's two rows read
+# as stale exemptions. That build happens BELOW the row in scripts/check.sh, so
+# nothing runs into it — recorded here rather than handled, because a per-profile
+# exemption column would be a second registry keyed on a build flag.
 #
 # The three TEST-ONLY owners are NOT here and may not be: their absence is
 # derived from the module graph, and a hand-written row answering a derived
@@ -99,13 +130,13 @@ why = "the `Hooks` provided body, `fn store_pin_lock(&mut self, _lock: PinLock) 
 [[absent]]
 file = "crates/rsk-fido/src/clientpin.rs"
 function = "store_local_pin"
-basis = "unreached"
-why = "the panel's PIN-change door: its only production caller is crates/rsk-display, and `display` is what pulls that crate in. Nothing the default image links calls it, so it is dropped"
+basis = "unlinked-crate"
+why = "the panel's PIN-change door: its only production caller is crates/rsk-display/src/pin.rs, and `display` is what pulls that crate in. Nothing the default image links calls it, so it is dropped"
 
 [[absent]]
 file = "crates/rsk-fido/src/clientpin.rs"
 function = "spend_and_verify_local_pin"
-basis = "unreached"
+basis = "unlinked-crate"
 why = "the same door onto the EF_PIN retry counter, called only from crates/rsk-display/src/gates.rs — absent from this image for the reason its `column = \"firmware-display\"` records"
 
 [[absent]]

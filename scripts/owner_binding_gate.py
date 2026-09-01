@@ -10,13 +10,27 @@ step between the two — this function, that symbol, this ELF — was written
 nowhere. Stage 11A work 4 is that step, and `BINARY-CHECKED` is the VALUE of a
 `method` field here rather than a word in a sentence.
 
-**The measurement that decides the design: 20 of the 44 owners have NO SYMBOL.**
-Counted on the default image at `f124135`: 16 owners are standalone functions
-`arm-none-eabi-nm` defines, 20 exist only as a DWARF abstract instance folded
-into their callers (`seed.rs::clear_ppuat` at 4 call sites, `state.rs::reset` at
-15), and 8 are not in the image at all. A gate written over the symbol table
-would call 20 correctly-owned, correctly-shipped functions missing — which is
-worse than no gate, because the fix for that noise is to delete the rule.
+**The measurement that decides the design: 21 of the 44 owners have NO SYMBOL.**
+Counted on the default image: 15 owners are standalone functions
+`arm-none-eabi-nm` defines, 21 exist only as a DWARF abstract instance folded
+into their callers (`seed.rs::clear_ppuat` at 4 call sites,
+`state.rs::AssertionState::reset` at 5), and 8 are not in the image at all. A
+gate written over the symbol table would call 21 correctly-owned,
+correctly-shipped functions missing — which is worse than no gate, because the
+fix for that noise is to delete the rule.
+
+**A site is a QUALIFIED PATH, and that is a defect this gate shipped with.**
+Keyed on `DW_AT_name`, `state.rs::reset` was ONE site merging the twelve DIEs of
+four functions — `AssertionState`, `CredMgmtState`, `LargeBlobState` and
+`FidoState` all declare `fn reset` in that file — and `bind` then took its
+concrete instance from one and its symbol from another. Driven: deleting the two
+production callers of the `authenticatorReset` session wipe
+(`reset.rs::ctx.state.reset()`, `ctap.rs::scrub_secrets`) and rebuilding drops
+`_ZN8rsk_fido5state9FidoState5reset17h…E` from the image, and the gate still said
+`ok` — the owner reclassified `symbol`→`inlined` on the 15 call sites of its
+three SIBLINGS. So identity is the demangled linkage name, and the count a file
+must produce comes from the SOURCE (`declarations`): a function that vanishes
+from the image would otherwise take its own requirement with it.
 
 So the evidence for an inlined owner is a CALL SITE and not a debug-info entry.
 `DW_TAG_subprogram` with `DW_AT_inline` says the compiler emitted a description
@@ -110,13 +124,13 @@ WORKFLOWS = ".github/workflows/"
 #: Why a registered owner may be missing from the image. Disjoint by
 #: construction — see [`basis_holds`] — so a row cannot be relabelled with a
 #: neighbouring basis and stay green.
-BASES = ("cfg-gated", "trait-default-body", "const-evaluated", "unreached")
+BASES = ("cfg-gated", "trait-default-body", "const-evaluated", "unlinked-crate", "unreached")
 
 #: A roster cannot lose its evidence class without someone saying so. Measured
-#: at 20 inlined owners; set ~30% under it, the slack the neighbouring gates
+#: at 21 inlined owners; set ~30% under it, the slack the neighbouring gates
 #: carry, so ordinary code motion does not trip it. What it is actually for: if
 #: the abstract-origin reader breaks, the cheap repair is an `[[absent]]` row per
-#: owner, and 20 of those are legal one at a time. Under this floor they are not.
+#: owner, and 21 of those are legal one at a time. Under this floor they are not.
 FLOORS = {"inlined": 14}
 
 #: A DIE header: `<depth><offset>: Abbrev Number: N (DW_TAG_…)`.
@@ -144,6 +158,21 @@ DECLARATION = (
 )
 CFG_FEATURE = re.compile(r'#\[cfg\([^\n]*?feature\s*=\s*"([^"]+)"')
 TRAIT_ITEM = re.compile(r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:unsafe[ \t]+)?trait[ \t]+\w+", re.M)
+#: An `impl` or `trait` header, so a `fn` can be attributed to the item it sits
+#: in. Which one is prose for the reader; the RULE is how many there are. Read to
+#: the OPENING BRACE and not to the newline: `AppletHandler`'s impl in
+#: `crates/rsk-device/src/ctap.rs` puts its parameter list on one line and the
+#: self type on the next.
+ITEM = re.compile(
+    r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:unsafe[ \t]+)?(?:impl|trait)\b([^{;]*)", re.M
+)
+
+#: The trees a caller is looked for in, and the trees a crate is looked for in.
+#: NOT `token_refinement_gate.catalogue`, whose three directories are the WRITER
+#: AXES' scope: measured, that scope answered `callers elsewhere: []` for two
+#: owners whose production caller is `crates/rsk-display`, so an owner called
+#: only from a fourth crate could be registered `unreached` and accepted.
+FIRST_PARTY = ("crates", "firmware")
 
 
 def registry(root: pathlib.Path, findings: list[str], text: str | None = None):
@@ -224,7 +253,7 @@ def read(root: pathlib.Path, artifact: pathlib.Path) -> dict[str, str]:
     while the row this file is the rule for reads the default one ~250 rows
     earlier.
 
-    The digest is computed here and never stored: this image's DWARF carries an
+    The digest is [`digest`]'s and never stored: this image's DWARF carries an
     absolute `DW_AT_comp_dir`, so its sha256 is a fact about one checkout.
     """
     binary = str(root / artifact)
@@ -236,8 +265,19 @@ def read(root: pathlib.Path, artifact: pathlib.Path) -> dict[str, str]:
         "defined": out(elf_gate.NM, "--defined-only", binary),
         "dwarf": out(elf_gate.READELF, "--debug-dump=info", binary),
         "rawline": out(elf_gate.READELF, "--debug-dump=rawline", binary),
-        "digest": hashlib.sha256((root / artifact).read_bytes()).hexdigest(),
+        "digest": digest(root / artifact),
     }
+
+
+def digest(path: pathlib.Path) -> str:
+    """The sha256 the summary stamps a run with, DERIVED from the artifact.
+
+    Its own function so a case can drive it without an image: as a line inside
+    [`read`] — which nothing but the row itself calls — it could be replaced by a
+    constant and every case stayed green, which is a digest that stamps nothing.
+    Nowhere is it STORED; `assurance/owner_binding.toml`'s header says why.
+    """
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def source_paths(rawline: str) -> dict[int, dict[int, str]]:
@@ -336,19 +376,35 @@ def instances(dwarf: str, tables: dict[int, dict[int, str]]):
         elif key in ("DW_AT_low_pc", "DW_AT_inline", "DW_AT_declaration"):
             current[key] = value
 
+    def qualify(die: dict, fallback: str) -> str:
+        """`FidoState::reset`, not `reset` — the KEY, and the whole of this bug.
+
+        Keeps `fallback` when the mangling is one `ct_gate` does not read (the v0
+        scheme, a C name): a wrong path would attribute a symbol to the wrong
+        function, and the collapse a fallback causes is caught downstream by the
+        source-anchored count.
+        """
+        mangled = die.get("DW_AT_linkage_name")
+        if not mangled:
+            return fallback
+        path = ct_gate.demangle(mangled)
+        return path if path.rsplit("::", 1)[-1] == fallback.rsplit("::", 1)[-1] else fallback
+
     def identity(die: dict, depth: int = 0):
         if depth > 8:
             return None
         if die.get("file") and "DW_AT_name" in die:
             # `reset<firmware::handler::FidoRng>` is one function; the generic
-            # arguments are what makes `state.rs::reset` four linkage names.
-            return (die["file"], die["DW_AT_name"].split("<")[0])
+            # arguments are what make one `fn` several linkage names.
+            return (die["file"], qualify(die, die["DW_AT_name"].split("<")[0]))
         for key in ("DW_AT_specification", "DW_AT_abstract_origin"):
             origin = subprograms.get(die.get(key))
             if origin is not None:
                 found = identity(origin, depth + 1)
                 if found:
-                    return found
+                    # The instance's own linkage name where it has one, and the
+                    # declaration's path — never the bare name — where it does not.
+                    return (found[0], qualify(die, found[1]))
         return None
 
     by_site: dict[tuple[str, str], list[dict]] = collections.defaultdict(list)
@@ -419,7 +475,10 @@ def default_features(root: pathlib.Path, rel: str) -> set[str]:
         walked.add(entry)
         queue.extend(table.get(entry, []))
     crate = manifest.parent.name
-    on |= {e.split("/", 1)[1] for e in walked if e.split("/", 1)[0].rstrip("?") == crate}
+    # `"/" in e` before the split: an optional dependency mints an IMPLICIT
+    # feature of its own name, so `default = ["rsk-display"]` is a legal entry
+    # with no slash in it — and this line used to raise IndexError on one.
+    on |= {e.split("/", 1)[1] for e in walked if "/" in e and e.split("/", 1)[0].rstrip("?") == crate}
     if manifest == binary:
         on |= {e for e in walked if "/" not in e}
     dependency = image.get("dependencies", {}).get(crate)
@@ -468,14 +527,118 @@ def in_trait_item(text: str, function: str) -> bool:
     return False
 
 
+def declarations(text: str, function: str) -> list[str]:
+    """The `impl`/`trait` each `fn function` in `text` sits in, in file order.
+
+    The SOURCE ANCHOR, and it exists because the roster names an owner by its
+    BARE name: `state.rs` declares four `fn reset`, and how many functions the
+    image owes for that row cannot come from the image — a function that is gone
+    is simply not among its own candidates.
+
+    It counts every declaration, `#[cfg]`-gated ones included. Measured, no file
+    in the roster has two of a name where one is gated — the only file with more
+    than one at all is `state.rs` — so the exclusion is not written; a sibling
+    behind an off feature would report as a shortfall, and the message names it.
+    """
+    blocks = []
+    for head in ITEM.finditer(text):
+        start = text.find("{", head.end())
+        if start == -1:
+            continue
+        depth, cursor = 0, start
+        while cursor < len(text):
+            if text[cursor] == "{":
+                depth += 1
+            elif text[cursor] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            cursor += 1
+        # `impl Trait for Type` is Type's; `impl<S: Storage<T>> FidoState<S>` is
+        # FidoState's, so a leading parameter list is scanned off BALANCED —
+        # `<[^>]*>` stops inside the first nested one and takes `Storage` for it.
+        item = head.group(1).lstrip()
+        if item.startswith("<"):
+            depth = 0
+            for index, char in enumerate(item):
+                depth += (char == "<") - (char == ">")
+                if depth == 0:
+                    item = item[index + 1 :]
+                    break
+        item = item.strip().rsplit(" for ", 1)[-1].split("<")[0].split()
+        blocks.append((start, cursor, item[0].split("::")[-1] if item else ""))
+    found = []
+    for site in re.finditer(DECLARATION.format(name=re.escape(function)), text, re.M):
+        # The LAST enclosing header is the innermost one — `blocks` is in source
+        # order — and a `fn` in no `impl` at all is a free function, labelled "".
+        inside = [b for b in blocks if b[0] < site.end() < b[1]]
+        found.append(inside[-1][2] if inside else "")
+    return found
+
+
+def callers(root: pathlib.Path) -> dict[tuple[str, str], str]:
+    """{(file, function): body} over every first-party production `.rs`.
+
+    `token_refinement_gate.functions` is the reader, but NOT its `catalogue`: that
+    walks the three directories the writer axes are derived over, and measured,
+    71 files against this walk's 244 — which is how two owners called only from
+    `crates/rsk-display` read as called by nobody.
+    """
+    found = {}
+    for base in FIRST_PARTY:
+        for path in sorted((root / base).rglob("*.rs")):
+            if path.name.endswith(("_tests.rs", "_kani.rs")):
+                continue
+            rel = str(path.relative_to(root))
+            for name, body in refinement.functions(path.read_text(encoding="utf-8", errors="replace")):
+                found[(rel, name)] = body
+    return found
+
+
+def crates(root: pathlib.Path) -> dict[str, str]:
+    """{package name: the directory it lives in} over the first-party trees."""
+    found = {}
+    for base in FIRST_PARTY:
+        for manifest in sorted((root / base).rglob("Cargo.toml")):
+            package = tomllib.loads(manifest.read_text(encoding="utf-8")).get("package")
+            if isinstance(package, dict) and package.get("name"):
+                found[str(package["name"])] = str(manifest.parent.relative_to(root))
+    return found
+
+
+def linked_crates(root: pathlib.Path) -> set[str]:
+    """The directories the DEFAULT image links, walked from `firmware`'s manifest.
+
+    An `optional` dependency is out unless a default feature turns it on, which
+    is the whole rule here: `rsk-display` and `rsk-ui` are optional behind
+    `display`, and no manifest in this tree declares a `default` list at all.
+    """
+    where = crates(root)
+    reached, queue = set(), [str(IMAGE_MANIFEST.parent)]
+    while queue:
+        rel = queue.pop()
+        if rel in reached or not (root / rel / "Cargo.toml").is_file():
+            continue
+        reached.add(rel)
+        manifest = tomllib.loads((root / rel / "Cargo.toml").read_text(encoding="utf-8"))
+        on = default_features(root, f"{rel}/src")
+        for name, spec in manifest.get("dependencies", {}).items():
+            optional = isinstance(spec, dict) and spec.get("optional")
+            if optional and not ({name, f"dep:{name}"} & on):
+                continue
+            if name in where:
+                queue.append(where[name])
+    return reached
+
+
 def basis_holds(root: pathlib.Path, rel: str, function: str, basis: str, catalogue: dict):
     """(does it hold, what was measured) for one registered absence.
 
-    The four are DISJOINT: `unreached` is refused of a site that is cfg-gated, a
-    trait's provided body or a `const fn`, so relabelling a row with a
-    neighbouring basis reddens instead of passing. Without that, the one row that
-    is genuinely cfg-gated also has no caller in scope, and its basis could be
-    swapped for a weaker one silently.
+    The five are DISJOINT: `unreached` is refused of a site that is cfg-gated, a
+    trait's provided body, a `const fn` or called at all, so relabelling a row
+    with a neighbouring basis reddens instead of passing. Without that, the one
+    row that is genuinely cfg-gated also has no caller in scope, and its basis
+    could be swapped for a weaker one silently.
     """
     text = (root / rel).read_text(encoding="utf-8", errors="replace")
     found = re.search(DECLARATION.format(name=re.escape(function)), text, re.M)
@@ -484,33 +647,53 @@ def basis_holds(root: pathlib.Path, rel: str, function: str, basis: str, catalog
     gated = sorted(set(CFG_FEATURE.findall(found.group(1))) - default_features(root, rel))
     provided = in_trait_item(text, function)
     constant = bool(re.search(rf"\bconst[ \t]+fn[ \t]+{re.escape(function)}\b", text))
-    callers = sorted(
+    called = sorted(
         {where for (where, _name), body in catalogue.items()
          if where != rel and re.search(rf"\b{re.escape(function)}\s*\(", body)}
     )
+    linked = linked_crates(root)
+    reachable = sorted(c for c in called if any(c.startswith(f"{d}/") for d in linked))
     if basis == "cfg-gated":
         return bool(gated), f"cfg features off in the default image: {gated}"
     if basis == "trait-default-body":
         return provided, f"declared inside a `trait` item: {provided}"
     if basis == "const-evaluated":
-        return constant and not callers, f"`const fn`: {constant}, callers elsewhere: {callers}"
+        return constant and not called, f"`const fn`: {constant}, callers: {called}"
+    if basis == "unlinked-crate":
+        return (
+            bool(called) and not reachable and not gated and not provided and not constant,
+            f"callers: {called}, of them in a crate the default image links:"
+            f" {reachable}, cfg-gated: {gated}, trait body: {provided},"
+            f" `const fn`: {constant}",
+        )
     if basis == "unreached":
         return (
-            not callers and not gated and not provided and not constant,
-            f"callers elsewhere: {callers}, cfg-gated: {gated},"
+            not called and not gated and not provided and not constant,
+            f"callers: {called}, cfg-gated: {gated},"
             f" trait body: {provided}, `const fn`: {constant}",
         )
     return False, f"`{basis}` is not one of {list(BASES)}"
 
 
 def bind(site, dies, inlined, defined):
-    """(disposition, the symbol or the evidence) for one owner.
+    """(disposition, the symbol or the evidence) for ONE qualified function.
 
     `symbol` needs a linkage name the image DEFINES — a concrete instance whose
     symbol is nowhere is a finding of its own, not a quieter pass. `inlined`
     needs a CALL SITE: an abstract instance with none is a description of a
     function the image does not carry, which is exactly the case a rule written
-    over debug info alone reads as present.
+    over debug info alone reads as present. That last clause is UNFALSIFIABLE on
+    this tree's images and stays because of what it is for, not what it catches:
+    measured over the 5071 functions this image identifies, `abstract with zero
+    call sites` is 0 — a function whose callers all go loses its abstract
+    instance with them (driven: the acceptance image for the qualified key does
+    not keep one), so the shape this refuses is one the linker has not produced
+    here. It is a fixture case and not a row that holds it.
+
+    A concrete instance decides before an abstract one because 159 functions
+    carry both: the same `fn` inlined at some call sites and emitted standalone
+    for the rest is `symbol`, and reading the abstract half first would report a
+    function `nm` defines as evidence-by-call-site.
     """
     concrete = [d for d in dies if "DW_AT_low_pc" in d]
     abstract = [d for d in dies if "DW_AT_inline" in d]
@@ -620,12 +803,35 @@ def audit(root, registry_text=None, raw=None, sites=None, gated=None, floors=FLO
     gated = refinement.test_only_sources(root) if gated is None else gated
     owners = {(f, fn) for _axis, f, fn in sites}
     exempt = {(str(r["file"]), str(r["function"])): r for r in absents}
-    catalogue = refinement.catalogue(root)
+    catalogue = callers(root)
 
     counts: collections.Counter = collections.Counter()
+    bound = 0
     for axis, where, function in sites:
         site = (where, function)
-        disposition, evidence = bind(site, by_site.get(site, []), inlined, defined)
+        # The roster names a BARE function and one file can declare four of them,
+        # so an owner is every qualified path in that file ending in its name —
+        # and the count it owes comes from the source, never from the image.
+        candidates = sorted(k for k in by_site if k[0] == where and k[1].rsplit("::", 1)[-1] == function)
+        declared = declarations((root / where).read_text(encoding="utf-8", errors="replace"), function)
+        bound += len(candidates)
+        if candidates and len(candidates) < len(declared):
+            findings.append(
+                f"{axis} `{where}::{function}`: the file declares"
+                f" {len(declared)} `fn {function}` ({', '.join(declared)}) and the"
+                f" image carries {len(candidates)}"
+                f" ({', '.join(k[1] for k in candidates)}) — the roster names this"
+                " owner by its bare name, so every function of that name is owed"
+            )
+        judged = [bind(k, by_site[k], inlined, defined) for k in candidates]
+        # The WEAKEST answer is the owner's: a sibling with a symbol does not put
+        # a function that is nowhere into the image, which is this row's defect.
+        disposition, evidence = min(
+            judged or [("absent", f"0 DIE(s), {len(declared)} declared")],
+            key=lambda pair: ("absent", "unsymbolised", "inlined", "symbol").index(pair[0]),
+        )
+        if len(judged) > 1:
+            evidence = "; ".join(f"{k[1]} {d}" for k, (d, _e) in zip(candidates, judged))
         counts[disposition] += 1
         # The test-only question is asked FIRST and of every disposition,
         # `unsymbolised` included: what makes it a defect is that the function is
@@ -684,7 +890,7 @@ def audit(root, registry_text=None, raw=None, sites=None, gated=None, floors=FLO
     if counts["inlined"] < floors["inlined"]:
         findings.append(
             f"{artifact}: {counts['inlined']} owner(s) bound by an inlined call"
-            f" site, floor {floors['inlined']} — that class is 20 of 44 on this"
+            f" site, floor {floors['inlined']} — that class is 21 of 44 on this"
             " image, and losing it silently turns the roster into exemptions"
         )
 
@@ -693,7 +899,7 @@ def audit(root, registry_text=None, raw=None, sites=None, gated=None, floors=FLO
         f" against {artifact} sha256 {raw['digest'][:16]}…,"
         f" {counts['symbol']} symbol / {counts['inlined']} inlined /"
         f" {counts['absent']} absent ({len(exempt)} registered,"
-        f" {counts['test-only']} test-only),"
+        f" {counts['test-only']} test-only) over {bound} bound function(s),"
         f" {sum(compiled.values())} compile unit(s) from {len(compiled)} producer(s)"
     )
     return findings, summary
