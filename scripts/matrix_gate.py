@@ -266,6 +266,36 @@ PKG_LOOP = re.compile(r"for pkg in ([^;]+); do")
 #: comparison running over a single list, in silence.
 FLOOR_LOOPS = 2
 
+#: A backticked token in a `why` or a `[[question]]` body. The prose is not
+#: judged for truth anywhere in this file — but a prose argument that CITES the
+#: tree can at least be held to citing something that is there, which is the rule
+#: `citation_gate.py` runs over `formal/` one directory across. Measured before
+#: it was written: the ledger's prose cites fourteen things — ten paths and four
+#: `check.sh` rows — and not one of them was read by anything. All fourteen
+#: resolve; two of the CLAIMS around them did not survive being re-read, and no
+#: rule here catches that. What this catches is the step below it: rename a
+#: `check.sh` row and the `bench` question's whole "covered has nothing to rest
+#: on here" argument points at no row at all, grid unchanged, EXIT=0.
+CITED = re.compile(r"`([^`]+)`")
+#: Which of those tokens is a claim about a file: a `/` and an extension. A token
+#: without both is vocabulary (`rsk-fido/bench`, `EF_META`, `flash.size_mb=4`)
+#: and is deliberately unchecked — this rule is about citations, not spelling.
+CITED_PATH = re.compile(r"^[A-Za-z0-9_.*-]+(?:/[A-Za-z0-9_.*-]+)+\.[A-Za-z0-9]+$")
+#: And which is a claim about a `check.sh` row: the label shape, `foo (bar)`.
+#: The false positive this admits is backticked prose that happens to carry
+#: parentheses; there is none in the ledger today, and the red it would raise
+#: names the token and says to drop the ticks — which is a worse failure than
+#: silence in exactly one direction, and it is the survivable one.
+CITED_ROW = re.compile(r"^\S.*\s\([^()]*\)$")
+
+#: The cargo subcommand a row runs, past any `env VAR=… ` prefix.
+CARGO_SUB = re.compile(r"(?<![\w-])cargo\s+(\w+)")
+#: The ones that build the image and execute nothing in it. A `check.sh` row
+#: that is not cargo at all (`firmware_size_budget`, a shell function reading the
+#: ELF) is deliberately not here: those DO measure something, and which of them
+#: measures a given property is the `why`'s judgement, not a subcommand's.
+COMPILE_ONLY = ("build", "check", "clippy", "doc")
+
 #: What a broken input raises before it can become a finding. A traceback is a
 #: red too, and a much worse one: it names a line of this file rather than the
 #: file whose shape changed.
@@ -723,6 +753,7 @@ def audit(root):
         problems.extend(check_cell(root, pid, by_name[column], entry, by_name, own))
 
     problems.extend(check_chains(placed))
+    problems.extend(check_citations(root, doc))
 
     questions = {q.get("column"): q.get("text", "") for q in doc.get("question", [])}
     for column in sorted(set(questions) - set(by_name)):
@@ -759,6 +790,38 @@ def audit(root):
         f" ({', '.join(f'{counts[v]} {v}' for v in DISPOSITIONS)})"
     )
     return problems, summary
+
+
+def check_citations(root, doc):
+    """Every file and `check.sh` row the ledger's prose names, held to the tree.
+
+    `why` and `text` are the half of this file no script reads for truth, and
+    that stays true — this reads them only for the tokens they POINT at. A path
+    citation has to resolve (a glob counts: `formal/*.cfg` is one claim about 216
+    files) and a row citation has to be a row `check_sh_rows` can find. Rotting a
+    citation is how the arguments here go wrong quietly: the sentence still
+    parses, the disposition still type-checks, and the reader has no way to tell
+    a live reference from a dead one without opening every file named.
+    """
+    rows, problems = check_sh_rows(root), []
+    for kind, field in (("cell", "why"), ("question", "text")):
+        for index, entry in enumerate(doc.get(kind, [])):
+            where = f"{LEDGER}: {kind} #{index + 1}"
+            for token in CITED.findall(str(entry.get(field, ""))):
+                token = " ".join(token.split())
+                if CITED_PATH.match(token):
+                    if not (root / token).exists() and not list(root.glob(token)):
+                        problems.append(
+                            f"{where} cites `{token}`, which is not in the tree — a"
+                            " dead citation reads exactly like a live one"
+                        )
+                elif CITED_ROW.match(token) and token not in rows:
+                    problems.append(
+                        f"{where} cites `{token}`, which is no {CHECK} row — either"
+                        " the row was renamed and the argument now points at"
+                        " nothing, or this is prose that should lose its backticks"
+                    )
+    return problems
 
 
 def check_question(root, entry, by_name, reference, gaps, own):
@@ -1021,8 +1084,19 @@ def check_evidence(root, where, pid, column, entry, own):
     `build firmware (test, --features no-touch)` re-declared the four presence
     statements `covered` on the very image that removes their gate.
 
-    What it still cannot say is whether the row MEASURES the property rather than
-    building it — that is the `why`'s job, as everywhere else in this file.
+    And a third, which used to be left to the `why`: a row that only COMPILES is
+    refused outright. Measured before the rule was written — 89 cells would pass
+    the two checks above today, and 9 of them name nothing but a `cargo build` or
+    a `cargo clippy` row. `build firmware (display)` builds the exact image
+    `firmware-display` is and runs not one line of it, so `covered` on it asserts
+    that a statement HOLDS there on the strength of the compiler accepting the
+    file. That is the same "a row that merely compiles the image counted" the
+    owner-crate half was added for, one step in: the row now selects the right
+    crate and still measures nothing.
+
+    What it still cannot say is whether a row that DOES run the crate exercises
+    this property rather than its neighbours — a name filter (`test (bench)` runs
+    four selector tests) passes here and the `why` has to say so.
     """
     named = entry.get("evidence") or []
     if not named:
@@ -1030,7 +1104,7 @@ def check_evidence(root, where, pid, column, entry, own):
             f"{where}: basis `{CHECK_SH_ROWS}` and no `evidence` — name the rows that"
             " produced it, or the claim is the prose basis this vocabulary dropped"
         ]
-    rows, problems, runs_owner = check_sh_rows(root), [], False
+    rows, problems, inert, runs_owner = check_sh_rows(root), [], [], False
     for label in named:
         if label not in rows:
             problems.append(f"{where}: names `{label}`, which is no {CHECK} row")
@@ -1047,6 +1121,17 @@ def check_evidence(root, where, pid, column, entry, own):
                 f"{where}: `{label}` does not pin {open_knobs} — the row ran at other"
                 " build knobs than this column's, so it measured another image"
             )
+        # Held back rather than appended: the owner-crate message below is
+        # emitted only over an otherwise-clean row, so raising this one inline
+        # would SUPPRESS it — and a row that both compiles nothing and names the
+        # wrong crate owes the reader both reasons, not whichever ran first.
+        subcommand = CARGO_SUB.search(command)
+        if subcommand and subcommand.group(1) in COMPILE_ONLY:
+            inert.append(
+                f"{where}: `{label}` runs `cargo {subcommand.group(1)}` — it compiles"
+                f" this column and executes none of it, so it cannot say {pid} holds"
+                " here. `covered` is the word for a measurement"
+            )
         runs_owner |= bool(own.get(pid, frozenset()) & gate_lines.packages(command))
     if not runs_owner and not problems:
         problems.append(
@@ -1054,7 +1139,7 @@ def check_evidence(root, where, pid, column, entry, own):
             f" the crate(s) whose production Rust carries {pid} — a row that compiles"
             " this image is not evidence about this property"
         )
-    return problems
+    return problems + inert
 
 
 def unpinned_knobs(column, env):
@@ -1312,6 +1397,21 @@ def render(root):
             "",
         ]
 
+    own = owners(root)
+    # The caveat on the middle column, DERIVED. It read "Three P0-family rows carry
+    # no production tag" while the tree had none, so the page told the reader the
+    # count was short by three when it was exact — a hand-written number beside a
+    # derived one, which is the shape this file refuses on `[[cell]]`.
+    untagged = sorted(pid for pid in rows if not own.get(pid))
+    blind = (
+        f"{len(untagged)} P0-family row(s) carry no production tag at all"
+        f" ({', '.join(f'`{pid}`' for pid in untagged)}) and count as not moving,"
+        " which is the one direction this number can be wrong in."
+        if untagged
+        else "Every P0-family row carries a production tag, so the one direction"
+        " this number could be wrong in — an untagged row counting as not moving —"
+        " is empty here."
+    )
     out += [
         "## Open gaps",
         "",
@@ -1320,9 +1420,7 @@ def render(root):
         " property's tag — are among the crates the column compiles unlike the"
         " default build, above. Outside it, the code the statement is about did not"
         " move and the question is whether the rest of the image reaches it; inside"
-        " it, the statement is about a different compilation. Three P0-family rows"
-        " carry no production tag at all and count as not moving, which is the one"
-        " direction this number can be wrong in.",
+        " it, the statement is about a different compilation. " + blind,
         "",
         "",
         "The two after it are the ledger's, and they are Stage 0's last exit"
@@ -1337,7 +1435,6 @@ def render(root):
         "| Configuration | `gap` rows | of which the owner crate moves | Owed by | Settled by | The question that would settle them |",
         "|---|---|---|---|---|---|",
     ]
-    own = owners(root)
     for column in cols:
         open_rows = [pid for pid in rows if (pid, column.name) not in placed]
         if open_rows:
