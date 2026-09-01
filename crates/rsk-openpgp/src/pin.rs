@@ -514,6 +514,9 @@ fn commit_staged_dek<S: Storage>(fs: &mut Fs<S>, dek_fid: KeyFid) -> Result<(), 
     staged.zeroize();
     r?;
     let _ = fs.delete_key(stage);
+    // The ONLY re-arm on both `reset_retry` arms and `put_reset_code`'s set arm: each
+    // verifies one reference and re-keys ANOTHER its `check_pin` never migrated. Make
+    // it conditional and all three open silently — `reset_retry_via_pw3…` goes red.
     rsk_fs::request_rescrub(fs);
     Ok(())
 }
@@ -879,6 +882,10 @@ pub fn put_reset_code<S: Storage>(
         let verifier = fs.delete(EF_RC).is_ok();
         let dek = fs.delete_key(EF_DEK_RC).is_ok();
         let counter = set_pin_retry_counter(fs, EF_RC, 0).is_ok();
+        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_RC migrates only
+        // through its own verify, so both records this tombstones can still be keyed
+        // under the pre-OTP arm — and clearing the code does not rotate the DEK.
+        rsk_fs::request_rescrub(fs);
         sess.has_rc = false;
         return if verifier && dek && counter {
             Sw::OK

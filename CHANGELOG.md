@@ -2734,6 +2734,56 @@ and to the statuses it quotes.
 
 ### Security
 
+- **Two commands revoke a pre-OTP credential by tombstoning it, and a tombstone
+  is not an erase.** The run-35 class was written as "lazily *re-keys*", and both
+  of these DELETE instead — but `EF_HARDENED`'s promise is the broader one
+  (SEC-BOOT-001: "no superseded weak-sealed copy awaits the scrub"), and a
+  log-structured store keeps a deleted record's bytes in the ring until a
+  compaction lap reclaims the page, exactly as it keeps a superseded one's. Both
+  re-arm the lap now, after the store call and in the shape the OATH and PIV
+  sites already use.
+
+  **OATH SET CODE (`0x03`)** drops `EF_OTP_PIN`. That is the one OATH record
+  `migrate_seal` does not reach at boot — the credentials and the access code are
+  re-sealed eagerly there, before `run_at_rest_lap`, so `EF_OTP_PIN` is the only
+  OATH record that can still be chip-serial-rooted when a host command arrives.
+  The PIN's *value* is what leaks, and the command's own comment expects the
+  owner to re-mint it.
+
+  **OpenPGP PUT DATA `0xD3` with an empty body** clears the reset code, dropping
+  `EF_RC` *and* `EF_DEK_RC`. That one is worse, and the reason was read in the
+  code rather than assumed: `EF_DEK_RC` is the card's DEK sealed under the RC
+  session, the clear arm calls neither `rewrap_dek` nor `stage_dek`, and nothing
+  else on the card rotates the DEK — so the tombstoned copy still opens the
+  private keys. The new test proves it by measurement: it opens `EF_DEK_RC`
+  under the pre-OTP arm before the clear, then `load_dek`s after it, and the two
+  DEKs are byte-identical. `pin_derive_session` is HMAC-SHA256 + HKDF over the
+  *public* serial with no stretching, and GCM authenticates, so the reset code
+  falls to an offline, unthrottled, self-checking search — no verifier needed.
+
+  Both cases fell before the fix on the marker assertion — the marker SURVIVED a
+  supersession that should have cleared it, which is the missing-re-arm direction
+  and not its inverse — and each asserts its record is chip-serial-rooted first,
+  so it cannot pass by the record being strong. Four mutants kill, each reddening
+  only its own case (the call deleted; the call swapped for a marker *read*), and
+  two controls that are measurably not no-ops stay green: each re-arm moved ahead
+  of its delete, which under a one-operation write budget flips both the status
+  word and which record survives (OATH `9000`/marker-latched → `6581`/marker-
+  cleared), and the suite cannot see it. **bcdDevice → 0x09BC.**
+
+  **A third site was claimed and is REFUTED.** OpenPGP `reset_retry` verifies the
+  RC or PW3 and re-keys `EF_PW1` — the PIV asymmetry exactly — and its only
+  re-arm is the one inside `commit_staged_dek`. That coupling is real but it is
+  not a hole: on a healthy medium `commit_staged_dek` cannot be skipped after the
+  verifier write (its early exits need the stage it just wrote to be gone), and
+  the only way to skip it is a medium that has stopped accepting writes — on
+  which `request_rescrub` cannot clear the marker either, because clearing it is
+  itself a write. Measured, not argued: an added unconditional re-arm on both
+  arms left the outcome **byte-identical at every write budget from 0 to 11**. So
+  no call was added; the coupling is recorded at `commit_staged_dek` instead, and
+  `reset_retry_via_pw3_re_arms_the_at_rest_lap` is the case that goes red if a
+  future edit makes it conditional.
+
 - **PIV re-keys a reference on two paths that never verified the one they
   overwrite, and the run-35 class is four crates wide, not two.** `rsk-fs`'s
   `EF_HARDENED` doc defines the class as *any* applet that lazily re-keys a

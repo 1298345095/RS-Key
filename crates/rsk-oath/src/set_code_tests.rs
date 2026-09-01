@@ -391,3 +391,59 @@ fn a_refused_validate_neither_grants_nor_drops_the_unlock() {
         "a refused VALIDATE dropped the standing unlock",
     );
 }
+
+/// SET CODE drops `EF_OTP_PIN` — the one OATH record `migrate_seal` does not
+/// reach at boot, so on a card whose PIN was set before the burn the copy it
+/// tombstones is still rooted in the public chip serial. A tombstone is not an
+/// erase: the record stays readable in the ring until a compaction lap, and the
+/// applet's own comment expects the owner to re-mint that PIN.
+#[test]
+fn set_code_dropping_a_pre_otp_pin_re_arms_the_at_rest_lap() {
+    let (mut fs, rng) = fixture();
+    let touch = RefCell::new(AlwaysConfirm);
+
+    // Pre-burn: SET PIN stores v1 under the NO-OTP (chip-serial) kbase.
+    {
+        let mut app = OathApplet::new(SERIAL, [0x22; 32], None, &rng, &touch);
+        assert_eq!(
+            run(
+                &mut app,
+                &mut fs,
+                &apdu(INS_SET_PIN, 0, 0, &tlv(TAG_PASSWORD, b"1234"))
+            )
+            .0,
+            Sw::OK
+        );
+    }
+    let nootp = Device {
+        serial_hash: &[0x22; 32],
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let mut rec = [0u8; OTP_PIN_REC_V1];
+    assert_eq!(fs.read(EF_OTP_PIN, &mut rec), Some(OTP_PIN_REC_V1));
+    assert_eq!(
+        &rec[2..],
+        &nootp.pin_derive_verifier(b"1234")[..],
+        "fixture: the record SET CODE is about to drop is chip-serial-rooted",
+    );
+
+    // The OTP build, and the lap has already run.
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    select(&mut app, &mut fs);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+
+    assert_eq!(set_code(&mut app, &mut fs, &[0xABu8; 20]), Sw::OK);
+    assert!(
+        !fs.has_data(EF_OTP_PIN),
+        "fixture: SET CODE drops the OTP PIN"
+    );
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "SET CODE superseded a chip-serial-rooted verifier and must re-arm the at-rest lap",
+    );
+}

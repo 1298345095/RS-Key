@@ -389,6 +389,10 @@ impl<'a> OathApplet<'a> {
         // Answered rather than discarded: a surviving PIN is that second path, and
         // the lock-down below happens either way.
         let dropped = fs.delete(EF_OTP_PIN);
+        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_OTP_PIN is the
+        // only OATH record with no eager boot migration, so the copy this tombstones
+        // can still be keyed under the pre-OTP arm the public chip serial derives.
+        rsk_fs::request_rescrub(fs);
         self.validated = false;
         match dropped {
             Ok(()) => Sw::OK,

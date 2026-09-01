@@ -1696,3 +1696,173 @@ fn pw_status_default_holds_every_retry_counter() {
         );
     }
 }
+
+/// Clearing the reset code tombstones `EF_RC` AND `EF_DEK_RC`. Neither migrates
+/// off the pre-OTP root except through the RC's own verify, so on a card whose
+/// reset code was set before the burn both are still rooted in the public chip
+/// serial — and `EF_DEK_RC` is the card's DEK, which the clear does not rotate.
+/// A revoked credential wrapping a live key: audit run-35's rule reaches it.
+#[test]
+fn clearing_a_pre_otp_reset_code_re_arms_the_at_rest_lap() {
+    let mut fs = setup();
+    let d_pre = dev();
+    let d_otp = otp_dev();
+    let mut rng = CountRng(7);
+    const RC: &[u8] = b"resetme0";
+
+    // Pre-burn: admin sets a reset code, so EF_RC and EF_DEK_RC are both
+    // chip-serial-rooted.
+    let mut sess = Session::new();
+    assert_eq!(
+        verify(
+            &d_pre,
+            &mut fs,
+            &mut sess,
+            &mut rng,
+            0x00,
+            PW3_MODE83,
+            PW3_DEFAULT
+        ),
+        Sw::OK
+    );
+    assert_eq!(
+        put_reset_code(&d_pre, &mut fs, &mut sess, &mut rng, RC),
+        Sw::OK
+    );
+
+    let mut rc_rec = [0u8; 34];
+    assert_eq!(fs.read(EF_RC, &mut rc_rec), Some(34));
+    assert_eq!(
+        &rc_rec[2..],
+        &d_pre.pin_derive_verifier(RC)[..],
+        "fixture: EF_RC is rooted in the public chip serial",
+    );
+
+    // Open the RC-sealed DEK the way an offline attacker with the flash dump
+    // and a candidate RC would: the session key is chip-serial-derived.
+    let mut blob = [0u8; DEK_FILE_SIZE];
+    let n = fs
+        .read_key(EF_DEK_RC, &mut blob)
+        .expect("EF_DEK_RC present");
+    assert_eq!(blob[0], DEK_FORMAT_V3);
+    let mut dek_from_rc = [0u8; DEK_SIZE];
+    d_pre
+        .decrypt_with_aad(
+            &d_pre.pin_derive_session(RC),
+            &blob[1..n],
+            PinKdf::V2,
+            &mut dek_from_rc,
+        )
+        .expect("fixture: the RC-sealed copy opens under the chip-serial arm");
+
+    // The OTP build. PW3's own verify migrates and re-arms; a boot re-latches.
+    let mut sess = Session::new();
+    assert_eq!(
+        verify(
+            &d_otp,
+            &mut fs,
+            &mut sess,
+            &mut rng,
+            0x00,
+            PW3_MODE83,
+            PW3_DEFAULT
+        ),
+        Sw::OK
+    );
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: PW3's own migrating verify re-arms the lap"
+    );
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+
+    // The RC half is untouched by that migration: still chip-serial-rooted.
+    assert_eq!(fs.read(EF_RC, &mut rc_rec), Some(34));
+    assert_eq!(
+        &rc_rec[2..],
+        &d_pre.pin_derive_verifier(RC)[..],
+        "fixture: the PW3 migration did not touch EF_RC",
+    );
+    assert!(fs.has_key(EF_DEK_RC), "fixture: EF_DEK_RC is still there");
+
+    assert_eq!(
+        put_reset_code(&d_otp, &mut fs, &mut sess, &mut rng, b""),
+        Sw::OK
+    );
+    assert!(
+        fs.read(EF_RC, &mut rc_rec).is_none(),
+        "fixture: EF_RC dropped"
+    );
+    assert!(!fs.has_key(EF_DEK_RC), "fixture: EF_DEK_RC dropped");
+
+    // The load-bearing half: the clear did NOT rotate the DEK, so the copy it
+    // tombstoned still opens the card's keys.
+    let mut dek_live = [0u8; DEK_SIZE];
+    load_dek(&d_otp, &mut fs, &sess, &mut dek_live).unwrap();
+    assert_eq!(
+        dek_live, dek_from_rc,
+        "the DEK recoverable from the tombstoned RC copy is still the live one",
+    );
+
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "clearing the reset code superseded a chip-serial-rooted DEK copy and must re-arm the lap",
+    );
+}
+
+/// RESET RETRY verifies PW3 and re-keys `EF_PW1` — the same asymmetry as PIV's
+/// RESET RETRY COUNTER, and `check_ref`'s migrating fallback has never run on the
+/// reference it overwrites. Nothing on the call re-arms directly: the one re-arm
+/// is inside `commit_staged_dek`. This case is where that coupling goes red.
+#[test]
+fn reset_retry_via_pw3_re_arms_the_at_rest_lap() {
+    let mut fs = setup();
+    let d_otp = otp_dev();
+    let mut rng = CountRng(7);
+    let mut sess = Session::new();
+    assert_eq!(
+        verify(
+            &d_otp,
+            &mut fs,
+            &mut sess,
+            &mut rng,
+            0x00,
+            PW3_MODE83,
+            PW3_DEFAULT
+        ),
+        Sw::OK
+    );
+    // EF_PW1 was never verified, so it is still chip-serial-rooted.
+    let mut rec = [0u8; 34];
+    assert_eq!(fs.read(EF_PW1, &mut rec), Some(34));
+    assert_eq!(
+        &rec[2..],
+        &dev().pin_derive_verifier(PW1_DEFAULT)[..],
+        "fixture: EF_PW1 is rooted in the public chip serial",
+    );
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+
+    assert_eq!(
+        reset_retry(
+            &d_otp, &mut fs, &mut sess, &mut rng, 0x02, PW1_MODE81, b"222222"
+        ),
+        Sw::OK
+    );
+    assert_eq!(fs.read(EF_PW1, &mut rec), Some(34));
+    assert_eq!(
+        &rec[2..],
+        &d_otp.pin_derive_verifier(b"222222")[..],
+        "fixture: the reset re-keyed EF_PW1 under the OTP arm",
+    );
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "RESET RETRY superseded a chip-serial-rooted verifier and must re-arm the lap",
+    );
+}
