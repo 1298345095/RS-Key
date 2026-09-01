@@ -55,7 +55,7 @@ impl Reassembler {
     /// A copy of the state a probe can fork, so one pre-state can be driven by
     /// several frames without rebuilding it. Verification-only: `Reassembler` is
     /// deliberately not `Clone` in production — a duplicated transaction is a
-    /// second owner for one channel.
+    /// second owner for one channel, and `IsClone` below is what holds that.
     pub fn clone_for_probe(&self) -> Self {
         Self {
             msg: self.msg,
@@ -102,6 +102,31 @@ const _: () = assert!(PROBE_CHUNKS >= 2);
 /// refusal is one no host can provoke and `SEC-TRANS-003`'s INIT arm is
 /// discharged by an unreachable branch. Held at the SHIPPED width under `test`.
 const _: () = assert!(CTAP_MAX_MESSAGE <= u16::MAX as usize);
+
+/// Whether `T` is `Clone`, which stable Rust has no `T: !Clone` bound to ask.
+/// Resolution order answers instead: an inherent associated const wins over a
+/// trait one, and the inherent block below applies only when `T: Clone`.
+struct IsClone<T>(core::marker::PhantomData<T>);
+
+impl<T: Clone> IsClone<T> {
+    const YES: bool = true;
+}
+
+/// The answer for every other `T`, reached only where the inherent one is not.
+trait NotClone {
+    const YES: bool = false;
+}
+
+impl<T> NotClone for IsClone<T> {}
+
+/// The probe still reads a `Clone` type as one, so the `false` below is an
+/// answer and not a constant: if resolution ever stops reaching the inherent
+/// `YES`, every `!IsClone` assertion goes vacuously green and this one red.
+const _: () = assert!(IsClone::<TxView>::YES, "IsClone stopped detecting Clone");
+/// And `Reassembler` is not `Clone`: one channel, one owner. A duplicate is a
+/// second owner mid-transaction, which is the state `NoCrossChannelSplice` is
+/// stated over — `clone_for_probe` is how a harness forks one instead.
+const _: () = assert!(!IsClone::<Reassembler>::YES, "Reassembler became Clone");
 
 /// An INIT frame for `cid` declaring `bcnt` bytes.
 pub fn init_frame(cid: u32, cmd: u8, bcnt: u16) -> [u8; HID_RPT_SIZE] {
