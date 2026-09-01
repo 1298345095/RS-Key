@@ -123,6 +123,26 @@ fn a_warm_boot_carries_the_soft_lock_in() {
 }
 
 #[test]
+fn a_warm_boot_carries_a_sub_limit_batch_in() {
+    // The half of the carry the test above cannot reach — and the pair the
+    // firmware's scratch codec asserts round-trips: below the limit nothing is
+    // engaged, so erasing the batch refunds a §6.5.5.6 budget the host has spent.
+    let batch = rsk_fido::consts::PIN_MISMATCH_LIMIT - 1;
+    let env = Env::new();
+    env.board.borrow_mut().boot = crate::BootState {
+        warm: true,
+        lock: rsk_fido::state::PinLock {
+            engaged: false,
+            mismatches: batch,
+        },
+    };
+    let ctap = env.ctap();
+    let carried = ctap.fido_state.borrow().pin_lock();
+    assert_eq!(carried.mismatches, batch, "the sub-limit batch was erased");
+    assert!(!carried.engaged, "the restore invented a soft lock");
+}
+
+#[test]
 fn a_cold_boot_is_the_default() {
     // A build with nothing to remember a warm reset with sees every boot as a first
     // one, which is the safe reading of both clauses.
