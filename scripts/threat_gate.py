@@ -9,7 +9,7 @@ alone. "Against the threat model" names no threat: a property with no clause
 behind it is either mis-scoped or unnecessary, and neither was visible — while a
 stated threat with no property behind it was not visible either.
 
-Three rules, and the third is the one the file exists for:
+Four rules, and the third is the one the file exists for:
 
 * the clause SET is derived from the markdown — every heading and every list
   item — and `assurance/threat_clauses.toml` must name each one exactly once. A
