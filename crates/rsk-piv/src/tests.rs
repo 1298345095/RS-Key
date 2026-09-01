@@ -5752,6 +5752,10 @@ fn kbase_migration_reseals_slots_and_pin_falls_back() {
     // below re-keys the PIN verifier, superseding a chip-serial-sealed copy,
     // so it must re-arm the lap (request_rescrub) — audit run-35's rule.
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
     let mut app2 = PivApplet::new(SERIAL, HASH, Some(otp_source as FusedKey), &rng, &pres);
     select(&mut app2, &mut fs);
     auth_mgm(&mut app2, &mut fs);
@@ -5784,6 +5788,155 @@ fn kbase_migration_reseals_slots_and_pin_falls_back() {
     select(&mut app3, &mut fs);
     let (sw, _) = run(&mut app3, &mut fs, INS_VERIFY, 0, 0x80, &DEFAULT_PIN);
     assert_eq!(sw, Sw::new(0x63, 0xC2));
+}
+/// RESET RETRY COUNTER re-keys `EF_PIN` under the OTP arm while verifying only the
+/// PUK. The PIN is blocked on this path by construction, so `check_ref`'s migrating
+/// fallback has never run on it — and once the PUK itself has migrated on an earlier
+/// use, nothing on the call re-arms the lap.
+#[test]
+fn unblock_with_the_puk_re_arms_the_at_rest_lap() {
+    const OTP: [u8; 32] = [0x55; 32];
+    fn otp_source() -> Option<[u8; 32]> {
+        Some(OTP)
+    }
+    const NEW_PIN: [u8; PIN_WIRE_LEN] = [0x39, 0x39, 0x39, 0x39, 0x39, 0x39, PIN_PAD, PIN_PAD];
+    let dev_pre = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let dev_otp = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: Some(&OTP),
+    };
+
+    // Provision pre-OTP: both references are rooted in the public chip serial.
+    let rng = RefCell::new(TestRng(3));
+    let pres = RefCell::new(AlwaysConfirm);
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    let mut fs = new_fs();
+    select(&mut app, &mut fs);
+    let mut rec = [0u8; PIN_REC_LEN];
+    assert_eq!(fs.read(EF_PIN, &mut rec), Some(PIN_REC_LEN));
+    assert_eq!(
+        &rec[2..],
+        &dev_pre.pin_derive_verifier(&DEFAULT_PIN)[..],
+        "fixture: EF_PIN starts rooted in the public chip serial"
+    );
+
+    // The OTP build. The PUK migrates on its own first use and re-arms the lap;
+    // a boot then runs the lap and re-latches the marker.
+    let mut app2 = PivApplet::new(SERIAL, HASH, Some(otp_source as FusedKey), &rng, &pres);
+    select(&mut app2, &mut fs);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+    let mut body = DEFAULT_PUK.to_vec();
+    body.extend_from_slice(&DEFAULT_PUK);
+    let (sw, _) = run(&mut app2, &mut fs, INS_CHANGE_PIN, 0, REF_PUK, &body);
+    assert_eq!(sw, Sw::OK);
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the PUK's own migrating verify re-arms the lap"
+    );
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+
+    // Block the PIN. A wrong PIN never reaches the fallback, so EF_PIN is still
+    // chip-serial-rooted when the unblock replaces it.
+    for _ in 0..DEFAULT_RETRIES {
+        run(&mut app2, &mut fs, INS_VERIFY, 0, REF_PIN, &NEW_PIN);
+    }
+    let (sw, _) = run(&mut app2, &mut fs, INS_VERIFY, 0, REF_PIN, &DEFAULT_PIN);
+    assert_eq!(sw, Sw::PIN_BLOCKED, "fixture: the PIN is blocked");
+    assert_eq!(fs.read(EF_PIN, &mut rec), Some(PIN_REC_LEN));
+    assert_eq!(
+        &rec[2..],
+        &dev_pre.pin_derive_verifier(&DEFAULT_PIN)[..],
+        "fixture: a blocked PIN never migrated"
+    );
+
+    let mut body = DEFAULT_PUK.to_vec();
+    body.extend_from_slice(&NEW_PIN);
+    let (sw, _) = run(&mut app2, &mut fs, INS_RESET_RETRY, 0, REF_PIN, &body);
+    assert_eq!(sw, Sw::OK);
+    assert_eq!(fs.read(EF_PIN, &mut rec), Some(PIN_REC_LEN));
+    assert_eq!(
+        &rec[2..],
+        &dev_otp.pin_derive_verifier(&NEW_PIN)[..],
+        "the unblock re-keyed EF_PIN under the OTP arm"
+    );
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the unblock superseded a chip-serial-rooted verifier and must re-arm the at-rest lap"
+    );
+}
+
+/// SET RETRIES rewrites BOTH references to their factory defaults, gated on the PIN
+/// and the management key and never on the PUK. So `EF_PUK` can still be
+/// chip-serial-rooted when its record is superseded, with nothing on the call
+/// re-arming the lap.
+#[test]
+fn set_retries_re_arms_the_at_rest_lap() {
+    const OTP: [u8; 32] = [0x66; 32];
+    fn otp_source() -> Option<[u8; 32]> {
+        Some(OTP)
+    }
+    let dev_pre = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let dev_otp = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: Some(&OTP),
+    };
+
+    let rng = RefCell::new(TestRng(5));
+    let pres = RefCell::new(AlwaysConfirm);
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    let mut fs = new_fs();
+    select(&mut app, &mut fs);
+    migrate_kbase(&dev_otp, &mut fs, &mut TestRng(13));
+
+    // The PIN migrates on its own verify and re-arms; a boot re-latches the marker.
+    // The PUK is untouched by that path, so it is still chip-serial-rooted.
+    let mut app2 = PivApplet::new(SERIAL, HASH, Some(otp_source as FusedKey), &rng, &pres);
+    select(&mut app2, &mut fs);
+    auth_mgm(&mut app2, &mut fs);
+    verify_pin(&mut app2, &mut fs);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+    let mut rec = [0u8; PIN_REC_LEN];
+    assert_eq!(fs.read(EF_PUK, &mut rec), Some(PIN_REC_LEN));
+    assert_eq!(
+        &rec[2..],
+        &dev_pre.pin_derive_verifier(&DEFAULT_PUK)[..],
+        "fixture: EF_PUK is still rooted in the public chip serial"
+    );
+
+    let (sw, _) = run(&mut app2, &mut fs, INS_SET_RETRIES, 5, 5, &[]);
+    assert_eq!(sw, Sw::OK);
+    assert_eq!(fs.read(EF_PUK, &mut rec), Some(PIN_REC_LEN));
+    assert_eq!(
+        &rec[2..],
+        &dev_otp.pin_derive_verifier(&DEFAULT_PUK)[..],
+        "SET RETRIES re-keyed EF_PUK under the OTP arm"
+    );
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "SET RETRIES superseded a chip-serial-rooted verifier and must re-arm the at-rest lap"
+    );
 }
 
 /// Targeted property fuzz for the Pivman ADMIN-DATA (`5FFF00`) parse and the

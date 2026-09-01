@@ -608,9 +608,13 @@ impl PivApplet<'_> {
         {
             return Sw::MEMORY_FAILURE;
         }
-        if put_pin_verifier(dev, fs, EF_PIN, &DEFAULT_PIN).is_err()
-            || put_pin_verifier(dev, fs, EF_PUK, &DEFAULT_PUK).is_err()
-        {
+        let stored = put_pin_verifier(dev, fs, EF_PIN, &DEFAULT_PIN)
+            .and_then(|()| put_pin_verifier(dev, fs, EF_PUK, &DEFAULT_PUK));
+        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): the PUK is never
+        // verified on this path, so the record this supersedes is still keyed under
+        // the pre-OTP arm. After the writes — a refusal can still land.
+        rsk_fs::request_rescrub(fs);
+        if stored.is_err() {
             return Sw::MEMORY_FAILURE;
         }
         self.sess.set_pin(false);
@@ -1439,7 +1443,12 @@ pub fn unblock_pin_with_puk<S: Storage>(
     if let Err(sw) = check_new_reference(new) {
         return sw;
     }
-    if put_pin_verifier(dev, fs, EF_PIN, new).is_err() {
+    let stored = put_pin_verifier(dev, fs, EF_PIN, new);
+    // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): only the PUK is
+    // verified here, so a PIN blocked before it ever migrated is superseded while
+    // still keyed under the pre-OTP arm. After the write — a refusal can still land.
+    rsk_fs::request_rescrub(fs);
+    if stored.is_err() {
         return Sw::MEMORY_FAILURE;
     }
     reset_counter(fs, RETRY_PIN)

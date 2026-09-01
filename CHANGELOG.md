@@ -2734,6 +2734,52 @@ and to the statuses it quotes.
 
 ### Security
 
+- **PIV re-keys a reference on two paths that never verified the one they
+  overwrite, and the run-35 class is four crates wide, not two.** `rsk-fs`'s
+  `EF_HARDENED` doc defines the class as *any* applet that lazily re-keys a
+  pre-OTP record after the lap has run; the sweep one commit ago read it as the
+  two applet crates it had open. RESET RETRY COUNTER (`unblock_pin_with_puk`)
+  verifies the **PUK** and then writes a fresh **PIN** verifier — and the PIN is
+  blocked on that path by construction, so `check_ref`'s migrating fallback has
+  never run on `EF_PIN`. SET RETRIES (`0xFA`) is gated on the PIN and the
+  management key, never on the PUK, then rewrites **both** references to factory
+  defaults, so `EF_PUK` can still be chip-serial-rooted when its record is
+  superseded. Either way the displaced verifier is rooted in the public chip
+  serial — brute-forceable offline from a flash dump — while `EF_HARDENED` stayed
+  latched, so no boot ever swept it. Both re-arm the lap now, after the store
+  write, in the shape the OATH site already used.
+
+  Measured before it was fixed, and as someone else's claim rather than a given:
+  each new case in `crates/rsk-piv/src/tests.rs` reads the record back to prove
+  it is chip-serial-rooted, proves the *other* reference's own migrating verify
+  does re-arm, latches the marker, and then falls on the marker assertion — the
+  marker SURVIVES a re-key that should have cleared it, which is the missing-
+  re-arm direction and not its inverse. Four mutants kill, each reddening only
+  its own case (the call deleted; the call swapped for a marker *write*), and
+  three controls that are not no-ops stay green: each re-arm moved ahead of its
+  store write, and SET RETRIES' two writes swapped. All seven binaries differ
+  from pristine by digest.
+
+  The sweep is finished across all four applet crates this time, from
+  `pin_derive_verifier`'s four writers outward, opening every caller rather than
+  trusting a comment: FIDO's `set_pin` refuses when a PIN exists while
+  `change_pin` and the display's `local_pin_gate` verify first and re-arm there;
+  OpenPGP's writers funnel through `commit_staged_dek` or `migrate_pin_kbase`,
+  and `init`'s rewrite arm runs only when neither verifier exists; OATH's
+  `cmd_set_otp_pin` mints only into absence; PIV's `change_reference` and
+  `scan_files` are covered by `check_ref` and by absence.
+
+  The family that pins all of this was satisfiable by absence. Every case put
+  `EF_HARDENED` and then asserted it gone, with nothing checking the latch took —
+  and absence is the default. A shared-path defect that makes `Fs::put` answer
+  `Ok(())` without storing for that FID left all ten cases GREEN while hiding the
+  very re-arm they exist to pin. With the latch now asserted at all ten (the
+  shape `crates/rsk-fs/src/fs_tests.rs:382` already used), the same defect
+  reddens every one of them. Their messages also claimed a superseded copy was
+  "readable in a flash dump", which no host test can witness: `RamStorage` is a
+  map that overwrites in place, so these are call-presence oracles on the marker,
+  and three of them now say so. **bcdDevice → 0x09BB.**
+
 - **OATH's PIN CHANGE is a lazy pre-OTP re-key too, and run-35's sweep did not
   reach it.** That sweep re-armed the at-rest scrub in FIDO clientPIN, the
   display device PIN, PIV and OATH — but OATH's `0xB2` VERIFY only. `0xB3`
@@ -2755,11 +2801,13 @@ and to the statuses it quotes.
   stay green: the re-arm moved ahead of the store write, and a refused store
   answering `6985` instead of `6581`.
 
-  A class sweep of both applet crates found no other site still missing it: the
-  OpenPGP verifier writers all funnel through `commit_staged_dek` /
+  A class sweep of these two applet crates found no other site still missing it:
+  the OpenPGP verifier writers all funnel through `commit_staged_dek` /
   `migrate_pin_kbase`, which re-arm, and `cmd_set_otp_pin` mints only where no
   record exists, superseding nothing. The boot-time migrations do not need it —
-  they run before `run_at_rest_lap`, not after. **bcdDevice → 0x09BA.**
+  they run before `run_at_rest_lap`, not after. Two crates was the wrong scope,
+  and the entry above says what the class really is and what PIV was hiding in
+  it. **bcdDevice → 0x09BA.**
 
 - **The delete guard that shipped one commit ago raised `6581` over erases that
   had completed.** `Fs::delete` drops the shared `EF_META` record *first* and
