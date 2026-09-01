@@ -98,6 +98,32 @@ Boot.cfg                             GREEN   8
 \* and all three boot mutants still redden on the same invariant -- the
 \* assumption buys REACHABILITY, not safety, which is what running it says.
 BootCarry.cfg                        GREEN   6
+\* THE WRITE/RE-ARM ORDER, both arms. Every configuration above collapses the
+\* record write and the re-arm into ONE step, so a power cut between them has
+\* nowhere to sit and the order they ship in is unfalsifiable; these two split
+\* the pair around an in-flight flag and differ in nothing else. The RED row is
+\* the order the tree ships -- write, then re-arm -- and its counterexample is a
+\* reset landing in the window: the marker stands over the copy the write just
+\* superseded, and the worker that owed the re-arm is gone, so no later boot
+\* runs the lap. The GREEN row re-arms first and pays at worst a lap that
+\* re-runs over nothing.
+\* THE PAIR IS THE POINT, and it is why this is an ORDER switch rather than a
+\* free split of the action. A free split has no order to test -- its two halves
+\* fire either way round -- and it reddens Boot, BootCarry and BootInduction at
+\* depth 2 on the transient while collapsing every BugMarkerBeforeScrub row onto
+\* that same transient, all three still printing MarkerNeverLies. Measured.
+\* MarkerNeverLies is named although the RED row arms exactly one switch and the
+\* runner would derive the same name from its INVARIANTS block; what the column
+\* cannot see either way is DEPTH, so what separates this row from a kill on the
+\* transient is its GREEN twin, which no free split can produce.
+\* They are `Historical_` because the RED one injects no defect -- it is the
+\* tree's own order -- so it is hand-named in the runner's tier list rather than
+\* swept up by a family glob that would hand it a mutant's expectations. They
+\* sit here, beside the module's other arms, because that is what they are arms
+\* of. A third of the GREEN arm's measured distinct count is its floor, the same
+\* rule as its siblings.
+Historical_BootWriteThenRearm.cfg    RED     -       -       MarkerNeverLies
+Historical_BootRearmThenWrite.cfg    GREEN   12
 \* The CTAPHID reassembler (RSKeyTransport): 13 distinct at depth 4, the
 \* owner/seq/got/need product over two channels -- a third rounds to 4.
 Transport.cfg                        GREEN   4

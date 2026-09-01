@@ -105,6 +105,13 @@ RSKeyBootHardening     MaxWeak                1   MarkerNeverLies
 \* scripts/assumption_gate.py holds it against the tree. It stays listed here so
 \* a reader of the scope record is not left thinking it is one.
 RSKeyBootHardening     PowerOnClearsScratch2  -   -
+\* Not a size either, and not a hardware question: whether the record write and
+\* the re-arm are two STEPS. FALSE in every configuration the tiers are about --
+\* one action, no window -- and TRUE in the two order rows, which is where the
+\* order the tree ships becomes falsifiable at all. assurance/assumptions.toml
+\* carries it; listed here so a reader of the scope record is not left thinking
+\* a minimum was measured for it.
+RSKeyBootHardening     RekeyOrderModelled     -   -
 RSKeySecurityState     AlwaysUvShipped        -   -
 RSKeyTokenRefinement   AlwaysUvShipped        -   -
 TraceSecurity          AlwaysUvShipped        -   -

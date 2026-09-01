@@ -106,7 +106,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-DISP-001` | `ConfirmNamesTheOperation` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 0 | 30 | — | MODELLED-ONLY |
 | `SEC-DISP-002` | `StaleTouchApprovesNothing` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 0 | 30 | — | MODELLED-ONLY |
 | `SEC-DISP-003` | `OnlyAllowConfirms` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 0 | 30 | — | MODELLED-ONLY |
-| `SEC-BOOT-001` | `MarkerNeverLies` | 3 of 11 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-BOOT-001` | `MarkerNeverLies` | 4 of 13 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-BOOT-002` | `TheWholeLockRides` | 3 of 8 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-TRANS-001` | `NoCrossChannelSplice` | 1 of 5 | 1 | 0 of 0 | 2 | 0 | 10 | 0 | — | BOUNDED |
 | `SEC-TRANS-002` | `NoSequenceGap` | 1 of 5 | 1 | 0 of 0 | 1 | 0 | 10 | 0 | — | BOUNDED |

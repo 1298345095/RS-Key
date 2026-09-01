@@ -572,6 +572,13 @@ TABLE_GROUPS = (
     ("`BootInduction.cfg` — `IndInv /\\ Next => IndInv'` from ANY admitted state",
      ("BootInduction.cfg",)),
     ("`BootInductionMut_*.cfg`", ("BootInductionMut_*.cfg",)),
+    # The two arms of the write/re-arm order, which every row above collapses
+    # into one step. One line, because the pair is one experiment: the RED arm is
+    # the order the tree ships and the GREEN one is the order it does not, and a
+    # reader given either alone would take it for a property of the split.
+    ("`Historical_Boot*.cfg` — the write/re-arm order the tree ships, and the one"
+     " it does not",
+     ("Historical_BootWriteThenRearm.cfg", "Historical_BootRearmThenWrite.cfg")),
     ("`Transport.cfg` — the eighth module: the CTAPHID reassembler",
      ("Transport.cfg",)),
     ("`TransMut_*.cfg` / `TransSolo_*.cfg`", ("TransMut_*.cfg", "TransSolo_*.cfg")),

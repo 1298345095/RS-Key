@@ -43,7 +43,7 @@ fi
 
 # Which module a configuration belongs to: the seam configs are the second
 # module's, and TLC takes the module name rather than reading it from the cfg.
-spec_for() { case "$1" in TokenGate*) echo RSKeyTokenGate ;; TokenRefinement*) echo RSKeyTokenRefinement ;; TraceSecurity*) echo TraceSecurity ;; TraceSeamsBad*) echo TraceSeamsBad ;; TraceSeams*) echo TraceSeams ;; Seam*) echo RSKeyAppletSeams ;; Store*) echo RSKeyStore ;; Lat*) echo RSKeyRetryLattice ;; Polic*) echo RSKeyAppletPolicies ;; Admin*) echo RSKeyAdminSurface ;; Disp*) echo RSKeyTrustedDisplay ;; Boot*) echo RSKeyBootHardening ;; Trans*) echo RSKeyTransport ;; *) echo RSKeySecurityState ;; esac; }
+spec_for() { case "$1" in TokenGate*) echo RSKeyTokenGate ;; TokenRefinement*) echo RSKeyTokenRefinement ;; TraceSecurity*) echo TraceSecurity ;; TraceSeamsBad*) echo TraceSeamsBad ;; TraceSeams*) echo TraceSeams ;; Seam*) echo RSKeyAppletSeams ;; Store*) echo RSKeyStore ;; Lat*) echo RSKeyRetryLattice ;; Polic*) echo RSKeyAppletPolicies ;; Admin*) echo RSKeyAdminSurface ;; Disp*) echo RSKeyTrustedDisplay ;; Historical_Boot*|Boot*) echo RSKeyBootHardening ;; Trans*) echo RSKeyTransport ;; *) echo RSKeySecurityState ;; esac; }
 
 # The invariants a configuration checks, in order.
 invariants_of() {
@@ -404,6 +404,8 @@ list_safety() {
   ls BootCarryMut_*.cfg    # …and every mutant of it on that arm too
   echo BootInduction.cfg   # IndInv /\ Next => IndInv', from ANY admitted state
   ls BootInductionMut_*.cfg  # and what says that probe can go red
+  echo Historical_BootWriteThenRearm.cfg # the write/re-arm order the tree ships,
+  echo Historical_BootRearmThenWrite.cfg # RED, against the order it does not
   echo Transport.cfg           # the eighth module: the CTAPHID reassembler
   ls TransMut_*.cfg
   ls TransSolo_*.cfg

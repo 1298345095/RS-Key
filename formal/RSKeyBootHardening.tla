@@ -66,6 +66,19 @@ EXTENDS Naturals
 CONSTANTS
     PowerOnClearsScratch2,
     MaxWeak,  \* saturation bound on the counted superseded copies (>= 1)
+    \* Whether the record write and the re-arm are two STEPS. FALSE keeps them
+    \* one action -- what every configuration the tiers are about runs, and what
+    \* leaves a power cut between them nowhere to sit. TRUE splits the pair
+    \* around `rekeying`; the switch below says which half lands first.
+    RekeyOrderModelled,
+    \* Under that split, the record first and the re-arm after it. That is the
+    \* order every call site SHIPS -- the `fs.put` and then the
+    \* `rsk_fs::request_rescrub` under it
+    \* (crates/rsk-fido/src/clientpin.rs:814-816) -- and it is the arm a cut can
+    \* catch: between the two the marker stands over a copy the write has
+    \* already superseded, and a reset ends the worker that owed the re-arm.
+    \* FALSE re-arms first, which costs at worst a lap that re-runs over nothing.
+    BugRecordWriteBeforeRearm,
     \* Audit run-35's shape: a lazy re-key that leaves the marker standing, so
     \* the copy it superseded -- sealed under a root the PUBLIC chip serial
     \* derives -- stays in the flash ring as an offline dictionary target and
@@ -111,9 +124,14 @@ VARIABLES
     \* Survives a warm reset; a power-on reset clears it, and the TAG makes an
     \* undefined register read as clear too.
     recorded,
-    lock      \* the running cycle's in-RAM PinLock, rebuilt at boot
+    lock,     \* the running cycle's in-RAM PinLock, rebuilt at boot
+    \* A lazy re-key with one half done and the other still owed. FALSE
+    \* throughout unless `RekeyOrderModelled`: with the pair atomic there is no
+    \* in-flight state, which is what keeps the configurations that collapse it
+    \* running over the state space they always ran over.
+    rekeying
 
-vars == << phase, marker, weak, recorded, lock >>
+vars == << phase, marker, weak, recorded, lock, rekeying >>
 
 TypeOK ==
     /\ phase \in {"serving", "down"}
@@ -121,6 +139,7 @@ TypeOK ==
     /\ weak \in 0..MaxWeak
     /\ recorded \in Locks
     /\ lock \in Locks
+    /\ rekeying \in IF RekeyOrderModelled THEN BOOLEAN ELSE {FALSE}
 
 \* A fresh OTP-provisioned device after its first completed boot: lap done,
 \* nothing pending, no strikes.
@@ -130,32 +149,61 @@ Init ==
     /\ weak = 0
     /\ recorded = "clear"
     /\ lock = "clear"
+    /\ rekeying = FALSE
 
 (***************************************************************************)
 (* SERVING. A lazy re-key supersedes one more weak-sealed copy and must     *)
 (* re-arm the lap; the FIDO layer moves the soft lock and every move writes  *)
 (* the whole scratch word.                                                   *)
 (***************************************************************************)
-\* THE WRITE/RE-ARM ORDER IS NOT MODELLED, AND THIS IS WHERE IT WOULD BE. The
-\* tree writes the record FIRST and re-arms second at every site; d703c15 names
-\* that as the less fail-safe order. Collapsing the pair into one action leaves
-\* a power cut between them no state to sit in, so "the marker is cleared
-\* before the medium can hold a superseded copy" is unfalsifiable here.
-\* Splitting it free-floating was MEASURED and REFUSED: Boot, BootCarry and
-\* BootInduction fall at depth 2 on the transient, and the three
-\* BugMarkerBeforeScrub rows stop reaching their own defect (26 distinct at
-\* depth 5 -> 2 at depth 2) while still reporting MarkerNeverLies, so the
-\* verdict column cannot see that they died for the wrong reason. A faithful
-\* split needs an in-flight flag and `~(marker /\ weak > 0 /\ ~pending)`;
-\* measured on a scratch module, that is RED at depth 3 on write -> reset and
-\* GREEN on re-arm-first, so the SHIPPED order is the red arm and the row it
-\* belongs in is an expected-RED Historical_* one -- which run-tlc.sh's tier
-\* list names by hand, not by glob.
+\* The re-arm itself, which every arm below shares: `request_rescrub` clears the
+\* marker (crates/rsk-fs/src/lib.rs:46) unless the switch that keeps it standing
+\* is armed.
+Rearmed == IF BugRekeyKeepsTheMarker THEN marker ELSE FALSE
+
+\* THE WRITE AND THE RE-ARM AS ONE STEP, which is what the configurations the
+\* tiers are about run. Collapsing the pair leaves a power cut between them no
+\* state to sit in, so the ORDER is unfalsifiable here -- and that is a choice
+\* the switch above makes visible rather than a gap. Splitting it FREE-FLOATING
+\* was measured and refused: Boot, BootCarry and BootInduction then fall at
+\* depth 2 on the transient, and the three BugMarkerBeforeScrub rows stop
+\* reaching their own defect while still reporting MarkerNeverLies -- a kill for
+\* the wrong reason no verdict column can see.
 LazyRekey ==
+    /\ ~RekeyOrderModelled
     /\ phase = "serving"
     /\ weak < MaxWeak
     /\ weak' = weak + 1
-    /\ marker' = IF BugRekeyKeepsTheMarker THEN marker ELSE FALSE
+    /\ marker' = Rearmed
+    /\ UNCHANGED << phase, recorded, lock, rekeying >>
+
+\* THE SAME RE-KEY AS TWO STEPS, so a reset can land between them. Which half is
+\* which is the whole question: the tree writes the record and re-arms after it
+\* (d703c15 names that as the less fail-safe order), and `rekeying` is the window
+\* in which the marker may disagree with the medium because the second half is
+\* still owed. A reset ends the worker that owed it.
+RekeyBegin ==
+    /\ RekeyOrderModelled
+    /\ phase = "serving"
+    /\ ~rekeying
+    /\ weak < MaxWeak
+    /\ rekeying' = TRUE
+    /\ IF BugRecordWriteBeforeRearm
+         THEN /\ weak' = weak + 1
+              /\ UNCHANGED marker
+         ELSE /\ marker' = Rearmed
+              /\ UNCHANGED weak
+    /\ UNCHANGED << phase, recorded, lock >>
+
+RekeyFinish ==
+    /\ phase = "serving"
+    /\ rekeying
+    /\ rekeying' = FALSE
+    /\ IF BugRecordWriteBeforeRearm
+         THEN /\ marker' = Rearmed
+              /\ UNCHANGED weak
+         ELSE /\ weak' = weak + 1
+              /\ UNCHANGED marker
     /\ UNCHANGED << phase, recorded, lock >>
 
 LockMoves ==
@@ -163,7 +211,7 @@ LockMoves ==
     /\ \E l \in Locks :
           /\ lock' = l
           /\ recorded' = l
-    /\ UNCHANGED << phase, marker, weak >>
+    /\ UNCHANGED << phase, marker, weak, rekeying >>
 
 (***************************************************************************)
 (* THE RESETS. A warm reset (host-requestable sys_reset) keeps the scratch   *)
@@ -174,6 +222,8 @@ LockMoves ==
 WarmReset ==
     /\ phase = "serving"
     /\ phase' = "down"
+    \* The reset takes the worker with it: a half-done re-key never finishes.
+    /\ rekeying' = FALSE
     /\ UNCHANGED << marker, weak, recorded, lock >>
 
 ColdReset ==
@@ -184,6 +234,7 @@ ColdReset ==
     \* them apart either, because a carried word carries a valid tag. The tag
     \* defends against UNDEFINED, which is a third case and reads as clear.
     /\ recorded' = IF PowerOnClearsScratch2 THEN "clear" ELSE recorded
+    /\ rekeying' = FALSE
     /\ UNCHANGED << marker, weak, lock >>
 
 (***************************************************************************)
@@ -206,10 +257,12 @@ Boot ==
                   ELSE /\ weak' = weak
                        /\ marker' = IF BugMarkerBeforeScrub THEN TRUE ELSE FALSE
          ELSE UNCHANGED << marker, weak >>
-    /\ UNCHANGED recorded
+    /\ UNCHANGED << recorded, rekeying >>
 
 Next ==
     \/ LazyRekey
+    \/ RekeyBegin
+    \/ RekeyFinish
     \/ LockMoves
     \/ WarmReset
     \/ ColdReset
@@ -224,12 +277,20 @@ Spec == Init /\ [][Next]_vars
 (***************************************************************************)
 
 \* THE MARKER NEVER LIES: EF_HARDENED present means nothing weak awaits the
-\* scrub. Both storage mutants break exactly this -- the lazy re-key that keeps
-\* the marker standing over its new leftover, and the lap that claims completion
-\* it did not earn. While it holds, "marker absent => a future boot scrubs" is
-\* the liveness half, carried by the boot gate's own retry (a failed compact
-\* leaves the marker unset, crates/rsk-fs/src/lib.rs:64).
-MarkerNeverLies == ~(marker /\ weak > 0)
+\* scrub, outside the window of a re-key that is half done. Both storage mutants
+\* break exactly this -- the lazy re-key that keeps the marker standing over its
+\* new leftover, and the lap that claims completion it did not earn. While it
+\* holds, "marker absent => a future boot scrubs" is the liveness half, carried
+\* by the boot gate's own retry (a failed compact leaves the marker unset,
+\* crates/rsk-fs/src/lib.rs:64).
+\*
+\* `~rekeying` is the whole of what the split arm costs, and it costs the atomic
+\* one nothing: with the pair collapsed the flag is FALSE in every state, so
+\* this is the predicate it always was. Under the split it says the window may
+\* exist and may not OUTLIVE the worker that owed the second half -- once the
+\* re-key is gone, a marker standing over a leftover is a lie no later boot can
+\* hear, because the marker is exactly what stops the lap running again.
+MarkerNeverLies == ~(marker /\ weak > 0 /\ ~rekeying)
 
 \* THE WHOLE LOCK RIDES: while serving, the in-RAM lock equals the scratch word.
 \* Every writer keeps them equal -- LockMoves writes both, a boot restores one

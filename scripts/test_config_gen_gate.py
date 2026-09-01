@@ -127,7 +127,7 @@ def test_an_edit_that_only_shortens_a_config_is_found(tree):
     path.write_text("\n".join(path.read_text().splitlines()[:-1]) + "\n")
     found = problems(tree)
     assert len(found) == 1, found
-    assert "line 11: generator writes b'    MarkerNeverLies', the tree has b''" \
+    assert "line 13: generator writes b'    MarkerNeverLies', the tree has b''" \
         in found[0], found
 
 
@@ -137,7 +137,9 @@ def test_an_edit_that_only_shortens_a_config_is_found(tree):
 def test_a_generator_edit_without_regenerating_is_found(tree):
     edit(tree / "formal/gen-configs.sh", 'echo "    MaxWeak = 2"', 'echo "    MaxWeak = 3"')
     found = problems(tree)
-    assert len(found) == 13, found  # every Boot* configuration carries it
+    # Every configuration of the boot module carries it -- the two write/re-arm
+    # order rows included, which is why this is 15 and not the 13 `Boot*` ones.
+    assert len(found) == 15, found
     assert all("differs from what" in problem for problem in found)
 
 
@@ -313,7 +315,7 @@ def test_a_missing_final_newline_names_the_right_difference(tree):
     found = problems(tree)
     assert len(found) == 1, found
     assert "every line they share is equal" in found[0], found
-    assert "12 newline-separated part(s) and the tree has 11" in found[0], found
+    assert "14 newline-separated part(s) and the tree has 13" in found[0], found
 
 
 def test_a_cfg_that_is_not_a_regular_file_is_a_finding_not_a_traceback(tree):
