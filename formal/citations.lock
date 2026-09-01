@@ -34,7 +34,6 @@ assurance/bundle/SEC-FIDO-002.toml	firmware/src/presence.rs	263-269	#[cfg(featur
 assurance/bundle/SEC-FIDO-002.toml	firmware/src/worker.rs	434-434	crate::presence::set_wait_scope(match ex.kind {	crate::presence::set_wait_scope(match ex.kind {
 assurance/bundle/SEC-FIDO-002.toml	formal/gen-configs.sh	105-107	ALL_INV=(NoAuthorizationBypass NoCrossTransportTouchConsumption	NoUnmanageableCredential ResetNeverWeakensSurvivingState)
 assurance/bundle/SEC-FIDO-002.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
-assurance/bundle/SEC-FIDO-002.toml	scripts/check.sh	785-785	run "comutants lint"           python scripts/comutate.py --lint	run "comutants lint"           python scripts/comutate.py --lint
 assurance/bundle/SEC-FIDO-002.toml	scripts/kani.sh	299-299	export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft"	export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft"
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-display/src/gates.rs	149-149	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/clientpin.rs	175-175	fn set_pin<S: Storage, R: Rng>(	fn set_pin<S: Storage, R: Rng>(

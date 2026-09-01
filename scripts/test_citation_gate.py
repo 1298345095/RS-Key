@@ -110,14 +110,33 @@ Shipped.cfg                          GREEN   25854624
 Solo_*.cfg                           RED     -
 """
 
+#: The second KEYED table, and the harder one: its rows are named with SPACES in
+#: them and they move whenever a row lands above them — three did in one session.
+#: Both helpers that print a row are here, because both name it with `$1`.
+CHECK = """#!/usr/bin/env bash
+run() { echo; echo "== $1 =="; shift; "$@"; }
+# a comment line, which is where a relock once parked a citation
+run "formal citations"         python scripts/citation_gate.py
+run "comutants lint"           python scripts/comutate.py --lint
+run_tests "test (host)"        cargo test --workspace
+"""
+
 #: An evidence bundle: it cites code by line and the verdict table by ROW, which
 #: is the pair the six repaired citations are about. In the corpus because the
-#: directory holds it, not because a tuple names it.
+#: directory holds it, not because a tuple names it. The second block writes the
+#: SAME row two ways — by key and by line — so one insertion measures both, and
+#: it writes the key TOML-escaped, which is how a basic string carries a quote.
 BUNDLE = """\
 [[method]]
 artifact = "Solo_Probe.cfg"
 reading = "the gate this row drives (`clientpin.rs:4-6`), and the verdict the runner holds\
  it to: formal/floors.txt:Solo_*.cfg gives the family `RED -` with no invariant column"
+
+[[method]]
+artifact = "comutants"
+reading = "the row that lints the roster, by NAME because rows move: \
+scripts/check.sh:\\"comutants lint\\" runs on every gate, and the same row written \
+as a line is scripts/check.sh:5"
 """
 
 #: The derived page every code-half case drives.
@@ -130,6 +149,7 @@ EXEMPT_PAGE = "scripts/citation_gate.py"
 #: The derived page every bundle-half case drives, and the table it cites.
 BUNDLE_PAGE = "assurance/bundle/SEC-T-001.toml"
 FLOORS_PAGE = "formal/floors.txt"
+CHECK_PAGE = "scripts/check.sh"
 
 MODEL_PAGE = _page("RSKeySecurityState.tla")
 PROSE_PAGE = _page("README.md")
@@ -147,6 +167,7 @@ class Tree:
         self.write(SCRIPT_PAGE, SCRIPT)
         self.write(EXEMPT_PAGE, SCRIPT)
         self.write(FLOORS_PAGE, FLOORS)
+        self.write(CHECK_PAGE, CHECK)
         self.write(BUNDLE_PAGE, BUNDLE)
         self.write("crates/rsk-device/src/ctap.rs", UNTAGGED_CODE)
         self.write("crates/rsk-usb/src/ctaphid.rs", UNTAGGED_CODE)
@@ -178,6 +199,20 @@ class Tree:
     def lock(self):
         """Lock the citations as they stand — the state a case then perturbs."""
         self.problems(relock=True)
+
+    def run(self, monkeypatch):
+        """The exit code `check.sh`'s row takes, not `audit`'s list.
+
+        A guard is falsified through the row that runs it: `main()` is what
+        `python scripts/citation_gate.py` calls, and a clause whose finding never
+        reaches an exit code is one the gate cannot go red on.
+        """
+        monkeypatch.setattr(citation_gate, "ROOT", self.root)
+        monkeypatch.setattr(citation_gate.sys, "argv", ["citation_gate.py"])
+        monkeypatch.setattr(citation_gate, "FLOOR", 2)
+        monkeypatch.setattr(citation_gate, "PENDING", {})
+        monkeypatch.setattr(citation_gate, "FLOOR_BY_PAGE", {})
+        return citation_gate.main()
 
     def problems(self, floor=2, pending=None, relock=False, buried=False):
         """Audited with the floor lowered and no landing debt: the fixture is
@@ -741,13 +776,91 @@ def test_the_same_insertion_moves_a_LINE_citation(tree):
     assert "is now at :6" in drift[0], drift[0]
 
 
+# --- the second keyed table: rows whose names have spaces ---------------------
+
+
+def test_a_check_row_citation_resolves_by_its_name(tree):
+    """The control. A row is named by the first argument of either helper that
+    prints one, which is the string the runner puts in the log; the bundle writes
+    it TOML-escaped, because that is how a basic string carries a quote."""
+    rows = citation_gate.rows_of(CHECK, citation_gate.KEYED[CHECK_PAGE])
+    assert rows == {"formal citations", "comutants lint", "test (host)"}, rows
+    assert tree.problems() == []
+
+
+def test_a_check_row_citation_that_names_no_row(tree, monkeypatch):
+    """The first rule, driven through the ROW that runs it and not just the
+    function: a key nothing in the file answers to has to reach an exit code."""
+    tree.edit(BUNDLE_PAGE, 'check.sh:\\"comutants lint\\"', 'check.sh:\\"comutants lynt\\"')
+    assert only(tree.problems(), "names no row of scripts/check.sh")
+    assert tree.run(monkeypatch) == 1
+
+
+def test_two_rows_answering_to_the_same_name(tree, monkeypatch):
+    """The second rule, and it is asked of the TABLE rather than of the citations:
+    a key two rows answer to anchors nothing, the way a basename in two SEARCH
+    directories does. So it is a finding in a commit that cites neither."""
+    tree.edit(CHECK_PAGE, 'run "formal citations"', 'run "comutants lint"')
+    assert only(tree.problems(), "has 2 rows named `comutants lint`")
+    assert tree.run(monkeypatch) == 1
+
+
+def test_a_row_landing_above_a_cited_one_moves_only_the_LINE_form(tree):
+    """The measurement that bought this entry, in the motion that produced it: one
+    bundle's three citations of the `comutants lint` row went 725 → 772 → 785 over
+    two commits in a day, and the relock in between recorded a neighbouring
+    COMMENT for two of them. The same row is cited both ways here, so one
+    insertion measures both anchors against the same edit."""
+    tree.lock()
+    tree.edit(
+        CHECK_PAGE,
+        'run "comutants lint"',
+        'run "new row"                  true\nrun "comutants lint"',
+    )
+    drift = only(tree.problems(), "has drifted")
+    assert len(drift) == 1, tree.problems()
+    assert CHECK_PAGE in drift[0] and "is now at :6" in drift[0], drift[0]
+
+
+def test_the_line_form_into_a_keyed_file_is_not_weakened(tree):
+    """Adding a file to [`KEYED`] may not retire the line form into it, and the
+    tree has a citation that needs it: `assurance/platform.toml`'s
+    `scripts/check.sh:174-223` is a FUNCTION BODY, which is no row and has no key
+    to name."""
+    tree.edit(BUNDLE_PAGE, "scripts/check.sh:5", "scripts/check.sh:500")
+    assert only(tree.problems(), "which has 6 lines")
+
+
+def test_a_keyed_file_the_tree_no_longer_carries(tree, monkeypatch):
+    """The rule [`SEARCH`] already has, one table over. An entry pointing at
+    nothing checks nothing, and no citation has to exist for that to be true."""
+    (tree.root / CHECK_PAGE).unlink()
+    assert only(tree.problems(), "is in KEYED but the tree does not carry it")
+    assert tree.run(monkeypatch) == 1
+
+
+def test_deleting_the_entry_takes_both_of_its_findings_with_it(tree, monkeypatch):
+    """The guard-deletion arm, done the way a deletion actually happens: the entry
+    AND the pattern built from it. Both findings above go green, which is what
+    says the entry is load-bearing rather than decorative — and it is why [`ROW`]
+    is built by a function instead of written out beside the table."""
+    tree.edit(BUNDLE_PAGE, 'check.sh:\\"comutants lint\\"', 'check.sh:\\"comutants lynt\\"')
+    tree.edit(CHECK_PAGE, 'run "formal citations"', 'run "comutants lint"')
+    assert len(tree.problems()) == 2, tree.problems()
+    monkeypatch.setattr(
+        citation_gate, "KEYED", {FLOORS_PAGE: citation_gate.KEYED[FLOORS_PAGE]}
+    )
+    monkeypatch.setattr(citation_gate, "ROW", citation_gate.row_pattern(citation_gate.KEYED))
+    assert tree.problems() == []
+
+
 # --- the widened extension set ------------------------------------------------
 
 
 def test_a_shell_citation_is_read(tree):
     """`.sh` beside `.rs`: the bundles cite the RUNNER as finely as the firmware,
-    and `run-tlc.sh:200-203` is the derivation a reason-comparison argument rests
-    on. The `.rs`-only group saw none of them."""
+    and `formal/run-tlc.sh:222-225` is the derivation a reason-comparison argument
+    rests on. The `.rs`-only group saw none of them."""
     tree.write("formal/run-tlc.sh", "#!/usr/bin/env bash\nderived_inv() { :; }\n")
     tree.edit(BUNDLE_PAGE, "clientpin.rs:4-6", "formal/run-tlc.sh:2")
     assert tree.problems() == []

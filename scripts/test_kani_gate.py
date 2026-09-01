@@ -108,6 +108,24 @@ PROVEN = {
     "rsk-bench": ("src/kani.rs", 0),
 }
 
+#: A crate with no Kani in it at all, so the ledger's OTHER spelling of a count
+#: has something true to say. It is on no tier and in no roster, which is what
+#: makes it invisible to every other case here.
+QUIET = "rsk-quiet"
+
+#: The crate ledger, and the one thing this guard reads it for: a stated proof
+#: count. Both spellings the tree uses are here — a digit and the word `zero` —
+#: because a digit-only rule reads "zero Kani proofs" as prose and lets it rot.
+LEDGER = """\
+[crate.rsk-a]
+class = "pure"
+gap = "the codec is a pure function under its own 1 Kani proof and unit tests."
+
+[crate.rsk-quiet]
+class = "pure"
+note = "zero Kani proofs and NOT a gap: differential against the reference."
+"""
+
 
 def fixture_harness(covers):
     """A file with one `#[kani::proof]` and `covers` `kani::cover!` inside it."""
@@ -126,6 +144,8 @@ class Tree:
         self.write(kani_gate.DOCS, DOCS)
         for crate, (rel, covers) in PROVEN.items():
             self.write(f"crates/{crate}/{rel}", fixture_harness(covers))
+        self.write(f"crates/{QUIET}/src/lib.rs", "pub fn quiet() {}\n")
+        self.write(kani_gate.LEDGER, LEDGER)
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)
 
     def write(self, rel, text, executable=False):
@@ -144,6 +164,15 @@ class Tree:
 
     def problems(self):
         return kani_gate.audit(self.root)[0]
+
+    def run(self, monkeypatch):
+        """The exit code `check.sh`'s `kani roster` row takes, not `audit`'s list.
+
+        A clause whose finding never reaches an exit code is one the gate cannot
+        go red on, and that is the layer where a guard in this tree has failed.
+        """
+        monkeypatch.setattr(kani_gate, "ROOT", self.root)
+        return kani_gate.main()
 
 
 @pytest.fixture
@@ -546,6 +575,62 @@ def test_a_cover_in_a_crate_no_harness_reaches(tree):
     """A `kani::cover!` outside every harness is checked by nothing, quietly."""
     tree.write("crates/rsk-e/src/lib.rs", "fn f() { kani::cover!(true); }\n")
     assert only(tree.problems(), "rsk-e has a kani::cover! but no #[kani::proof]")
+
+
+# --- a proof count stated in the crate ledger ---------------------------------
+
+
+def test_a_ledger_count_under_the_tree(tree):
+    """The live defect: `assurance/crates.toml` said `rsk-ui` had 12 and the tree
+    carried 14 — and `--write-readme` had copied the sentence into formal/README.md,
+    so the two agreed with each other and with nothing that runs."""
+    tree.write("crates/rsk-a/src/more_kani.rs", fixture_harness(0))
+    # The needle names the message, not a fragment three floor rows also print:
+    # adding a harness moves every ratchet, and a case that cannot tell them apart
+    # is one fixture edit away from passing on somebody else's finding.
+    assert only(tree.problems(), "gap says `1 Kani proof`; crates/rsk-a carries 2")
+
+
+def test_a_ledger_count_over_the_tree(tree, monkeypatch):
+    """The other direction, for the reason the floors check both: a count over the
+    tree claims a proof nobody wrote. Driven through the ROW as well, because a
+    finding that never reaches an exit code is one no gate can go red on."""
+    tree.edit(kani_gate.LEDGER, "own 1 Kani proof", "own 12 Kani proofs")
+    assert only(tree.problems(), "says `12 Kani proofs`; crates/rsk-a carries 1")
+    assert tree.run(monkeypatch) == 1
+
+
+def test_the_word_zero_is_a_count_too(tree):
+    """The arm a digit-only rule fails: the real ledger states two of its three
+    counts in WORDS — `rsk-ec` and `rsk-sha512` both say `zero Kani proofs` — and
+    those are as falsifiable as a digit."""
+    tree.edit(kani_gate.LEDGER, "[crate.rsk-quiet]", "[crate.rsk-b]")
+    assert only(tree.problems(), "says `zero Kani proofs`; crates/rsk-b carries 1")
+
+
+def test_a_ledger_claim_about_a_crate_that_is_not_there(tree):
+    """Without this the claim passes vacuously: `Counter[missing]` is 0, so a
+    renamed or moved crate turns `zero Kani proofs` into a rule about nothing."""
+    tree.edit(kani_gate.LEDGER, "[crate.rsk-quiet]", "[crate.rsk-gone]")
+    assert only(tree.problems(), "no crates/rsk-gone for this to count in")
+
+
+def test_the_ledger_going_away_is_a_finding_not_a_traceback(tree):
+    """A guard that ends in a traceback reads as broken and gets switched off; the
+    counts are unchecked either way, so it says which."""
+    (tree.root / kani_gate.LEDGER).unlink()
+    assert only(tree.problems(), "the proof counts it states are unchecked")
+
+
+def test_deleting_the_ledger_rule_takes_its_findings_with_it(tree, monkeypatch):
+    """The guard-deletion arm. Both counts are wrong here and both go green once
+    the rule is gone, which is what says it is load-bearing — and what the two
+    numbers had instead, for as long as they were two."""
+    tree.edit(kani_gate.LEDGER, "own 1 Kani proof", "own 12 Kani proofs")
+    tree.edit(kani_gate.LEDGER, "[crate.rsk-quiet]", "[crate.rsk-gone]")
+    assert len(tree.problems()) == 2, tree.problems()
+    monkeypatch.setattr(kani_gate, "ledger_claims", lambda root, harnesses: [])
+    assert tree.problems() == []
 
 
 # --- the guard's own wiring ---------------------------------------------------

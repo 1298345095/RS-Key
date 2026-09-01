@@ -80,7 +80,7 @@ gap = "the confirm ceremony (WhatIsConfirmedIsWhatIsShown, decomposed as SEC-DIS
 [crate.rsk-ui]
 class = "state-partial"
 model = "RSKeyTrustedDisplay"
-gap = "hit_confirm's disjoint Allow/Deny zones are the modelled seam (OnlyAllowConfirms's Rust owner); rendering, fonts and the settings codec are pure functions under their own 12 Kani proofs and render tests — no screen-transition state lives in this crate (the ceremony state machine is rsk-display's)."
+gap = "hit_confirm's disjoint Allow/Deny zones are the modelled seam (OnlyAllowConfirms's Rust owner); rendering, fonts and the settings codec are pure functions under their own 14 Kani proofs and render tests — no screen-transition state lives in this crate (the ceremony state machine is rsk-display's)."
 
 [crate.rsk-usb]
 class = "state-partial"

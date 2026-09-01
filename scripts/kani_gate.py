@@ -5,12 +5,19 @@
 
 `cargo kani` is invoked with a hand-written `-p` list, and a crate that is not on
 it is not proven — but nothing says so. The row was named "prove every harness"
-and it was running 29 of 49. Never added: `rsk-ui` (12 proofs, the trusted
-display's touch-target geometry — the anti-phishing consent surface), `rsk-led`
-(5 over `EF_LED_CONF`, a persisted record with a published wire format),
-`rsk-slip39` and `rsk-bip39`. Green daily, asserting nothing about any of them. A
-harness in an unlisted crate is worse than no harness, because the reviewer
-believes it runs.
+and it was running 29 of 49. Never added: `rsk-ui` (the trusted display's
+touch-target geometry — the anti-phishing consent surface), `rsk-led`
+(`EF_LED_CONF`, a persisted record with a published wire format), `rsk-slip39`
+and `rsk-bip39`. Green daily, asserting nothing about any of them. A harness in
+an unlisted crate is worse than no harness, because the reviewer believes it
+runs.
+
+No per-crate count is written in that sentence any more, and the deletion is the
+point: it used to say "`rsk-ui` (12 proofs" and the crate carried 14, in the same
+words `assurance/crates.toml` and the `--write-readme` mirror of it in
+formal/README.md were also carrying. A count belongs where something derives it,
+so the ledger's is held to the tree by [`ledger_claims`] and this file states
+none.
 
 Third time a gate script has been the finding rather than the instrument (after
 the test filter that matched nothing and the fuzz row blind to `[[bin]]`
@@ -66,6 +73,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import tomllib
 
 import gate_lines
 import toolchain_gate
@@ -74,6 +82,18 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORKFLOWS = pathlib.Path(".github/workflows")
 DOCS = pathlib.Path("docs/testing.md")
 RUNNER = pathlib.Path("scripts/kani.sh")
+#: The crate ledger. `assurance_gate.py --write-readme` mirrors its prose into
+#: formal/README.md, so a count stated here is stated twice and repaired once.
+LEDGER = pathlib.Path("assurance/crates.toml")
+
+#: A proof count claimed in the ledger's prose. Only this shape, and only inside a
+#: `[crate.X]` table, because that is what makes the number decidable: the section
+#: says which crate, and both spellings the ledger uses — a digit and the word
+#: `zero` — then count. A claim in ordinary prose elsewhere is not, and a rule
+#: that hunted for one would fire on every sentence about proofs — the shape a
+#: guard gets switched off for. Live claims when this landed: three, on `rsk-ui`,
+#: `rsk-ec` and `rsk-sha512`.
+CLAIM = re.compile(r"\b(?:(\d+)|zero|no) Kani proofs?\b")
 
 #: Crates with a harness the daily row deliberately does not run, each with the
 #: measured reason. An exclusion is a debt, so it is checked too: one naming a crate
@@ -389,6 +409,40 @@ def crates_with_proofs(root):
     return harnesses, covers, sorted(orphans), unseen
 
 
+def ledger_claims(root, harnesses):
+    """Problems where `assurance/crates.toml` states a proof count the tree denies.
+
+    A stated count is a ratchet like `FLOOR_*` and fails in both directions for
+    the same reasons — under the tree it covers a harness that went away, over it
+    claims a proof nobody wrote. What made this one worth deriving is that it is
+    stated TWICE: `--write-readme` copies the sentence into formal/README.md, so
+    the pair drifted together and read as two sources agreeing.
+    """
+    path = root / LEDGER
+    if not path.is_file():
+        return [f"{LEDGER} is gone, so the proof counts it states are unchecked"]
+    with open(path, "rb") as fh:
+        ledger = tomllib.load(fh).get("crate", {})
+    problems = []
+    for crate, entry in sorted(ledger.items()):
+        for field, value in sorted(entry.items()):
+            if not isinstance(value, str):
+                continue
+            for found in CLAIM.finditer(value):
+                said = int(found[1]) if found[1] else 0
+                if not (root / "crates" / crate).is_dir():
+                    problems.append(
+                        f"{LEDGER} [crate.{crate}] {field} says `{found[0]}`, and"
+                        f" there is no crates/{crate} for this to count in"
+                    )
+                elif said != harnesses[crate]:
+                    problems.append(
+                        f"{LEDGER} [crate.{crate}] {field} says `{found[0]}`;"
+                        f" crates/{crate} carries {harnesses[crate]} #[kani::proof]"
+                    )
+    return problems
+
+
 def ratchets(root, table, harnesses, covers):
     """Problems where a floor, or a number the page prints, is not the tree's count.
 
@@ -520,6 +574,7 @@ def audit(root):  # noqa: C901 — one clause per failure mode, each named
     for rel in orphans:
         problems.append(f"{rel} has a #[kani::proof] or kani::cover! no tier can reach")
     problems += ratchets(root, table, harnesses, covers)
+    problems += ledger_claims(root, harnesses)
 
     pinned = workflow_pins(root)
     said = sorted({value for values in pinned.values() for value in values})

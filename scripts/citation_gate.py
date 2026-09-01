@@ -130,6 +130,25 @@ and rotted again within hours, because the file gained three comment lines. So
 nothing. The line form still works on the same file and is still locked, because
 a citation whose subject IS the prose has no key to name (`floors.txt:50`, whose
 sentence is about the undercount that comment carries).
+
+`scripts/check.sh` is the second such file and the worse one, because its rows
+move whenever ANY row lands above them. Measured over one day: `SEC-FIDO-002`'s
+three citations of the `comutants lint` row were written as `:725` at `b185fc3`,
+where line 725 really was that row; by `b66c004` two of the three still said
+`:725` — a `counter_writers_gate` COMMENT by then — and the third had been
+re-anchored to `:772`; `d544aa1` moved all three to `:785`. The lock recorded the
+comment as faithfully as the row and the gate printed `ok` over both. Its rows
+have names with SPACES in them, so the key is quoted the way the file itself
+writes it: `scripts/check.sh:"comutants lint"`. The bundles are TOML basic
+strings, where that arrives as `\\"comutants lint\\"`, so the backslashes are
+tolerated — one syntax, two encodings of a quote.
+
+Two rules make a key an anchor rather than a guess, and both are asked of the
+whole table rather than of the citations: a KEYED file the tree no longer has is
+a dead entry (the rule [`SEARCH`] already has), and a key carried by two rows
+names no one row, so it is refused the way an ambiguous basename is. Measured
+today: `floors.txt` 70 rows, `check.sh` 113 (99 `run`, 14 `run_tests`), no name
+used twice in either.
 """
 
 import pathlib
@@ -232,6 +251,20 @@ SCRIPT_ROOT = "scripts/"
 #: script a free pass by what it is called, which is the argument [`CODE_ROOTS`]
 #: makes against reading `foo_tests.rs` off a name. A file added here owes its
 #: reason on the line.
+#:
+#: File-level and not per-citation, measured rather than assumed. Dropping the set
+#: outright reddens 62 of the 142 citations these four carry, every one of them a
+#: fixture; checking only the citations that write a repo PATH still reddens 31 of
+#: 46, and 27 of those are `test_impact.py`/`test_kani_sh.py`, whose trees exist
+#: only inside a `tmp_path`. What the narrowing would buy is the 19 path-carrying
+#: citations in the two `citation_gate` files, of which 4 are quoted rot on
+#: purpose. And it would NOT have caught the rot that raised the question: the two
+#: sentences about the derived-invariant fallback wrote a bare `run-tlc.sh:200-203`
+#: and a bare `run-tlc.sh` resolves in none of the five [`SEARCH`] directories, so
+#: the report would have been "no such file" — the wrong reason, on a citation
+#: whose line had simply moved. Both are written `formal/run-tlc.sh:222-225` now,
+#: which is the form a narrowing could check; that repair is what a narrowing is
+#: worth, and it costs nothing.
 SCRIPT_EXEMPT = frozenset(
     {
         # Quotes the rotted citations it exists to describe.
@@ -412,7 +445,7 @@ def floor_for(page):
 #: a single line with the upper bound silently discarded, in two pages whose prose
 #: already uses `—` and `·` throughout — measured: `state.rs:284–99991` passed.
 #: `.sh` and `.txt` beside `.rs`, because the bundles cite the RUNNER as finely
-#: as they cite the firmware — `run-tlc.sh:200-203` is the derivation their
+#: as they cite the firmware — `formal/run-tlc.sh:222-225` is the derivation their
 #: reason-comparison argument rests on — and the `.rs`-only group made every one
 #: of those invisible. Priced before flipping it, over the whole tree and not
 #: just the pages: 122 citations the group had never seen, of which exactly ONE
@@ -444,26 +477,68 @@ SPAN = re.compile(rf"(\d+)(?:\s*[{DASH}]\s*(\d+))?")
 #: It is not a BAN on the line form into a keyed file, and that was decided by
 #: measurement too: `SEC-FIDO-006B.toml`'s `formal/floors.txt:50` is about the
 #: undercount that COMMENT carries, which has no key to name. The lock is what
-#: covers those.
+#: covers those. `SEC-FIDO-006.toml`'s `scripts/check.sh:551` is the same shape
+#: one file over, and it still resolves, is still locked and still drifts.
+#:
+#: A key function answers None for a line that carries no row, because the second
+#: entry is mostly shell.
+CHECK_ROW = re.compile(r'\s*(?:run|run_tests)\s+"([^"]*)"')
+
+
+def check_row(line):
+    """The row name `check.sh` prints, or None for a line that is not a row.
+
+    Both helpers name the row with their FIRST argument -- `run() { …; echo
+    "== $1 =="; … }` and `run_tests`'s `local name=$1` -- so this reads the same
+    string the runner puts in the log.
+    """
+    found = CHECK_ROW.match(line)
+    return found.group(1) if found else None
+
+
 KEYED = {
     # Columns are `<config or glob>  <GREEN|RED>  …`; `\*` opens a comment and
     # `expect_for` in `run-tlc.sh` skips exactly those, so this reads the same
     # column the runner matches on.
     "formal/floors.txt": lambda line: line.split()[0],
+    "scripts/check.sh": check_row,
 }
-ROW = re.compile(
-    r"(?<![\w/.:-])(?P<file>" + "|".join(re.escape(k) for k in KEYED) + r")"
-    r":(?P<row>[@A-Za-z][\w*.-]*)"
-)
+
+
+def row_pattern(keyed):
+    """`file:key`, with the key quoted when it has spaces in it.
+
+    Built from `keyed` rather than written out, so taking a file back out of
+    [`KEYED`] takes its citations out of this too -- which is what the deletion
+    arm has to be able to do. `\\?` on each quote because the evidence bundles are
+    TOML basic strings and a literal `"` reaches this reader escaped; an unquoted
+    key stops at the first space and then fails as the wrong key, rather than
+    silently reading half a row name.
+    """
+    return re.compile(
+        r"(?<![\w/.:-])(?P<file>" + "|".join(re.escape(k) for k in keyed) + r")"
+        r':(?:\\?"(?P<quoted>[^"\\\n]+)\\?"|(?P<row>[@A-Za-z][\w*.-]*))'
+    )
+
+
+ROW = row_pattern(KEYED)
+
+
+def row_lines(text, key):
+    """(line number, row key) for every row a keyed table carries, in order."""
+    found = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith(("\\*", "#")):
+            continue
+        name = key(line)
+        if name is not None:
+            found.append((number, name))
+    return found
 
 
 def rows_of(text, key):
     """The keys a keyed table offers, comments and blank lines dropped."""
-    return {
-        key(line)
-        for line in text.splitlines()
-        if line.strip() and not line.lstrip().startswith(("\\*", "#"))
-    }
+    return {name for _, name in row_lines(text, key)}
 
 
 def resolve(rel, tracked, page=None):
@@ -572,6 +647,26 @@ def audit(root, relock=False):
 
     for missing in (d for d in SEARCH if not (root / d).is_dir()):
         problems.append(f"{missing} is in SEARCH but is not a directory any more")
+    # Asked of the TABLE, not of the citations into it: a key is only an anchor
+    # while it is unique and the file is there, and either can stop being true in
+    # a commit that cites nothing.
+    for rel, key in KEYED.items():
+        if rel not in tracked:
+            problems.append(
+                f"{rel} is in KEYED but the tree does not carry it any more;"
+                " every row citation of it would be checked against nothing"
+            )
+            continue
+        at = {}
+        for number, name in row_lines((root / rel).read_text(), key):
+            at.setdefault(name, []).append(number)
+        for name, numbers in sorted(at.items()):
+            if len(numbers) > 1:
+                problems.append(
+                    f"{rel} has {len(numbers)} rows named `{name}`"
+                    f" (lines {', '.join(str(n) for n in numbers)}); a citation of"
+                    " that key names no one row, so rename one or cite by line"
+                )
     derived, scripted = code_pages(root, tracked), script_pages(root)
     bundled = bundle_pages(root)
     for found, floor, where in (
@@ -594,7 +689,8 @@ def audit(root, relock=False):
         seen, at, here = None, 0, 0
         for found in ROW.finditer(text):
             here += 1
-            rel, want = found.group("file"), found.group("row")
+            rel = found.group("file")
+            want = found.group("quoted") or found.group("row")
             if rel not in tracked:
                 problems.append(f"{page} cites `{found.group(0)}`, and no such file is in the tree")
             elif want not in rows_of((root / rel).read_text(), KEYED[rel]):
