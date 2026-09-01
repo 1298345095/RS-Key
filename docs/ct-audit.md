@@ -113,13 +113,66 @@ today.
   a dependency question — but the mitigation it named is what remains load-bearing:
   every private-key path, asm CRT and software alike, is base-blinded per
   operation, and none of them is exempt. See [threat-model.md](threat-model.md).
-- **`rsk-rsa` keygen modexp secret-indexed window lookup**: a genuine
-  secret-dependent *memory-access pattern* over bits of the generated prime, but
-  it is **keygen-only, one-shot, and not USB-timing-observable**. On the
-  cacheless Cortex-M33 there is no microarchitectural channel. Exploitable only
-  via physical EM/power capture of a single keygen event, already out of scope
-  ([threat-model.md](threat-model.md)). Optional hardening: build the asm with a
-  constant memory-access pattern.
+- **`rsk-rsa` modexp secret-indexed window lookup**: the window index is a secret
+  nibble — of the candidate in the keygen prime search, and of `dP`/`dQ` in
+  `rsa_private_exp_crt`, which both reach the same
+  `bignum_modexp_private_exponent_internal`. It folds into the table's base
+  pointer instead of steering a branch, so the instruction sequence per nibble is
+  the same whatever the nibble is and only the *address* changes
+  (`crates/rsk-rsa/csrc/bignum_high_level.c`, the `#else` arm that
+  `CONSTANT_MEMORY_ACCESS_PATTERN 0` in `crates/rsk-rsa/csrc/bignum_config.h`
+  selects).
+
+  *There is no XIP-cache channel — and not because the core is cacheless.* The
+  RP2350 does put a cache in front of its QSPI flash, and it is load-bearing
+  enough that hot loops were moved out of XIP to escape it
+  ([architecture.md](architecture.md), [limitations.md](limitations.md),
+  [testing.md](testing.md)). That cache sits on the *flash* path, and neither end
+  of this access is on it. The table is the `temp` array the Rust caller declares
+  as a stack local (`crates/rsk-rsa/src/lib.rs`, `modexp_priv` and `sign_crt`),
+  and every stack it can sit on is SRAM: core0's, which the linker bounds with
+  `_stack_end` and `_stack_start`, and — for the keygen half, which core1 runs
+  too — core1's `CORE1_STACK` (`firmware/src/core1.rs`), a `.bss` static outside
+  that pair and SRAM by the same script. The code that reads it is SRAM-resident
+  by link section: the C carries `BIGNUM_RAMFUNC`, which is
+  `section(".data.bignum_hl")`, and the `bignum_mulacc` that performs the load
+  has `.section .data.bignum_asm` for its whole translation unit. Confirmed in
+  the on-device ELF rather than inferred from the sections: both symbols resolve
+  to RAM addresses, while `bignum_modexp_public_exponent` resolves to flash. That
+  is not a property of the one image read: `crates/rsk-rsa/build.rs` compiles the
+  C and the asm unconditionally for `target_os = "none"` with no feature gate,
+  and neither of the crate's two features reaches a firmware image, so every
+  shipped flavour links the same sections. The CRT path is worth reading in the
+  image and not in the source, because `rsa_private_exp_crt` itself stays in
+  flash and only the inner modexp it shares with keygen is moved. "The
+  Cortex-M33 is cacheless" was true of the core's own data path and false as a
+  statement about the SoC, which is why it disagreed with every other page here.
+
+  *What that does not settle.* An SRAM access is not a cache access, but it is
+  not nothing. Two mechanisms could still turn the address into a time, and this
+  audit measures neither: SRAM banking, and data-dependent multiplier latency
+  inside `bignum_mulacc`. The banking half is an assumption and not a finding —
+  *if* the bank a cycle touches follows the address, then a secret nibble picks
+  it, and nothing in this tree establishes that. It is the conservative reading
+  of the SoC's memory organisation; the nearest in-tree note
+  (`firmware/src/core1.rs`, the core1-stats counters) is about cross-core
+  XIP/bus contention rather than SRAM banks, and citing it here would be citing
+  the wrong thing. Deciding either mechanism needs the instrumented hardware
+  harness [Coverage & limits](#coverage--limits) asks for, and both are
+  unmeasured here in both directions. Physical EM/power capture stays out of
+  scope ([threat-model.md](threat-model.md)). What is no longer claimed is the
+  bound: the CRT path is reached over USB and runs on a long-lived `dP`/`dQ`, so
+  this is not a one-shot keygen event, and the base blinding above does not
+  answer it — blinding randomizes the base, not the exponent nibbles that choose
+  the window. Concurrency belongs to the keygen half alone: the prime filter
+  races this modexp on both cores, and core1 takes nothing but keygen jobs
+  (`firmware/src/core1.rs`), so the USB-reachable sign/decrypt path runs it
+  single-core. Hardening: build the asm with `CONSTANT_MEMORY_ACCESS_PATTERN 1`,
+  which selects the branchless `bignum_table_select` over the whole table —
+  proposed, not tested. Nothing in this tree ever compiles that arm: the vendored
+  header defines it `0` and recommends that value for Cortex-M, no build
+  overrides it, `bignum_table_select` is absent from the image, and the same
+  switch pulls in an in-place table transpose that has never been built either.
 
 ## Coverage & limits
 
@@ -140,8 +193,11 @@ lookups; and status-word/error-path oracles.
   constant-time under the audited toolchain. The `black_box` barrier pins it,
   but the guarantee remains "verified on this build."
 - **Physical side channels (power/EM/fault) are explicitly out of scope** and
-  unverified here, including the keygen access pattern and any DPA on the
-  secure-boot AES, both already noted in the threat model.
+  unverified here — physical capture of the modexp window-lookup access pattern,
+  and any DPA on the secure-boot AES, both already noted in the threat model.
+  What is out of scope is the *capture*. The lookup itself is not keygen-only:
+  its USB-reachable half stands open and unmeasured under
+  [Documented residuals](#documented-residuals), not excluded.
 - **Third-party crate internals** (RustCrypto, `num-bigint-dig`) were audited
   only at the *usage* boundary. Their own CT properties are inherited from
   upstream — `num-bigint-dig`'s exponentiation is variable-time, which is what

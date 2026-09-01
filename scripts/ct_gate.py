@@ -80,18 +80,27 @@ outliving it by three revisions — and what it reports is the frame-register
 spills described below, not a channel. Spelled with the same taint walk it would
 be sound and EMPTY: inside the registered site every register-indexed load is
 indexed by the public length counter, and the one load-shaped residual
-`docs/ct-audit.md` names — the `rsk-rsa` keygen modexp secret-indexed window
-lookup — is out of reach three ways. The arm that ships folds the secret nibble
-into the BASE pointer rather than an index (`bignum_high_level.c`'s
+`docs/ct-audit.md` names — the `rsk-rsa` modexp secret-indexed window lookup —
+is out of reach three ways, whichever surface drives it. The arm that ships folds
+the secret nibble into the BASE pointer rather than an index
+(`crates/rsk-rsa/csrc/bignum_high_level.c`'s
 `table_entry = (void *)temp + four_bits * modulus_length_bytes`, the `#else` arm
-that `CONSTANT_MEMORY_ACCESS_PATTERN 0` in `bignum_config.h` selects); the load
-itself happens inside `bignum_mulacc`, so the taint would have to cross a `bl`
-and the ABI into hand-written asm; and neither end is in `.text` — the C carries
-`BIGNUM_RAMFUNC`, which is `section(".data.bignum_hl")`, the asm's whole
-translation unit is `.section .data.bignum_asm`, and the disassembly below is
-`--section=.text`. A rule whose extension is empty over everything the audit
-page names is a green cell with nothing in it, which is the shape this file
+that `CONSTANT_MEMORY_ACCESS_PATTERN 0` in `crates/rsk-rsa/csrc/bignum_config.h`
+selects); the load itself happens inside `bignum_mulacc`, so the taint would have
+to cross a `bl` and the ABI into hand-written asm; and neither end is in `.text`
+— the C carries `BIGNUM_RAMFUNC`, which is `section(".data.bignum_hl")`, the
+asm's whole translation unit is `.section .data.bignum_asm`, and the disassembly
+below is `--section=.text`. A rule whose extension is empty over everything the
+audit page names is a green cell with nothing in it, which is the shape this file
 exists to refuse.
+
+The word `keygen` stood in that descriptor until the page it quotes refuted the
+scope: the same `bignum_modexp_private_exponent_internal` runs on `dP`/`dQ` for
+PIV GENERAL AUTHENTICATE and for OpenPGP PSO:CDS / INTERNAL AUTHENTICATE /
+DECIPHER, all reachable over USB against a long-lived key. None of the three
+reasons above depended on which surface drives the modexp, which is why the
+descriptor could rot without the reasoning going wrong — and why a copy of
+another page's finding is worth this paragraph rather than a shorter sentence.
 
 What such a rule would still owe if anyone built it: the RP2350 puts a 16 KB
 cache in front of XIP flash (`crates/rsk-bench/src/lib.rs:12`), so a secret
