@@ -1031,6 +1031,23 @@ def audit(root, board_floor=None):
     return findings, summary
 
 
+def cell(text):
+    r"""A markdown table cell. An unescaped `|` in prose ends the row otherwise.
+
+    `PLAT-SOURCE-002`'s discharge writes `r.map(|()| tok)`, which wrote NINE
+    cells into this table's seven columns: GFM DROPS the excess, so that row
+    published a fragment of prose where its owner belongs and no `supports` at
+    all. Measured through mdBook, the renderer the page is read in.
+
+    Escaping the BACKSLASH as well was measured and is a REGRESSION: inside a
+    table `\|` is the one sequence a code span honours, so `\in` would render
+    `\\in` on the four rows that write one, while `\|` -> `\\|` already renders
+    `\|` — restoring the `git grep` alternation `PLAT-MODEL-009` means the
+    reader to paste, which this page had been eating.
+    """
+    return str(text).replace("|", "\\|")
+
+
 def render(root, registered=None):
     """`docs/platform-assumptions.md` as the tree makes it."""
     root = pathlib.Path(root)
@@ -1096,9 +1113,9 @@ def render(root, registered=None):
     for name, entry in rows:
         supports = ", ".join(f"`{p}`" for p in entry.get("supports", [])) or "—"
         out.append(
-            f"| `{name}` | `{entry.get('class')}` | {entry.get('statement')} |"
-            f" **{entry.get('status')}** | {entry.get('discharge')} |"
-            f" {entry.get('discharge_owner')} | {supports} |"
+            f"| `{name}` | `{entry.get('class')}` | {cell(entry.get('statement'))} |"
+            f" **{entry.get('status')}** | {cell(entry.get('discharge'))} |"
+            f" {cell(entry.get('discharge_owner'))} | {supports} |"
         )
     out += [
         "",

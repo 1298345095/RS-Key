@@ -59,6 +59,7 @@ page that names a DIFFERENT row.
 """
 
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -1409,3 +1410,79 @@ def test_a_board_row_deleted_with_its_record_is_a_finding(tree):
     (tree.root / "assurance/board/PLAT-FLASH-001.toml").unlink()
     tree.regenerate()
     assert only(tree.problems(), "below the floor of")
+
+
+# --- the pipe that ended the row ----------------------------------------------
+
+
+#: How a GFM table splits a row: on a `|` that no backslash precedes. Modelled
+#: here rather than assumed, and the model was MEASURED through mdBook — the
+#: renderer this page is actually read in — on five spellings: a bare `|` splits;
+#: `\|`, `\\|` and a `|` inside a code span do not; and a row with more cells
+#: than the header has the excess DROPPED, which is why `PLAT-SOURCE-002` lost
+#: its owner and its whole `supports` list off the published page rather than
+#: showing a visibly broken one.
+UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
+
+
+def registry_table(page):
+    """The assumption table as a renderer sees it: header cells, then row cells.
+
+    Both halves come out of ONE `render` call but two different code paths — the
+    header is a literal in that function, the rows are built from the registry —
+    so a case comparing them is not comparing a value with itself.
+    """
+    lines = page.splitlines()
+    head = next(i for i, line in enumerate(lines) if line.startswith("| ID | Class |"))
+    rows = []
+    for line in lines[head + 2:]:
+        if not line.startswith("| `PLAT-"):
+            break
+        rows.append(UNESCAPED_PIPE.split(line)[1:-1])
+    return UNESCAPED_PIPE.split(lines[head])[1:-1], rows
+
+
+#: A discharge route in both shapes the real registry writes. The bare `|` is
+#: `PLAT-SOURCE-002`'s (`r.map(|()| tok)`), which ended its row four columns
+#: early; the `\|` is `PLAT-MODEL-009`'s `git grep` alternation, which does NOT
+#: end the row — markdown eats the backslash instead and publishes a grep pattern
+#: that no longer means alternation. One case, because one helper answers both.
+PIPED_DISCHARGE = r'Run `a | b`, then `git grep -n "x\|y"`.'
+
+
+def test_a_pipe_in_a_discharge_does_not_end_the_row(tree):
+    """A `|` in prose is a cell separator, and the row runs into its neighbours.
+
+    Measured before the fix on the real checkout: 72 rows of 7 cells, one of 10
+    and one of 9, against a 7-column header — and GFM drops the excess, so two
+    rows published a fragment of a grep pattern where the owner belongs and no
+    `supports` at all.
+    """
+    tree.edit(
+        "assurance/platform.toml",
+        'discharge = "The store slice."',
+        f"discharge = '{PIPED_DISCHARGE}'",
+    )
+    header, rows = registry_table(platform_gate.render(tree.root))
+    assert rows, "the fixture rendered no assumption rows"
+    # The count is DERIVED from the header of the same table. A literal 7 here is
+    # a second copy of the column count, and a column added to both halves of
+    # `render` would leave it asserting the old shape.
+    assert [len(row) for row in rows] == [len(header)] * len(rows)
+
+
+def test_the_escape_carries_the_route_rather_than_dropping_it(tree):
+    """Seven cells is not enough: deleting the `|` would also give seven.
+
+    The other side of the oracle, and a third source — the row is un-escaped by
+    GFM's own rule (`\\|` is a literal `|`) and compared against the TOML the
+    registry holds, not against `cell`'s own output.
+    """
+    tree.edit(
+        "assurance/platform.toml",
+        'discharge = "The store slice."',
+        f"discharge = '{PIPED_DISCHARGE}'",
+    )
+    _header, rows = registry_table(platform_gate.render(tree.root))
+    route = next(row for row in rows if "`PLAT-MODEL-001`" in row[0])[4].strip()
+    assert route.replace("\\|", "|") == PIPED_DISCHARGE
