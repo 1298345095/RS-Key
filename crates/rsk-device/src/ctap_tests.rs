@@ -124,9 +124,9 @@ fn a_warm_boot_carries_the_soft_lock_in() {
 
 #[test]
 fn a_warm_boot_carries_a_sub_limit_batch_in() {
-    // The half of the carry the test above cannot reach — and the pair the
-    // firmware's scratch codec asserts round-trips: below the limit nothing is
-    // engaged, so erasing the batch refunds a §6.5.5.6 budget the host has spent.
+    // Not the values — `pin_lock_round_trips_and_boot_leaves_it_alone` (rsk-fido)
+    // drives this pair already; erasing a sub-limit batch refunds a §6.5.5.6 budget.
+    // Only this case reaches the WIRING: a guard on `boot.lock.engaged` here.
     let batch = rsk_fido::consts::PIN_MISMATCH_LIMIT - 1;
     let env = Env::new();
     env.board.borrow_mut().boot = crate::BootState {

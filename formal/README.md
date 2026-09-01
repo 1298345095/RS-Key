@@ -1962,7 +1962,13 @@ ERASED by the restore). The last is patched CONDITIONALLY on `engaged`, because
 the model's switch diverges only at `recorded = "batch"`: an unconditional drop
 also fires where the model says the restore is correct, and killed on
 `crates/rsk-fido/src/state_tests.rs:119`, an assertion whose model image is
-unchanged behaviour.
+unchanged behaviour. Its slice is `-p rsk-fido` and stays there. Widening it to
+`-p rsk-fido -p rsk-device` was driven as a 2x2 against the rsk-device case
+present and absent, and every arm read `killed`, because `run_one` keys on ONE
+command's exit code and the fido half already fails. What widening costs is the
+recorded evidence: no slice carries `--no-fail-fast`, cargo schedules
+`rsk_device` first, and the wide row then records that binary's failure in place
+of the kill above.
 
 The lazy re-keys also carry their earlier direct closure:
 `pin_verifier_and_pinwrapped_seed_migrate_at_verify` (rsk-fido) and
@@ -1972,10 +1978,14 @@ removing its own site's re-arm in a worktree — the first probe removed the
 *panel* site by mistake and the fido test rightly stayed green, which doubles
 as the asserts' specificity check. The panel path's own twin
 (`spend_and_verify_pin_at`, the fourth PIN door) and the OATH/OpenPGP site
-asserts remain open, recorded here rather than implied — as does
-`crates/rsk-device/src/ctap_tests.rs:101-123`, which drives only
-`engaged: true, mismatches: 3` and stays green under `BugPartialLockCarry`, so
-nothing asserts that the BOOT WIRING carries a sub-limit batch.
+asserts remain open, recorded here rather than implied. The boot-wiring gap that
+stood here is CLOSED. `crates/rsk-device/src/ctap_tests.rs:101-123` drives only
+`engaged: true, mismatches: 3`, so `a_warm_boot_carries_a_sub_limit_batch_in`
+was added beside it for the other arm — and what that case alone catches is not
+`BugPartialLockCarry`, which the ordinary rsk-device host row catches too, but a
+CONDITIONAL wiring: guard `restore_pin_lock` with `if boot.lock.engaged` and the
+sub-limit case falls `left: 0 right: 2` while the twin above stays green;
+delete the case and that same defect leaves the row at rc 0.
 
 **The open hardware assumption, and what running it the other way cost.**
 `PowerOnClearsScratch2` was a named Boolean `ASSUME` that every generated Boot
