@@ -195,6 +195,48 @@ today.
   overrides it, `bignum_table_select` is absent from the image, and the same
   switch pulls in an in-place table transpose that has never been built either.
 
+  *Severity: LOW, recorded rather than left pending.* It is registered as
+  `PLAT-CRYPTO-002` in [platform-assumptions.md](platform-assumptions.md) with
+  the four surfaces, the blinding gap, the absent cache channel and the triggers
+  that re-open it. What makes it low is the OBSERVATION and not the code:
+  recovering the window sequence needs a time-resolved look inside one operation,
+  and no in-scope observer has one. On all four surfaces the private operation
+  runs to completion before any response byte leaves, and the 61xx / GET RESPONSE
+  chaining that may follow is transport-level (`crates/rsk-device/src/ccid.rs`)
+  over a buffer already computed — so a host measures a single end-to-end
+  latency, and the exponent is fixed for the life of the key, so that latency is
+  the same scalar for every signature and carries nothing about which nibble sat
+  where. The observer that would hold a time-resolved trace is the power/EM
+  prober [threat-model.md](threat-model.md) §4 puts out of scope. Two things keep
+  this a residual rather than a non-issue. Nothing has measured whether an RP2350
+  SRAM read's cycle count follows its address at all — the paragraph above says
+  so, in both directions. And the arithmetic that stands in for that measurement
+  is a bound and not a result: the sixteen entries are `temp + k·half` with
+  `half` a multiple of 32 bytes, so they share every address bit below 32 and
+  each read is a contiguous multiple-of-32-byte run, which no stripe whose period
+  divides 32 bytes can tell apart and which a high-bit-selected bank holds whole
+  at ≤ 4 KiB.
+
+  *The hardening is DEFERRED, not declined.* `CONSTANT_MEMORY_ACCESS_PATTERN 1`
+  is registered as `PLAT-BUILD-005` with its price, and the price is why it is
+  not simply flipped. It has never been built here and cannot be validated here:
+  `crates/rsk-rsa/build.rs` compiles the C and the asm only for
+  `target_os = "none"`, so no host test and no `tools/emu` run reaches that arm,
+  and the transpose it pulls in is exercised by an on-card RSA sign at each of
+  the three widths and by nothing else. The Bellcore check makes a wrong
+  transpose a refused signature rather than a bad one, so a passing on-card sign
+  IS the proof — and a failing one is a key that stops working. Cost, counted
+  from the instruction mix and not measured: `bignum_table_select` reads
+  16 × `half` bytes per window where the shipped arm reads `half`, against a
+  window that already spends four squarings and one multiply, so the overhead is
+  of the order of a tenth of the private operation and larger at RSA-2048 than at
+  RSA-4096 — the multiply grows quadratically in the width and the scan only
+  linearly. It costs SRAM and not only flash: the C half is `BIGNUM_RAMFUNC`
+  (`section(".data.bignum_hl")`) and the asm's whole translation unit is
+  `.section .data.bignum_asm`. What would settle it: one firmware build with the
+  flag defined, then a board run of the three widths and a before/after timing of
+  one PIV GENERAL AUTHENTICATE.
+
 ## Coverage & limits
 
 **Covered:** all hand-rolled comparator definitions and call sites; every

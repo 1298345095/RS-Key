@@ -350,6 +350,23 @@ no discrete flash chip to tap, raising a reliable swap to decap-class effort. Th
 RP2350 is not a secure element and RS-Key does not pretend otherwise. If your
 threat model includes a funded lab, buy a certified key.
 
+**One residual straddles this line, and it is written down rather than left to
+the reader.** The RSA private operation picks a modexp window per four bits of
+`dP`/`dQ`, and the choice lands in an ADDRESS: PIV GENERAL AUTHENTICATE and
+OpenPGP PSO:CDS / INTERNAL AUTHENTICATE / DECIPHER all drive it over USB against
+a long-lived key, and the per-operation blinding randomises the base, never the
+exponent. Reading the window sequence back needs a time-resolved look inside a
+single operation, and the only observer holding one is the power/EM capture
+already listed above — so that half is out of scope for the reason this section
+already gives, not for a new one. The other half is not out of scope: a host that
+can time whole operations is the §1 attacker, and against it the pattern is one
+scalar per signature over an exponent that never changes. Severity, the reasoning
+and what would re-open it are registered as `PLAT-CRYPTO-002`, and the hardening
+that would remove it is `PLAT-BUILD-005`, deferred with a stated price
+([platform-assumptions.md](platform-assumptions.md), [ct-audit.md](ct-audit.md)).
+This paragraph adds a residual to the page; it excludes no observer the section
+did not already exclude.
+
 ### 5. Network
 
 None. The device speaks USB only. There is no radio and no IP stack.

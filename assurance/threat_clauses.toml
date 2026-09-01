@@ -303,6 +303,12 @@ where = "### 4. Physical / lab attacks — OUT OF SCOPE"
 why = """
 declared out of scope; a property here would claim what this page refuses \
 to claim"""
+# The body hands the RSA window residual's severity and its hardening to two
+# registry rows, so the sentence naming them is pinned: without it that sentence
+# can go and the section reads as an exclusion with nothing behind it.
+rests_on = [
+  "Severity, the reasoning and what would re-open it are registered as `PLAT-CRYPTO-002`, and the hardening that would remove it is `PLAT-BUILD-005`, deferred with a stated price ([platform-assumptions.md](platform-assumptions.md), [ct-audit.md](ct-audit.md)).",
+]
 
 [[clause]]
 id = "TM-NETWORK"

@@ -32,7 +32,14 @@ covers the security boundary. This page covers feature and hardware gaps.
   base-blinded and Bellcore-fault-checked like the asm path, and every signature
   and decryption is checked byte-for-byte against OpenSSL vectors in the host
   tests. It is still ours, still single-maintainer, and still unaudited — the
-  advisory is closed, the class of bug it names is not. *Status: accepted;
+  advisory is closed, the class of bug it names is not. The one residual that
+  audit leaves open is the modexp's secret-indexed window lookup on `dP`/`dQ`,
+  reachable over USB on PIV and OpenPGP signing and decryption; it is recorded
+  LOW because reading the window sequence back needs a time-resolved look inside
+  a single operation, which a host timing whole operations does not have, and the
+  hardening that would remove it is deferred with a stated price
+  (`PLAT-CRYPTO-002` and `PLAT-BUILD-005` in
+  [platform assumptions](platform-assumptions.md)). *Status: accepted;
   see the [constant-time audit](ct-audit.md) for what has been looked at.*
 - **RSA-3072/4096 on-card generation is slow.** The prime search dominates the
   cost: *rejecting* hundreds of composite candidates, each one asm-modexp-bound.
