@@ -115,6 +115,16 @@ CEREMONY = """\
 pub fn shown() {}
 """
 
+#: `SEC-B-001`'s registered evidence, in the one class a `check.sh` row can run.
+#: `assurance_gate` derives a property's Kani harnesses by looking for
+#: `snake(name)` in the function names of `crates/*/src/*kani*.rs`, so the file
+#: name matters as much as the function's — and the same filter keeps this file
+#: out of the production set, which is why it cannot also become an owner.
+SCREEN_KANI = """\
+#[kani::proof]
+pub fn shown_holds_on_every_build() {}
+"""
+
 REGISTRY = """\
 [[property]]
 id = "SEC-A-001"
@@ -136,6 +146,7 @@ name = "Later"
 CHECK_SH = """\
 run "clippy (loud)" cargo clippy -p firmware --features loud -- -D warnings
 run_tests "test (screen)" cargo test -p rsk-screen -p firmware --features screen
+run "kani (screen)" cargo kani -p rsk-screen -p firmware --features screen --harness shown_holds_on_every_build
 run_tests "test (core)" cargo test -p firmware -p rsk-core
 run "build-configuration matrix" python scripts/matrix_gate.py
 """
@@ -182,8 +193,8 @@ properties = ["SEC-B-001"]
 columns = ["firmware-screen"]
 disposition = "covered"
 basis = "check-sh-rows"
-evidence = ["test (screen)"]
-why = "the only column that compiles the ceremony, and the row that runs it."
+evidence = ["kani (screen)"]
+why = "the only column that compiles the ceremony, and the row that proves it."
 
 [[cell]]
 properties = ["SEC-A-001", "SEC-A-002"]
@@ -259,6 +270,7 @@ class Tree:
         self.write("crates/rsk-core/src/lib.rs", "pub fn core() {}\n")
         self.write("crates/rsk-screen/Cargo.toml", SCREEN)
         self.write("crates/rsk-screen/src/lib.rs", CEREMONY)
+        self.write("crates/rsk-screen/src/screen_kani.rs", SCREEN_KANI)
         self.write("nix/firmware.nix", FLAKE)
         self.write("firmware/boards/board-a.toml", BOARD_A)
         self.write(".github/workflows/release-build.yml", RELEASE)
@@ -712,7 +724,7 @@ def test_covered_on_a_configured_column_owes_the_rows_that_produced_it(tree, cap
     """`covered` is the strongest word in the vocabulary and it rested on
     nothing: the reviewer re-declared every `gap` cell of the real ledger
     `covered` and the row printed ok over 995 of them."""
-    tree.edit("assurance/configurations.toml", 'evidence = ["test (screen)"]\n', "")
+    tree.edit("assurance/configurations.toml", 'evidence = ["kani (screen)"]\n', "")
     said = red(tree, capsys)
     assert "and no `evidence`" in said
     assert "the prose basis this vocabulary dropped" in said
@@ -721,7 +733,7 @@ def test_covered_on_a_configured_column_owes_the_rows_that_produced_it(tree, cap
 def test_covered_naming_a_row_check_sh_does_not_have_is_rejected(tree, capsys):
     tree.edit(
         "assurance/configurations.toml",
-        'evidence = ["test (screen)"]',
+        'evidence = ["kani (screen)"]',
         'evidence = ["test (the screen, surely)"]',
     )
     assert "which is no scripts/check.sh row" in red(tree, capsys)
@@ -732,7 +744,7 @@ def test_covered_naming_a_row_that_builds_another_image_is_rejected(tree, capsys
     column only if it builds this column's features."""
     tree.edit(
         "assurance/configurations.toml",
-        'evidence = ["test (screen)"]',
+        'evidence = ["kani (screen)"]',
         'evidence = ["clippy (loud)"]',
     )
     said = red(tree, capsys)
@@ -760,7 +772,7 @@ def test_covered_naming_a_row_that_only_compiles_the_image_is_rejected(tree, cap
     `covered` on the very image that removes the gate they are about."""
     tree.edit(
         "assurance/configurations.toml",
-        'evidence = ["test (screen)"]',
+        'evidence = ["kani (screen)"]',
         'evidence = ["clippy (screen build)"]',
     )
     tree.edit(
@@ -784,7 +796,7 @@ def test_covered_on_a_board_names_a_row_that_builds_that_board(tree, capsys):
     )
     tree.edit(
         "assurance/configurations.toml",
-        'evidence = ["test (screen)"]',
+        'evidence = ["kani (screen)"]',
         'evidence = ["test (core)"]',
     )
     assert "does not pin ['BOARD=board-a']" in red(tree, capsys)
@@ -828,8 +840,8 @@ def test_a_field_the_basis_does_not_read_is_rejected(tree, capsys):
     carrying one would show the reader a sameness the gate never derived."""
     tree.edit(
         "assurance/configurations.toml",
-        'basis = "check-sh-rows"\nevidence = ["test (screen)"]',
-        'basis = "check-sh-rows"\nevidence = ["test (screen)"]\nsame_as = "firmware"',
+        'basis = "check-sh-rows"\nevidence = ["kani (screen)"]',
+        'basis = "check-sh-rows"\nevidence = ["kani (screen)"]\nsame_as = "firmware"',
     )
     said = red(tree, capsys)
     assert "carries ['same_as'], which basis `check-sh-rows` does not read" in said
@@ -1271,3 +1283,145 @@ def test_a_matrix_rewritten_with_crlf_line_endings_is_rejected(tree, capsys):
     path = tree.root / "docs/assurance-matrix.md"
     path.write_bytes(path.read_text().replace("\n", "\r\n").encode())
     assert "is not what the generator writes" in red(tree, capsys)
+
+
+# --- what counts as production Rust ------------------------------------------
+
+
+def test_a_cfg_site_no_buildable_image_compiles_is_not_a_gate(tree, capsys):
+    """The filename filter this reader used to be, in the shape that survived it.
+
+    `cfg_sites` refused a `kani`/`tests` NAME, which is what
+    `assurance_gate.cfg_excluded` was written to replace; measured on the real
+    tree, the two readers differ on 18 files. The sharpest of them is a
+    DIRECTORY, and it is why `cfg_excluded` alone is not the fix:
+    `crates/rsk-fido/src/conformance/` is `#[cfg(test)] mod conformance;` and
+    that function names only its `mod.rs`, so its eighteen siblings were still
+    offered as gate sites — an `out-of-scope` cell citing
+    `crates/rsk-fido/src/conformance/getinfo.rs` was EXIT=0, which is exactly
+    what `cfg_sites`'s own docstring says it prevents.
+    """
+    tree.write("firmware/src/conformance/mod.rs", "mod wire;\n")
+    tree.write(
+        "firmware/src/conformance/wire.rs",
+        '#[cfg(feature = "no-touch")]\nfn only_here() {}\n',
+    )
+    tree.edit("firmware/src/presence.rs", "pub fn press()", "#[cfg(test)]\nmod conformance;\npub fn press()")
+    tree.edit(
+        "assurance/configurations.toml",
+        'cfg = ["firmware/src/presence.rs"]',
+        'cfg = ["firmware/src/conformance/wire.rs"]',
+    )
+    matrix_gate.cfg_sites.cache_clear()
+    matrix_gate.production_rust.cache_clear()
+    said = red(tree, capsys)
+    assert "names `firmware/src/conformance/wire.rs`" in said
+    assert "which does not gate on `no-touch`" in said
+
+
+def test_a_cfg_site_a_buildable_image_does_compile_is_still_a_gate(tree):
+    """The green direction, and the one that keeps the fix from being a blanket
+    refusal on directories: the same two files under a `mod` no cfg withholds
+    stay a gate site, and the cell citing one of them passes."""
+    tree.write("firmware/src/conformance/mod.rs", "mod wire;\n")
+    tree.write(
+        "firmware/src/conformance/wire.rs",
+        '#[cfg(feature = "no-touch")]\nfn only_here() {}\n',
+    )
+    tree.edit("firmware/src/presence.rs", "pub fn press()", "mod conformance;\npub fn press()")
+    tree.edit(
+        "assurance/configurations.toml",
+        'cfg = ["firmware/src/presence.rs"]',
+        'cfg = ["firmware/src/conformance/wire.rs"]',
+    )
+    matrix_gate.cfg_sites.cache_clear()
+    matrix_gate.production_rust.cache_clear()
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
+
+
+# --- one column, one equivalence ---------------------------------------------
+
+
+def test_a_second_equivalent_cell_on_one_column_is_rejected(tree, capsys):
+    """`knob_delta` is a function of (column, `same_as`), so two `equivalent`
+    cells on that pair derive the SAME delta and differ only in their row list
+    and their prose — one cell written twice, with two `why` bodies free to
+    argue opposite things. Measured on the real tree: appending a second
+    `firmware-2mb` = `firmware` cell for three more rows was EXIT=0 beside a
+    first one whose own `why` says every other row on that column stays `gap`.
+    """
+    tree.edit(
+        "assurance/configurations.toml",
+        'properties = ["SEC-A-001", "SEC-A-002"]\ncolumns = ["firmware-pinned"]',
+        'properties = ["SEC-A-001"]\ncolumns = ["firmware-pinned"]',
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        'why = "identical feature closure; the delta is a USB identity pair."',
+        'why = "identical feature closure; the delta is a USB identity pair."\n\n'
+        "[[cell]]\n"
+        'properties = ["SEC-A-002"]\n'
+        'columns = ["firmware-pinned"]\n'
+        'same_as = "firmware"\n'
+        'knob_delta = ["vidpid=Pico"]\n'
+        'disposition = "equivalent"\n'
+        'basis = "same-cargo-features"\n'
+        'why = "the same pair again, for the row the cell above stopped naming."',
+    )
+    said = red(tree, capsys)
+    assert "firmware-pinned: 2 `equivalent` cells say it compiles like `firmware`" in said
+    assert "one cell split in two" in said
+
+
+def test_one_equivalent_cell_per_pair_is_accepted(tree):
+    """The green direction: two `equivalent` cells on one COLUMN are fine when
+    they name different `same_as` columns, because the delta is then a different
+    derivation and the two arguments are about different things."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'properties = ["SEC-A-001", "SEC-A-002"]\ncolumns = ["firmware-pinned-too"]\n'
+        'same_as = "firmware-pinned"',
+        'properties = ["SEC-A-001"]\ncolumns = ["firmware-pinned-too"]\n'
+        'same_as = "firmware-pinned"',
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        'why = "the same pinned identity as firmware-pinned, one step further out."',
+        'why = "the same pinned identity as firmware-pinned, one step further out."\n\n'
+        "[[cell]]\n"
+        'properties = ["SEC-A-002"]\n'
+        'columns = ["firmware-pinned-too"]\n'
+        'same_as = "firmware"\n'
+        'knob_delta = ["vidpid=Nitro3"]\n'
+        'disposition = "equivalent"\n'
+        'basis = "same-cargo-features"\n'
+        'why = "measured against the default build rather than against its sibling."',
+    )
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
+
+
+# --- the derived caveat on the Open gaps table --------------------------------
+
+
+def test_the_page_names_the_rows_that_carry_no_production_tag(tree):
+    """The number was DERIVED for a reason the comment beside it got backwards.
+
+    "Three P0-family rows carry no production tag" was exact when it was written
+    at 41ddf88 (`SEC-FIDO-006A/B/C`) and went to zero at fc7491a, which tagged
+    them — so it rotted rather than arriving wrong, which is the stronger case
+    for deriving it. Nothing drove the non-empty branch, and replacing the whole
+    derivation with a hard-coded `[]` left the suite green.
+    """
+    tree.edit("firmware/src/presence.rs", "/// Refines `Fixture!Held` — SEC-A-002.\n", "")
+    page = matrix_gate.render(tree.root)
+    assert "1 P0-family row(s) carry no production tag at all (`SEC-A-002`)" in page
+    assert "which is the one direction this number can be wrong in" in page
+
+
+def test_the_page_says_so_when_every_row_carries_a_tag(tree):
+    """And the other arm, which is the one this checkout is in."""
+    page = matrix_gate.render(tree.root)
+    assert "Every P0-family row carries a production tag" in page
+    assert "carry no production tag at all" not in page

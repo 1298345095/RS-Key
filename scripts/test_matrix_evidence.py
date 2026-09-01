@@ -43,7 +43,7 @@ def swap_evidence(tree, row, label):
     tree.edit("scripts/check.sh", 'run "clippy (loud)"', row + 'run "clippy (loud)"')
     tree.edit(
         "assurance/configurations.toml",
-        'evidence = ["test (screen)"]',
+        'evidence = ["kani (screen)"]',
         f'evidence = ["{label}"]',
     )
 
@@ -52,7 +52,9 @@ def swap_evidence(tree, row, label):
 
 
 def test_a_row_that_runs_the_crate_still_carries_a_covered_cell(tree):
-    """`test (screen)` is `cargo test`; the fixture ships `covered` on it."""
+    """`kani (screen)` builds the column, selects `rsk-screen`, and names the
+    harness `assurance_gate` derives as `SEC-B-001`'s evidence. The fixture ships
+    `covered` on it, so all four rules have a way to be satisfied at once."""
     assert tree.run() == 0
 
 
@@ -119,5 +121,144 @@ def test_no_shipped_cell_rests_on_a_compile_only_row():
 
 
 def test_the_compile_only_list_still_has_the_subcommands_in_it():
-    """A rule over an empty tuple passes every case above it."""
-    assert set(matrix_gate.COMPILE_ONLY) >= {"build", "clippy"}
+    """A rule over an empty tuple passes every case above it.
+
+    Every member individually, not a `>=` over two of four: `>= {"build",
+    "clippy"}` left `check` and `doc` deletable with the suite green, which is
+    the decorative half of a list that reads as complete. `doc` is driven below;
+    `check` is asserted as an anticipatory member and the assertion SAYS so, with
+    the measurement that makes it one.
+    """
+    assert set(matrix_gate.COMPILE_ONLY) == {"build", "check", "clippy", "doc"}
+    rows = matrix_gate.check_sh_rows(ROOT)
+    subcommands = [
+        found.group(1)
+        for _features, _env, command in rows.values()
+        if (found := matrix_gate.CARGO_SUB.search(command))
+    ]
+    assert subcommands.count("check") == 0, "a `cargo check` row exists — drive it here"
+    assert subcommands.count("doc") == 8, subcommands.count("doc")
+
+
+def test_a_covered_cell_resting_on_a_rustdoc_row_is_refused(tree, capsys):
+    """The member that was decorative only because no `rustdoc` row happens to
+    pin a column's features. Eight of them exist in the real tree; pin one and
+    the word `covered` rests on rustdoc having accepted the file."""
+    swap_evidence(
+        tree,
+        'run "doc (screen)" cargo doc -p rsk-screen -p firmware --features screen\n',
+        "doc (screen)",
+    )
+    assert "`doc (screen)` runs `cargo doc`" in red(tree, capsys)
+
+
+# --- the fourth rule: the registry's evidence, not the crate's unit tests ------
+
+
+def test_a_row_that_runs_no_registered_evidence_is_refused(tree, capsys):
+    """The half of the ledger's definition the gate ran without.
+
+    `covered` says THE REGISTRY'S evidence was produced on this configuration;
+    the gate checked only that the named row builds this image and selects the
+    right crate. Measured on the real tree: 80 `gap` cells passed every other
+    rule here on an existing row, carried by eight `cargo test` rows, and not
+    one of the eight produces registered evidence for any of the 40 rows —
+    `test (fips: rsk-fido)` was one edit from `covered` on `SEC-FIDO-001`.
+    """
+    tree.edit(
+        "assurance/configurations.toml",
+        'evidence = ["kani (screen)"]',
+        'evidence = ["test (screen)"]',
+    )
+    said = red(tree, capsys)
+    assert "no row named here runs any of SEC-B-001's registered evidence" in said
+    assert "['shown_holds_on_every_build']" in said
+    assert "a crate's own unit tests are in none of its classes" in said
+
+
+def test_a_row_that_runs_the_property_s_device_test_carries_the_cell(tree):
+    """The third evidence class, driven through the gate and not asserted of the
+    derivation. A statement sweep found it: with only the Kani arm above, the
+    `tests/*.py` half of `registry_evidence` could be deleted with the suite
+    green — the fixture had no `tests/` at all, so the class existed for no
+    input. `assurance_gate` derives a script that names the invariant, and a row
+    that runs one produces the registry's evidence as surely as a harness does.
+    """
+    tree.write("tests/10_shown.py", "# drives Shown end to end against the emulator\n")
+    tree.edit(
+        "scripts/check.sh",
+        'run "clippy (loud)"',
+        'run "device (screen)" cargo run -p rsk-screen --features screen'
+        " -- tests/10_shown.py\n"
+        'run "clippy (loud)"',
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        'evidence = ["kani (screen)"]',
+        'evidence = ["device (screen)"]',
+    )
+    matrix_gate.registry_evidence.cache_clear()
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
+
+
+def test_a_row_that_runs_the_property_s_fuzz_target_carries_the_cell(tree):
+    """The second class, and the reason an artifact is matched on its STEM: a row
+    says `cargo fuzz run shown`, never `shown.rs`, which is the file name
+    `assurance_gate.grep_word` hands back."""
+    tree.write("fuzz/fuzz_targets/shown.rs", "// fuzzes Shown across the wire\n")
+    tree.edit(
+        "scripts/check.sh",
+        'run "clippy (loud)"',
+        'run "fuzz (screen)" cargo fuzz run shown -p rsk-screen --features screen\n'
+        'run "clippy (loud)"',
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        'evidence = ["kani (screen)"]',
+        'evidence = ["fuzz (screen)"]',
+    )
+    matrix_gate.registry_evidence.cache_clear()
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
+
+
+def test_an_artifact_a_row_merely_spells_is_not_one_it_ran(tree, capsys):
+    """The boundary that makes the stem match safe, driven rather than argued.
+
+    On the real tree the fuzz target `pqc` is a substring of the cargo feature
+    `advertise-pqc`; under a plain `in` a row that merely ENABLES that feature
+    would produce the property's evidence. The fixture's `screen` feature stands
+    in for it: a target named `creen` is spelled by every row on this column.
+    """
+    (tree.root / "crates/rsk-screen/src/screen_kani.rs").unlink()
+    tree.write("fuzz/fuzz_targets/creen.rs", "// names Shown, and nothing runs it\n")
+    matrix_gate.registry_evidence.cache_clear()
+    assert matrix_gate.registry_evidence(tree.root, "Shown") == ("creen",)
+    said = red(tree, capsys)
+    assert "no row named here runs any of SEC-B-001's registered evidence" in said
+    assert "['creen']" in said
+
+
+def test_the_message_says_so_when_the_registry_derives_nothing_runnable(tree, capsys):
+    """A property whose only evidence is the formal invariant. The refusal must
+    not read as "you named the wrong row" — there is no right one, and the route
+    out is the model run at this column that `settled_by = "evidence"` asks for.
+    """
+    (tree.root / "crates/rsk-screen/src/screen_kani.rs").unlink()
+    said = red(tree, capsys)
+    assert "the registry derives none that a row can run" in said
+
+
+def test_a_row_naming_the_harness_at_another_image_is_still_refused(tree, capsys):
+    """The new rule must not SUBSUME the older ones: naming the property's own
+    harness is not enough if the row builds a different image."""
+    swap_evidence(
+        tree,
+        'run "kani (loud)" cargo kani -p rsk-screen -p firmware --features loud'
+        " --harness shown_holds_on_every_build\n",
+        "kani (loud)",
+    )
+    said = red(tree, capsys)
+    assert "builds ['loud'] and this column is ['screen']" in said
+    assert "runs any of SEC-B-001's registered evidence" not in said

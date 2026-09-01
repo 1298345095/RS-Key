@@ -17,18 +17,31 @@
 #
 # The five dispositions (roadmap §6 stage 0 п.2):
 #   covered       the registry's evidence was produced on this configuration.
-#                 On any column but the default build the cell names the
-#                 `check.sh` rows that produced it, and the gate re-derives
-#                 whether those rows really build THIS image — same cargo
-#                 features, same knobs. There is no prose spelling: `covered`
-#                 asserts more than `equivalent` does, and it used to assert it
-#                 on nothing
+#                 That first sentence is the CLAIM; the rest is how it is
+#                 spelled, and reading the spelling alone is how this word goes
+#                 wrong. On any column but the default build the cell names the
+#                 `check.sh` rows that produced it, and the gate re-derives BOTH
+#                 halves: that those rows really build THIS image — same cargo
+#                 features, same knobs — and that they RAN some of the evidence
+#                 the registry derives for the property. The registry stores no
+#                 evidence field (properties.toml's own header says why), so the
+#                 second half is `assurance_gate`'s derivation: a Kani harness,
+#                 a fuzz target, a `tests/*.py`. A crate's own unit tests are in
+#                 none of those classes, which is why `cargo test -p rsk-fido
+#                 --features fips-profile` cannot carry the word — and the gate
+#                 ran without that half long enough for 80 `gap` cells to sit
+#                 one edit away from `covered` on eight rows of exactly that
+#                 shape. There is no prose spelling: `covered` asserts more than
+#                 `equivalent` does, and it used to assert it on nothing
 #   equivalent    it compiles the property's code as another column does;
 #                 `same_as` names that column and `basis` must be
 #                 `same-cargo-features`, which the gate CHECKS against the
 #                 derived per-crate feature closure. There is deliberately no
 #                 second way to spell an equivalence: "the names look similar"
-#                 is exactly how a false one gets written
+#                 is exactly how a false one gets written. One column carries at
+#                 most ONE `equivalent` cell per `same_as`, because `knob_delta`
+#                 is derived from that pair: a second is one cell split in two,
+#                 and the halves are free to argue opposite things
 #   conditional   claimed only under a stated condition
 #   out-of-scope  the claim is not made here — the code is absent, or the gate
 #                 the property is about is compiled out
@@ -94,6 +107,29 @@ out-of-queue = [
 # column and the gate re-derives it: with the VALUES, so moving a board's
 # `flash.size_mb` from 4 to 16 reddens the cell rather than leaving a name list
 # that still matches.
+#
+# Why the board and geometry columns stop where they do, and it is measured
+# rather than recalled: 194 `gap` cells over seven columns sit on a column whose
+# derived feature closure is IDENTICAL to a column already disposed for that row,
+# so the gate would take an `equivalent` on any of them with no run of any kind.
+# None is closable, because the knob delta is what an equivalence still has to
+# survive, and the four arguments this file already makes cap every one of those
+# columns at exactly what is placed:
+#   geometry     `flash.size_mb`/`flash.kvmain_kb` (flake: `flashSize`/`kvmain`)
+#                off `firmware/build.rs`'s `DEFAULT_FLASH_SIZE` 4 MB /
+#                `DEFAULT_KVMAIN` 1408 K reaches the store, and lets through only
+#                the six in-RAM SEAM/TRANS statements
+#   presence     a GPIO source instead of BOOTSEL reaches the four rows whose
+#                statement names presence and the four reset clauses
+#   LED, vidpid, display.*   reach no P0-family statement at all
+# `waveshare-one` earns all 40 because every knob it sets is the value `build.rs`
+# already resolves to, and `abrobot-4m` earns 32 because only its presence source
+# moves. Every other identical-closure column is at its cap. NO derivation can
+# check any of that — nothing static sees a smaller KV region — so it stays prose,
+# and the rule the gate CAN hold is the one above it: one `equivalent` cell per
+# (column, `same_as`), which is what stops a second cell appended below a refusal
+# from quietly contradicting it. Widening an existing cell's `properties` still
+# gets past that, and it puts the row list beside the `why` that refuses it.
 
 [[cell]]
 # The image every piece of evidence in the registry was measured on.
@@ -279,7 +315,12 @@ row on this column stays \
 `gap`, because the store IS what the geometry changes: `check.sh` rebuilds \
 `rsk-wipe` once per board because a change that stopped `BOARD` reaching the \
 wiper once left a 16 MB board's whole KV store standing behind a "successful" \
-wipe."""
+wipe. Those rebuilds mean something only because of the row beside them, \
+`check.sh: rsk-wipe refuses an unknown flash size`, which fails a wiper that \
+links with no board at all — it used to fall back to 4 MB at EXIT=0, so the \
+per-board loop passed whether or not `BOARD` was reaching it. Cited with the \
+`check.sh:` prefix because that label carries no parentheses, and the shape \
+rule alone sees 52% of the row namespace."""
 
 [[cell]]
 properties = [
@@ -306,7 +347,12 @@ row on this column stays \
 `gap`, because the store IS what the geometry changes: `check.sh` rebuilds \
 `rsk-wipe` once per board because a change that stopped `BOARD` reaching the \
 wiper once left a 16 MB board's whole KV store standing behind a "successful" \
-wipe."""
+wipe. Those rebuilds mean something only because of the row beside them, \
+`check.sh: rsk-wipe refuses an unknown flash size`, which fails a wiper that \
+links with no board at all — it used to fall back to 4 MB at EXIT=0, so the \
+per-board loop passed whether or not `BOARD` was reaching it. Cited with the \
+`check.sh:` prefix because that label carries no parentheses, and the shape \
+rule alone sees 52% of the row namespace."""
 
 [[cell]]
 properties = [
@@ -336,7 +382,12 @@ row on this column stays \
 `gap`, because the store IS what the geometry changes: `check.sh` rebuilds \
 `rsk-wipe` once per board because a change that stopped `BOARD` reaching the \
 wiper once left a 16 MB board's whole KV store standing behind a "successful" \
-wipe."""
+wipe. Those rebuilds mean something only because of the row beside them, \
+`check.sh: rsk-wipe refuses an unknown flash size`, which fails a wiper that \
+links with no board at all — it used to fall back to 4 MB at EXIT=0, so the \
+per-board loop passed whether or not `BOARD` was reaching it. Cited with the \
+`check.sh:` prefix because that label carries no parentheses, and the shape \
+rule alone sees 52% of the row namespace."""
 
 [[cell]]
 properties = [
@@ -366,7 +417,12 @@ row on this column stays \
 `gap`, because the store IS what the geometry changes: `check.sh` rebuilds \
 `rsk-wipe` once per board because a change that stopped `BOARD` reaching the \
 wiper once left a 16 MB board's whole KV store standing behind a "successful" \
-wipe."""
+wipe. Those rebuilds mean something only because of the row beside them, \
+`check.sh: rsk-wipe refuses an unknown flash size`, which fails a wiper that \
+links with no board at all — it used to fall back to 4 MB at EXIT=0, so the \
+per-board loop passed whether or not `BOARD` was reaching it. Cited with the \
+`check.sh:` prefix because that label carries no parentheses, and the shape \
+rule alone sees 52% of the row namespace."""
 
 [[cell]]
 properties = [
@@ -395,7 +451,12 @@ row on this column stays \
 `gap`, because the store IS what the geometry changes: `check.sh` rebuilds \
 `rsk-wipe` once per board because a change that stopped `BOARD` reaching the \
 wiper once left a 16 MB board's whole KV store standing behind a "successful" \
-wipe."""
+wipe. Those rebuilds mean something only because of the row beside them, \
+`check.sh: rsk-wipe refuses an unknown flash size`, which fails a wiper that \
+links with no board at all — it used to fall back to 4 MB at EXIT=0, so the \
+per-board loop passed whether or not `BOARD` was reaching it. Cited with the \
+`check.sh:` prefix because that label carries no parentheses, and the shape \
+rule alone sees 52% of the row namespace."""
 
 [[cell]]
 properties = [
@@ -427,7 +488,12 @@ row on this column stays \
 `gap`, because the store IS what the geometry changes: `check.sh` rebuilds \
 `rsk-wipe` once per board because a change that stopped `BOARD` reaching the \
 wiper once left a 16 MB board's whole KV store standing behind a "successful" \
-wipe."""
+wipe. Those rebuilds mean something only because of the row beside them, \
+`check.sh: rsk-wipe refuses an unknown flash size`, which fails a wiper that \
+links with no board at all — it used to fall back to 4 MB at EXIT=0, so the \
+per-board loop passed whether or not `BOARD` was reaching it. Cited with the \
+`check.sh:` prefix because that label carries no parentheses, and the shape \
+rule alone sees 52% of the row namespace."""
 
 [[cell]]
 # The four images that remove the gate the statements are about.
@@ -596,11 +662,17 @@ TRUE — GREEN over 23 521 512 distinct states at depth 51, per \
 has ever had, so the number was wrong when it was written rather than gone \
 stale — a count restated beside a file is a count that disagrees with it. \
 THE CODE HALF IS NOT, and its cost is a number rather than an omission: \
-`cargo test -p rsk-fido --features always-uv --target aarch64-apple-darwin` is \
-493 passed and 176 FAILED (rc 101), because alwaysUv with no PIN answers \
-`PUAT_REQUIRED` and the suite is written against the default door. That pair \
-was 446/172 when it was first written and neither half held, so it is a \
-re-measurement and not a copy. So no `check.sh` row exercises \
+`cargo test -p rsk-fido --features always-uv --target "$HOST"` is 493 passed \
+and 176 FAILED (rc 101), because alwaysUv with no PIN answers `PUAT_REQUIRED` \
+and the suite is written against the default door. Write the target the way \
+`scripts/check.sh` does: this said `aarch64-apple-darwin`, which is one \
+maintainer's host triple pinned into a shared register, and CI runs the same \
+row at `x86_64-unknown-linux-gnu`. The pair 446/172 is NOT a superseded \
+version of this one and must not be reconciled with it: it is what \
+`assurance/bundle/logs/cargo-test-always-uv.log` holds, over 619 tests, and \
+the suite is 669 tests now — two true measurements of a growing suite, which \
+is why the bundle's own framing of that log is the thing to fix and not this \
+number. So no `check.sh` row exercises \
 this column, and `covered` may rest only on the default build or on such a row \
 — the matrix has no basis for "the model half is checked at this column's own \
 constant", which is evidence-schema work and not a cell anybody can fill \

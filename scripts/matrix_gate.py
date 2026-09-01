@@ -66,6 +66,7 @@ import re
 import sys
 import tomllib
 
+import assurance_gate
 import claims_gate
 import gate_lines
 import platform_gate
@@ -117,10 +118,21 @@ CRATE_ABSENT = "crate-absent"
 GATE_COMPILED_OUT = "gate-compiled-out"
 #: This column IS the default build: no cargo features, no knobs.
 DEFAULT_BUILD = "default-build"
-#: The cell names `evidence`: `check.sh` rows that build THIS configuration —
-#: same cargo features, same build knobs. `covered` is the strongest word in the
-#: vocabulary and it was the only one resting on nothing, so every un-placed cell
-#: could be re-declared `covered` and the row still printed ok.
+#: The cell names `evidence`: `check.sh` rows that PRODUCED the registry's
+#: evidence for this property, on THIS configuration — same cargo features, same
+#: build knobs. `covered` is the strongest word in the vocabulary and it was the
+#: only one resting on nothing, so every un-placed cell could be re-declared
+#: `covered` and the row still printed ok.
+#:
+#: Both halves, because the ledger's definition has two sentences and reading
+#: either alone is how this basis goes wrong in opposite directions. "The
+#: registry's evidence was produced on this configuration" is the CLAIM; "the
+#: cell names the `check.sh` rows that produced it, and the gate re-derives
+#: whether those rows really build THIS image" is how the claim is SPELLED. The
+#: second is a necessary condition on the first, never a replacement for it —
+#: and until [`registry_evidence`] the gate ran only the second, which measured
+#: 80 `gap` cells one edit from `covered` on eight `cargo test` rows that produce
+#: no registered evidence for any of them.
 CHECK_SH_ROWS = "check-sh-rows"
 BASES = (SAME_FEATURES, CRATE_ABSENT, GATE_COMPILED_OUT, DEFAULT_BUILD, CHECK_SH_ROWS)
 #: Which bases each disposition may rest on. There is deliberately no unchecked
@@ -287,6 +299,15 @@ CITED_PATH = re.compile(r"^[A-Za-z0-9_.*-]+(?:/[A-Za-z0-9_.*-]+)+\.[A-Za-z0-9]+$
 #: names the token and says to drop the ticks — which is a worse failure than
 #: silence in exactly one direction, and it is the survivable one.
 CITED_ROW = re.compile(r"^\S.*\s\([^()]*\)$")
+#: The other half of the row namespace, and it is the larger half: 54 of the 113
+#: rows carry no ` (…)` at all (`fmt`, `kani roster`, `published claims`,
+#: `formal citations`), so the shape above sees 52% of what a rename can break
+#: and a ledger citing any of the rest stayed green through one. A row with no
+#: shape cannot be told from vocabulary by LOOKING at it — the "require a token
+#: the derivation knows" rule [`check_question`] measured was refuted by the
+#: tree's own questions — so the citation says which it is, and the prefix is the
+#: file the row lives in: `` `check.sh: kani roster` ``.
+CITED_CHECK_ROW = re.compile(r"^check\.sh:\s*(\S.*)$")
 
 #: The cargo subcommand a row runs, past any `env VAR=… ` prefix.
 CARGO_SUB = re.compile(r"(?<![\w-])cargo\s+(\w+)")
@@ -294,6 +315,12 @@ CARGO_SUB = re.compile(r"(?<![\w-])cargo\s+(\w+)")
 #: that is not cargo at all (`firmware_size_budget`, a shell function reading the
 #: ELF) is deliberately not here: those DO measure something, and which of them
 #: measures a given property is the `why`'s judgement, not a subcommand's.
+#:
+#: `check` is anticipatory and says so: this tree has 0 `cargo check` rows, so no
+#: input reaches that member and nothing here can falsify it. It stays because
+#: the member that CAN be falsified is `doc` — 8 `rustdoc` rows exist, none of
+#: them pinned to a column's features today — and dropping a correct entry to
+#: raise a mutation score is how the next `cargo check` row becomes evidence.
 COMPILE_ONLY = ("build", "check", "clippy", "doc")
 
 #: What a broken input raises before it can become a finding. A traceback is a
@@ -605,13 +632,37 @@ def reference_column(cols):
     return next((column for column in cols if column.default), None)
 
 
+@functools.cache
+def production_rust(root):
+    """The `.rs` files a buildable image can compile — `assurance_gate`'s reader.
+
+    Not a filename filter. That is what both readers here used to be, and
+    `assurance_gate.cfg_excluded` was written to replace it: six `*_assurance.rs`
+    mirrors carry neither `kani` nor `tests` in the name and were counted as
+    production. Measured here, the two readers differ on 18 files, all in the
+    permissive direction.
+
+    Plus the transitive half `cfg_excluded` stops one step short of. It maps an
+    unshippable `mod foo;` to `foo/mod.rs` alone, and everything beside that file
+    is reachable ONLY through it: `crates/rsk-fido/src/conformance/` is declared
+    `#[cfg(test)] mod conformance;` by that crate's `lib.rs`, and its eighteen
+    siblings were offered to [`cfg_sites`] as gate sites — an
+    `out-of-scope` cell citing one of them was EXIT=0, which is the thing that
+    function's own docstring says it prevents.
+    """
+    excluded = assurance_gate.cfg_excluded(root)
+    shut = {path.parent for path in excluded if path.name == "mod.rs"}
+    return [
+        path
+        for path in assurance_gate.production_rust(root)
+        if not shut.intersection(path.resolve().parents)
+    ]
+
+
 def owners(root):
     """property id -> the crates whose production Rust carries its tag."""
     found = {}
-    files = [*(root / "crates").glob("*/src/**/*.rs"), *(root / "firmware/src").glob("**/*.rs")]
-    for path in sorted(files):
-        if "kani" in path.name or "tests" in path.name:
-            continue
+    for path in production_rust(root):
         rel = path.relative_to(root).parts
         crate = rel[1] if rel[0] == "crates" else "firmware"
         for pid in OWNER_TAG.findall(path.read_text(errors="ignore")):
@@ -622,6 +673,62 @@ def owners(root):
 def registry(root):
     doc = tomllib.loads((root / REGISTRY).read_text())
     return [(entry["id"], entry["name"]) for entry in doc["property"]]
+
+
+@functools.cache
+def names_artifact(artifact):
+    """Whether a row's command NAMES this evidence artifact, not merely spells it.
+
+    A plain `in` is too loose in the one direction that matters: the fuzz target
+    `pqc` is inside `--features advertise-pqc`, and a `covered` cell would then
+    rest on a row that only enables a feature named after it. The separators a
+    path or a flag puts around a real mention are boundaries; a `-` is not.
+    """
+    return re.compile(rf"(?<![\w-]){re.escape(artifact)}(?![\w-])")
+
+
+@functools.cache
+def registry_evidence(root, name):
+    """The RUNNABLE artifacts the registry derives as this property's evidence.
+
+    `assurance/properties.toml` stores no evidence field — "everything else is
+    DERIVED by scripts/assurance_gate.py and printed, never stored", because a
+    hand-written copy rotted in three of six fields. So this is that derivation,
+    restricted to the three classes something can RUN: the Kani harnesses whose
+    function name carries the invariant, the fuzz targets that name it, and the
+    `tests/*.py` scripts that do. `assurance_gate.derive`'s fourth class is
+    `rust`, the production files carrying the tag, and it is deliberately not
+    here: that is the CODE the statement is about, not evidence that it holds.
+
+    Read for one thing — whether a `check.sh` row a `covered` cell names produced
+    any of it. A crate's unit tests are in NO class, which is why the eight
+    `cargo test` rows the 80-cell measurement found cannot carry the word: they
+    run `rsk-fido`'s own suite at another compilation, which is a real thing to
+    have done and is not the registry's evidence for `SEC-FIDO-001`.
+
+    The formal invariant every entry must name is the class left out on purpose:
+    it is not run by a `check.sh` row at all, and a column whose route out is a
+    model run at its own constants is exactly what `settled_by = "evidence"` on
+    that column already says.
+
+    Each artifact is spelled the way a row would NAME it: a harness by its
+    function (`--harness foo`), a fuzz target and a device script by their STEM
+    (`cargo fuzz run pqc`, `python tests/10_foo.py`). `assurance_gate.grep_word`
+    hands back file names, and `pqc.rs` appears in no command anybody writes.
+    """
+    sn = assurance_gate.snake(name)
+    harnesses = [
+        fn
+        for path in sorted((root / "crates").glob("*/src/*kani*.rs"))
+        for fn in assurance_gate.FN_DEF.findall(path.read_text(errors="ignore"))
+        if sn in fn
+    ]
+    fuzz = sorted((root / "fuzz" / "fuzz_targets").glob("*.rs"))
+    scripts = sorted((root / "tests").glob("**/*.py"))
+    named = assurance_gate.grep_word(fuzz, name)
+    named += assurance_gate.grep_word(scripts, name) + assurance_gate.grep_word(scripts, sn)
+    stems = [pathlib.Path(found).stem for found in named]
+    return tuple(sorted(set(harnesses) | set(stems)))
 
 
 # --- the ledger -------------------------------------------------------------
@@ -704,6 +811,7 @@ def audit(root):
             f" {list(LEDGER_TABLES)} — a section of this file no reader reads"
         )
     ids = [pid for pid, _name in registry(root)]
+    names = dict(registry(root))
     tranche, seen = {}, []
     for name in TRANCHES:
         for pid in doc.get("tranche", {}).get(name, []):
@@ -750,7 +858,7 @@ def audit(root):
         if column not in by_name:
             problems.append(f"{where}: no such build configuration")
             continue
-        problems.extend(check_cell(root, pid, by_name[column], entry, by_name, own))
+        problems.extend(check_cell(root, pid, by_name[column], entry, by_name, own, names))
 
     problems.extend(check_chains(placed))
     problems.extend(check_citations(root, doc))
@@ -808,14 +916,37 @@ def check_citations(root, doc):
         for index, entry in enumerate(doc.get(kind, [])):
             where = f"{LEDGER}: {kind} #{index + 1}"
             for token in CITED.findall(str(entry.get(field, ""))):
+                # A `why` is a TOML block whose lines are joined with `\`, so a
+                # token that wraps arrives already flat — but a block written
+                # WITHOUT the continuations keeps the newline, and the token then
+                # matches neither pattern below and is checked by nothing. 0 of
+                # the 208 tokens in the tree wrap today; the arm is what keeps
+                # that a fact about the prose rather than a fact about the rule.
                 token = " ".join(token.split())
+                prefixed = CITED_CHECK_ROW.match(token)
                 if CITED_PATH.match(token):
-                    if not (root / token).exists() and not list(root.glob(token)):
+                    # The glob alone, and it is not a shortcut: this read
+                    # `not (root / token).exists() and not list(...)`, and the
+                    # first half could not distinguish an input from the second.
+                    # `CITED_PATH`'s class admits no `[` or `?`, so the only
+                    # metacharacter that reaches here is `*` — and a file
+                    # literally named `vec*.rs` matches the pattern `vec*.rs`.
+                    # Measured over the whole class: `glob` is non-empty wherever
+                    # `exists` is true and in one case more (a broken symlink),
+                    # which is the direction that never turns a live citation
+                    # dead. The boundary that makes this safe is pinned below.
+                    if not list(root.glob(token)):
                         problems.append(
                             f"{where} cites `{token}`, which is not in the tree — a"
                             " dead citation reads exactly like a live one"
                         )
-                elif CITED_ROW.match(token) and token not in rows:
+                elif prefixed and prefixed.group(1) not in rows:
+                    problems.append(
+                        f"{where} cites `{token}`, and {CHECK} has no row"
+                        f" {prefixed.group(1)!r} — the `check.sh:` prefix is what makes"
+                        " a shapeless row label citable, so this one has been renamed"
+                    )
+                elif not prefixed and CITED_ROW.match(token) and token not in rows:
                     problems.append(
                         f"{where} cites `{token}`, which is no {CHECK} row — either"
                         " the row was renamed and the argument now points at"
@@ -920,10 +1051,17 @@ def check_chains(placed):
     whose own cells are undecided) and a closed one never reaches anything at all
     (`firmware-2mb` = `firmware-16mb` = `firmware-2mb`). Both were EXIT=0.
     """
-    problems = []
+    problems, split = [], {}
     for (pid, column), entry in placed.items():
         if entry.get("disposition") != "equivalent":
             continue
+        # `knob_delta` is a function of (column, same_as), so two `equivalent`
+        # cells on one pair derive the SAME delta and differ only in their row
+        # list and their prose — one cell written twice, with two `why` bodies
+        # free to contradict. Measured: appending a second `firmware-2mb` =
+        # `firmware` cell for three more rows was EXIT=0 beside a first one whose
+        # own `why` says "every other row on this column stays `gap`".
+        split.setdefault((column, entry.get("same_as")), set()).add(id(entry))
         seen, at = [column], entry.get("same_as")
         while True:
             if at in seen:
@@ -950,10 +1088,19 @@ def check_chains(placed):
                     " disposition, so say THAT one here rather than pointing at it"
                 )
             break
+    for (column, at), entries in sorted(split.items(), key=lambda item: str(item[0])):
+        if len(entries) > 1:
+            problems.append(
+                f"{column}: {len(entries)} `equivalent` cells say it compiles like"
+                f" `{at}` — the knob delta is derived from that pair, so these are one"
+                " cell split in two and the halves are free to argue opposite things."
+                " Widen the first cell's `properties` instead, where the `why` that"
+                " refuses the other rows is standing"
+            )
     return problems
 
 
-def check_cell(root, pid, column, entry, by_name, own):
+def check_cell(root, pid, column, entry, by_name, own, names):
     """Every way one cell's disposition disagrees with the tree."""
     where = f"{pid} × {column.name}"
     problems = []
@@ -1020,7 +1167,7 @@ def check_cell(root, pid, column, entry, by_name, own):
             f" and sets {sorted(column.knobs)}"
         )
     if basis == CHECK_SH_ROWS:
-        problems.extend(check_evidence(root, where, pid, column, entry, own))
+        problems.extend(check_evidence(root, where, pid, column, entry, own, names))
     return problems
 
 
@@ -1072,7 +1219,7 @@ def check_gate(root, where, pid, column, entry, own):
     return problems
 
 
-def check_evidence(root, where, pid, column, entry, own):
+def check_evidence(root, where, pid, column, entry, own, names):
     """The `check.sh` rows a `covered` cell names, held to the cell it is under.
 
     Two things, and both are needed. A row is about this COLUMN only if it builds
@@ -1094,9 +1241,17 @@ def check_evidence(root, where, pid, column, entry, own):
     owner-crate half was added for, one step in: the row now selects the right
     crate and still measures nothing.
 
-    What it still cannot say is whether a row that DOES run the crate exercises
-    this property rather than its neighbours — a name filter (`test (bench)` runs
-    four selector tests) passes here and the `why` has to say so.
+    And a fourth, which is the ledger's own first sentence and the one the gate
+    ran without: `covered` says THE REGISTRY'S EVIDENCE was produced here, so the
+    row has to have produced some of it. [`registry_evidence`] derives what that
+    is — a Kani harness, a fuzz target, a `tests/*.py` — and a row that names
+    none of them measured something else. Measured before the rule was written:
+    80 `gap` cells passed every check above on an existing row, carried by eight
+    `cargo test` rows, and not one of the eight produces any registered evidence
+    for any of the 40 rows. That is what made `test (bench)` — four selector
+    tests and one ignored loop — a legal basis for ten `covered` cells while the
+    same ledger's prose argued it was not; the two halves of the definition were
+    being read one at a time.
     """
     named = entry.get("evidence") or []
     if not named:
@@ -1105,6 +1260,8 @@ def check_evidence(root, where, pid, column, entry, own):
             " produced it, or the claim is the prose basis this vocabulary dropped"
         ]
     rows, problems, inert, runs_owner = check_sh_rows(root), [], [], False
+    artifacts = registry_evidence(root, names[pid]) if pid in names else ()
+    produces = False
     for label in named:
         if label not in rows:
             problems.append(f"{where}: names `{label}`, which is no {CHECK} row")
@@ -1133,11 +1290,19 @@ def check_evidence(root, where, pid, column, entry, own):
                 " here. `covered` is the word for a measurement"
             )
         runs_owner |= bool(own.get(pid, frozenset()) & gate_lines.packages(command))
+        produces |= any(names_artifact(artifact).search(command) for artifact in artifacts)
     if not runs_owner and not problems:
         problems.append(
             f"{where}: no row named here selects {sorted(own.get(pid, frozenset()))},"
             f" the crate(s) whose production Rust carries {pid} — a row that compiles"
             " this image is not evidence about this property"
+        )
+    if not produces:
+        inert.append(
+            f"{where}: no row named here runs any of {pid}'s registered evidence"
+            f" ({list(artifacts) or 'the registry derives none that a row can run'})"
+            " — `covered` says the REGISTRY's evidence was produced on this"
+            " configuration, and a crate's own unit tests are in none of its classes"
         )
     return problems + inert
 
@@ -1240,20 +1405,17 @@ def check_knobs(where, column, other, entry):
 def cfg_sites(root, feature):
     """The production files that gate on `feature` — the switch's existence.
 
-    Production, on the same rule `owners` uses: a `cfg` in a `*_tests.rs` or a
-    Kani harness is not a gate in the image, and a cell that named one would be
-    pointing at code the firmware never runs.
+    Production on [`production_rust`]'s reading, which is `assurance_gate`'s: a
+    `cfg` in a file no buildable image compiles is not a gate in the image, and a
+    cell that named one would be pointing at code the firmware never runs.
     """
     if not feature:
         return []
     pattern = re.compile(rf'feature\s*=\s*"{re.escape(feature)}"')
-    files = [*(root / "crates").glob("*/src/**/*.rs"), *(root / "firmware/src").glob("**/*.rs")]
     return [
         path
-        for path in sorted(files)
-        if "kani" not in path.name
-        and "tests" not in path.name
-        and pattern.search(path.read_text(errors="ignore"))
+        for path in production_rust(root)
+        if pattern.search(path.read_text(errors="ignore"))
     ]
 
 
@@ -1307,7 +1469,11 @@ def render(root):
         "",
         "| Disposition | Code | Means |",
         "|---|---|---|",
-        "| `covered` | `cov` | the evidence the registry records was produced on this configuration |",
+        "| `covered` | `cov` | the evidence the registry records was produced on"
+        " this configuration; on any column but the default build the cell names the"
+        " `check.sh` rows, and the gate re-derives both that they build THIS image"
+        " and that they ran evidence the registry actually derives for the property —"
+        " a Kani harness, a fuzz target or a `tests/*.py`, never a crate's unit tests |",
         "| `equivalent` | `equ` | this configuration enables exactly the cargo features another does; `same_as` names it, the gate re-derives both closures, and the cell must write down the build knobs that still differ |",
         "| `conditional` | `cnd` | claimed only under a stated condition |",
         "| `out-of-scope` | `oos` | the claim is not made here — the code it is about is absent, or the gate it is about is compiled out |",
@@ -1398,10 +1564,12 @@ def render(root):
         ]
 
     own = owners(root)
-    # The caveat on the middle column, DERIVED. It read "Three P0-family rows carry
-    # no production tag" while the tree had none, so the page told the reader the
-    # count was short by three when it was exact — a hand-written number beside a
-    # derived one, which is the shape this file refuses on `[[cell]]`.
+    # The caveat on the middle column, DERIVED — and the diagnosis that came with
+    # it was backwards. "Three P0-family rows carry no production tag" was EXACT
+    # when it was written at 41ddf88 (`SEC-FIDO-006A/B/C`, re-derived there) and
+    # went to zero at fc7491a, which tagged them. So it was not a number wrong on
+    # arrival, it was one that ROTTED — which is the stronger argument for
+    # deriving it, and the weaker one was the one recorded.
     untagged = sorted(pid for pid in rows if not own.get(pid))
     blind = (
         f"{len(untagged)} P0-family row(s) carry no production tag at all"

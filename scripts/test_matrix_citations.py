@@ -129,13 +129,13 @@ def test_a_renamed_check_sh_row_reddens_the_prose_that_names_it(tree, capsys):
     """
     tree.edit(
         "assurance/configurations.toml",
-        "why = \"the only column that compiles the ceremony, and the row that runs it.\"",
+        "why = \"the only column that compiles the ceremony, and the row that proves it.\"",
         "why = \"the only column that compiles the ceremony; `test (screen)` runs it.\"",
     )
     assert regenerate(tree) == 0
     tree.edit("scripts/check.sh", 'run_tests "test (screen)"', 'run_tests "test (panel)"')
     tree.edit(
-        "assurance/configurations.toml", 'evidence = ["test (screen)"]', 'evidence = ["test (panel)"]'
+        "assurance/configurations.toml", 'evidence = ["kani (screen)"]', 'evidence = ["test (panel)"]'
     )
     assert "cites `test (screen)`, which is no" in red(tree, capsys)
 
@@ -148,6 +148,92 @@ def test_a_glob_citation_that_matches_nothing_is_refused(tree, capsys):
         "why = \"the image every measurement was taken on; see `formal/*.cfg`.\"",
     )
     assert "cites `formal/*.cfg`, which is not in the tree" in red(tree, capsys)
+
+
+# --- the half of the row namespace the shape rule cannot see ------------------
+
+
+def test_a_shapeless_row_cited_with_the_prefix_passes(tree):
+    """54 of the real tree's 113 rows carry no ` (…)` — `fmt`, `kani roster`,
+    `published claims` — so the shape rule sees 52% of what a rename can break.
+    The prefix is what makes the other half citable at all."""
+    tree.edit("scripts/check.sh", 'run "clippy (loud)"', 'run "fmt" cargo fmt --check\nrun "clippy (loud)"')
+    tree.edit(
+        "assurance/configurations.toml",
+        "why = \"the image every measurement was taken on.\"",
+        "why = \"the image every measurement was taken on, under `check.sh: fmt`.\"",
+    )
+    assert regenerate(tree) == 0
+
+
+def test_a_shapeless_row_that_was_renamed_reddens_the_prose(tree, capsys):
+    """The rot the whole rule exists for, on the 52% it could not reach.
+
+    Same order as its `foo (bar)` sibling above: the citation is live when it is
+    written, someone else renames the row, and before the prefix the argument
+    pointed at nothing with the grid unchanged and EXIT=0 — indistinguishable
+    from vocabulary, which is why no heuristic could have caught it.
+    """
+    tree.edit("scripts/check.sh", 'run "clippy (loud)"', 'run "fmt" cargo fmt --check\nrun "clippy (loud)"')
+    tree.edit(
+        "assurance/configurations.toml",
+        "why = \"the image every measurement was taken on.\"",
+        "why = \"the image every measurement was taken on, under `check.sh: fmt`.\"",
+    )
+    assert regenerate(tree) == 0
+    tree.edit("scripts/check.sh", 'run "fmt" cargo fmt', 'run "fmt (host)" cargo fmt')
+    said = red(tree, capsys)
+    assert "cites `check.sh: fmt`, and scripts/check.sh has no row 'fmt'" in said
+    assert "makes a shapeless row label citable" in said
+
+
+def test_a_citation_wrapped_across_two_lines_is_still_read(tree, capsys):
+    """A `why` is a TOML block joined with `\\`, so a wrapped token arrives flat —
+    but a block written WITHOUT the continuations keeps the newline, and the
+    token then matches neither pattern and is checked by nothing. 0 of the real
+    ledger's 208 tokens wrap today, which is a fact about the prose and not one
+    about the rule; this is the arm that keeps it that way."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'why = "the image every measurement was taken on."',
+        'why = """\nthe image every measurement was taken on, under `check.sh:\nfmt`."""',
+    )
+    assert "cites `check.sh: fmt`, and scripts/check.sh has no row 'fmt'" in red(tree, capsys)
+
+
+def test_a_star_in_a_real_filename_is_still_found(tree):
+    """Why the path check is one call and not two.
+
+    It read `not (root / token).exists() and not list(root.glob(token))`, and no
+    input could tell the halves apart — a mutation dropping the `exists` half
+    was a survivor. The reason is the class `CITED_PATH` admits: no `[`, no `?`,
+    so the only metacharacter that reaches the branch is `*`, and a file
+    literally named `vec*.rs` matches the pattern `vec*.rs`. This is the arm
+    that would have caught it if it were not.
+    """
+    tree.write("crates/rsk-core/src/vec*.rs", "// a star in the name, not a glob\n")
+    tree.edit(
+        "assurance/configurations.toml",
+        "why = \"the image every measurement was taken on.\"",
+        "why = \"the image every measurement was taken on, per `crates/rsk-core/src/vec*.rs`.\"",
+    )
+    assert regenerate(tree) == 0
+
+
+def test_a_token_carrying_a_bracket_is_vocabulary_and_not_a_path(tree):
+    """The boundary the simplification above rests on, pinned rather than
+    assumed: a token a glob would read as a character class never reaches the
+    path branch at all, because `CITED_PATH`'s class stops it. Widen that class
+    and the one call stops being enough — which is what this case is here to
+    say to whoever widens it."""
+    assert not matrix_gate.CITED_PATH.match("crates/rsk-core/src/vec[1].rs")
+    assert not matrix_gate.CITED_PATH.match("crates/rsk-core/src/vec?1.rs")
+    tree.edit(
+        "assurance/configurations.toml",
+        "why = \"the image every measurement was taken on.\"",
+        "why = \"the image every measurement was taken on: `bytes[1..3]`, `EF_META[0]`.\"",
+    )
+    assert regenerate(tree) == 0
 
 
 # --- and on the tree it ships in ---------------------------------------------
