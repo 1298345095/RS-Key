@@ -830,3 +830,263 @@ def _measure_held(root=ROOT):
 def _measure_owed():
     summary = claims_gate.audit(ROOT)[1]
     return int(re.search(r"(\d+) page\(s\) carrying", summary).group(1))
+
+
+# ---- the orphan: an id no registry holds -------------------------------------
+#
+# The measured hole. Both rules above START from the ids the registry knows —
+# `spans` kept `m.group(0) in status` and the paragraph was `continue`d when that
+# left none — so a sentence about an INVENTED id was read by neither.
+# "`SEC-BOOT-042` is PROVEN-SOURCE on the shipped image." and the same with
+# `MEASURED` were each EXIT=0 with ZERO findings, appended to a real corpus page.
+# The control that did fall, "`SEC-FIDO-002` is BINARY-CHECKED", fell on the
+# STATUS half and only because that word is no row's status: invent the id rather
+# than the word and nothing looked at all.
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "`SEC-BOOT-042` is PROVEN-SOURCE on the shipped image.",
+        "`SEC-BOOT-042` is MEASURED on an RP2350 A4 board.",
+        # `SEC-BOOT` is a real family and `MODELLED-ONLY` is a real status: the
+        # invention is two digits, and neither half of the copy rules sees it.
+        "`SEC-BOOT-042` is MODELLED-ONLY, like the rest of its family.",
+        "`SEC-FIDO-042` and `SEC-STORE-009` are BOUNDED.",
+    ],
+)
+def test_an_id_no_registry_holds_is_refused(tree, sentence):
+    say(tree, sentence)
+    reported = findings(tree)
+    assert any("no registry row holds" in f for f in reported), reported
+
+
+def test_an_orphan_needs_no_status_word_anywhere(tree):
+    """Which is why it is a rule of its own and not a widening of the copy rules:
+    an id with no row has no status to be held to, so the sentence around it is
+    unfalsifiable rather than false, and it stays a finding with no evidence word
+    on the page at all."""
+    say(tree, "The boot slice is tracked as `SEC-BOOT-042` and reviewed monthly.")
+    reported = findings(tree)
+    assert any("SEC-BOOT-042" in f and "no registry row holds" in f for f in reported)
+    assert not any("copy of anything" in f for f in reported), reported
+
+
+def test_the_orphan_rule_is_scored_per_occurrence(tree):
+    """It has no window, which is the one thing the other two rules had to get
+    right twice. 14 978 of 29 403 prose lines here are 50-95 columns, so a
+    sentence- or paragraph-scoped rule catches a lie depending on where an editor
+    wrapped; two orphans one blank line apart are two findings either way."""
+    say(tree, "`SEC-BOOT-042` is PROVEN-SOURCE.\n\nAnd `SEC-BOOT-043` is not.")
+    reported = [f for f in findings(tree) if "no registry row holds" in f]
+    assert len(reported) == 2, reported
+
+
+def test_the_shape_reaches_an_id_the_registry_does_not_hold():
+    """`test_the_id_pattern_reaches_the_clause_rows` holds [`ID`] from getting too
+    NARROW, and 59 registered rows cannot witness the direction this rule needs:
+    that a plausible id NOBODY registered is id-shaped. That half is asserted
+    here, because it is the half the registry can never supply."""
+    status = claims_gate.vocabulary(ROOT)[0]
+    for invented in (
+        "SEC-BOOT-042",
+        "SEC-FIDO-099",
+        "SEC-STORE-007",
+        "SEC-FIDO-L09",
+        "SEC-PQC-001",
+    ):
+        assert claims_gate.ID.fullmatch(invented), invented
+        assert invented not in status, invented
+
+
+def test_widening_the_shape_would_redden_the_shipped_tree():
+    """The other side of that trade, kept live rather than argued in a comment:
+    the obvious next shape — a namespace and any further segments — reads
+    `CHANGELOG.md`'s `SEC-DISP` family and its `SEC-FIDO-NNN` placeholder as
+    invented ids. Anchored by CONTENT, because `CHANGELOG.md` moves."""
+    broad = re.compile(r"\bSEC(?:-[A-Z0-9]+)+\b")
+    status = claims_gate.vocabulary(ROOT)[0]
+    over = {
+        m.group(0)
+        for _, text in claims_gate.corpus(ROOT)
+        for m in broad.finditer(text)
+        if m.group(0) not in status
+    }
+    assert {"SEC-DISP", "SEC-FIDO-NNN"} <= over, (
+        f"the prose this trade was measured on is gone; re-measure the shape: {over}"
+    )
+
+
+@pytest.mark.parametrize(
+    "prose",
+    [
+        # The first three are quoted from the shipped corpus.
+        "The three `SEC-DISP-*` cells stay `gap` for that reason.",
+        "Refines `RSKeySecurityState!<Invariant>` — SEC-FIDO-NNN. So a reader can tell.",
+        "One cell moved: `SEC-DISP-001/002/003 × firmware-display` is now `gap`.",
+        "`PLAT-TOOL-004` is PROVEN and `TM-HOST-GATES` is MEASURED.",
+        "See `formal/SEC-Boot.cfg`, `scripts/sec-fido-001.py` and the key `sec-boot-042`.",
+    ],
+)
+def test_a_sec_shaped_token_that_is_not_a_claim_stays_prose(tree, prose):
+    """A family named as a family, a placeholder, a run of cells, another
+    registry's ids, and three lower-case spellings. A rule that fired on any of
+    these would be measuring spelling rather than holding a claim."""
+    say(tree, prose)
+    assert findings(tree) == []
+
+
+@pytest.mark.parametrize(
+    "sentence,refused",
+    [
+        ("A note on the cache half: `SEC-\nSTORE-002` is BOUNDED today.", False),
+        ("A note on the cache half: `SEC-\nSTORE-002` is PROVEN today.", True),
+    ],
+)
+def test_an_id_split_by_a_hard_wrap_is_still_its_own_row(tree, sentence, refused):
+    """Both directions, and each was a hole [`flat`] closes — measured by
+    reverting the two sites alone. Without it here, the orphan rule reads a legal
+    wrap as an invention; without it in `spans`, the subject is dropped and
+    "`SEC-\\nSTORE-002` is PROVEN" is EXIT=0 on a corpus that wraps."""
+    say(tree, sentence)
+    assert bool(findings(tree)) is refused, findings(tree)
+
+
+def test_a_wrapped_true_claim_still_pays_into_the_scanner_floor(tree):
+    """Green is not enough on the true half: if the wrapped id is merely dropped,
+    the claim goes unchecked and reads exactly like a page with nothing on it —
+    which is what `held` staying put measured before [`flat`] reached `spans`."""
+    before = _measure_held(tree)
+    say(tree, "A note on the cache half: `SEC-\nSTORE-002` is BOUNDED today.")
+    assert _measure_held(tree) == before + 1
+
+
+def test_a_shape_derived_from_the_registry_blinds_the_rule(tree):
+    """The removal arm that no other rule here catches, and the "fix" this rule
+    must never be given: an [`ID`] built FROM the 59 registry rows leaves `held`
+    and the disclaimer count untouched — every floor stays satisfied — and makes
+    the orphan invisible again. The shape is the load-bearing half."""
+    say(tree, "`SEC-BOOT-042` is PROVEN-SOURCE on the shipped image.")
+    assert any("no registry row holds" in f for f in findings(tree))
+    status = claims_gate.vocabulary(ROOT)[0]
+    derived = re.compile(
+        r"\b(?:" + "|".join(re.escape(i) for i in sorted(status, key=len, reverse=True)) + r")\b"
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(claims_gate, "ID", derived)
+        assert findings(tree) == [], "the mutation did not blind the rule"
+
+
+def test_the_row_and_not_the_helper(tree):
+    """`check.sh` runs `python scripts/claims_gate.py`. Fourteen of thirty gates
+    here were byte-identical to baseline when their entry function's non-zero
+    return was flipped to zero — the exit PATH was unheld, this file among them.
+    A shared case drives that generically now; this drives it over THIS rule's
+    defect, because a generic red says nothing about which finding made it. The
+    fixture copies `scripts/`, so the copied script's own `ROOT` is the fixture."""
+    row = [sys.executable, "scripts/claims_gate.py"]
+    green = subprocess.run(row, cwd=tree, capture_output=True, text=True)
+    assert green.returncode == 0, (green.stdout, green.stderr)
+    assert green.stdout.startswith("claims-gate: ok —")
+    say(tree, "`SEC-BOOT-042` is PROVEN-SOURCE on the shipped image.")
+    red = subprocess.run(row, cwd=tree, capture_output=True, text=True)
+    assert red.returncode == 1, (red.stdout, red.stderr)
+    assert "SEC-BOOT-042" in red.stderr and "no registry row holds" in red.stderr
+
+
+# ---- and the direction that is NOT held --------------------------------------
+
+
+def test_the_reverse_direction_would_redden_a_clean_tree():
+    """Why "a registry row no HAND-WRITTEN page names" is a measurement in the
+    docstring and not a rule in the file. The number is held here because a
+    number nothing checks has already rotted: if it ever reaches 0 the rule
+    becomes free, and that is a decision to re-take rather than a comment."""
+    status = claims_gate.vocabulary(ROOT)[0]
+    named = {
+        i
+        for _, text in claims_gate.corpus(ROOT)
+        for i in claims_gate.ID.findall(text)
+        if i in status
+    }
+    unnamed = set(status) - named
+    assert unnamed, "the reverse rule is now free — re-take the decision"
+    said, rows = re.search(
+        r"report (\d+) of the (\d+) on\s+a clean tree", claims_gate.__doc__
+    ).groups()
+    assert (int(said), int(rows)) == (len(unnamed), len(status)), (said, rows)
+
+
+def test_those_rows_are_generator_written_and_not_rot():
+    """The other half of the same decision, and the half that makes it a
+    measurement rather than a preference: they are not missing, they are in
+    TABLES. `formal/README.md` is hand-written and names all 59 — until
+    [`mask_regions`] runs over its six generated regions."""
+    status = claims_gate.vocabulary(ROOT)[0]
+    everywhere = {
+        i
+        for _, text in claims_gate.published(ROOT)
+        for i in claims_gate.ID.findall(text)
+        if i in status
+    }
+    assert everywhere == set(status), sorted(set(status) - everywhere)
+    raw = claims_gate.normalise((ROOT / "formal/README.md").read_text(encoding="utf-8"))
+    assert {i for i in claims_gate.ID.findall(raw) if i in status} == set(status)
+    masked = {
+        i for i in claims_gate.ID.findall(claims_gate.mask_regions(raw)) if i in status
+    }
+    kept = int(re.search(r"registered ids to (\d+)", claims_gate.__doc__).group(1))
+    assert len(masked) == kept, sorted(masked)
+
+
+def test_the_orphan_citation_is_the_line_in_the_file(tree):
+    """This rule's WHOLE output is a citation, and the copy rules already shipped
+    one wrong for the reason `test_a_reported_line_is_the_line_in_the_file` holds
+    above. Same page, because a page carrying no hyphen-wrap cannot drift — and
+    an orphan finding is cited from a different pass, so it drifts separately."""
+    page = "docs/formal.md"
+    raw = (tree / page).read_text()
+    assert re.search(r"-\n[ \t]*\S", raw), f"{page} carries no hyphen-wrap to drift on"
+    say(tree, "The boot slice is tracked as `SEC-BOOT-042`.", page=page)
+    lines = (tree / page).read_text().splitlines()
+    want = next(n for n, line in enumerate(lines, 1) if "SEC-BOOT-042" in line)
+    got = [f for f in findings(tree) if "no registry row holds" in f]
+    assert got and got[0].startswith(f"{page}:{want}:"), (want, got)
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "`SEC-**BOOT**-042` is PROVEN-SOURCE.",
+        "`SEC‑BOOT‑042` is PROVEN-SOURCE.",
+        "`SEC​-BOOT-042` is PROVEN-SOURCE.",
+        "`SEC-BOOT-\n042` is PROVEN-SOURCE.",
+    ],
+)
+def test_an_orphan_spelled_to_render_the_same_reads_the_same(tree, spelling):
+    """[`normalise`] and [`soft`] are shared with the copy rules, and a rule that
+    inherited only one of them would be bypassable by emphasis or by the
+    editor's wrap. Reported under the flattened name in every case."""
+    say(tree, spelling)
+    reported = [f for f in findings(tree) if "no registry row holds" in f]
+    assert reported and all("SEC-BOOT-042" in f for f in reported), reported
+
+
+def test_a_registry_that_went_blind_fails_loud(tree):
+    """The direction the three floors exist for, and this rule answers it the
+    other way round: a registry that stops parsing makes every id an orphan
+    rather than every page clean, one finding per occurrence in the corpus. So a
+    floor here would be the decoration — the failure is already red, loudly."""
+    (tree / claims_gate.REGISTRY).write_text("# emptied\n")
+    reported = [f for f in findings(tree) if "no registry row holds" in f]
+    assert len(reported) > claims_gate.CLAIM_FLOOR, reported
+
+
+def test_an_invented_region_marker_still_exempts_a_paragraph(tree):
+    """The inherited bypass, asserted rather than described so it cannot be
+    believed closed: [`REGION`] takes the SHAPE, so `<!-- bogus:start -->` around
+    a false claim is EXIT=0 for all three rules. The trade is stated in the
+    docstring; this case is what would go red if someone closed it, which is the
+    day to delete the paragraph that says it is open."""
+    say(tree, "<!-- bogus:start -->\n\n`SEC-BOOT-042` is PROVEN-SOURCE.\n\n<!-- bogus:end -->")
+    assert findings(tree) == []

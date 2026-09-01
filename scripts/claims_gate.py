@@ -36,6 +36,26 @@ Two rules, and both are about a COPY:
   the week, and the sentence rule cannot see it because the STATUS half stayed
   true.
 
+A THIRD rule, and it is the one thing here not about a copy: an id that copies
+nothing because no registry holds it. Both rules above start from the ids the
+registry KNOWS — `spans` kept `m.group(0) in status` and the paragraph was
+`continue`d when that left none — so a sentence about an id nobody registered was
+read by neither. Measured before this rule existed: "`SEC-BOOT-042` is
+PROVEN-SOURCE on the shipped image." and "`SEC-BOOT-042` is MEASURED on an RP2350
+A4 board." each gave EXIT=0 with ZERO findings, on a page in the shipped corpus,
+and `SEC-BOOT` is a real family — the invention was two digits. The control that
+did fall, "`SEC-FIDO-002` is BINARY-CHECKED", fell on the STATUS half and only
+because `BINARY-CHECKED` is no row's status; invent the ID instead of the word
+and nothing looked at all. So an id-shaped token on a hand-written page that the
+registry does not hold is a finding naming the page and the token — which is
+stage 12's "no orphan public claim", checkable in no other row. It is scored per
+OCCURRENCE: an orphan has no subject, no clause and no status, so it is the only
+rule here with no window to get wrong. What it did need was [`flat`], in both
+directions and each measured: without it the orphan rule reads a legal
+`SEC-\nSTORE-002` as an invented id, and the SPANS filter it shares — raw until
+this rule made the disagreement visible — let "`SEC-\nSTORE-002` is PROVEN" out
+at EXIT=0.
+
 What this row does not do, measured rather than guessed — an independent review
 drove 23 spellings and broke the first version with plain English before it
 needed a trick one:
@@ -85,10 +105,40 @@ needed a trick one:
   `45cfg | 11mut`, and the status moved to a header row. It catches the layout
   the author happened to use, not the copy;
 * the corpus is markdown. A P0-family claim in a Rust doc comment
-  (`store_meta_kani.rs` carries one, true today) is outside it.
+  (`store_meta_kani.rs` carries one, true today) is outside it;
+* [`REGION`] takes the SHAPE of a generated region and not a roster of the
+  generators, so an INVENTED marker is a working self-exemption from all three
+  rules: measured, `<!-- bogus:start -->` around "`SEC-BOOT-042` is
+  PROVEN-SOURCE" is EXIT=0 with the census unmoved. It is the same shape
+  `is_generated` closed one level up, and it is left open for the reason its own
+  comment gives — the real markers are part literal and part built with an
+  f-string or `.format`, so a derived roster is the fragile half, and a
+  hand-kept one would read a new generator's output as prose. Nothing anywhere
+  holds a marker name to a generator, and `narrow_gate` and `run_count_gate`
+  read the same primitive, so this is not a trade to re-take in one file;
+* the orphan rule reads only the SHAPE, and the shape is [`ID`], held to every
+  registry row by a case. That case holds it from getting too NARROW, and no
+  registry row can witness the direction this rule needs — that `SEC-BOOT-042`
+  is id-shaped is a fact about ids the registry does NOT have. So the tail is
+  measured instead of derived, and widening it is worse: `SEC(-[A-Z0-9]+)+`
+  reddens the shipped tree twice, on `CHANGELOG.md`'s `SEC-DISP` and
+  `SEC-FIDO-NNN` — a family named as a family, and a placeholder;
+* **the REVERSE direction is open, and the number is why.** "A registry row no
+  hand-written page names" is not held, because it would report 34 of the 59 on
+  a clean tree — measured, and they are not rot: every occurrence of all 34 is
+  generator-written, on `docs/assurance-vector.md`, `docs/assurance-matrix.md`
+  and `docs/platform-assumptions.md`, or inside one of the six generated REGIONS
+  of `formal/README.md`, which drops that page from 59 registered ids to 7 once
+  [`mask_regions`] has run. The weaker form — a row no page names AT ALL — is 0
+  today and would be decorative: `evidence_gate` refuses a stale
+  `docs/assurance-vector.md` and `assurance_gate` refuses a stale
+  `formal/README.md` table, so a row missing from a generated page is already
+  their finding. What stays unheld is the middle: a row that only ever appears
+  in a table, which no prose has ever had to explain.
 
 What it does is make the WORDS the registry owns unusable as a lie about a row
-that registry holds, in the shapes above.
+that registry holds, and the id itself unusable as a claim about nothing, in the
+shapes above.
 """
 
 import pathlib
@@ -538,10 +588,14 @@ def audit(
         for chunk in PARAGRAPH.split(text):
             base = text.find(chunk, cursor)
             cursor = base + len(chunk) if base != -1 else cursor
+            # [`flat`] on the ID for the reason its docstring gives about the
+            # STATUS word, and measured the same way: raw, `SEC-\nSTORE-002`
+            # compares unequal to its own row, the span is dropped, and
+            # "`SEC-\nSTORE-002` is PROVEN" is EXIT=0 on a corpus that wraps.
             spans = [
-                (m.start(), m.end(), m.group(0))
+                (m.start(), m.end(), flat(m.group(0)))
                 for m in ID.finditer(chunk)
-                if m.group(0) in status
+                if flat(m.group(0)) in status
             ]
             if not spans:
                 continue
@@ -590,6 +644,23 @@ def audit(
                     " hand-written status is a copy, and this one is not a copy of"
                     " anything"
                 )
+        # Per OCCURRENCE and not per paragraph: an orphan needs no subject, no
+        # clause and no window, so it is the one rule here that cannot depend on
+        # where an editor wrapped. [`ID`] and not a second pattern — a case
+        # fullmatches every registry row against it, and the breadth this needs
+        # is the direction no row can witness (docstring).
+        for found in ID.finditer(text):
+            name = flat(found.group(0))
+            if name in status:
+                continue
+            findings.append(
+                f"{rel}:{line_of(text, found.start())}: names {name}, which no"
+                " registry row holds — the id is the whole of what a published"
+                " claim points at, so one pointing nowhere cannot be held to a"
+                " status, and the sentence around it is unfalsifiable instead of"
+                " merely false"
+            )
+
         for number, line in enumerate(text.splitlines(), 1):
             if not (ID.search(line) and vocab.search(line)):
                 continue
