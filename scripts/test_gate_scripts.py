@@ -83,6 +83,14 @@ NAMED = {
     # `_gate.py`, so their tables could have been deleted with this file green.
     "security_trace.py": ("test_security_trace.py", "check.sh"),
     "trace_map.py": ("test_trace_map.py", "check.sh"),
+    # The four that sat in `UNROSTERED` below under the plainest reason there is
+    # — "a `run` row with no mutation table" — until each got one. Two of them
+    # are `.sh`, which the `_gate.py` glob cannot see even when the name ends in
+    # `_gate`: `complexity_gate.sh` is that blind spot wearing a third suffix.
+    "docs_constants.py": ("test_docs_constants.py", "check.sh"),
+    "gate_union.py": ("test_gate_union.py", "check.sh"),
+    "complexity_gate.sh": ("test_complexity_gate.py", "check.sh"),
+    "token_refinement.sh": ("test_token_refinement.py", "check.sh"),
 }
 #: The pytest invocation that has to reach the tests, wherever it is spelled.
 COLLECTS = re.compile(r"pytest\s+([^\n|;&]*)")
@@ -223,10 +231,13 @@ def test_every_gate_reports_a_summary_when_it_is_happy():
 #: A `check.sh` row that runs a script under `scripts/` and is owed no mutation
 #: table by any rule above, with the reason. Held BOTH ways, the way
 #: `release_gate.HISTORICAL` is: a name here that has since gained a table is
-#: deleted from here, so a carve-out cannot outlive its need. Measured when this
-#: case was written — four rows, and `pt.sh` is the only one of them that is not
-#: a guard. The other three are the same blind spot `crate_graph.py` sat in,
-#: recorded rather than hidden.
+#: deleted from here, so a carve-out cannot outlive its need.
+#:
+#: Which is what happened to the four that used to sit here under the plainest
+#: reason of all — "a `run` row with no mutation table" — and are on [`NAMED`]
+#: now. What is left is the two shapes a table here is not the answer to: a
+#: script that is not a guard, and a guard whose table is INSIDE it, driven by
+#: the row itself. Three rows, and `pt.sh` is the only one that is not a guard.
 UNROSTERED = {
     "pt.sh": "not a guard and not a `run` row: the elf and store rows invoke it"
              " to apply a partition table, and it asserts nothing",
@@ -234,15 +245,6 @@ UNROSTERED = {
                    " here — `check.sh` runs its `--self-test`, so the table is"
                    " inside the script and the row IS the drive",
     "ci-knobs.sh": "the same: a `--self-test` row",
-    "complexity_gate.sh": "a `run` row with no mutation table. The `_gate.py`"
-                          " glob cannot see a `.sh` guard, which is the blind"
-                          " spot `crate_graph.py` sat in wearing another suffix",
-    "docs_constants.py": "a `run` row with no mutation table — held only by the"
-                         " constants it happens to read today",
-    "gate_union.py": "a `run` row with no mutation table",
-    "token_refinement.sh": "a `run` row with no mutation table of its own; it"
-                           " dispatches to two `--check` scripts that have none"
-                           " either",
 }
 
 #: A `scripts/…` path as a `check.sh` row spells it, with or without `python`.
