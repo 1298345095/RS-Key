@@ -344,7 +344,7 @@ def shippable_features(root: pathlib.Path) -> frozenset[str]:
 
 
 def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
-    """Files whose `mod` declaration cannot hold in any buildable image.
+    """Files no buildable image compiles: a withheld `mod`, and its sub-tree.
 
     The `kani`/`tests` filename filter this replaced read a NAME, and the six
     `*_assurance.rs` mirrors carry neither: measured, `store_assurance.rs`
@@ -352,12 +352,27 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
     `SEC-STORE-002`, `-003`, `-004` and `-006`, and `transport_assurance.rs` of
     `SEC-TRANS-003` — §2 principle 7 in the one direction it forbids, a
     proof-only mirror standing in for the code it mirrors.
+
+    A withheld declaration shuts the whole SUB-TREE under it, not only the file
+    it names, because everything below is reached through it and nothing below
+    repeats its `cfg`. Measured, that is eighteen files: `crates/rsk-fido/src/lib.rs`
+    says `#[cfg(test)] mod conformance;` and `conformance/mod.rs` then declares
+    its siblings plainly, so every one was a production owner-in-waiting — the
+    same mirror-for-the-code defect one directory out, harmless today only
+    because none of the eighteen carries a tag yet.
+
+    The closure was `matrix_gate.production_rust`'s alone. It belongs at THIS
+    layer, where the reader lives and where `evidence_gate` also calls in;
+    `matrix_gate` imports this module, so the edge only runs one way, and its
+    own copy now filters an already-closed set rather than answering second.
     """
     shippable = shippable_features(root)
-    out = {}
-    for parent in list((root / "crates").glob("*/src/**/*.rs")) + list(
+    sources = list((root / "crates").glob("*/src/**/*.rs")) + list(
         (root / "firmware" / "src").glob("**/*.rs")
-    ):
+    )
+    out: dict[pathlib.Path, str] = {}
+    shut: dict[pathlib.Path, str] = {}
+    for parent in sources:
         for match in MOD_DECL.finditer(parent.read_text(errors="ignore")):
             expr = None
             for line in match.group("attrs").splitlines():
@@ -372,7 +387,19 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
             if not target.is_file():
                 target = parent.parent / name / "mod.rs"
             if target.is_file():
-                out[target.resolve()] = f"{parent.name} declares `mod {name}` under cfg({expr})"
+                why = f"{parent.name} declares `mod {name}` under cfg({expr})"
+                out[target.resolve()] = why
+                # Where the refused module's own children sit: beside a `mod.rs`,
+                # in a same-stem directory otherwise. Taken off the RESOLVED
+                # target so a `#[path]` re-point carries its sub-tree with it.
+                home = target.parent if target.name == "mod.rs" else target.parent / target.stem
+                shut[home.resolve()] = why
+    for source in sources:
+        resolved = source.resolve()
+        for ancestor in resolved.parents:
+            if ancestor in shut:
+                out.setdefault(resolved, f"{shut[ancestor]}, above this file")
+                break
     return out
 
 

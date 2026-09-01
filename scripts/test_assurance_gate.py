@@ -832,3 +832,51 @@ def test_a_declaration_reached_through_a_path_attribute_is_found():
     names = {path.name for path in excluded}
     assert "store_assurance.rs" in names
     assert any(name.endswith("_kani.rs") for name in names)
+
+
+def _mirror_tree(tree, gate: str) -> pathlib.Path:
+    """Move `BarNeverOpens`'s only tag into a sub-tree declared under `gate`.
+
+    The one variable between the two cases below is `gate`, so a red that came
+    from a mis-parsed tag or a file the resolver never opened would take the
+    green twin down with it.
+    """
+    edit(
+        tree / "crates" / "rsk-a" / "src" / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        f"{gate}mod conformance;\n",
+    )
+    home = tree / "crates" / "rsk-a" / "src" / "conformance"
+    home.mkdir()
+    (home / "mod.rs").write_text("mod wire;\n")
+    (home / "wire.rs").write_text("// Refines `Mini!BarNeverOpens` — SEC-T-002.\n")
+    # The property must have MOVED, not merely gone: a red arm over a fixture
+    # whose tag was only deleted is the sibling case, satisfied by absence.
+    assert "SEC-T-002" not in (tree / "crates" / "rsk-a" / "src" / "lib.rs").read_text()
+    assert "SEC-T-002" in (home / "wire.rs").read_text()
+    return home / "wire.rs"
+
+
+def test_a_tag_under_a_withheld_mod_is_not_a_production_owner(tree, capsys):
+    """The transitive half, and the shape it was measured in.
+
+    `cfg_excluded` maps a withheld `mod` onto the ONE file it names, so a
+    directory module shut by `#[cfg(test)] mod conformance;` kept every sibling
+    below its `mod.rs` in the production set — eighteen of them on the real
+    tree, under `crates/rsk-fido/src/conformance/`. Harmless only while none
+    carries a tag, which is a condition a commit changes silently. Measured on a
+    copy of the shipped tree: moving `SEC-FIDO-008`'s sole tag out of
+    `clientpin.rs` and into `conformance/clientpin.rs` was EXIT=0, and the
+    generated table went on publishing `Rust = 1` for an owner no image compiles.
+    """
+    _mirror_tree(tree, "#[cfg(test)]\n")
+    red(tree, capsys, "checked by Seams.cfg but has no Refines tag")
+
+
+def test_a_tag_under_a_shipped_mod_is_still_a_production_owner(tree, capsys):
+    """The control the rule must be indifferent to: the same mirror, the same
+    tag, one attribute fewer. A sub-tree no cfg withholds still owns its
+    property, so the exclusion is not a blanket refusal of directories."""
+    _mirror_tree(tree, "")
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
