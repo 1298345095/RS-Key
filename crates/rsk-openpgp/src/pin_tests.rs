@@ -66,6 +66,11 @@ fn pin_and_dek_migrate_to_otp_kbase_at_verify() {
     let mut rng = CountRng(0);
     let d = otp_dev();
 
+    // The one-shot at-rest lap has already run on this device: the migration
+    // below supersedes a chip-serial-rooted verifier and DEK copy AFTER it, so
+    // it must re-arm the lap (audit run-35's rule).
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+
     // …verifies under the OTP build via the fallback, without burning a retry
     // and with a working session (the DEK copy was re-wrapped).
     assert_eq!(
@@ -81,6 +86,11 @@ fn pin_and_dek_migrate_to_otp_kbase_at_verify() {
         Sw::OK
     );
     assert!(sess.has_pw1);
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "migrate_pin_kbase re-keyed the verifier and the DEK off the chip-serial \
+         root and must re-arm the at-rest lap",
+    );
     let mut dek = [0u8; DEK_SIZE];
     load_dek(&d, &mut fs, &sess, &mut dek).unwrap();
 
@@ -384,9 +394,17 @@ fn change_pw1_then_new_pin_works_and_dek_survives() {
     let mut data = Vec::new();
     data.extend_from_slice(PW1_DEFAULT);
     data.extend_from_slice(b"654321");
+    // The at-rest lap has already run: the commit below supersedes the DEK copy
+    // sealed under the PIN the owner has just replaced, so it must re-arm it.
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
     assert_eq!(
         change_pin(&d, &mut fs, &mut sess, &mut rng, 0x00, PW1_MODE81, &data),
         Sw::OK
+    );
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "commit_staged_dek retired the copy sealed under the old PIN and must \
+         re-arm the at-rest lap",
     );
     sess.reset();
 
@@ -922,9 +940,61 @@ fn a_pending_stage_survives_an_unrelated_pin_update() {
         ),
         Sw::OK
     );
+    // The at-rest lap has already run: the recovery below retires a copy sealed
+    // under a PIN the owner has replaced, so it must re-arm it.
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
     let mut got = [0u8; DEK_SIZE];
     load_dek(&d, &mut fs, &s3, &mut got)
         .expect("the PW3 stage was destroyed by an unrelated PW1 update");
+    assert_eq!(got, dek);
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "recover_staged_dek superseded the copy sealed under the old PIN and \
+         must re-arm the at-rest lap",
+    );
+}
+
+/// A DEK update abandoned before its verifier landed leaves a stage holding the
+/// copy under a PIN nobody presents. The next successful open retires it — a lazy
+/// supersession like every other, so it re-arms the at-rest lap too. Neither half
+/// of that had a test.
+#[test]
+fn a_stale_stage_is_retired_and_re_arms_the_at_rest_lap() {
+    let d = dev();
+    let mut fs = setup();
+    let mut sess = Session::new();
+    assert_eq!(
+        verify(
+            &d,
+            &mut fs,
+            &mut sess,
+            &mut CountRng(0),
+            0x00,
+            PW3_MODE83,
+            PW3_DEFAULT
+        ),
+        Sw::OK
+    );
+    let mut dek = [0u8; DEK_SIZE];
+    load_dek(&d, &mut fs, &sess, &mut dek).unwrap();
+
+    // An update that staged under a new PW3 and died before `put_verifier`: the
+    // committed copy still opens under the standing PIN, so the stage is garbage.
+    stage_dek(&d, &mut fs, &mut CountRng(9), EF_DEK_PW3, b"87654321", &dek).unwrap();
+    assert!(fs.has_key(EF_DEK_STAGE_PW3), "the fixture staged nothing");
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+
+    let mut got = [0u8; DEK_SIZE];
+    load_dek(&d, &mut fs, &sess, &mut got).unwrap();
+    assert!(
+        !fs.has_key(EF_DEK_STAGE_PW3),
+        "a stage the committed copy proves garbage was left live",
+    );
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "retiring a stale stage supersedes a copy sealed under a PIN nobody \
+         holds and must re-arm the at-rest lap",
+    );
     assert_eq!(got, dek);
 }
 
