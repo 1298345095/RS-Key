@@ -23,9 +23,11 @@ skips would be counting them while the session is still deciding them.
 from __future__ import annotations
 
 #: How many skipped cases `pytest scripts` may report. ZERO — a case that cannot
-#: run in a bare checkout is the thing to fix, not the budget: every table under
-#: `scripts/` drives its subject over handed-in text or a `tmp_path` fixture, so
-#: none of them needs a build, a board or a network. It is a PARAMETER of
+#: run in a bare checkout is the thing to fix, not the budget: nearly every table
+#: under `scripts/` drives its subject over handed-in text or a `tmp_path`
+#: fixture. The exception is `test_ct_gate.py`'s image arms, which disassemble
+#: the built firmware because the defect they inject is machine code; they ERROR
+#: without one rather than skipping, which is the point. It is a PARAMETER of
 #: `verdict()` rather than a global a case reads, so both arms are drivable
 #: without patching the number the session it runs in is judged by.
 SKIP_BUDGET = 0

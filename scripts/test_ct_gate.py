@@ -2,15 +2,26 @@
 # Copyright (C) 2026 RS-Key contributors
 """The mutation table for `ct_gate.py`.
 
-Every case runs against a RECORDED disassembly and a registry handed in as text:
-the parser and the rule are what a case can decide, the shipped image is what the
-gate row decides, and neither the ELF nor the working tree is touched here. Both
-of those are corrections an independent review drove — the first version wrote
-`assurance/ct_sites.toml` from a case and restored it in a `finally`, and three
-of its cases read whichever firmware `target/` happened to hold, which after
-`check.sh`'s later rows is the no-touch build.
+Two halves, and the split is what they can decide. The cases above the fixtures
+run against a RECORDED disassembly and a registry handed in as text: the parser
+and the RULE are what they are about, and neither the ELF nor the working tree is
+touched. That the registry is handed in is a correction an independent review
+drove — the first version wrote `assurance/ct_sites.toml` from a case and
+restored it in a `finally`.
 
-The image arms are recorded in [`test_the_image_arms_were_driven_by_hand`].
+The second half — from `whole_image` down — drives the ROW, `python
+scripts/ct_gate.py`, as a subprocess with the DISASSEMBLER substituted: the real
+image's real objdump output, cut to the functions the site is inlined into,
+mutated at the instruction level and fed back. It is what the recorded table in
+[`test_the_image_arms_were_driven_by_hand`] could not be, because a case cannot
+relink the firmware: those five arms edited Rust and rebuilt by hand, and nothing
+re-ran them. These do, every session. Neither half touches the working tree.
+
+Which image the second half reads is whichever `target/` holds — after
+`check.sh`'s later rows that is the no-touch build, and after
+`cargo build --release -p firmware` it is the default one. No case here reads a
+count off it, so both drive these arms; pinning the default image is the row's
+job, not this file's.
 
 The fixtures are the shipped comparator's actual lowering, copied out of
 `arm-none-eabi-objdump -d -l --inlines` on the release image, with the inline
@@ -19,8 +30,11 @@ chain kept intact because attribution is half of what is under test.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
 
 import pytest
@@ -933,6 +947,12 @@ def test_the_registry_refuses_a_key_it_does_not_read():
 def test_the_image_arms_were_driven_by_hand():
     """Recorded, because a case cannot relink the firmware.
 
+    History now, and no longer the only evidence that a defect reaches an exit
+    code: the arms below this one inject an early exit into the real image's
+    disassembly and drive the real entry point over it on every run. What is kept
+    here is what they cannot re-derive — the arms whose mutant was a SOURCE edit,
+    and the four refutations that shaped the rule.
+
     Driven through the row's own command (`python scripts/ct_gate.py`) after
     `cargo build --release -p firmware`:
 
@@ -994,3 +1014,397 @@ def test_the_image_arms_were_driven_by_hand():
     pass. The firmware build it reads was already a row.
     """
     assert ct_gate.REGION == "ct-sites"
+
+
+#: An emitted function's header line, which is what the cut below is made at.
+#: Not `FUNC_HEAD`: that one matches the INLINE frames objdump reprints inside a
+#: function, and cutting at those would cut a run in half.
+FUNCTION = re.compile(r"^[0-9a-f]{8} <")
+
+#: `ct_eq` as the disassembly SPELLS it, hash suffix excluded. `ct_gate.demangle`
+#: is what turns this into `SYMBOL`; deciding which functions survive the cut is
+#: a grep over the text, before any parse has happened.
+MANGLED = "_ZN10rsk_crypto3mac5ct_eq"
+
+SYMBOL = SITE["CT-CMP-001"]["symbol"]
+
+#: The half of a finding that says THE DEFECT. A row that goes red on a floor, on
+#: a missing image or on a parse error has gone red for the inverse reason, and
+#: an arm that reads only the exit code cannot tell the two apart — measured in
+#: this repo as 2 of 24 co-refutation patches scoring a kill for the wrong half.
+LEAK = "a secret-dependent branch inside a constant-time site"
+
+#: Every OTHER way the row can go red. An arm below asserts none of these is what
+#: it caught, so a defect that stopped being a defect and started being a parse
+#: failure cannot pass for a kill.
+NOT_THE_DEFECT = (
+    "under the measured",
+    "is in no inline chain",
+    "the reload excuse covers",
+    "no paragraph says",
+    "cannot be generated",
+    "build it first",
+)
+
+
+@pytest.fixture(scope="session")
+def whole_image():
+    """`ct_gate`'s own reader, over `ct_gate`'s own image, run ONCE per session.
+
+    Which image: whichever `target/` holds, and inside `check.sh` that is the
+    `--features no-touch` build, because its row sits between the default build
+    and pytest. Nothing here reads a count off it, so either image drives these
+    arms — the row is what pins the default one.
+
+    A missing ELF is a FINDING and not a skip. `conftest.py` fails the session on
+    any skip for the reason this section exists: a case that stops running is the
+    one state `check.sh` cannot tell from a pass.
+    """
+    elf = ROOT / ct_gate.ELF
+    assert elf.is_file(), (
+        f"{ct_gate.ELF} is not there — `cargo build --release -p firmware`"
+        " first. The arms below prove a machine-code defect reddens the row, and"
+        " they have no image to put a defect into."
+    )
+    done = subprocess.run(
+        [ct_gate.OBJDUMP, "-d", "-l", "--inlines", "--section=.text", str(elf)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return done.stdout.splitlines()
+
+
+@pytest.fixture(scope="session")
+def inlining_functions(whole_image):
+    """The dump cut to the emitted functions the site is inlined into.
+
+    Why a cut at all: the whole dump is over a million lines and the row's Python
+    pass over it is seconds, which is a suite nobody runs. Why it is SOUND: every
+    walk in `ct_gate` stops when `chain[-1]` changes, and `chain[-1]` is the
+    enclosing emitted function, so a whole function removed is a neighbourhood no
+    walk could have entered. A finding needs a load the site is attributed to, so
+    it can only ever be raised inside a function this keeps.
+
+    And it cannot go BLIND either way, which is the property that matters more
+    than the argument: a cut that lost a run drops the row under `RUN_FLOOR` and
+    the green arms fail, a cut that lost a finding makes the defect arm fail.
+    Both directions are asserted below, so a slicer that rotted breaks a case
+    rather than quietly measuring a different stream.
+    """
+    blocks, current, prologue = [], [], []
+    for line in whole_image:
+        if FUNCTION.match(line):
+            blocks.append(current)
+            current = [line]
+        elif current:
+            current.append(line)
+        else:
+            prologue.append(line)
+    blocks.append(current)
+    kept = [b for b in blocks if b and any(MANGLED in line for line in b)]
+    cut = prologue + [line for block in kept for line in block]
+    # Whole blocks are kept, so an attributed line falling outside the cut is the
+    # one way it could lose a run before any case has looked at it.
+    assert sum(MANGLED in line for line in cut) == sum(
+        MANGLED in line for line in whole_image
+    ), "the cut dropped a line the site is attributed to"
+    return cut
+
+
+def row(work, dump, script=None):
+    """`main()` in a SUBPROCESS, with the disassembler substituted and nothing else.
+
+    A shim first on `PATH`, not a monkeypatch: `check.sh` reads a process's exit
+    code and nothing else, and an in-process patch cannot tell a gate that exits
+    1 from one that prints its finding and returns 0 — the family
+    `test_gate_scripts.py` measured on fourteen of thirty rows. Only `objdump` is
+    shimmed; `toolchain()`'s `readelf` still resolves to the real one and still
+    reads the real image.
+    """
+    script = ROOT / "scripts/ct_gate.py" if script is None else script
+    work.mkdir(parents=True, exist_ok=True)
+    text = work / "objdump.txt"
+    text.write_text("\n".join(dump) + "\n", encoding="utf-8")
+    argv = work / "argv"
+    tool = work / ct_gate.OBJDUMP
+    tool.write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$*" > "{argv}"\nexec cat "{text}"\n',
+        encoding="utf-8",
+    )
+    tool.chmod(0o755)
+    done = subprocess.run(
+        [sys.executable, str(script)],
+        capture_output=True,
+        text=True,
+        env=dict(os.environ, PATH=f"{work}{os.pathsep}{os.environ['PATH']}"),
+    )
+    # The shim answered the row's OWN command over the row's OWN image, so a
+    # `disassembly()` that stopped reading the ELF reads as a failure here rather
+    # than as a green row over a stream nothing produced.
+    spelled = argv.read_text(encoding="utf-8")
+    assert str(script.parents[1] / ct_gate.ELF) in spelled, spelled
+    assert "--inlines" in spelled and "--section=.text" in spelled, spelled
+    return done
+
+
+def cmp_zero(register, halfwords):
+    """`cmp <register>, #0` as ARM encodes it, at the width it replaces.
+
+    T1 is two bytes and only reaches r0-r7; T2 is four. Real encodings because a
+    defect the parser REJECTS is a syntactic corruption, and a row that goes red
+    on one has not read a defect at all.
+    """
+    number = int(register[1:])
+    if halfwords == 1:
+        return f"{0x2800 | number << 8:04x}      "
+    return f"f1b{number:x} 0f00 "
+
+
+def early_exit(lines):
+    """Point the accumulate loop's back edge at the XOR instead of at the counter.
+
+    `if diff != 0 { return false; }`, at the instruction the compiler emits for
+    it: the two byte loads and the XOR stay where they are, and the compare the
+    loop's `bne` reads becomes a compare of the accumulated difference. One
+    instruction per copy, at the same address and the same width, so this is a
+    machine-code defect and not a stream whose shape the parser rejects.
+
+    Returns the mutated lines and {address: the register now compared}.
+    """
+    stream = list(ct_gate.instructions(lines))
+    planned = {}
+    for run in ct_gate.runs(stream, SYMBOL):
+        loaded, accumulator = set(), None
+        for address, mnemonic, operands, _ in run:
+            if ct_gate.LOAD.match(mnemonic):
+                base = ct_gate.BASE.search(operands)
+                if base and base.group(1) != "pc":
+                    loaded.add(operands.split(",")[0].strip())
+            elif mnemonic in ("eor", "eors"):
+                written, read = (p.strip() for p in operands.split(",")[:2])
+                if written in loaded and read in loaded:
+                    accumulator = written
+            elif accumulator and mnemonic == "cmp" and "#" in operands:
+                planned[address] = accumulator
+                break
+    out, injected = [], {}
+    for line in lines:
+        code = ct_gate.INSN.match(line)
+        register = planned.get(int(code.group(1), 16)) if code else None
+        halfwords = len(line.split("\t")[1].split()) if code else 0
+        # A high register has no narrow `cmp #0`, so that copy is left alone
+        # rather than widened: the mutant may not move an address.
+        if register and not (halfwords == 1 and int(register[1:]) > 7):
+            address = int(code.group(1), 16)
+            out.append(
+                f"{code.group(1)}:\t{cmp_zero(register, halfwords)}\tcmp\t{register}, #0"
+            )
+            injected[address] = register
+            continue
+        out.append(line)
+    return out, injected
+
+
+@pytest.fixture(scope="session")
+def defective_image(inlining_functions):
+    """The image with the early exit in it, built ONCE for the four arms below."""
+    mutated, injected = early_exit(inlining_functions)
+    # Asserted here so an injection that stopped applying is this fixture's
+    # failure, not a green row somewhere downstream reading as a clean image.
+    assert injected, "no copy of the site took the early exit"
+    assert mutated != inlining_functions
+    assert sum(
+        1 for line in mutated if re.search(r"\tcmp\tr\d+, #0$", line)
+    ) >= len(injected), "the mutated stream does not carry what was injected"
+    return mutated, injected
+
+
+def test_a_machine_code_early_exit_in_the_shipped_image_reddens_the_row(
+    defective_image, tmp_path
+):
+    """The gap this section closes.
+
+    The four binary mutants above call `audit(lines=…)` over a hand-written
+    fixture: they falsify the RULE. Nothing drove the ROW — `python
+    scripts/ct_gate.py` — over a defective image, so the five arms recorded in
+    [`test_the_image_arms_were_driven_by_hand`] were the only evidence that a
+    defect reaches an exit code, and re-running them meant editing Rust and
+    relinking by hand. This one injects the same defect into the real image's
+    real disassembly and drives the real entry point.
+    """
+    mutated, injected = defective_image
+    done = row(tmp_path, mutated)
+    assert done.returncode == 1, (done.stdout, done.stderr)
+    leaks = [line for line in done.stderr.splitlines() if LEAK in line]
+    assert leaks, done.stderr
+    # WHICH assertion fell, and in which direction: the row must say a branch
+    # reads a byte the comparator LOADED. A floor, a vanished site or an
+    # unreadable image is the inverse defect wearing the same exit code.
+    assert all(word not in done.stderr for word in NOT_THE_DEFECT), done.stderr
+
+    # And that it is THE INJECTION it caught: the finding names the BRANCH, which
+    # sits a few bytes past the compare that was rewritten, so the tie is the
+    # compare it quotes and the distance between the two addresses.
+    assert any(
+        f"branches on flags from `cmp {register}, #0`" in done.stderr
+        for register in set(injected.values())
+    ), done.stderr
+    reported = {int(a, 16) for a in re.findall(r"CT-CMP-001: 0x([0-9a-f]+) `b", done.stderr)}
+    assert any(
+        any(0 < branch - address <= 8 for branch in reported) for address in injected
+    ), (sorted(injected), sorted(reported))
+
+
+def test_the_row_is_green_over_the_image_as_it_ships(inlining_functions, tmp_path):
+    """The control for the arm above, and the one that keeps the cut honest.
+
+    Without it the case above is satisfied by a row that can only fail, and by a
+    cut that lost the runs rather than by a defect. `RUN_FLOOR` and its two
+    siblings are read off `ct_gate` rather than written here: pinning the numbers
+    is what made the recorded table go stale twice.
+    """
+    done = row(tmp_path, inlining_functions)
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert "0 secret-dependent" in done.stdout, done.stdout
+    counts = [int(n) for n in re.findall(r"(\d+) (?:attributed run|conditional branch)", done.stdout)]
+    traced = int(re.search(r"and (\d+) traced", done.stdout).group(1))
+    assert counts[0] >= ct_gate.RUN_FLOOR, done.stdout
+    assert counts[1] >= ct_gate.BRANCH_FLOOR, done.stdout
+    assert traced >= ct_gate.REASONED_FLOOR, done.stdout
+
+
+def test_a_renamed_branch_target_is_not_a_behaviour_change(
+    inlining_functions, tmp_path
+):
+    """The control that says the arm measures behaviour and not spelling.
+
+    Every `<symbol+offset>` objdump prints beside a branch target is renamed —
+    the labels, not the attribution: an `inlined by …` line is a location line
+    and not an instruction, so the chains the verdict is keyed on are untouched.
+    """
+    relabelled = [
+        re.sub(r"<[^>]*>", "<a_name_this_rule_may_not_read>", line)
+        if ct_gate.INSN.match(line)
+        else line
+        for line in inlining_functions
+    ]
+    assert sum(
+        1 for was, now in zip(inlining_functions, relabelled) if was != now
+    ), "no label was renamed, so this control is a second copy of the one above"
+    # The claim this control rests on, asserted rather than commented. Measured
+    # while driving it: the 16 `<symbol>:` function-header lines carry the only
+    # other angle brackets, and `ct_gate` parses nothing out of those either.
+    assert [step[3] for step in ct_gate.instructions(relabelled)] == [
+        step[3] for step in ct_gate.instructions(inlining_functions)
+    ], "the rename reached the inline chains the verdict is keyed on"
+
+    done = row(tmp_path, relabelled)
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert "0 secret-dependent" in done.stdout, done.stdout
+
+
+def test_a_nop_outside_every_attributed_run_is_not_a_behaviour_change(
+    inlining_functions, tmp_path
+):
+    """The second control, and the one about LAYOUT rather than names.
+
+    Appended after the last instruction the site is not attributed to, which is
+    also after every run: `walk_back`, `last_definition` and `reload_of_a_store`
+    all walk BACKWARDS, so an instruction added behind them cannot move a window
+    they never reach. That it landed outside the runs is asserted, not assumed.
+    """
+    stream = list(ct_gate.instructions(inlining_functions))
+    after = next(
+        address for address, _, _, chain in reversed(stream) if SYMBOL not in chain
+    )
+    nopped = []
+    for line in inlining_functions:
+        nopped.append(line)
+        code = ct_gate.INSN.match(line)
+        if code and int(code.group(1), 16) == after:
+            nopped.append(f"{after + 2:08x}:\tbf00      \tnop")
+    assert len(nopped) == len(inlining_functions) + 1
+
+    runs = ct_gate.runs(list(ct_gate.instructions(nopped)), SYMBOL)
+    assert len(runs) == len(ct_gate.runs(stream, SYMBOL)), "the nop split a run"
+    assert not any(
+        address == after + 2 for run in runs for address, _, _, _ in run
+    ), "the nop landed inside an attributed run"
+
+    done = row(tmp_path, nopped)
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert "0 secret-dependent" in done.stdout, done.stdout
+
+
+#: One clause of `ct_gate.py`, deleted in a SCRATCH COPY, and what the row then
+#: says over the defect above: (what it is, the text, what replaces it, the
+#: finding that still reddens the row — `None` when nothing does).
+#:
+#: `None` is the arm that says the clause is load-bearing: the row goes GREEN
+#: over an image whose comparator branches on the bytes it loaded. The other two
+#: are honest about what actually holds them — a floor and the page diff, not the
+#: rule — which is the reading a verdict column would have hidden.
+CLAUSES = (
+    (
+        "buffer_load follows the taint through arithmetic",
+        "    if depth <= 0 or mnemonic not in TRANSPARENT:\n        return None\n",
+        "    return None\n",
+        None,
+    ),
+    (
+        "secret_branches reads a flag-setting branch at all",
+        "        elif COND_BRANCH.match(mnemonic):",
+        "        elif False:",
+        "the rule stopped putting the question",
+    ),
+    (
+        "audit turns a violation into a finding",
+        "        for addr, mnemonic, source, load in violations:",
+        "        for addr, mnemonic, source, load in []:",
+        "is not what the generator writes",
+    ),
+)
+
+
+def scratch(work, source):
+    """The smallest tree the real script resolves itself against.
+
+    The ELF is SYMLINKED and not copied: `disassembly` asks whether it is a file
+    and `toolchain` reads its DWARF, and the image is 16 MB. The registry and the
+    page are copied so a clause deletion cannot reach the working tree.
+    """
+    root = work / "tree"
+    for directory in ("scripts", "assurance", "docs", str(ct_gate.ELF.parent)):
+        (root / directory).mkdir(parents=True, exist_ok=True)
+    (root / "scripts/ct_gate.py").write_text(source, encoding="utf-8")
+    for name in ("elf_gate.py",):
+        shutil.copy(ROOT / "scripts" / name, root / "scripts" / name)
+    for path in (ct_gate.REGISTRY, ct_gate.PAGE):
+        shutil.copy(ROOT / path, root / path)
+    (root / ct_gate.ELF).symlink_to(ROOT / ct_gate.ELF)
+    return root / "scripts/ct_gate.py"
+
+
+@pytest.mark.parametrize("what, clause, without, backstop", CLAUSES)
+def test_the_clause_that_catches_the_early_exit_is_named(
+    what, clause, without, backstop, defective_image, tmp_path
+):
+    """A clause that survives its own deletion is decorative. Which of these do.
+
+    Read as the FINDING and not as the exit code, deliberately: two of the three
+    clauses below still redden the row after they are gone, and both do it on
+    something that is not the leak. An arm reading `returncode` alone would have
+    called all three load-bearing.
+    """
+    source = (ROOT / "scripts/ct_gate.py").read_text(encoding="utf-8")
+    assert source.count(clause) == 1, f"{what}: the clause is not where this reads it"
+    mutated, _ = defective_image
+
+    done = row(tmp_path, mutated, script=scratch(tmp_path, source.replace(clause, without)))
+    assert LEAK not in done.stderr, (what, done.stderr)
+    if backstop is None:
+        assert done.returncode == 0, (what, done.stdout, done.stderr)
+    else:
+        assert done.returncode == 1, (what, done.stdout, done.stderr)
+        assert backstop in done.stderr, (what, done.stderr)
