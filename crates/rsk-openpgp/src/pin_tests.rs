@@ -70,6 +70,10 @@ fn pin_and_dek_migrate_to_otp_kbase_at_verify() {
     // below supersedes a chip-serial-rooted verifier and DEK copy AFTER it, so
     // it must re-arm the lap (audit run-35's rule).
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
 
     // …verifies under the OTP build via the fallback, without burning a retry
     // and with a working session (the DEK copy was re-wrapped).
@@ -397,6 +401,10 @@ fn change_pw1_then_new_pin_works_and_dek_survives() {
     // The at-rest lap has already run: the commit below supersedes the DEK copy
     // sealed under the PIN the owner has just replaced, so it must re-arm it.
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
     assert_eq!(
         change_pin(&d, &mut fs, &mut sess, &mut rng, 0x00, PW1_MODE81, &data),
         Sw::OK
@@ -943,6 +951,10 @@ fn a_pending_stage_survives_an_unrelated_pin_update() {
     // The at-rest lap has already run: the recovery below retires a copy sealed
     // under a PIN the owner has replaced, so it must re-arm it.
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
     let mut got = [0u8; DEK_SIZE];
     load_dek(&d, &mut fs, &s3, &mut got)
         .expect("the PW3 stage was destroyed by an unrelated PW1 update");
@@ -983,6 +995,10 @@ fn a_stale_stage_is_retired_and_re_arms_the_at_rest_lap() {
     stage_dek(&d, &mut fs, &mut CountRng(9), EF_DEK_PW3, b"87654321", &dek).unwrap();
     assert!(fs.has_key(EF_DEK_STAGE_PW3), "the fixture staged nothing");
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
 
     let mut got = [0u8; DEK_SIZE];
     load_dek(&d, &mut fs, &sess, &mut got).unwrap();

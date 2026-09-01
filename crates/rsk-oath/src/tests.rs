@@ -1118,6 +1118,10 @@ fn otp_pin_set_before_burn_still_verifies_after_burn() {
     // re-store below supersedes the chip-serial-rooted copy AFTER the only pass
     // that could reclaim its page — it must re-arm the lap (audit run-35).
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
 
     // Post-burn: the same PIN must still verify, via the without_otp fallback.
     let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
@@ -1145,7 +1149,7 @@ fn otp_pin_set_before_burn_still_verifies_after_burn() {
     assert!(
         !fs.has_data(rsk_fs::EF_HARDENED),
         "VERIFY re-keyed the verifier off the chip-serial root and must re-arm \
-         the at-rest lap: the copy it superseded is readable in a flash dump",
+         the at-rest lap: the marker is still latched",
     );
 
     // A wrong PIN post-burn still fails.

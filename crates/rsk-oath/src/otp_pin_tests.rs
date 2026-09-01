@@ -259,13 +259,17 @@ fn a_change_after_the_otp_burn_rearms_the_at_rest_lap() {
     // The one-shot at-rest lap has already run on this device, so the CHANGE
     // below supersedes that copy AFTER the only pass that could reclaim it.
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
 
     let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
     assert_eq!(change(&mut app, &mut fs, b"1234", b"5678"), Sw::OK);
     assert!(
         !fs.has_data(rsk_fs::EF_HARDENED),
         "CHANGE re-keyed the verifier off the chip-serial root and must re-arm \
-         the at-rest lap: the copy it superseded is readable in a flash dump",
+         the at-rest lap: the marker is still latched",
     );
 
     // …and it really did re-key: the standing record is the OTP-arm one.

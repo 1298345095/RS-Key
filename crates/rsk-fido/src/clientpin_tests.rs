@@ -1646,6 +1646,10 @@ fn pin_verifier_and_pinwrapped_seed_migrate_at_verify() {
     // the lap (request_rescrub) or that copy stays readable in a raw flash
     // dump forever — audit run-35 found four of five lazy re-keys skipping it.
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
 
     // The OTP build: first verify migrates the verifier and unwraps the
     // seed straight to a plain 0x12, costing no retry.
@@ -1666,10 +1670,13 @@ fn pin_verifier_and_pinwrapped_seed_migrate_at_verify() {
     assert_eq!(ctx.fs.read(EF_KEY_DEV.get(), &mut raw), Some(61));
     assert_eq!(raw[0], 0x12);
     assert_eq!(load_keydev(&otp_dev(), ctx.fs), Some(seed0));
+    // What this witnesses is the `request_rescrub` CALL, not a leak: `RamStorage`
+    // is a map that overwrites in place, so no superseded copy survives any write
+    // here for a test to read. The medium that keeps one is the flash ring.
     assert!(
         !ctx.fs.has_data(rsk_fs::EF_HARDENED),
-        "a lazy re-key must re-arm the at-rest lap: the copy it superseded is \
-         sealed under a root the public chip serial derives"
+        "a lazy re-key must re-arm the at-rest lap: the marker is still latched, \
+         so no rescrub was requested"
     );
 
     // Second verify takes the direct path (verifier already re-stored).
