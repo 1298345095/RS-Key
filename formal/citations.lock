@@ -34,8 +34,7 @@ assurance/bundle/SEC-FIDO-002.toml	firmware/src/presence.rs	263-269	#[cfg(featur
 assurance/bundle/SEC-FIDO-002.toml	firmware/src/worker.rs	434-434	crate::presence::set_wait_scope(match ex.kind {	crate::presence::set_wait_scope(match ex.kind {
 assurance/bundle/SEC-FIDO-002.toml	formal/gen-configs.sh	105-107	ALL_INV=(NoAuthorizationBypass NoCrossTransportTouchConsumption	NoUnmanageableCredential ResetNeverWeakensSurvivingState)
 assurance/bundle/SEC-FIDO-002.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
-assurance/bundle/SEC-FIDO-002.toml	scripts/check.sh	725-725	# `via` hop it never calls, and a same-named stepper in another file. All four	# `via` hop it never calls, and a same-named stepper in another file. All four
-assurance/bundle/SEC-FIDO-002.toml	scripts/check.sh	772-772	run "comutants lint"           python scripts/comutate.py --lint	run "comutants lint"           python scripts/comutate.py --lint
+assurance/bundle/SEC-FIDO-002.toml	scripts/check.sh	785-785	run "comutants lint"           python scripts/comutate.py --lint	run "comutants lint"           python scripts/comutate.py --lint
 assurance/bundle/SEC-FIDO-002.toml	scripts/kani.sh	299-299	export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft"	export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft"
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-display/src/gates.rs	149-149	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);	let ends_host_token = scope == PinScope::Fido && retries.is_some_and(|left| left > 0);
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/clientpin.rs	175-175	fn set_pin<S: Storage, R: Rng>(	fn set_pin<S: Storage, R: Rng>(
@@ -49,7 +48,7 @@ assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/clientpin.rs	493-495	if f
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/clientpin.rs	786-786	if retries == 0 {	if retries == 0 {
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/clientpin.rs	831-831	fn write_pin_verifier<S: Storage>(	fn write_pin_verifier<S: Storage>(
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/clientpin.rs	1260-1260	let _ = clear_force_change(fs);	let _ = clear_force_change(fs);
-assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/clientpin_tests.rs	2055-2055	/// The revocation sits in `write_pin_verifier`, the one function every `EF_PIN`	/// The revocation sits in `write_pin_verifier`, the one function every `EF_PIN`
+assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/clientpin_tests.rs	2062-2062	/// The revocation sits in `write_pin_verifier`, the one function every `EF_PIN`	/// The revocation sits in `write_pin_verifier`, the one function every `EF_PIN`
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/config.rs	243-245	if !ctx.state.verify_token(proto, &vp[..vp_len], param)	{
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 assurance/bundle/SEC-FIDO-003.toml	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
@@ -108,7 +107,7 @@ assurance/bundle/SEC-FIDO-004.toml	formal/gen-configs.sh	305-305	# family nothin
 assurance/bundle/SEC-FIDO-004.toml	formal/gen-configs.sh	305-306	# family nothing else runs: the pre-0x08BF tree with the repair the model	# proposed and the maintainer did not take. `FixSweepDropsCredsBeforeRpEntries`
 assurance/bundle/SEC-FIDO-004.toml	formal/gen-configs.sh	305-307	# family nothing else runs: the pre-0x08BF tree with the repair the model	# had never been passed TRUE by any call -- every configuration that assigned it
 assurance/bundle/SEC-FIDO-004.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
-assurance/bundle/SEC-FIDO-004.toml	formal/run-tlc.sh	214-215	"$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \	-nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
+assurance/bundle/SEC-FIDO-004.toml	formal/run-tlc.sh	236-237	"$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \	-nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	795-795	/// Refines `RSKeySecurityState!NoUnmanageableCredential` — SEC-FIDO-005.	/// Refines `RSKeySecurityState!NoUnmanageableCredential` — SEC-FIDO-005.
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	853-853	bump_rp(fs, seed, rp_id_hash, rp_id)?;	bump_rp(fs, seed, rp_id_hash, rp_id)?;
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	867-867	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
@@ -194,8 +193,8 @@ assurance/bundle/SEC-FIDO-006A.toml	crates/rsk-fido/src/reset_tests.rs	626-626	f
 assurance/bundle/SEC-FIDO-006A.toml	crates/rsk-usb/src/ctaphid.rs	757-762	if is_cbor {	});
 assurance/bundle/SEC-FIDO-006A.toml	crates/rsk-usb/src/ctaphid.rs	767-772	// frames during fast/crypto processing would consume — and then	if up_pending() {
 assurance/bundle/SEC-FIDO-006A.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
-assurance/bundle/SEC-FIDO-006A.toml	formal/run-tlc.sh	199-203	armed_n=$(armed_count "$cfg")	fi
-assurance/bundle/SEC-FIDO-006A.toml	formal/run-tlc.sh	214-215	"$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \	-nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
+assurance/bundle/SEC-FIDO-006A.toml	formal/run-tlc.sh	217-225	armed_n=$(armed_count "$cfg")	fi
+assurance/bundle/SEC-FIDO-006A.toml	formal/run-tlc.sh	236-237	"$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \	-nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
 assurance/bundle/SEC-FIDO-006A.toml	fuzz/fuzz_targets/power_cut.rs	29-31	//! After a real reboot it checks `ResetNeverWeakensSurvivingState` and its three	//! `ResetKeepsTheBackupSeal`. This is the byte-granular half of the phase-6
 assurance/bundle/SEC-FIDO-006A.toml	fuzz/fuzz_targets/power_cut.rs	202-202	(!credential_usable || (fs.has_data(EF_PIN) && fs.has_data(EF_ALWAYS_UV)))	(!credential_usable || (fs.has_data(EF_PIN) && fs.has_data(EF_ALWAYS_UV)))
 assurance/bundle/SEC-FIDO-006B.toml	crates/rsk-fido/src/config.rs	315-315	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
@@ -227,7 +226,7 @@ assurance/bundle/SEC-FIDO-006B.toml	formal/gen-configs.sh	211-225	# `clauses=1` 
 assurance/bundle/SEC-FIDO-006B.toml	formal/gen-configs.sh	226-226	clauses=1 emit Shipped.cfg "" FALSE TRUE	clauses=1 emit Shipped.cfg "" FALSE TRUE
 assurance/bundle/SEC-FIDO-006B.toml	formal/gen-configs.sh	321-328	# minting one would take a name the runner's own tier roster does not have.	# Mutants run on the tree's own settings, so nothing pre-existing can mask them.
 assurance/bundle/SEC-FIDO-006B.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
-assurance/bundle/SEC-FIDO-006B.toml	formal/run-tlc.sh	214-215	"$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \	-nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
+assurance/bundle/SEC-FIDO-006B.toml	formal/run-tlc.sh	236-237	"$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \	-nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
 assurance/bundle/SEC-FIDO-006B.toml	scripts/kani.sh	122-122	STATEFUL="rsk-fido rsk-fs"	STATEFUL="rsk-fido rsk-fs"
 assurance/bundle/SEC-FIDO-006C.toml	crates/rsk-display/src/backup.rs	47-47	can_reveal: st.has_seed && st.exportable && !st.sealed && !st.locked && device_pin_set,	can_reveal: st.has_seed && st.exportable && !st.sealed && !st.locked && device_pin_set,
 assurance/bundle/SEC-FIDO-006C.toml	crates/rsk-fido/src/consts.rs	295-295	pub const EF_BACKUP_SEALED: u16 = 0xCC02; // [1] once the seed has been backed up	pub const EF_BACKUP_SEALED: u16 = 0xCC02; // [1] once the seed has been backed up
@@ -343,7 +342,7 @@ assurance/bundle/SEC-FIDO-008.toml	formal/gen-configs.sh	109-114	# Structural fa
 assurance/bundle/SEC-FIDO-008.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
 assurance/bundle/SEC-FIDO-008.toml	formal/run-tlc.sh	60-65	# The invariant a MUTATION configuration says it targets, for the rows where	derived_inv() { invariants_of "$1" | grep -v '^TypeOK$' | head -1; }
 assurance/bundle/SEC-FIDO-008.toml	formal/run-tlc.sh	65-65	derived_inv() { invariants_of "$1" | grep -v '^TypeOK$' | head -1; }	derived_inv() { invariants_of "$1" | grep -v '^TypeOK$' | head -1; }
-assurance/bundle/SEC-FIDO-008.toml	formal/run-tlc.sh	200-203	if [ -z "${inv:-}" ] || [ "$inv" = "-" ]; then	fi
+assurance/bundle/SEC-FIDO-008.toml	formal/run-tlc.sh	222-225	if [ -z "${inv:-}" ] || [ "$inv" = "-" ]; then	fi
 crates/rsk-device/src/ctap.rs	crates/rsk-fido/src/clientpin.rs	612-612	ctx.presence.uv_available() && ctx.fs.has_data(EF_PIN)	ctx.presence.uv_available() && ctx.fs.has_data(EF_PIN)
 crates/rsk-device/src/ctap.rs	crates/rsk-usb/src/ctaphid.rs	218-218	pub const CTAP_MAX_MESSAGE: usize = INIT_DATA + 2 * CONT_DATA;	pub const CTAP_MAX_MESSAGE: usize = INIT_DATA + 2 * CONT_DATA;
 crates/rsk-fido/src/clientpin_tests.rs	crates/rsk-fido/src/clientpin.rs	91-91	6 => req.pin_hash_enc = Some(cbor(d.bytes())?),	6 => req.pin_hash_enc = Some(cbor(d.bytes())?),
@@ -545,11 +544,11 @@ formal/README.md	crates/rsk-fs/src/lib.rs	46-46	let _ = fs.delete(EF_HARDENED);	
 formal/README.md	crates/rsk-fs/src/lib.rs	49-67	/// Run the one-shot at-rest scrub lap: iff [`EF_HARDENED`] is absent, drive a full	}
 formal/README.md	crates/rsk-oath/src/lib.rs	330-332	if !self.validated {	}
 formal/README.md	crates/rsk-oath/src/lib.rs	337-349	if let Some([key]) = parse_exact(data, [TAG_KEY]) {	};
-formal/README.md	crates/rsk-oath/src/lib.rs	529-531	// states left a host unable to tell a wrong password from no password.	return Sw::WRONG_DATA;
-formal/README.md	crates/rsk-oath/src/lib.rs	1149-1150	self.validated = false;	self.otp_pin_verified = false;
-formal/README.md	crates/rsk-oath/src/lib.rs	1200-1204	/// `select` recomputes `validated` from whether a code is set.	self.chain = Chain::None;
-formal/README.md	crates/rsk-oath/src/lib.rs	1202-1202	self.validated = false;	self.validated = false;
-formal/README.md	crates/rsk-oath/src/lib.rs	1558-1558	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
+formal/README.md	crates/rsk-oath/src/lib.rs	533-535	// states left a host unable to tell a wrong password from no password.	return Sw::WRONG_DATA;
+formal/README.md	crates/rsk-oath/src/lib.rs	1153-1154	self.validated = false;	self.otp_pin_verified = false;
+formal/README.md	crates/rsk-oath/src/lib.rs	1209-1213	/// `select` recomputes `validated` from whether a code is set.	self.chain = Chain::None;
+formal/README.md	crates/rsk-oath/src/lib.rs	1211-1211	self.validated = false;	self.validated = false;
+formal/README.md	crates/rsk-oath/src/lib.rs	1567-1567	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
 formal/README.md	crates/rsk-openpgp/src/internalaut.rs	45-48	// §7.2.13 names PW1 no. 82 and nothing else; PW3 used to stand in, and a	return Err(Sw::SECURITY_STATUS_NOT_SATISFIED);
 formal/README.md	crates/rsk-openpgp/src/keys.rs	405-419	/// Bump the 3-byte big-endian PSO:CDS counter. If the PW-status "PW1 valid for	sess.has_pw1 = false;
 formal/README.md	crates/rsk-openpgp/src/lib.rs	343-346	/// valid AID and an ICC power cycle clear them (the dispatcher's `deselect`).	self.reset_session();
@@ -560,8 +559,8 @@ formal/README.md	crates/rsk-openpgp/src/pin.rs	218-220	let n = n.min(pw.len());	
 formal/README.md	crates/rsk-openpgp/src/pin.rs	220-220	if idx < n && pw[idx] == 0 {	if idx < n && pw[idx] == 0 {
 formal/README.md	crates/rsk-openpgp/src/pin.rs	226-226	Some(n) if n >= 3 && rec[0] != 0 => n,	Some(n) if n >= 3 && rec[0] != 0 => n,
 formal/README.md	crates/rsk-openpgp/src/pin.rs	253-255	// comparison, but a YubiKey 5.7.4 clears exactly the addressed	// stops PSO:CDS and the admin surface instead of leaving them open.
-formal/README.md	crates/rsk-openpgp/src/pin.rs	790-790	Some(n) if n >= 1 => rc_rec[0] as usize,	Some(n) if n >= 1 => rc_rec[0] as usize,
-formal/README.md	crates/rsk-openpgp/src/pin.rs	793-793	if data.len() <= rc_len {	if data.len() <= rc_len {
+formal/README.md	crates/rsk-openpgp/src/pin.rs	793-793	Some(n) if n >= 1 => rc_rec[0] as usize,	Some(n) if n >= 1 => rc_rec[0] as usize,
+formal/README.md	crates/rsk-openpgp/src/pin.rs	796-796	if data.len() <= rc_len {	if data.len() <= rc_len {
 formal/README.md	crates/rsk-openpgp/src/pso.rs	80-92	(0x9E, 0x9A) => {	if !sess.has_pw2 {
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	59-65	pub fn write_authorized(sess: &Session, fid: u16) -> bool {	}
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	244-247	pub fn put_pw_status<S: Storage>(fs: &mut Fs<S>, sess: &Session, data: &[u8]) -> Sw {	}
@@ -576,10 +575,10 @@ formal/README.md	crates/rsk-piv/src/lib.rs	199-203	self.clear_challenge();	pub s
 formal/README.md	crates/rsk-piv/src/lib.rs	365-368	if !reselect {	// The default PIN/PUK/retry/mgmt/attestation files are provisioned once
 formal/README.md	crates/rsk-piv/src/lib.rs	391-391	self.sess.reset();	self.sess.reset();
 formal/README.md	crates/rsk-piv/src/lib.rs	543-577	// the retry counter … shall be decremented by one." A YubiKey 5.7.4 does	/// `6A88` for anything but `P1 = 00, P2 = 80`, as on `change_pin` — and here
-formal/README.md	crates/rsk-piv/src/lib.rs	1281-1283	Err(sw) => return sw,	if left == 0 {
-formal/README.md	crates/rsk-piv/src/lib.rs	1299-1299	// nothing. The cost is that a power cut here spends a retry the holder did	// nothing. The cost is that a power cut here spends a retry the holder did
-formal/README.md	crates/rsk-piv/src/lib.rs	1312-1312	&& ct_eq(	&& ct_eq(
-formal/README.md	crates/rsk-piv/src/lib.rs	1432-1432	puk: &[u8],	puk: &[u8],
+formal/README.md	crates/rsk-piv/src/lib.rs	1285-1287	Err(sw) => return sw,	if left == 0 {
+formal/README.md	crates/rsk-piv/src/lib.rs	1305-1305	if set_retries_left(fs, retry, left - 1).is_err() {	if set_retries_left(fs, retry, left - 1).is_err() {
+formal/README.md	crates/rsk-piv/src/lib.rs	1316-1316	&& ct_eq(	&& ct_eq(
+formal/README.md	crates/rsk-piv/src/lib.rs	1436-1436	puk: &[u8],	puk: &[u8],
 formal/README.md	crates/rsk-rescue/src/lib.rs	141-143	/// Refines `RSKeyAdminSurface!PrivilegedOpNeedsPresence` — SEC-ADM-002.	self.presence.borrow_mut().request(confirm) == Presence::Confirmed
 formal/README.md	crates/rsk-sdk/src/applet.rs	208-210	fn selectable(&self, i: usize) -> bool {	}
 formal/README.md	crates/rsk-sdk/src/applet.rs	374-390	// answered to the AID SP 800-85A-4 C.1.1.2 names as invalid. A YubiKey	{
@@ -616,7 +615,7 @@ formal/RSKeyAdminSurface.tla	crates/rsk-device/src/ccid.rs	243-251	/// bit `i` s
 formal/RSKeyAdminSurface.tla	crates/rsk-device/src/ccid.rs	340-340	self.disp.current() == Some(idx) && self.caps_enabled(APPLET_CAPS[idx])	self.disp.current() == Some(idx) && self.caps_enabled(APPLET_CAPS[idx])
 formal/RSKeyAdminSurface.tla	crates/rsk-rescue/src/lib.rs	141-143	/// Refines `RSKeyAdminSurface!PrivilegedOpNeedsPresence` — SEC-ADM-002.	self.presence.borrow_mut().request(confirm) == Presence::Confirmed
 formal/RSKeyAdminSurface.tla	crates/rsk-sdk/src/applet.rs	203-205	pub fn set_enabled(&mut self, mask: u32) {	}
-formal/RSKeyAppletPolicies.tla	crates/rsk-oath/src/lib.rs	574-606	// gated here, before the HOTP counter burns.	fs,
+formal/RSKeyAppletPolicies.tla	crates/rsk-oath/src/lib.rs	578-610	// gated here, before the HOTP counter burns.	fs,
 formal/RSKeyAppletPolicies.tla	crates/rsk-openpgp/src/keypairgen.rs	79-122	let priv_fid = slot_algo_fid(fid);	// sibling reader `info::slot_algo` has the same `attr.len() >= 3` gate.
 formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/counter.rs	16-26	pub(crate) fn next_use_counter(counter: u16, session: u8) -> (u16, u8, bool) {	}
 formal/RSKeyAppletPolicies.tla	crates/rsk-otp/src/lib.rs	334-349	// The advance this press owes the PERSISTED half of the position. A	}
@@ -642,13 +641,13 @@ formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	214-215	presence,	validat
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	330-332	if !self.validated {	}
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	337-349	if let Some([key]) = parse_exact(data, [TAG_KEY]) {	};
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	345-345	self.validated = true;	self.validated = true;
-formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	385-392	// Installing a new access code drops any OTP-PIN: VERIFY PIN sets the same	self.validated = false;
-formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	529-531	// states left a host unable to tell a wrong password from no password.	return Sw::WRONG_DATA;
-formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1149-1150	self.validated = false;	self.otp_pin_verified = false;
-formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1172-1187	// Any attempt clears a prior unlock; only a correct PIN re-validates below.	self.validated = true;
-formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1200-1204	/// `select` recomputes `validated` from whether a code is set.	self.chain = Chain::None;
-formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1208-1208	/// algorithm) when an access code is set.	/// algorithm) when an access code is set.
-formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1234-1238	self.chain = Chain::None;	self.validated = !code_set;
+formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	385-396	// Installing a new access code drops any OTP-PIN: VERIFY PIN sets the same	self.validated = false;
+formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	533-535	// states left a host unable to tell a wrong password from no password.	return Sw::WRONG_DATA;
+formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1153-1154	self.validated = false;	self.otp_pin_verified = false;
+formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1181-1196	// Any attempt clears a prior unlock; only a correct PIN re-validates below.	self.validated = true;
+formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1209-1213	/// `select` recomputes `validated` from whether a code is set.	self.chain = Chain::None;
+formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1217-1218	/// algorithm) when an access code is set.	fn select(&mut self, _reselect: bool, fs: &mut Fs<S>, res: &mut ResBuf) -> Sw {
+formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	1243-1247	self.chain = Chain::None;	self.validated = !code_set;
 formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/keys.rs	405-419	/// Bump the 3-byte big-endian PSO:CDS counter. If the PW-status "PW1 valid for	sess.has_pw1 = false;
 formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/lib.rs	257-259	// moved the tag below the ACL and left this one above it.	return Sw::SECURITY_STATUS_NOT_SATISFIED;
 formal/RSKeyAppletSeams.tla	crates/rsk-openpgp/src/pin.rs	19-38	pub struct Session {	session_rc: [u8; 32],
@@ -671,26 +670,27 @@ formal/RSKeyAppletSeams.tla	firmware/src/pin_lock.rs	12-21	//! [`rsk_fido::state
 formal/RSKeyBootHardening.tla	crates/rsk-fido/src/clientpin.rs	814-816	if migrated {	}
 formal/RSKeyBootHardening.tla	crates/rsk-fido/src/clientpin.rs	1218-1220	if migrated {	}
 formal/RSKeyBootHardening.tla	crates/rsk-fs/src/lib.rs	26-46	/// Set (`[1]`) once the post-OTP-provisioning at-rest hardening pass has run: the seal	let _ = fs.delete(EF_HARDENED);
+formal/RSKeyBootHardening.tla	crates/rsk-fs/src/lib.rs	46-46	let _ = fs.delete(EF_HARDENED);	let _ = fs.delete(EF_HARDENED);
 formal/RSKeyBootHardening.tla	crates/rsk-fs/src/lib.rs	49-67	/// Run the one-shot at-rest scrub lap: iff [`EF_HARDENED`] is absent, drive a full	}
 formal/RSKeyBootHardening.tla	crates/rsk-fs/src/lib.rs	64-64	if fs.compact().is_ok() {	if fs.compact().is_ok() {
-formal/RSKeyBootHardening.tla	crates/rsk-oath/src/lib.rs	1185-1185	// (rsk-fs `EF_HARDENED` invariant; audit run-35).	// (rsk-fs `EF_HARDENED` invariant; audit run-35).
-formal/RSKeyBootHardening.tla	crates/rsk-openpgp/src/pin.rs	340-340	// both are rooted in the *public* chip serial (so the verifier is brute-forceable	// both are rooted in the *public* chip serial (so the verifier is brute-forceable
-formal/RSKeyBootHardening.tla	crates/rsk-piv/src/lib.rs	1321-1324	return Sw::MEMORY_FAILURE;	// the pre-OTP arm, which the public chip serial alone derives (rsk-fs
+formal/RSKeyBootHardening.tla	crates/rsk-oath/src/lib.rs	1195-1195	rsk_fs::request_rescrub(fs);	rsk_fs::request_rescrub(fs);
+formal/RSKeyBootHardening.tla	crates/rsk-openpgp/src/pin.rs	342-342	rsk_fs::request_rescrub(fs);	rsk_fs::request_rescrub(fs);
+formal/RSKeyBootHardening.tla	crates/rsk-piv/src/lib.rs	1330-1330	rsk_fs::request_rescrub(fs);	rsk_fs::request_rescrub(fs);
 formal/RSKeyBootHardening.tla	firmware/src/pin_lock.rs	18-21	//! a real power cycle clears it. The *whole* lock moves: carrying the engaged flag	//!
 formal/RSKeyBootHardening.tla	firmware/src/pin_lock.rs	36-37	const TAG: u32 = 0x5253_4B00;	const TAG_MASK: u32 = 0xFFFF_FF00;
 formal/RSKeyBootHardening.tla	firmware/src/pin_lock.rs	52-54	/// Refines `RSKeyBootHardening!TheWholeLockRides` — SEC-BOOT-002.	rp_pac::WATCHDOG.scratch2().write_value(encode(lock));
 formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	125-125	pw[idx] -= 1;	pw[idx] -= 1;
 formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	195-286	/// Refines `RSKeyRetryLattice!NoAuthWhenBlocked` — SEC-LAT-001.	}
 formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	218-220	let n = n.min(pw.len());	if idx < n && pw[idx] == 0 {
-formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	564-564	let mut fid = pw_fid(p2);	let mut fid = pw_fid(p2);
-formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	770-820	/// resetting code (P1=0x00) or via a verified admin PIN (P1=0x02). Both re-seal	return match result {
-formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	793-793	if data.len() <= rc_len {	if data.len() <= rc_len {
-formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	825-825	if p1 != 0x02 {	if p1 != 0x02 {
+formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	567-567	let mut fid = pw_fid(p2);	let mut fid = pw_fid(p2);
+formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	773-823	/// resetting code (P1=0x00) or via a verified admin PIN (P1=0x02). Both re-seal	return match result {
+formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	796-796	if data.len() <= rc_len {	if data.len() <= rc_len {
+formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	828-828	if p1 != 0x02 {	if p1 != 0x02 {
 formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	580-587	fn reset_retry<S: Storage>(&mut self, dev: &Device, fs: &mut Fs<S>, apdu: &Apdu) -> Sw {	unblock_pin_with_puk(dev, fs, puk, new)
-formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1276-1339	/// Refines `RSKeyRetryLattice!NoAuthWhenBlocked` — SEC-LAT-001.	Sw::retries(left)
-formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1281-1283	Err(sw) => return sw,	if left == 0 {
-formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1299-1299	// nothing. The cost is that a power cut here spends a retry the holder did	// nothing. The cost is that a power cut here spends a retry the holder did
-formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1432-1432	puk: &[u8],	puk: &[u8],
+formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1280-1343	/// Refines `RSKeyRetryLattice!NoAuthWhenBlocked` — SEC-LAT-001.	Sw::retries(left)
+formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1285-1287	Err(sw) => return sw,	if left == 0 {
+formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1305-1305	if set_retries_left(fs, retry, left - 1).is_err() {	if set_retries_left(fs, retry, left - 1).is_err() {
+formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1436-1436	puk: &[u8],	puk: &[u8],
 formal/RSKeySecurityState.tla	crates/rsk-device/src/ctap.rs	202-205	backup_sealed_record: fs.has_data(EF_BACKUP_SEALED),	credential_slots_raw: credentials.iter().filter(|present| **present).count() as u16,
 formal/RSKeySecurityState.tla	crates/rsk-device/src/ctap.rs	354-361	// Persist the clientPIN soft lock across a warm reboot. It is RAM-only, and a	.store_pin_lock(self.fido_state.borrow().pin_lock());
 formal/RSKeySecurityState.tla	crates/rsk-device/src/presence.rs	25-26	/// No host request in flight: an on-panel (local) flow owns the button.	pub const SCOPE_NONE: u8 = 0;
@@ -880,7 +880,9 @@ formal/TraceSecurity.tla	crates/rsk-fido/src/clientpin.rs	612-612	ctx.presence.u
 formal/TraceSecurity.tla	crates/rsk-fido/src/config.rs	315-315	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
 formal/TraceSecurity.tla	crates/rsk-fido/src/makecredential.rs	533-551	let always_uv = crate::config::always_uv_enabled(ctx.fs);	Ok(UvOutcome::NONE)
 formal/TraceSecurity.tla	crates/rsk-fido/src/reset.rs	232-232	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
+formal/comutants.toml	crates/rsk-device/src/ctap.rs	127-128	let boot = hooks.borrow_mut().boot_state();	st.restore_pin_lock(boot.lock);
 formal/comutants.toml	crates/rsk-device/src/ctap_tests.rs	101-123	#[test]	}
+formal/comutants.toml	crates/rsk-device/src/ctap_tests.rs	122-122	assert_eq!(carried.mismatches, 3, "the mismatch count was dropped");	assert_eq!(carried.mismatches, 3, "the mismatch count was dropped");
 formal/comutants.toml	crates/rsk-fido/src/clientpin.rs	220-220	clear_ppuat(ctx.fs).map_err(|_| CtapError::Other)?;	clear_ppuat(ctx.fs).map_err(|_| CtapError::Other)?;
 formal/comutants.toml	crates/rsk-fido/src/clientpin.rs	493-495	if force_change_pending(ctx) {	}
 formal/comutants.toml	crates/rsk-fido/src/clientpin.rs	840-842	if fid == EF_PIN {	}
@@ -898,13 +900,13 @@ formal/comutants.toml	crates/rsk-fs/src/fs.rs	752-752	self.storage.write(EF_META
 formal/comutants.toml	crates/rsk-fs/src/fs_tests.rs	384-384	assert!(	assert!(
 formal/comutants.toml	crates/rsk-fs/src/fs_tests.rs	445-445	assert!(	assert!(
 formal/comutants.toml	crates/rsk-fs/src/storage.rs	78-78	map: HashMap<u16, Vec<u8>>,	map: HashMap<u16, Vec<u8>>,
-formal/comutants.toml	crates/rsk-oath/src/lib.rs	1198-1205	/// Drop the VALIDATE result on deselect / card reset, so a later session must	}
-formal/comutants.toml	crates/rsk-oath/src/lib.rs	1238-1239	self.validated = !code_set;	self.otp_pin_verified = false;
+formal/comutants.toml	crates/rsk-oath/src/lib.rs	1207-1214	/// Drop the VALIDATE result on deselect / card reset, so a later session must	}
+formal/comutants.toml	crates/rsk-oath/src/lib.rs	1247-1248	self.validated = !code_set;	self.otp_pin_verified = false;
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	258-260	if !putdata::write_authorized(&self.sess, fid) {	}
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	326-328	fn deselect(&mut self, _fs: &mut Fs<S>) {	}
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	344-347	fn select(&mut self, reselect: bool, _fs: &mut Fs<S>, res: &mut ResBuf) -> Sw {	}
 formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	220-224	if idx < n && pw[idx] == 0 {	let mut rec = [0u8; 64];
-formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	796-796	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);
+formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	799-799	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);
 formal/comutants.toml	crates/rsk-otp/src/counter_tests.rs	9-9	assert_eq!(next_use_counter(5, 0), (5, 1, false));	assert_eq!(next_use_counter(5, 0), (5, 1, false));
 formal/comutants.toml	crates/rsk-otp/src/lib.rs	611-615	let unmatched =	}
 formal/comutants.toml	crates/rsk-otp/src/tests.rs	1284-1284	assert!(	assert!(
@@ -922,11 +924,11 @@ formal/comutants.toml	crates/rsk-piv/src/lib.rs	183-186	fn set_pin(&mut self, ve
 formal/comutants.toml	crates/rsk-piv/src/lib.rs	288-288	if p1 != 0x00 || !self.sess.has_mgm || !is_key(p2) {	if p1 != 0x00 || !self.sess.has_mgm || !is_key(p2) {
 formal/comutants.toml	crates/rsk-piv/src/lib.rs	390-392	fn deselect(&mut self, _fs: &mut Fs<S>) {	}
 formal/comutants.toml	crates/rsk-piv/src/lib.rs	594-594	if !self.sess.has_mgm || !self.sess.has_pin {	if !self.sess.has_mgm || !self.sess.has_pin {
-formal/comutants.toml	crates/rsk-piv/src/lib.rs	665-665	if !self.sess.has_mgm {	if !self.sess.has_mgm {
-formal/comutants.toml	crates/rsk-piv/src/lib.rs	793-793	if !self.sess.has_mgm {	if !self.sess.has_mgm {
-formal/comutants.toml	crates/rsk-piv/src/lib.rs	1042-1042	if !self.sess.has_mgm {	if !self.sess.has_mgm {
-formal/comutants.toml	crates/rsk-piv/src/lib.rs	1102-1102	if !self.sess.has_mgm {	if !self.sess.has_mgm {
-formal/comutants.toml	crates/rsk-piv/src/lib.rs	1301-1301	if set_retries_left(fs, retry, left - 1).is_err() {	if set_retries_left(fs, retry, left - 1).is_err() {
+formal/comutants.toml	crates/rsk-piv/src/lib.rs	669-669	if !self.sess.has_mgm {	if !self.sess.has_mgm {
+formal/comutants.toml	crates/rsk-piv/src/lib.rs	797-797	if !self.sess.has_mgm {	if !self.sess.has_mgm {
+formal/comutants.toml	crates/rsk-piv/src/lib.rs	1046-1046	if !self.sess.has_mgm {	if !self.sess.has_mgm {
+formal/comutants.toml	crates/rsk-piv/src/lib.rs	1106-1106	if !self.sess.has_mgm {	if !self.sess.has_mgm {
+formal/comutants.toml	crates/rsk-piv/src/lib.rs	1305-1305	if set_retries_left(fs, retry, left - 1).is_err() {	if set_retries_left(fs, retry, left - 1).is_err() {
 formal/comutants.toml	crates/rsk-sdk/src/applet.rs	227-227	pub fn reset_card<C>(&mut self, applets: &mut [&mut dyn Applet<C>], ctx: &mut C) {	pub fn reset_card<C>(&mut self, applets: &mut [&mut dyn Applet<C>], ctx: &mut C) {
 formal/comutants.toml	firmware/src/pin_lock.rs	18-21	//! a real power cycle clears it. The *whole* lock moves: carrying the engaged flag	//!
 formal/gen-configs.sh	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
