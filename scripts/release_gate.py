@@ -170,6 +170,18 @@ FRONTIER = "source->binary"
 FRONTIER_ROW = "PLAT-TOOLCHAIN-001"
 FRONTIER_STATUS = "pending"
 
+#: Every spelling of [`FRONTIER`] a `SHAPE` value or a `SUBJECTS` key could wear.
+#: One token is the right way to SAY the claim once; it is the wrong way to
+#: REFUSE it, because a refusal that compares that one string is walked past by
+#: the next spelling. Measured by review at exit 0, all three: `source-to-binary`
+#: (the spelling `assurance/platform.toml` uses for the same gap, quoted in this
+#: module's own docstring), `source→binary` with U+2192, and leaving the key
+#: alone while rewriting its GLOSS to say the compiler preserves meaning — which
+#: is why the glosses are rendered into the region rather than read by nothing.
+FRONTIER_SPELLINGS = re.compile(
+    r"(?i)source\s*(?:->|→|-to-|\s+to\s+)\s*binary|semantic\s+preserv|miscompil"
+)
+
 #: What an entry may claim, and what each word means. HAND-WRITTEN, and it has to
 #: be: no file in this tree says what a command establishes, only what it runs.
 #: Closed on purpose — an open vocabulary lets a step be "covered" by a word
@@ -300,6 +312,11 @@ ENTRY_FLOOR = 12
 #: The same, for the flavor loops. Every image the release publishes is one row.
 FLAVOR_FLOOR = 10
 
+#: The knobs `nix/firmware.nix` marks "TEST builds only". They are declarative
+#: derivation arguments, not `cargoFlags`, so `check_no_touch`'s two readings —
+#: the package name and the feature list — are blind to them by construction.
+FORBIDDEN_KNOBS = ("fakeMkek", "fakeDevk")
+
 #: An asset name the page still has to say although this workflow no longer
 #: writes it, with the reason. Held BOTH ways: a name here that the page has
 #: stopped saying is deleted from here, so a carve-out cannot outlive its need.
@@ -343,18 +360,36 @@ STEP = re.compile(r"^(?P<indent> +)- (?P<key>name|uses): (?P<value>.+?)\s*$")
 #: owns continuation joining and the block body is read by indent below.
 KEY = re.compile(r"^(?P<indent> +)(?P<key>[a-z-]+):\s?(?P<value>.*?)\s*$")
 
+#: A called workflow, WITH its ref. The `\s*$` form this replaced read
+#: `uses: x.yml` and never `uses: attacker/repo/.github/workflows/x.yml@v1`, so a
+#: second called workflow was invisible exactly when it came from somewhere else
+#: — measured by review at exit 0. A trailing comment is tolerated because every
+#: pin in this tree carries one.
+CALLED = re.compile(r"^\s+uses:\s*(?P<path>\S+?\.ya?ml)(?P<ref>@\S+)?\s*(?:#.*)?$", re.M)
+
+#: Which pushed refs [`CALLER`] turns into a release. Pinned because it is the
+#: admission rule one layer above the `resolve tag` step: `tags: ["**"]` hands
+#: every tag-shaped ref to a job holding `contents: write`, and the tag gate is
+#: defence in depth by its own entry's statement.
+TRIGGER = '["v*"]'
+
 #: `for pkg in a b c; do`, the shape both flavor loops use.
 LOOP = re.compile(r"for pkg in (?P<list>[\w\s-]+?);\s*do")
 
 #: A bare integer, for rule 5. Neither `2mb` nor `v7.0.1` is one.
 COUNT = re.compile(r"(?<![\w.-])(\d+)(?![\w.-])")
 
-#: A hex run long enough for git to resolve. 7 is git's own shortest unambiguous
-#: abbreviation; above 40 it is not a commit id and cannot be one, so a sha256
-#: digest is out of reach by length rather than by a carve-out. Case-insensitive
-#: rather than `[0-9a-f]`: git resolves an upper-case abbreviation perfectly well,
-#: and a rule that reads only one case is one an upper-case spelling walks past.
-HEXRUN = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{7,40}(?![0-9a-fA-F])")
+#: A hex run git could resolve. FOUR, which is git's own floor — not 7, which is
+#: only its default *display* abbreviation: `git rev-parse --verify d544a^{commit}`
+#: exits 0 in this checkout, so a 6-character revision typed into a `run:` line
+#: was outside this rule and went stale on the next commit. Above 40 it is not a
+#: commit id and cannot be one, so a sha256 digest is out of reach by length
+#: rather than by a carve-out. Case-insensitive rather than `[0-9a-f]`: git
+#: resolves an upper-case abbreviation perfectly well, and a rule that reads only
+#: one case is one an upper-case spelling walks past. The widening is free,
+#: measured over today's region: 15 runs of 4-40 against 6 of 7-40, so it costs
+#: nine more `git rev-parse` calls and finds no new commit.
+HEXRUN = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{4,40}(?![0-9a-fA-F])")
 
 #: The English spellings of a small count, so rule 5b holds both halves of what
 #: this page actually says: `the 14 .uf2 flavors` and `rebuilds all fourteen
@@ -384,7 +419,93 @@ PAGE_COUNT = re.compile(
 #: live — measured by review: `if: false` on the reproducibility gate was exit 0
 #: with the page still saying a non-reproducible image is never published.
 DISARM_KEYS = ("if", "continue-on-error")
-DISARM_SUFFIX = re.compile(r"\|\|\s*(?:true|:)\s*$")
+
+#: A step key that changes what its `run:` block MEANS. Every command printed on
+#: this page is read as bash, executed at the workspace root: under
+#: `shell: python` the block is not a shell script at all, and under a
+#: `working-directory` the paths in it name other files — measured by review at
+#: exit 0. Refused rather than modelled, for [`check_disarmed`]'s reason.
+MISREAD_KEYS = ("shell", "working-directory")
+
+#: The words that make a command's failure stop mattering, after `||` or after
+#: `;`. A CLOSED set, the way [`SUBJECTS`] is, and for the same reason in the
+#: other direction: the SBOM step's `[ -e "$f" ] || continue` is a conditional
+#: inside a `for`, so a rule reading every `||` calls the workflow's own control
+#: flow a disarm. Measured by review at exit 0 in the spellings the narrower
+#: `|| true` form walked past: `nix build … --rebuild ; true` and `… || echo
+#: skipped` on the reproducibility gate.
+DISARM_SUFFIX = re.compile(r"(?:\|\||;)\s*(?:true\b|:\s*$|echo\b|printf\b|exit\s+0\b)")
+
+#: The same thing said once for a whole block. GitHub runs a `run:` scalar as
+#: `bash -e`, so `set +e` makes every command after it advisory without changing
+#: one of them — which is the one shape [`DISARM_SUFFIX`] can never see, because
+#: it reads commands and this is a statement about the shell that runs them.
+DISARM_SET = re.compile(r"^set\s+(?:\+[A-Za-z]*e|\+o\s+errexit\b)")
+
+
+#: What the release job may carry at its OWN indent, and what the two values
+#: deciding where it runs and what it may do must be. A closed set, the way
+#: [`SUBJECTS`] is: every other rule in this file reads a step's COMMANDS, and a
+#: key one level up changes what a release runs without touching one of them.
+#: Measured by review at exit 0, all six — `if: false` (the region went on
+#: printing fifteen steps as "the steps a release runs", for a job that runs
+#: none), `continue-on-error`, `container:`, `strategy: matrix`,
+#: `defaults: run: shell:` and `runs-on: [self-hosted, attacker-box]`.
+#:
+#: A RULE rather than a value printed into the region, decided by measurement:
+#: the region is byte-diffed, so printing `runs-on` would redden a change to it —
+#: but with the finding "run `--write` and commit it", which `--write` then
+#: clears. The rot would be laundered by its own repair, which is what
+#: `test_regenerating_launders_no_clause` exists to refuse. A refusal cannot be
+#: regenerated away.
+JOB_KEYS = {"runs-on", "timeout-minutes", "permissions", "steps"}
+
+#: Where the release job runs, and what its token may do. Pinned: a self-hosted
+#: label moves the build onto a machine outside the trust base the provenance
+#: describes, while every command on this page stays the same; a widened scope is
+#: a capability no entry here opens.
+RUNNER = "ubuntu-latest"
+PERMISSIONS = {"contents": "write", "id-token": "write", "attestations": "write"}
+
+#: A mapping key at any indent, the shape [`job_block`] reads the job by.
+JOB_KEY = re.compile(r"^(?P<indent> +)(?P<key>[\w-]+):\s*(?P<value>.*?)\s*$")
+
+
+def job_block(text: str) -> tuple[list[str], dict[str, str], dict[str, str]]:
+    """(the job names, the first job's own keys, its `permissions:` scopes).
+
+    [`steps`] starts reading at a step and can never see the keys above one, so
+    this is the only reader of the layer that decides whether the steps run at
+    all, on what, and with which token.
+    """
+    lines = text.splitlines()
+    try:
+        start = next(i for i, raw in enumerate(lines) if re.match(r"^jobs:\s*$", raw))
+    except StopIteration:
+        return [], {}, {}
+    names: list[str] = []
+    keys: dict[str, str] = {}
+    scopes: dict[str, str] = {}
+    depth, at = None, None
+    for raw in lines[start + 1 :]:
+        if not raw.strip():
+            continue
+        if not raw.startswith(" "):
+            break
+        found = JOB_KEY.match(raw)
+        if not found:
+            continue
+        here = len(found["indent"])
+        depth = here if depth is None else depth
+        value = gate_lines.split_at_comment(found["value"])[0].strip()
+        if here == depth:
+            names.append(found["key"])
+        elif len(names) == 1 and here == depth + 2:
+            keys[found["key"]] = value
+            at = found["key"]
+        elif len(names) == 1 and here > depth + 2 and at == "permissions":
+            scopes[found["key"]] = value
+    return names, keys, scopes
 
 
 def steps(text: str) -> list[dict]:
@@ -402,12 +523,14 @@ def steps(text: str) -> list[dict]:
         found = STEP.match(raw)
         if found and (depth is None or len(found["indent"]) == depth):
             depth = len(found["indent"])
+            # `keys` collects the step's SUB-keys only. It exists for the two
+            # rules that read a key deciding whether a step runs or what its
+            # block means, and the `name`/`uses` this line sets is neither.
             current = {
                 "name": None, "uses": None, "run": [], "keys": set(),
                 "body": depth + 2, "at": None,
             }
             current[found["key"]] = found["value"]
-            current["keys"].add(found["key"])
             out.append(current)
             continue
         if current is None:
@@ -474,16 +597,50 @@ def step_items(text: str) -> tuple[int, int]:
     return blocks, items
 
 
+def cut_at_comment(body: str, quote: str | None) -> tuple[str, str | None]:
+    """(`body`'s code, the quote still open at its end) — a shell's reading of it.
+
+    `gate_lines.split_at_comment` cuts at the first ` #` whether or not it is
+    quoted, and that is a MIS-READ here rather than a residue: this job carries
+    two `awk '…'` programs whose own text holds one, and
+    `echo "tag # done"; curl … | sh` reads as `echo "tag`, so the half of the line
+    that RUNS is printed on this page nowhere. State carries in from the previous
+    line because a `'…'` program does.
+    """
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if quote is None:
+            if char == "\\":
+                index += 2
+                continue
+            if char in "\"'":
+                quote = char
+            elif char == "#" and (index == 0 or body[index - 1].isspace()):
+                return body[:index], None
+        elif quote == '"':
+            if char == "\\":
+                index += 2
+                continue
+            if char == '"':
+                quote = None
+        elif char == "'":
+            quote = None
+        index += 1
+    return body, quote
+
+
 def commands(block: str) -> list[str]:
     """The lines of a `run:` block that RUN, continuations joined, comments cut.
 
-    `gate_lines.split_at_comment` and not a `startswith("#")`: `true # cargo …`
-    runs the `true`, and reading a whole line as a comment because it ends in one
-    is the hole two guards in this directory shipped with.
+    [`cut_at_comment`] and not a `startswith("#")`: `true # cargo …` runs the
+    `true`, and reading a whole line as a comment because it ends in one is the
+    hole two guards in this directory shipped with.
     """
-    out = []
+    out, quote = [], None
     for _indent, body in gate_lines.logical_lines(block):
-        code = gate_lines.split_at_comment(body)[0].strip()
+        code, quote = cut_at_comment(body, quote)
+        code = code.strip()
         if code:
             out.append(code)
     return out
@@ -572,24 +729,54 @@ def phases(text: str) -> dict[str, list[str]]:
 TAGREF = re.compile(r"\$\{\{\s*steps\.tag\.outputs\.tag\s*\}\}|\$\{tag\}|\$tag")
 
 
+#: How a file GETS into `dist/`. Every `dist/` token was read as a publication
+#: before, which made `rm -f dist/leftover.tmp` an asset this page lists and the
+#: workflow's own `ls dist/*no-touch*` refusal a name — a removal and a test are
+#: not publications, and both were measured by review at exit 0.
+PUBLISH_VERB = re.compile(r"(?:^|[;&|]\s*|\b(?:then|do|else)\s+)(?:cp|mv|install|tee)\s")
+
+#: `cosign sign-blob --bundle <path>` WRITES `<path>` and READS its operand. The
+#: verb set above cannot see it, and taking every `dist/` operand of a `cosign`
+#: line instead would call `dist/SHA256SUMS` — the file it signs, written two
+#: steps earlier — a publication of this one.
+BUNDLE = re.compile(r"--bundle[=\s]+(?P<target>\S+)")
+
+#: A redirect's target. The `>` must open a word: after the tag placeholder is
+#: folded, `dist/rs-key-<tag>.intoto.jsonl` carries the very character this
+#: pattern looks for, and `2>&1` is not a file.
+REDIRECT = re.compile(r"""(?:^|\s)>>?\s*(?P<target>[\w./${}<>"'-]+)""")
+
+
+def written(command: str) -> list[str]:
+    """The paths `command` puts a file at — a WRITE, not a mention of one."""
+    out = []
+    if PUBLISH_VERB.search(command):
+        out += [word for word in command.split() if "dist/" in word]
+    out += [found["target"] for found in BUNDLE.finditer(command)]
+    out += [found["target"] for found in REDIRECT.finditer(command)]
+    return [word.strip("\"'") for word in out]
+
+
 def assets(job: list[dict], labels: list[str]) -> list[str]:
     """Every file this job publishes, as a name template.
 
     `gh release create … dist/*` uploads the directory wholesale, so the
-    published set is "whatever any step wrote into `dist/`" — two shapes, because
+    published set is "whatever any step WROTE into `dist/`" — two shapes, because
     the checksums step `cd dist` first and then redirects into a bare name.
     """
     found = set()
     for step in job:
+        inside = "cd dist" in step["block"]
         for command in step["code"]:
             # The tag placeholder carries SPACES (`${{ steps.tag.outputs.tag }}`),
             # so it is folded to one token BEFORE the path is read off. Reading
             # first stops at the space and yields `rs-key-${{`, which is what the
             # asset rule reported the first time this ran.
-            command = TAGREF.sub("<tag>", command)
-            found.update(re.findall(r"dist/([\w.${}<>-]+)", command))
-            if "cd dist" in step["block"]:
-                found.update(re.findall(r">\s*([\w.-]+)\s*$", command))
+            for name in written(TAGREF.sub("<tag>", command)):
+                if name.startswith("dist/"):
+                    found.add(name[len("dist/") :])
+                elif inside and "/" not in name:
+                    found.add(name)
     out = set()
     for name in found:
         if not name or name == "*":
@@ -601,8 +788,22 @@ def assets(job: list[dict], labels: list[str]) -> list[str]:
     return sorted(out)
 
 
+#: The build step's own rule for a flavor's published label, as the ordered
+#: right-hand sides of its `label=` assignments. [`label_of`] is that rule again
+#: in Python — a second copy by construction, and the one field this manifest
+#: calls derived while re-implementing it. Measured by review at exit 0:
+#: `label="rc1-${pkg#firmware}"` in the workflow renamed every published asset
+#: while the region went on printing the old names.
+LABEL_SHELL = ("${pkg#firmware}", "${label#-}", "default")
+LABEL_ASSIGN = re.compile(r'\blabel="(?P<value>[^"]*)"')
+
+
 def label_of(package: str) -> str:
-    """The published label of a flavor, by the workflow's own rule."""
+    """The published label of a flavor, by the workflow's own rule.
+
+    Held to that rule by [`check_label_rule`]: this function is a reading of
+    [`LABEL_SHELL`], not an authority of its own.
+    """
     label = package[len("firmware") :].lstrip("-") if package.startswith("firmware") else package
     return label or "default"
 
@@ -650,12 +851,70 @@ def check_parser_complete(root: pathlib.Path, findings: list[str]) -> None:
         )
 
 
-def check_disarmed(job: list[dict], findings: list[str]) -> None:
-    """Rule 1c: no step of the release job is switched off or made non-fatal.
+def check_caller_steps(root: pathlib.Path, findings: list[str]) -> None:
+    """Rule 1b, the CALLER's half — a question no rule here had ever asked.
 
-    [`SHAPE`] reads a command's TEXT and can never read its effect, so this is
-    the one shape of "the manifest describes a pipeline the repo does not run"
-    that is cheap to refuse outright rather than to model.
+    Rule 6 holds what the caller CALLS and is blind to what it RUNS, so a `steps:`
+    block beside the `uses:` is a release step this page never opens. Its own
+    function and not a second clause inside [`check_parser_complete`], so its arm
+    can remove it without taking the builder's half with it.
+    """
+    outer, _items = step_items((root / CALLER).read_text(encoding="utf-8"))
+    if outer:
+        findings.append(
+            f"{CALLER} carries {outer} `steps:` block(s) — this manifest reads it"
+            " as a thin caller and prints only what the builder runs, so a step"
+            " of its own is a released command printed nowhere"
+        )
+
+
+def check_job(root: pathlib.Path, findings: list[str]) -> None:
+    """Rule 1d: the release job's own keys, values and scopes.
+
+    The layer under every other rule here. [`check_disarmed`] refuses a STEP that
+    may not run; this refuses the same thing said once for all fifteen of them,
+    plus the two values that decide which machine runs them and what its token
+    may do — none of which is a command, and commands are all this file reads.
+    """
+    names, keys, scopes = job_block((root / WORKFLOW).read_text(encoding="utf-8"))
+    if len(names) != 1:
+        findings.append(
+            f"{WORKFLOW} carries {len(names)} job(s) ({names}) — this manifest"
+            " prints one, so a second job's steps are released and opened here"
+            " nowhere"
+        )
+    extra = sorted(set(keys) - JOB_KEYS)
+    if extra:
+        findings.append(
+            f"{WORKFLOW}'s release job carries {extra}, which is not one of"
+            f" {sorted(JOB_KEYS)} — a key at the job's own indent decides whether"
+            " these steps run, where, and how many times, and every other rule"
+            " here reads the steps"
+        )
+    if keys.get("runs-on") != RUNNER:
+        findings.append(
+            f"{WORKFLOW}'s release job runs on {keys.get('runs-on')!r} and this"
+            f" manifest reads {RUNNER!r} — a self-hosted or containerised runner"
+            " builds the published images on a machine this page describes"
+            " nowhere, with every command unchanged"
+        )
+    if scopes != PERMISSIONS:
+        findings.append(
+            f"{WORKFLOW}'s release job holds {scopes} and this manifest reads"
+            f" {PERMISSIONS} — a scope no entry here opens is a capability the"
+            " published provenance does not describe"
+        )
+
+
+def check_disarmed(job: list[dict], findings: list[str]) -> None:
+    """Rule 1c: no step is switched off, made non-fatal, or run as something else.
+
+    [`SHAPE`] reads a command's TEXT and can never read its effect, so these are
+    the shapes of "the manifest describes a pipeline the repo does not run" that
+    are cheap to refuse outright rather than to model: a key that decides whether
+    the step runs ([`DISARM_KEYS`]) or what its block is ([`MISREAD_KEYS`]), a
+    suffix that swallows one command's failure, and the `set +e` that swallows
+    every later one at once.
     """
     for step in job:
         keys = sorted(step["keys"] & set(DISARM_KEYS))
@@ -665,12 +924,27 @@ def check_disarmed(job: list[dict], findings: list[str]) -> None:
                 " that may not run is one this page would go on printing as a"
                 " command a release runs"
             )
+        misread = sorted(step["keys"] & set(MISREAD_KEYS))
+        if misread:
+            findings.append(
+                f"{WORKFLOW}'s step {step['title']!r} carries {misread} — this"
+                " page prints its block as bash run at the workspace root, and"
+                " under either key the commands it prints are not the ones the"
+                " step runs"
+            )
         for command in step["code"]:
             if DISARM_SUFFIX.search(command):
                 findings.append(
                     f"{WORKFLOW}'s step {step['title']!r} swallows a failure"
                     f" with {command!r} — a release step that cannot fail is a"
                     " gate that cannot gate"
+                )
+            if DISARM_SET.search(command):
+                findings.append(
+                    f"{WORKFLOW}'s step {step['title']!r} runs {command!r} — the"
+                    " block's remaining commands are advisory from there on, and"
+                    " every rule on this page reads the commands rather than the"
+                    " shell that runs them"
                 )
 
 
@@ -734,7 +1008,7 @@ def check_subjects(paired: dict[str, dict], findings: list[str]) -> None:
         if step is None:
             continue
         said, derived = entry["subject"], subject_of(step)
-        if said == FRONTIER:
+        if FRONTIER_SPELLINGS.search(said):
             findings.append(
                 f"the entry for {step['title']!r} claims `{FRONTIER}` and the"
                 f" command it runs establishes `{derived}` — determinism is not"
@@ -768,12 +1042,22 @@ def check_frontier_unreachable(findings: list[str]) -> None:
     the mechanism that would make such an entry legal — a shape mapping onto it,
     or the word appearing in the vocabulary — because the entry rule reads a
     hand-written field and a widened map would make the claim derivable instead.
+
+    Over [`FRONTIER_SPELLINGS`] and not the token: comparing the one string was
+    exit 0 on `source-to-binary`, on `source→binary`, and on a gloss rewritten
+    under a key this rule was reading and never opening.
     """
-    if FRONTIER in {subject for _pattern, subject in SHAPE} or FRONTIER in SUBJECTS:
+    reachable = sorted(
+        value
+        for value in {s for _pattern, s in SHAPE} | set(SUBJECTS) | set(SUBJECTS.values())
+        if FRONTIER_SPELLINGS.search(value)
+    )
+    if reachable:
         findings.append(
-            f"`{FRONTIER}` is reachable as an entry's subject — no command in a"
-            " release pipeline establishes that the machine code preserves what"
-            " the source says, so no entry may be able to claim it"
+            f"`{FRONTIER}` is reachable as an entry's subject, spelled"
+            f" {reachable} — no command in a release pipeline establishes that"
+            " the machine code preserves what the source says, so no entry may"
+            " be able to claim it, under any spelling"
         )
 
 
@@ -870,6 +1154,74 @@ def check_no_touch(flavors, packages, findings: list[str]) -> None:
         )
 
 
+def check_label_rule(job, findings: list[str]) -> None:
+    """Rule 4e: the asset names on this page are derived, so derive them from the
+    workflow rather than beside it.
+
+    Every `rs-key-<tag>-<label>.uf2` the region prints comes out of [`label_of`],
+    which is [`LABEL_SHELL`] rewritten in Python. Nothing held the two together,
+    so editing the shell renamed the whole published set at exit 0 — the exact
+    rot this file exists to refuse, in the field it calls derived.
+    """
+    said = tuple(
+        found["value"]
+        for step in job
+        for command in step["code"]
+        for found in LABEL_ASSIGN.finditer(command)
+    )
+    if said != LABEL_SHELL:
+        findings.append(
+            f"{WORKFLOW} builds a flavor's published label out of {list(said)}"
+            f" and `label_of` reads it as {list(LABEL_SHELL)} — every asset name"
+            " on this page is that rule in Python, so a change to one of the two"
+            " renames the published set and reddens nothing"
+        )
+
+
+def check_test_knobs(flavors, packages, findings: list[str]) -> None:
+    """Rule 4f: no published image carries a knob `nix/firmware.nix` marks
+    "TEST builds only".
+
+    `no-touch` is refused one rule up by NAME and by the feature it compiles;
+    these reach the derivation's environment instead, so neither the package name
+    nor its `cargoFlags` carries them and both rules there are blind. A published
+    image built with a known master key seals every secret to a value the
+    workflow file hands out — measured by review at exit 0, on a `firmware-lab`
+    flavor added to both loops.
+    """
+    carrying = sorted(
+        f"{name} ({knob})"
+        for name in flavors
+        for knob in FORBIDDEN_KNOBS
+        if knob in packages.get(name, {})
+    )
+    if carrying:
+        findings.append(
+            f"{WORKFLOW} would publish {carrying} — {NIX} marks those knobs"
+            " \"TEST builds only\", and an image built with a known master or"
+            " device key seals its secrets to a value this file hands out"
+        )
+
+
+def check_entry_order(job, paired, findings: list[str]) -> None:
+    """Rule 1f: the roster reads in the order the job runs.
+
+    [`match_steps`] holds the roster and the steps as SETS, both ways, and a set
+    is what it should hold — but the hand-written statements are reviewed against
+    the fenced command list below them, which is in step order, and a roster that
+    has drifted out of it is one a reader checks line by line against nothing.
+    """
+    order = [step["title"] for step in job]
+    said = [paired[entry["step"]]["title"] for entry in ENTRIES if entry["step"] in paired]
+    if said != [title for title in order if title in said]:
+        findings.append(
+            f"the manifest entries name {WORKFLOW}'s steps in the order {said}"
+            f" and the job runs them in {[t for t in order if t in said]} — the"
+            " statements are read against the command list below them, which is"
+            " in the job's order"
+        )
+
+
 def check_flavor_floor(flavors, floor: int, findings: list[str]) -> None:
     """Rule 10, the flavor half."""
     if len(flavors) < floor:
@@ -930,7 +1282,7 @@ def check_caller(root: pathlib.Path, findings: list[str]) -> None:
     membership form of this rule was exit 0 on it.
     """
     text = (root / CALLER).read_text(encoding="utf-8")
-    called = re.findall(r"^\s+uses:\s*(\S+\.ya?ml)\s*$", text, re.M)
+    called = [found["path"] for found in CALLED.finditer(text)]
     want = f"./{WORKFLOW}"
     if called != [want]:
         findings.append(
@@ -939,6 +1291,14 @@ def check_caller(root: pathlib.Path, findings: list[str]) -> None:
             " `cosign verify-blob --certificate-identity-regexp` checks and what"
             " makes the provenance SLSA Build L3 rather than L2, and a second"
             " called workflow is a release step printed nowhere"
+        )
+    said = re.search(r"^\s+tags:\s*(?P<filter>.+?)\s*$", text, re.M)
+    if said is None or said["filter"] != TRIGGER:
+        findings.append(
+            f"{CALLER} releases the tags {said['filter'] if said else 'nothing'}"
+            f" and this manifest reads {TRIGGER} — the trigger is the admission"
+            " rule one layer above `resolve tag`, and a widened one hands every"
+            " tag-shaped ref to a job holding `contents: write`"
         )
 
 
@@ -949,10 +1309,11 @@ def check_caller(root: pathlib.Path, findings: list[str]) -> None:
 #: went on listing all four.
 UPLOAD = re.compile(r"gh release create\b(?P<args>.*)$")
 
-#: A command that puts a file somewhere. Its last operand is checked, because
-#: `cp "$out/$pkg.elf" dist/` names no file this parser can print and was
-#: measured by review to add fourteen unsigned ELFs to a release invisibly.
-WRITER = re.compile(r"^(?P<verb>cp|mv|install)\s")
+#: A target this parser cannot turn into a name: a directory, whatever spells it,
+#: or a bare variable. `cp "$out/$pkg.elf" dist/` was measured by review to add
+#: fourteen unsigned ELFs to a release invisibly, and `cp "$out/$pkg.elf" "$d/"`
+#: does the same through a variable a bare-`dist` test never reads.
+UNNAMEABLE = re.compile(r"^(?:.*/|\$\{?\w+\}?)$")
 
 
 def check_uploaded(job, published, findings: list[str]) -> None:
@@ -990,22 +1351,26 @@ def check_uploaded(job, published, findings: list[str]) -> None:
 
 
 def check_named_writes(job, findings: list[str]) -> None:
-    """Rule 8d: nothing is copied into `dist/` under a name this parser cannot read.
+    """Rule 8d: nothing is written under a name this parser cannot read.
 
-    A bare directory target (`cp x dist/`) keeps the source's basename, which is
-    a shell expansion this file does not evaluate — so the file is published,
-    covered by no digest, and named on no page.
+    A directory target (`cp x dist/`) keeps the source's basename, which is a
+    shell expansion this file does not evaluate — so the file is published,
+    covered by no digest, and named on no page. Held on the SHAPE of the target
+    and not on the literal `dist`, because `cp "$out/$pkg.elf" "$d/"` publishes
+    the same fourteen ELFs through a variable: this job's only output directory
+    is `dist/`, so a write whose file this page cannot name is a finding wherever
+    it points.
     """
     for step in job:
         for command in step["code"]:
-            if not WRITER.match(command):
+            if not PUBLISH_VERB.search(command):
                 continue
-            target = command.split()[-1].strip("\"'")
-            if target.rstrip("/") == "dist":
+            target = TAGREF.sub("<tag>", command).split()[-1].strip("\"'")
+            if UNNAMEABLE.match(target):
                 findings.append(
-                    f"{WORKFLOW}'s step {step['title']!r} runs {command!r} — a"
-                    " bare `dist/` target keeps the source's basename, so the"
-                    " file is published under a name this page cannot print"
+                    f"{WORKFLOW}'s step {step['title']!r} runs {command!r} — the"
+                    f" target {target!r} keeps the source's basename, so the file"
+                    " is published under a name this page cannot print"
                 )
 
 
@@ -1142,8 +1507,11 @@ def audit(
     findings: list[str] = []
     job, packages, loops, built = read(root)
     check_parser_complete(root, findings)
+    check_caller_steps(root, findings)
+    check_job(root, findings)
     check_disarmed(job, findings)
     paired = match_steps(job, findings)
+    check_entry_order(job, paired, findings)
     check_subjects(paired, findings)
     check_frontier_unreachable(findings)
     check_frontier_open(root, findings)
@@ -1151,6 +1519,8 @@ def audit(
     check_loops_agree(loops, findings)
     check_packages_exist(flavors, packages, findings)
     check_no_touch(flavors, packages, findings)
+    check_test_knobs(flavors, packages, findings)
+    check_label_rule(job, findings)
     check_flavor_floor(flavors, flavor_floor, findings)
     check_counts(job, loops, findings)
     check_page_count(root, flavors, findings)
@@ -1221,6 +1591,20 @@ def body(root, job, packages, flavors, built, published) -> list[str]:
         " is held against the shape of each step's own command, and the second"
         " word is not a value that column can take.",
         "",
+        "### What a subject means",
+        "",
+        "The closed vocabulary the `Subject` column below is drawn from. Printed"
+        " here because a gloss nothing reads is a gloss anything can be written"
+        f" into: rewriting one to say what `{FRONTIER}` says, under a key this"
+        " gate was comparing and never opening, was the third way past the rule"
+        " above.",
+        "",
+        "| Subject | What claiming it means |",
+        "|---|---|",
+    ]
+    out += [f"| `{name}` | {cell(gloss)} |" for name, gloss in sorted(SUBJECTS.items())]
+    out += [
+        "",
         "### The steps a release runs",
         "",
         "| # | Step | Subject | What it settles |",
@@ -1239,8 +1623,9 @@ def body(root, job, packages, flavors, built, published) -> list[str]:
     out += [
         "",
         "The commands those steps run, as this gate reads them: `\\`"
-        " continuations joined, and everything from the first ` #` on a line"
-        " dropped — which also truncates a line whose *string* holds one.",
+        " continuations joined, and a comment cut where a shell would cut one —"
+        " a ` #` inside a quoted string is part of the command, so an `awk '…'`"
+        " program's own text stays whole and nothing hides behind a quote.",
         "",
         "```sh",
     ]
@@ -1322,6 +1707,9 @@ def body(root, job, packages, flavors, built, published) -> list[str]:
         " page describes only in the round.",
         "- the workflow's own header comments. They are prose about the"
         " procedure, not the procedure.",
+        "- what a pinned action DOES. The `uses:` steps run code out of another"
+        " repository; the table above records which commit of it a release runs,"
+        " and nothing whatsoever about what that commit does.",
         "- what a command MEANS. The `subject` column is decided by a command's"
         " shape; a step that is present, spelled right and wrong about the world"
         " is outside every rule here.",

@@ -37,11 +37,17 @@ that would have swept it is counted per base directory — so it never met a
 previous run. 361 orphaned bases, 8.9 GB, inside one day.
 """
 
+import ast
+import importlib
+import inspect
 import pathlib
 import re
 import shutil
 import subprocess
 import sys
+import types
+
+import pytest
 
 import conftest
 import gate_lines
@@ -212,6 +218,178 @@ def test_every_gate_reports_a_summary_when_it_is_happy():
         text = (HERE / name).read_text()
         assert "def audit(" in text, f"{name} has no audit() the tests can drive"
         assert "def main(" in text, f"{name} has no main() check.sh can run"
+
+
+#: A `check.sh` row that runs a script under `scripts/` and is owed no mutation
+#: table by any rule above, with the reason. Held BOTH ways, the way
+#: `release_gate.HISTORICAL` is: a name here that has since gained a table is
+#: deleted from here, so a carve-out cannot outlive its need. Measured when this
+#: case was written — four rows, and `pt.sh` is the only one of them that is not
+#: a guard. The other three are the same blind spot `crate_graph.py` sat in,
+#: recorded rather than hidden.
+UNROSTERED = {
+    "pt.sh": "not a guard and not a `run` row: the elf and store rows invoke it"
+             " to apply a partition table, and it asserts nothing",
+    "ci-scope.sh": "a `run` row, and the one shape that does not need a table"
+                   " here — `check.sh` runs its `--self-test`, so the table is"
+                   " inside the script and the row IS the drive",
+    "ci-knobs.sh": "the same: a `--self-test` row",
+    "complexity_gate.sh": "a `run` row with no mutation table. The `_gate.py`"
+                          " glob cannot see a `.sh` guard, which is the blind"
+                          " spot `crate_graph.py` sat in wearing another suffix",
+    "docs_constants.py": "a `run` row with no mutation table — held only by the"
+                         " constants it happens to read today",
+    "gate_union.py": "a `run` row with no mutation table",
+    "token_refinement.sh": "a `run` row with no mutation table of its own; it"
+                           " dispatches to two `--check` scripts that have none"
+                           " either",
+}
+
+#: A `scripts/…` path as a `check.sh` row spells it, with or without `python`.
+INVOKED = re.compile(r"(?:^|\s)(?:python3?\s+)?(?P<path>(?:\./)?scripts/[\w./-]+\.(?:py|sh))")
+
+
+def invoked_scripts():
+    """Every script under `scripts/` that a live `check.sh` row runs.
+
+    `unquoted` as well as the comment cut, for this file's own reason one rule
+    over: `check.sh` names itself inside an `echo` that tells a contributor which
+    file to edit, and a rule reading that as an invocation reports the runner as
+    a guard nothing tests.
+    """
+    code = [unquoted(gate_lines.split_at_comment(body)[0])
+            for _indent, body in gate_lines.logical_lines(check_sh())]
+    return sorted({pathlib.PurePath(found["path"]).name
+                   for line in code for found in INVOKED.finditer(line)})
+
+
+def test_every_script_check_sh_runs_is_on_a_roster():
+    """The direction the two rules above cannot see, and the one that has failed.
+
+    `test_every_gate_is_run_by_check_sh` walks the roster and asks whether the row
+    exists. Nothing walked the ROWS and asked whether the roster has heard of
+    them, so a guard whose name does not end `_gate.py` arrived with a table
+    nothing was a roster for — measured on `crate_graph.py`, whose whole mutation
+    table could have been deleted with this file green.
+    """
+    known = set(GATES) | {pathlib.PurePath(g).name for g in NAMED} | set(UNROSTERED)
+    missing = [name for name in invoked_scripts() if name not in known]
+    assert not missing, f"check.sh runs {missing}, which no roster here names"
+
+
+def test_the_unrostered_carve_out_cannot_outlive_its_reason():
+    """Both ways, so a script that has since gained a table leaves this list."""
+    runs = set(invoked_scripts())
+    stale = [name for name in UNROSTERED if name not in runs]
+    assert not stale, f"{stale} are carved out here and no check.sh row runs them"
+    covered = [name for name in UNROSTERED if (HERE / f"test_{pathlib.PurePath(name).stem}.py").is_file()]
+    assert not covered, f"{covered} now have a mutation table — move them onto a roster"
+
+
+def audit_arity(name):
+    """How many values `name`'s `audit()` returns, so the stub can fill them.
+
+    Read off the source rather than pinned in a table: the shapes run from one
+    value to four, and a stub of the wrong arity raises in the REPORTING path,
+    which reads as the exit-code case failing when it is the harness that is
+    wrong.
+    """
+    found = 1
+    for node in ast.parse((HERE / name).read_text()).body:
+        if isinstance(node, ast.FunctionDef) and node.name == "audit":
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Return) and isinstance(inner.value, ast.Tuple):
+                    found = max(found, len(inner.value.elts))
+    return found
+
+
+#: What the stub returns beside the findings. An empty LIST and not `None` in the
+#: second slot: `assurance_gate` and `threat_gate` print that value's lines
+#: before they look at the findings at all, so a stub that cannot be iterated
+#: raises there and reads as this case failing.
+FILLER = (None, [], "", [])
+
+#: The operands a gate takes beside its root. One entry, named rather than
+#: guessed from the signature: `run_count_gate.run(root, argv)` dispatches on it.
+ENTRY_ARGS = {"run_count_gate.py": (ROOT, [])}
+
+
+def exit_code(name, module):
+    """What the row would read, whichever of three roads the gate takes to it.
+
+    Most gates `return` an int out of `run` or `main`; `scope_gate` raises
+    `SystemExit(1)` instead, which is that number by another road — so this reads
+    it as one, or the one gate that never returns reads as the one that fails.
+
+    Only `*_gate.py` is driven through here. The `NAMED` half does NOT share this
+    contract and was measured not to: `crate_graph.py` and `generate_ui_fonts.py`
+    dispatch on a subcommand and answer 0 and 2 to no arguments, `impact.py` and
+    `security_trace.py` raise, and `comutate.py`'s `run` APPLIES the mutants
+    rather than reporting on them.
+    """
+    if hasattr(module, "run"):
+        args = ENTRY_ARGS.get(name, (ROOT,))
+        try:
+            return module.run(*args)
+        except SystemExit as raised:
+            return raised.code
+    try:
+        return module.main([]) if inspect.signature(module.main).parameters else module.main()
+    except SystemExit as raised:
+        return raised.code
+
+
+@pytest.mark.parametrize("name", GATES)
+def test_a_finding_reaches_the_row_as_a_non_zero_exit(name, monkeypatch, capsys):
+    """The fact about the SET that no gate's own table stated about itself.
+
+    Every mutation table under `scripts/` drives `audit()` and reads the findings
+    it returns. `check.sh` reads neither: it reads the process's EXIT CODE, and
+    nothing joined the two. Measured by flipping each entry function's non-zero
+    return to zero and re-running that gate's own table: **14 of the 30 did not
+    notice** — eleven stayed wholly green, and three had an unrelated red whose
+    failure set the mutation did not change. Those rows printed their finding to
+    the terminal and passed. `scope_gate` is the fourteenth in a shape the flip
+    does not even reach: it `raise SystemExit(1)`s, mutated to `(0)` by hand, same
+    result.
+
+    One direction, deliberately. The clean direction needs a stub that also fills
+    the summary line, which is built out of values only that gate's own `audit()`
+    produces, and `check.sh` re-measures it on every run by being green.
+
+    The finding must also be PRINTED, on either stream: six of these gates report
+    on stdout and the rest on stderr, and which one is not this rule's business —
+    a row that exits non-zero and says nothing is.
+    """
+    module = importlib.import_module(name[: -len(".py")])
+    arity = audit_arity(name)
+    finding = f"SYNTHETIC-EXIT-PROBE for {name}"
+    answer = ([finding], *FILLER[1:arity]) if arity > 1 else [finding]
+    monkeypatch.setattr(module, "audit", lambda *a, **k: answer)
+    assert exit_code(name, module) != 0, f"{name} prints a finding and exits 0"
+    printed = capsys.readouterr()
+    assert finding in printed.out + printed.err, f"{name} exits non-zero without saying why"
+
+
+def test_the_shared_exit_case_can_go_red():
+    """The arm for the case above, in both of its directions.
+
+    A rule that cannot fail is the thing this file exists to refuse, so the two
+    shapes it is about are driven here over a stand-in: a gate that PRINTS the
+    finding and exits 0 — which is exactly the mutation the sweep applied, and
+    what fourteen rows would have survived — and one that exits non-zero in silence.
+    """
+    loud_but_green = types.SimpleNamespace(run=lambda root: (print("a finding"), 0)[1])
+    assert exit_code("loud_but_green.py", loud_but_green) == 0
+
+    silent_and_red = types.SimpleNamespace(run=lambda root: 1)
+    assert exit_code("silent_and_red.py", silent_and_red) == 1
+
+    # And the third shape, so `scope_gate`'s road is not read as an absence.
+    def raiser(root):
+        raise SystemExit(1)
+
+    assert exit_code("raiser.py", types.SimpleNamespace(run=raiser)) == 1
 
 
 #: `VAR=$(mktemp …)` — the whole right-hand side, deliberately. A trailing path
