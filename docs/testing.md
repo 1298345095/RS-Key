@@ -394,12 +394,17 @@ command with it. "Peak" is the tier's `maximum resident set size` under
 > cover counts moved with the ratchets and their timings are the 2026-08-26
 > reading.
 
-Every tier came back at exactly its floor, and `all` is no longer the sum of the
-others: the four weekly shards ran separately in the same session and checked
-**the same 89 harness names**, compared name by name out of the four logs
-against `all`'s own listing, for 3763 s of solving against `all`'s 3735 s. So
-`FLOOR_all` and `COVERS_all` are numbers a run has reached, not numbers the
-partition adds up to.
+Every tier came back at exactly the floor it carried that day: the four weekly
+shards ran separately in the same session and checked the same harness names as
+`all` did, compared name by name out of the four logs against `all`'s own
+listing, for 3763 s of solving against `all`'s 3735 s. That count was the `all`
+roster **of the 2026-08-26 tree: 89 names**. The same tier is **today's
+`FLOOR_all` of 94** — the `all` row above, five harnesses later — and the four
+weekly floors still sum to it, because the shards partition the crates and
+`kani.sh` refuses to run when they stop. The count adds up; the *solving* does
+not, which is what 3763 s against 3735 s says. So `FLOOR_all` and `COVERS_all`
+are numbers a run has reached, and the reading they have reached is the 89 —
+moving it onto the 94 takes a fresh run of the four shards.
 
 Two figures this page carried are refuted by that run rather than confirmed.
 `rsk-phy`'s tier peaks at **19.9 GiB** against the 11.1 GB recorded for the
@@ -418,8 +423,10 @@ and not as a side effect of measuring.
 20 m 33 s, `light2` 54 m 52 s, `light3` 4 m 59 s and `heavy` 1 h 33 m 41 s on
 hosted `ubuntu-latest` runners, all four inside the 6 h job cap — and only one of
 the four is a reading of the roster above. That run was `main` at `06813cc1`,
-where `FLOOR_all` was 66 against today's 89, `light1` carried 17 harnesses and
-`light2` 21. A run that proved 17 is not evidence for a floor of 27.
+where `FLOOR_all` was 66 against today's `FLOOR_all` of 94, `light1` carried 17
+harnesses against today's `FLOOR_light1` of 32 and `light2` 21 against today's
+`FLOOR_light2` of 29. A run that proved 17 of `light1` is not evidence for a
+`light1` floor of 32.
 
 By *cost* it reads better than by count, and the two answers should not be
 conflated. Every harness the three shards have gained since is in one crate each
