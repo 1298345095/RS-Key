@@ -107,9 +107,15 @@ sentence naming a registered `SEC-…` id, and this page names none. Measured wi
 a refuted scope sentence in place: the claims, run-count and constant-time gates
 and `docs.sh check` were all exit 0, and the citation gate, red that day over
 line drift in other files, said nothing about this page. The single exception is
-the scope paragraph at the top of this page, which `ct_gate` refuses to let
-re-scope the `rsk-rsa` modexp as a keygen-only primitive. Nothing holds the
-findings table, the residuals, or this sentence.
+the scope paragraph at the top of this page. `ct_gate` anchors on its `rsk-rsa`
+clause and asks three things of the paragraph that carries it: it must name the
+modexp and the `rsa_private_exp_crt` that reaches it over USB, it may not
+re-scope them to key generation, and it may not be one of two paragraphs
+carrying the anchor, because an earlier one would shield it. Anchored instead on
+a sentence five lines above the clause and refusing one spelling of one word,
+the rule was walked past thirteen ways — a synonym, eight spellings, the clause
+moved into a list, a decoy paragraph, and an editor inserting a blank line.
+Nothing holds the findings table, the residuals, or this sentence.
 
 ## Defense-in-depth applied
 

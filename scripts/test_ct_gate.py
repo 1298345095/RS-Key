@@ -20,6 +20,7 @@ chain kept intact because attribution is half of what is under test.
 from __future__ import annotations
 
 import pathlib
+import re
 import sys
 
 import pytest
@@ -34,6 +35,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 #: path against the tree, where it is not.
 MAC = "/x/crates/rsk-crypto/src/mac.rs"
 PIN = "/x/crates/rsk-openpgp/src/pin.rs"
+CODE = "/x/crates/rsk-oath/src/code.rs"
 
 CHAIN = (
     f"inlined by {MAC}:60 (_ZN10rsk_crypto3mac5ct_eq17h0000000000000000E)\n"
@@ -250,17 +252,85 @@ CLOBBER_IS_NOT_THE_OPERAND = f"""{CHAIN}
 10000c0c:\td155      \tbne.n\t10000c60
 """
 
+#: A spill through the FRAME register beside one through `sp`, which is the only
+#: shape that tells the row's two reload counts apart: both are reloads, one is
+#: what the summary calls "excused through a base other than `sp`". Copied from
+#: the `strb.w r0, [r7, #-29]` / `ldrb.w r0, [r7, #-29]` pair the `black_box`
+#: barrier compiles to in the copies that do not spill to the stack.
+TWO_SPILLS = f"""{CHAIN}
+10000d00:\tf818 2001 \tldrb.w\tr2, [r8, r1]
+{CHAIN}
+10000d04:\t5c6b      \tldrb\tr3, [r5, r1]
+{CHAIN}
+10000d06:\t4053      \teors\tr3, r2
+{CHAIN}
+10000d08:\tf88d 0098 \tstrb.w\tr0, [sp, #152]
+{CHAIN}
+10000d0c:\tf89d 0098 \tldrb.w\tr0, [sp, #152]
+{CHAIN}
+10000d10:\tf807 0c1d \tstrb.w\tr0, [r7, #-29]
+{CHAIN}
+10000d14:\tf817 0c1d \tldrb.w\tr0, [r7, #-29]
+{CHAIN}
+10000d18:\t2800      \tcmp\tr0, #0
+{CHAIN}
+10000d1a:\td005      \tbeq.n\t10000d30
+"""
+
+#: One instruction the site's chain does NOT name, so two recordings of the loop
+#: sit in two attributed runs rather than one — which is what "a copy fewer"
+#: moves, and the quantity a literal floor was taken as a percentage of.
+GAP = f"""{OTHER}
+100000f0:\te7ff      \tb.n\t10000100
+"""
+
+#: A SECOND registered site, so the row can be asked whether it decides per site
+#: or on a total. Its excuse covers two of its three loads — two spill/reload
+#: pairs and one genuine buffer read — while `CLEAN`'s covers one of three, so
+#: summed they cancel at 3 against 3 and only the per-site question sees it.
+OATH = f"inlined by {CODE}:41 (_ZN8rsk_oath4code7ct_eq_b17h0000000000000002E)"
+TWO_SITES = f"""{CLEAN}{OATH}
+10001000:\tf88d 0090 \tstrb.w\tr0, [sp, #144]
+{OATH}
+10001004:\tf89d 0090 \tldrb.w\tr0, [sp, #144]
+{OATH}
+10001008:\tf88d 1094 \tstrb.w\tr1, [sp, #148]
+{OATH}
+1000100c:\tf89d 1094 \tldrb.w\tr1, [sp, #148]
+{OATH}
+10001010:\t5c8a      \tldrb\tr2, [r1, r2]
+{OATH}
+10001012:\t2a00      \tcmp\tr2, #0
+{OATH}
+10001014:\td005      \tbeq.n\t10001020
+"""
+
 SITE = {"CT-CMP-001": {"symbol": "rsk_crypto::mac::ct_eq", "class": "comparator"}}
 NO_FLOORS = {
     "run_floor": 0,
     "branch_floor": 0,
     "reasoned_floor": 0,
-    "exposed_floor": 0,
 }
 
 
 def observed(text):
     return ct_gate.observe(ROOT, SITE, text.splitlines())["CT-CMP-001"]
+
+
+def shifted(text, delta):
+    """The same recorded run at another address, so two copies can coexist."""
+    return re.sub(
+        r"^([0-9a-f]{8}):",
+        lambda m: f"{int(m.group(1), 16) + delta:08x}:",
+        text,
+        flags=re.M,
+    )
+
+
+def summary_of(text, page=None):
+    """The row's own summary line over a recorded disassembly."""
+    _, summary = ct_gate.audit(ROOT, lines=text.splitlines(), page=page, **NO_FLOORS)
+    return summary
 
 
 def shipped_registry() -> str:
@@ -337,7 +407,7 @@ def test_a_reload_of_this_frames_own_store_is_not_a_buffer_read():
 
 
 def test_an_excuse_that_covers_every_load_is_a_finding(monkeypatch):
-    """The hole `EXPOSED_FLOOR` closes, driven in both directions.
+    """The hole the excuse ratio closes, driven in both directions.
 
     `reload_of_a_store` is the only rule here that EXCUSES a load, and nothing
     else this row counts asks it — runs, branches and traced come out identical
@@ -345,23 +415,92 @@ def test_an_excuse_that_covers_every_load_is_a_finding(monkeypatch):
     own mutant with it and leaves every other number in place: a check that
     cannot fail, at exit 0. Measured the same way over the shipped image, stubbed
     to True it reports 0 secret-dependent branches over an unchanged 39 / 25 / 22
-    with all three older floors satisfied.
+    with all three floors satisfied.
+
+    No floor is patched here and there is none to patch: the rule is that the
+    excuse may not cover more of a site's loads than it leaves exposed, so the
+    fixture arms it as it stands (2 exposed, 1 excused) and the stub inverts it
+    (0 exposed, 3 excused).
     """
-    kwargs = dict(NO_FLOORS)
-    kwargs["exposed_floor"] = 2
-    word = "still visible to the taint"
+    word = "visible to the taint"
 
     before = observed(LEAKY)
-    findings, _ = ct_gate.audit(ROOT, lines=LEAKY.splitlines(), **kwargs)
+    findings, _ = ct_gate.audit(ROOT, lines=LEAKY.splitlines(), **NO_FLOORS)
     assert len(before[0]) == 1, before[0]
     assert not any(word in f for f in findings), findings
 
     monkeypatch.setattr(ct_gate, "reload_of_a_store", lambda stream, index: True)
     after = observed(LEAKY)
-    findings, _ = ct_gate.audit(ROOT, lines=LEAKY.splitlines(), **kwargs)
+    findings, _ = ct_gate.audit(ROOT, lines=LEAKY.splitlines(), **NO_FLOORS)
     assert after[0] == [], after[0]  # the mutant this row exists to catch, gone
     assert after[1:] == before[1:], (before, after)  # and nothing else moved
     assert any(word in f for f in findings), findings
+
+
+def test_the_excuse_ratio_does_not_move_with_the_copy_count():
+    """The false alarm a LITERAL count carried, and the reason this is a ratio.
+
+    Measured on the default release image: 27 of the 39 attributed runs
+    contribute exactly 2 exposed loads each and the other 12 contribute none
+    (histogram `{0: 12, 2: 27}`), so `exposed` has a GAIN of 2 per inlined copy.
+    The literal that shipped here was 43 — "the same ~20% under the measurement"
+    as the run and branch floors — and 20% of a quantity with gain 2 is FIVE
+    copies. Driven over the image by dropping the site's attribution from k of
+    the copies that carry an operand pair: k=5 answers 44 exposed over 34 runs
+    and passes, k=6 answers 42 over 33 — RED on the literal while `RUN_FLOOR`
+    still has three runs of slack. The band k=6..9 is defect-free code motion
+    reddening the row. The same walk under the ratio is green to k=22 with the
+    copies dropped in the harshest order — carriers first — and first red at
+    k=23, well past the k=10 where `RUN_FLOOR` asks for the walk to be
+    re-measured. Dropped in the other order it is green at every k driven.
+
+    Here the invariance itself is pinned, which is the property the image
+    measurement rests on: the same loop inlined twice and inlined once answer
+    the same verdict while both counts double.
+    """
+    symbol = SITE["CT-CMP-001"]["symbol"]
+    doubled = CLEAN + GAP + shifted(CLEAN, 0x100)
+    assert observed(CLEAN)[1] == 1
+    assert observed(doubled)[1] == 2, observed(doubled)[1]
+    one = ct_gate.excused_loads(list(ct_gate.instructions(CLEAN.splitlines())), symbol)
+    two = ct_gate.excused_loads(
+        list(ct_gate.instructions(doubled.splitlines())), symbol
+    )
+    assert one == (0, 2, 1), one
+    assert two == (0, 4, 2), two
+    for lines in (CLEAN, doubled):
+        findings, _ = ct_gate.audit(ROOT, lines=lines.splitlines(), **NO_FLOORS)
+        assert not any("visible to the taint" in f for f in findings), findings
+
+
+def test_the_excuse_ratio_is_asked_per_site_and_not_of_the_total(monkeypatch):
+    """The dilution a summed count carries, and the reason it is asked per site.
+
+    `docs/ct-audit.md` speaks of five hand-rolled comparators consolidated onto
+    one, so a second registered site is a thing this file has to survive, and a
+    TOTAL is the shape that stops meaning anything the moment there are two.
+    Measured on the image: registering
+    `rsk_crypto::mlkem::mlkem768_encapsulate` beside the comparator takes the
+    total from 54 exposed to 367, so the comparator's whole exposure could go to
+    zero under a literal floor of 43 that never moved.
+
+    Driven here through the row: the second site's excuse covers 2 of its 3
+    loads and the first site's covers 1 of 3, so the row must name the second
+    and only the second. Summed the two cancel — 3 excused against 3 exposed —
+    and a rule asked of the totals answers green over a site it has blinded.
+    """
+    sites = dict(SITE)
+    sites["CT-CMP-002"] = {"symbol": "rsk_oath::code::ct_eq_b", "class": "comparator"}
+    _, shipped_callers = ct_gate.registry(ROOT, [])
+    monkeypatch.setattr(
+        ct_gate, "registry", lambda root, findings, text=None: (sites, shipped_callers)
+    )
+    findings, summary = ct_gate.audit(ROOT, lines=TWO_SITES.splitlines(), **NO_FLOORS)
+    named = [f for f in findings if "visible to the taint" in f]
+    assert len(named) == 1, named
+    assert named[0].startswith("CT-CMP-002: the reload excuse covers 2 of"), named[0]
+    # The totals a summed rule would have read: 3 exposed against 3 excused.
+    assert "3 load(s) still exposed to the taint" in summary, summary
 
 
 def test_a_literal_pool_load_is_not_a_buffer_read():
@@ -468,6 +607,63 @@ def test_a_store_on_the_far_side_of_a_barrier_does_not_excuse_the_load():
     assert violations[0][3].startswith("ldrb ")
 
 
+def test_the_summary_separates_a_frame_spill_from_a_stack_spill():
+    """The row's HEADLINE quantity, and until this case nothing held it.
+
+    "fourteen reloads excused through a base other than `sp`" is the number the
+    commit that derived it is named after, and it was held by prose alone: drop
+    the `!= "sp"` discriminator from `excused_loads` and the row prints 28 —
+    every reload, the two questions fused again — with all 31 cases at exit 0.
+
+    Both spills are in the fixture because one is not enough: a rule that
+    answered "any reload" and a rule that answered "a reload through the frame
+    register" agree on a fixture that has only the second. Driven with the
+    discriminator dropped, this case falls on the `1 reload(s)` assertion seeing
+    `2` — a stack spill counted as a frame-register spill.
+    """
+    summary = summary_of(TWO_SPILLS)
+    assert ", 2 load(s) still exposed to the taint" in summary, summary
+    assert "and 1 reload(s) excused through a base other than `sp`" in summary, summary
+
+
+def test_a_literal_pool_load_counts_as_neither_half_of_the_split():
+    """The `pc` skip, which today's image cannot reach — so it is pinned here.
+
+    Measured on the default release image: 82 loads sit inside the site's runs
+    and NONE of them is `pc`-based, so the clause decides nothing there and an
+    assumption nothing branches on is a comment with a type. `buffer_load`
+    refuses a literal-pool load before the excuse is ever put, so counting it
+    either way would credit the excuse for a load it never decided.
+
+    Driven with the `pc` skip deleted from `excused_loads`, this case falls on
+    the `0 load(s) still exposed` assertion seeing `1` — a constant counted as a
+    buffer read the taint had left alone.
+    """
+    summary = summary_of(LITERAL)
+    assert ", 0 load(s) still exposed to the taint" in summary, summary
+    assert "and 0 reload(s) excused through a base other than `sp`" in summary, summary
+
+
+def test_the_row_diffs_the_page_it_was_handed_and_not_the_one_on_disk():
+    """The desync no other case can see: `scope_finding` reads the handed-in
+    page while the region diff reads the tree, and nothing held the two together.
+
+    Driven with `render`'s `text` argument ignored — the file read
+    unconditionally — this case falls on `any("cannot be generated" ...)` seeing
+    no such finding: a page with no region markers at all passed the row,
+    because the row was diffing a different document from the one it judged.
+    """
+    page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
+    head = page.index(f"<!-- {ct_gate.REGION}:start -->")
+    tail = page.index(f"<!-- {ct_gate.REGION}:end -->")
+    regionless = page[:head] + page[tail:].split("\n", 1)[1]
+    assert f"{ct_gate.REGION}:start" not in regionless
+    findings, _ = ct_gate.audit(
+        ROOT, lines=CLEAN.splitlines(), page=regionless, **NO_FLOORS
+    )
+    assert any("cannot be generated" in f for f in findings), findings
+
+
 def test_the_width_suffix_is_stripped_before_the_flag_set_is_consulted():
     """The defect this gate shipped with for one run: `cmp.w` was not in the set,
     the walk-back skipped the public bound and landed on the secret `eors`, and
@@ -495,13 +691,17 @@ def test_a_site_that_resolves_to_nothing_is_a_finding():
         ({"run_floor": 10_000}, "attributed run"),
         ({"branch_floor": 10_000}, "conditional branch"),
         ({"reasoned_floor": 10_000}, "traced to a definition"),
-        ({"exposed_floor": 10_000}, "still visible to the taint"),
     ],
 )
 def test_each_floor_reports_its_own_shortfall(floors, word):
     """Three floors and three messages: a branch the rule WALKED PAST is not one
     it decided, and before the taint became transitive most of the shipped
-    image's in-site branches were excused before the question was put."""
+    image's in-site branches were excused before the question was put.
+
+    Three and not four: the excuse rule is a RATIO and has no floor to raise, so
+    it is driven by widening the excuse instead — see
+    [`test_an_excuse_that_covers_every_load_is_a_finding`]. A fourth entry sat
+    here over a literal that no longer exists."""
     kwargs = dict(NO_FLOORS)
     kwargs.update(floors)
     findings, _ = ct_gate.audit(ROOT, lines=CLEAN.splitlines(), **kwargs)
@@ -514,13 +714,17 @@ def test_the_shipped_floors_are_parameters_and_not_globals():
     in a diff that says why — the reasoned one went 15 -> 20 when a review
     measured that 15 against 24 let nine branches go silently unasked, and STAYED
     at 20 when the measurement itself fell to 22: a floor walked down after every
-    narrowing follows the defect it is there to catch."""
+    narrowing follows the defect it is there to catch.
+
+    Three, not four. `EXPOSED_FLOOR = 43` stood here and is gone: a literal on a
+    quantity with a gain of 2 per inlined copy reddens on defect-free code
+    motion, and summed across sites it stops being about any of them."""
+    assert not hasattr(ct_gate, "EXPOSED_FLOOR")
     assert (
         ct_gate.RUN_FLOOR,
         ct_gate.BRANCH_FLOOR,
         ct_gate.REASONED_FLOOR,
-        ct_gate.EXPOSED_FLOOR,
-    ) == (30, 20, 20, 43)
+    ) == (30, 20, 20)
 
 
 def test_an_unregistered_inliner_is_a_finding():
@@ -551,25 +755,117 @@ REFUTED_SCOPE = "hand-written `rsk-rsa` keygen primitives."
 SHIPPED_SCOPE = "hand-written `rsk-rsa` modexp, sieve and primality primitives"
 
 
-def refuted_page() -> str:
+def refuted_page(word: str = "keygen") -> str:
     page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
     assert SHIPPED_SCOPE in page, "the scope clause moved; re-read the page"
-    return page.replace(SHIPPED_SCOPE, REFUTED_SCOPE, 1)
+    return page.replace(
+        SHIPPED_SCOPE, f"hand-written `rsk-rsa` {word} primitives.", 1
+    )
+
+
+#: Every walk-past of the WORD rule that shipped here, each one measured against
+#: the shipped page with `scope_finding` answering None. The first two are the
+#: ones that settle the design and neither is an attack: a synonym restores the
+#: refuted scope in plain English, and a blank line after "CTAP2)" is an editor
+#: breaking a ten-line paragraph in two. The rest are spellings the `re.I`-less
+#: `\bkeygen\b` could not see, plus two structural moves — the clause into a
+#: bullet, and a decoy paragraph carrying the anchor, which `next(...)` reached
+#: first. `key generation` is listed twice on purpose: once as the plain
+#: synonym, once with the whole tail carried away, which is the shape a synonym
+#: takes when the editor also tightens the sentence.
+SCOPE_BYPASSES = {
+    "synonym": lambda page: refuted_page("key generation"),
+    "re-wrapped paragraph": lambda page: refuted_page().replace(
+        "CTAP2): ", "CTAP2).\n\nThe verifiers covered: ", 1
+    ),
+    "Keygen": lambda page: refuted_page("Keygen"),
+    "KEYGEN": lambda page: refuted_page("KEYGEN"),
+    "KeyGen": lambda page: refuted_page("KeyGen"),
+    "keyGen": lambda page: refuted_page("keyGen"),
+    "key-generation": lambda page: refuted_page("key-generation"),
+    "keygens": lambda page: refuted_page("keygens"),
+    "key_gen": lambda page: refuted_page("key_gen"),
+    "zero-width space": lambda page: refuted_page("key\u200bgen"),
+    "line break": lambda page: refuted_page("key\ngen"),
+    "moved into a bullet": lambda page: page.replace(
+        SHIPPED_SCOPE + " — the modexp on\nboth of its callers, the prime search"
+        " and the `rsa_private_exp_crt` that PIV\nGENERAL AUTHENTICATE and"
+        " OpenPGP PSO:CDS / INTERNAL AUTHENTICATE / DECIPHER\nreach over USB"
+        " against a long-lived key.",
+        "the primitives listed below.\n\n- the hand-written `rsk-rsa` keygen"
+        " primitives.",
+        1,
+    ),
+    "decoy anchor": lambda page: refuted_page().replace(
+        "# Constant-time / timing side-channel audit",
+        "<!-- The hand-written `rsk-rsa` modexp and `rsa_private_exp_crt` are"
+        " described below. -->\n\n# Constant-time / timing side-channel audit",
+        1,
+    ),
+    "modexp renamed": lambda page: page.replace(
+        SHIPPED_SCOPE + " — the modexp on\nboth",
+        "hand-written `rsk-rsa` exponentiation, sieve and primality primitives —"
+        " the exponentiation on\nboth",
+        1,
+    ),
+    "CRT caller dropped": lambda page: page.replace(
+        " — the modexp on\nboth of its callers, the prime search and the"
+        " `rsa_private_exp_crt` that PIV\nGENERAL AUTHENTICATE and OpenPGP"
+        " PSO:CDS / INTERNAL AUTHENTICATE / DECIPHER\nreach over USB against a"
+        " long-lived key.",
+        " — the modexp as the prime search reaches it.",
+        1,
+    ),
+    "scoped by omission": lambda page: page.replace(
+        SHIPPED_SCOPE + " — the modexp on\nboth of its callers, the prime search"
+        " and the `rsa_private_exp_crt` that PIV\nGENERAL AUTHENTICATE and"
+        " OpenPGP PSO:CDS / INTERNAL AUTHENTICATE / DECIPHER\nreach over USB"
+        " against a long-lived key.",
+        "hand-written `rsk-rsa` primitives that run while a key is being made.",
+        1,
+    ),
+}
 
 
 def test_the_scope_paragraph_may_not_rescope_the_modexp_to_keygen():
     """Both directions of the only prose rule here.
 
     The shipped sentence passes and the refuted one does not, so the rule is not
-    a constant. It is a WORD rule and cannot tell a refutation from a claim — the
-    page's own residuals say "not keygen-only" — which is why it reads the scope
-    paragraph alone, and why the case asserts the shipped page is clean rather
-    than only that the mutant reddens.
+    a constant. It cannot tell a refutation from a claim — the page's own
+    residuals say "not keygen-only", and ten hits of the refuted pattern sit
+    elsewhere on the shipped page — which is why it reads the anchored paragraph
+    alone, and why the case asserts the shipped page is clean rather than only
+    that the mutant reddens.
     """
     page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
     assert ct_gate.scope_finding(page) is None
     problem = ct_gate.scope_finding(refuted_page())
     assert problem and "as keygen" in problem, problem
+
+
+@pytest.mark.parametrize("name", sorted(SCOPE_BYPASSES))
+def test_the_scope_rule_is_not_walked_past(name):
+    """The thirteen ways the WORD rule was walked past, plus the one it could
+    never have seen — all thirteen measured green against it at exit 0.
+
+    The rule they refuted anchored on "Its scope is", five lines above the clause
+    it is about, and refused `\\bkeygen\\b`. Anchoring on the CLAUSE is what
+    answers the two structural ones: a re-wrap or a move into a bullet carries
+    the anchor along with the words, so the rule follows instead of falling off.
+    Requiring the paragraph to NAME `modexp` and `rsa_private_exp_crt` is what
+    answers "scoped by omission", where the word never appears at all.
+
+    Driven per clause — each falls on its own row of this table, in the
+    direction that ACCEPTS a refuted scope: without `re.I` the four
+    capitalisations pass, without the separator class the hyphen, underscore,
+    zero-width space and line break pass, without the trailing-boundary removal
+    the plural passes, without `SCOPE_REQUIRED` "scoped by omission" and the
+    bullet pass, and without the more-than-one-anchor rule the decoy passes.
+    """
+    page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
+    mutated = SCOPE_BYPASSES[name](page)
+    assert mutated != page, name
+    assert ct_gate.scope_finding(mutated) is not None, name
 
 
 def test_the_row_itself_refuses_the_refuted_scope_sentence():
@@ -581,14 +877,42 @@ def test_the_row_itself_refuses_the_refuted_scope_sentence():
     assert any("as keygen" in f for f in findings), findings
 
 
+def test_the_row_itself_refuses_a_re_wrapped_scope_paragraph():
+    """The bypass that is not an attack, driven through the row rather than the
+    helper: an editor breaking a ten-line paragraph in two took the whole rule
+    off, and the exact refuted string then passed at EXIT=0."""
+    page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
+    findings, _ = ct_gate.audit(
+        ROOT,
+        lines=CLEAN.splitlines(),
+        page=SCOPE_BYPASSES["re-wrapped paragraph"](page),
+        **NO_FLOORS,
+    )
+    assert any("as keygen" in f for f in findings), findings
+
+
 def test_a_scope_paragraph_that_vanished_is_a_finding():
     """The deletion arm the rule needs to survive its own next edit: keyed on a
     string the page can simply drop, it would otherwise be silenced for free."""
     page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
     problem = ct_gate.scope_finding(
-        page.replace(ct_gate.SCOPE_ANCHOR, "This audit covers", 1)
+        page.replace(ct_gate.SCOPE_ANCHOR, "hand-rolled `rsk-rsa`", 1)
     )
     assert problem and "no paragraph says" in problem, problem
+
+
+def test_a_second_paragraph_carrying_the_anchor_is_itself_a_finding():
+    """The decoy, in its own case because it is the one thing the positive
+    requirements cannot answer: `scope_finding` reads ONE paragraph, so any
+    earlier one carrying the anchor shields the real clause whatever the real
+    clause says. Making the ambiguity the finding is what closes it.
+
+    Driven with the count check deleted, this case falls on `problem is not
+    None` seeing None — the decoy accepted, and with it the refuted scope it was
+    hiding."""
+    page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
+    problem = ct_gate.scope_finding(SCOPE_BYPASSES["decoy anchor"](page))
+    assert problem and "paragraphs say" in problem, problem
 
 
 def test_the_page_region_is_diffed_against_the_generator():
