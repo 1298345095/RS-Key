@@ -14,7 +14,10 @@
 #   state-unmodelled  holds security state no module covers yet; planned= names
 #                     the roadmap module so the hole is a plan, not an oversight
 #   pure              pure functions; evidence= names the differential/KAT/proof
-#                     files, and the gate checks they exist
+#                     files, and the gate holds them to that sentence: git's own
+#                     listing (so no directory and no miscased spelling), Rust
+#                     source, and this crate's own src/ or a fuzz target. It was
+#                     "checks they exist", which README.md satisfies
 #   out-of-scope      not part of the security argument; reason= says why
 #   embedded-binary   thumbv8m-only, not host-checkable; reason= names coverage
 #

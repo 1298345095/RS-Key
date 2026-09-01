@@ -34,7 +34,11 @@ What is checked, and the direction of each check:
   with its reason — the "20 of 49 proofs run by nothing" class, one layer up.
 * every [workspace] member appears in the crate ledger and vice versa, and
   each class carries what it obliges: a model that exists, a named gap, a
-  planned roadmap module, evidence files that exist, or a reason. The ledger
+  planned roadmap module, evidence that is what [`EVIDENCE_SUFFIX`] says the
+  field names — the crate's own differential/KAT/proof files — or a reason. That
+  last one used to be "a file that exists", which is a rule `README.md` meets
+  ([`platform_gate.PROSE_PAGE`] is the same sentence on the other axis). The
+  ledger
   exists because two roadmap drafts enumerated crates from memory and missed
   four, including the second-largest in the tree.
 
@@ -50,6 +54,12 @@ import re
 import subprocess
 import sys
 import tomllib
+
+# `gate_lines.tree_files` and `platform_gate.in_tree`, borrowed rather than
+# reimplemented: two registries answering "is this path a file of the tree"
+# differently is the defect, and a second membership line here is how that starts.
+import gate_lines
+import platform_gate
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -754,7 +764,56 @@ def check_tiers(root: pathlib.Path, findings: list[str]) -> int:
     return len(tiered)
 
 
-def check_crates(root: pathlib.Path, findings: list[str]) -> tuple[dict[str, int], dict[str, dict]]:
+#: What a `pure` row's `evidence` must BE. Not open-ended: this ledger's own
+#: header says the field "names the differential/KAT/proof files", so the honest
+#: set is nameable rather than merely non-prose — measured, 20 paths over 9 rows,
+#: every one a `.rs` under its own crate's `src/` or under `fuzz/fuzz_targets/`.
+#: Before this, the test was `.is_file()`: `evidence = ["README.md"]` on
+#: `rsk-led` was **exit 0** once `--write-readme` was run, and so was
+#: `["README.MD"]`, which APFS folds and no suffix rule does.
+#:
+#: WHY NOT [`platform_gate.PROSE_PAGE`]'s RULE, which this replaces the missing
+#: half of. That axis refuses one KIND of file and says outright it cannot check
+#: relevance; copied here it is INSUFFICIENT rather than wrong, because
+#: `["deny.toml"]` and `["assurance/crates.toml"]` are not pages and are not
+#: differentials either. Its generated-page carve-out is the wrong shape here
+#: too: `formal/README.md` is the page THIS gate writes and
+#: [`crate_ledger_table`] prints each `pure` row's own evidence into it, so the
+#: carve-out would admit a row settled by the page that prints its settlement.
+#: The suffix half refuses every page, generated or not, and that loop with it —
+#: which is why there is no separate `circular` clause here.
+#:
+#: REFUTED BY MEASUREMENT, not taste. Tying evidence to the row's own subject is
+#: the strong form `platform_gate` had to reject (two of its three honest rows go
+#: red); on THIS axis it costs zero, because a `pure` row's subject is a
+#: directory rather than a prose assumption. The step ABOVE it is what fails
+#: here: requiring a cited fuzz target to name its crate reddens
+#: `fuzz/fuzz_targets/mldsa_roundtrip.rs` and `mldsa_verify.rs`, which are
+#: `rsk-mldsa`'s evidence and reach it through `rsk_crypto`'s re-export —
+#: `fuzz/Cargo.toml` names `rsk-mldsa` nowhere. Two of twenty, and for the same
+#: reason as the platform refutation: the tie runs through an indirection. So
+#: the fuzz half below is a DIRECTORY allowance and not a tie.
+#:
+#: WHAT IT STILL DOES NOT CHECK. That the file is REACHED by its crate's module
+#: tree: `crates/rsk-slip39/src/tests.rs` is hooked in as a plain `mod tests;`
+#: while every other cited file uses `#[path]`, so both forms would have to be
+#: resolved — the "proofs run by nothing" class one layer out, and a bigger thing
+#: than this. And a `pure` crate whose differential legitimately lived in a
+#: SIBLING crate would be a false red; none does today.
+EVIDENCE_SUFFIX = ".rs"
+
+
+def evidence_homes(name: str) -> tuple[str, ...]:
+    """The two places crate `name`'s differential/KAT/proof files may sit."""
+    return (f"crates/{name}/src/", "fuzz/fuzz_targets/")
+
+
+def check_crates(
+    root: pathlib.Path, findings: list[str], tree: set[pathlib.Path]
+) -> tuple[dict[str, int], dict[str, dict]]:
+    """`tree` has no default on purpose: an empty one reads every artifact as
+    absent, which is loud, while a defaulted `None` treated as "skip" would let a
+    caller switch the rule off by forgetting it."""
     ledger = crate_ledger(root)
     members = workspace_members(root)
     modules = {p.stem for p in (root / "formal").glob("*.tla")}
@@ -782,8 +841,23 @@ def check_crates(root: pathlib.Path, findings: list[str]) -> tuple[dict[str, int
             if not paths:
                 findings.append(f"{where}: pure without evidence files")
             for p in paths:
-                if not (root / p).is_file():
-                    findings.append(f"{where}: evidence file missing: {p}")
+                if not platform_gate.in_tree(p, tree):
+                    findings.append(
+                        f"{where}: evidence file missing: {p} — git's own listing,"
+                        " which has no directory in it and folds no case"
+                    )
+                elif not str(p).lower().endswith(EVIDENCE_SUFFIX):
+                    findings.append(
+                        f"{where}: evidence {p!r} is not Rust source — this field"
+                        " names the differential/KAT/proof files, and a page, a"
+                        " manifest or a data table is none of the three"
+                    )
+                elif not str(p).startswith(evidence_homes(name)):
+                    findings.append(
+                        f"{where}: evidence {p!r} is neither {name}'s own source"
+                        f" ({evidence_homes(name)[0]}) nor a fuzz target — a file"
+                        " under another crate settles that crate, not this row"
+                    )
         elif cls in ("out-of-scope", "embedded-binary"):
             if not entry.get("reason", "").strip():
                 findings.append(f"{where}: {cls} without a reason")
@@ -799,7 +873,7 @@ def audit(root: pathlib.Path, check_generated_readme: bool = True):
     rows = check_properties(root, findings)
     check_property_tags(root, findings)
     tiered = check_tiers(root, findings)
-    tally, ledger = check_crates(root, findings)
+    tally, ledger = check_crates(root, findings, set(gate_lines.tree_files(root)))
     if check_generated_readme:
         check_readme(root, rows, ledger, findings)
 

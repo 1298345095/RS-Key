@@ -76,6 +76,10 @@ companion_bug() {
 """
 
 
+def git(root: pathlib.Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+
 def build(root: pathlib.Path) -> pathlib.Path:
     formal = root / "formal"
     formal.mkdir(parents=True)
@@ -140,6 +144,12 @@ def build(root: pathlib.Path) -> pathlib.Path:
         + assurance_gate.readme_block(rows, assurance_gate.crate_ledger(root))
         + "\n"
     )
+    # A checkout, because the evidence rule is git's listing and not a `stat`:
+    # that is what closes the case-fold and the directory in one mechanism. `add`
+    # as well as `init` so the paths are `--cached` and not merely `--others`,
+    # which a stray `core.excludesfile` could filter.
+    git(root, "init", "-q")
+    git(root, "add", "-A")
     return root
 
 
@@ -411,6 +421,134 @@ def test_stale_ledger_entry_fails(tree, capsys):
 def test_pure_evidence_must_exist(tree, capsys):
     (tree / "crates" / "rsk-b" / "src" / "kani.rs").unlink()
     red(tree, capsys, "evidence file missing")
+
+
+# ---- what a `pure` row's evidence must BE, one arm per clause ----------------
+#
+# Measured on the real tree before the rule, following the message the gate
+# itself prints when the ledger moves (`--write-readme`): `rsk-led` with
+# `evidence = ["README.md"]` was EXIT 0, `["README.MD"]` was EXIT 0, and
+# `["crates/rsk-led/src/kani.rs", "README.md"]` — the obvious move, appending a
+# page to a row that already cites a real artifact — was EXIT 0. Only `["docs"]`
+# reddened, because `.is_file()` is false for a directory: this gate was already
+# stricter than `platform_gate` there, and not on case.
+#
+# Every case drives `assurance_gate.run` on the fixture, which is the gate row's
+# own entry point, and none of them patches a floor.
+
+
+def add(tree: pathlib.Path, rel: str, text: str) -> None:
+    """Write a file INTO the fixture checkout — git's listing is what decides."""
+    path = tree / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    git(tree, "add", "-A")
+
+
+def pure_evidence(tree: pathlib.Path, value: str) -> None:
+    """Point `rsk-b`'s evidence at `value` and republish the generated table.
+
+    The republish is not a nicety: [`crate_ledger_table`] prints each row's
+    evidence, so an edit left unpublished reddens as a STALE TABLE, which is
+    exit 1 for the WRONG reason — the first reproduction of this hole measured
+    exactly that and read it as the rule working. `write_readme` refuses an
+    invalid tree, so a case with a real finding keeps the stale line as well;
+    the assertions below name the evidence finding rather than counting them.
+    """
+    edit(
+        tree / "assurance" / "crates.toml",
+        'evidence = ["crates/rsk-b/src/kani.rs"]',
+        f'evidence = [{value}]',
+    )
+    assurance_gate.write_readme(tree)
+
+
+def test_a_hand_written_page_does_not_settle_a_pure_row(tree, capsys):
+    """The headline: the file the rule exists to refuse, in the tree and named.
+
+    NOT an arm, and the needle says so by naming the path rather than a clause —
+    a root `README.md` trips the suffix and the home clause both, so deleting
+    either one leaves it refused. The arms are the three cases below, each
+    constructed to be accepted by every clause but its own."""
+    add(tree, "README.md", "# Fixture\n\nProse about the crate.\n")
+    pure_evidence(tree, '"README.md"')
+    red(tree, capsys, "evidence 'README.md' is")
+
+
+def test_appending_a_page_to_real_evidence_is_refused(tree, capsys):
+    """EVERY path, not one of them. `platform_gate` records this as the
+    reviewer's obvious move, and a rule reading "at least one artifact" is exit 0
+    on it — the row keeps its proof and gains a paragraph that settles nothing.
+    Like the case above it this is a shape, not an arm."""
+    add(tree, "README.md", "# Fixture\n\nProse about the crate.\n")
+    pure_evidence(tree, '"crates/rsk-b/src/kani.rs", "README.md"')
+    red(tree, capsys, "evidence 'README.md' is")
+
+
+def test_a_page_inside_the_crate_is_still_a_page(tree, capsys):
+    """ARM for [`EVIDENCE_SUFFIX`], and it must be a path the OTHER two clauses
+    accept or it proves nothing: this page is git's own spelling and sits in
+    `rsk-b`'s own `src/`, so only the suffix refuses it. Deleting that clause
+    alone puts this construction — a crate's notes filed as its proof — at exit
+    0, which is `README.md` moved one directory in."""
+    add(tree, "crates/rsk-b/src/notes.md", "# Notes\n\nThe roundtrip looks fine.\n")
+    pure_evidence(tree, '"crates/rsk-b/src/notes.md"')
+    red(tree, capsys, "'crates/rsk-b/src/notes.md' is not Rust source")
+
+
+def test_a_miscased_evidence_path_is_not_in_the_tree(tree, capsys):
+    """ARM for [`platform_gate.in_tree`], and the reason this gate borrows it
+    rather than keeping `.is_file()`. The path is not created: APFS folds case,
+    so `.is_file()` answers True for a file git lists as `kani.rs`, while the
+    suffix clause folds too and the home clause matches the prefix — both accept
+    it. Measured on this machine, `evidence = ["README.MD"]` on the real
+    `rsk-led` row was exit 0 under `.is_file()`. git's listing is case-exact, so
+    one message on both filesystems."""
+    pure_evidence(tree, '"crates/rsk-b/src/KANI.RS"')
+    red(tree, capsys, "evidence file missing: crates/rsk-b/src/KANI.RS")
+
+
+def test_a_directory_is_not_an_evidence_file(tree, capsys):
+    """Not a unique arm — `.is_file()` already refused this, which is where this
+    gate was ahead of `platform_gate`. It is here so the git listing that
+    replaced it did not give the directory back on the way past."""
+    pure_evidence(tree, '"crates"')
+    red(tree, capsys, "evidence file missing: crates")
+
+
+def test_another_crates_source_settles_that_crate(tree, capsys):
+    """ARM for [`evidence_homes`]. `crates/rsk-a/src/lib.rs` is git's own
+    spelling and is Rust source, so both other clauses accept it — and it is
+    `rsk-a`'s proof, not `rsk-b`'s. This is the relevance half `platform_gate`
+    says outright it cannot check, reachable here only because a `pure` row's
+    subject is a directory rather than a prose assumption."""
+    pure_evidence(tree, '"crates/rsk-a/src/lib.rs"')
+    red(tree, capsys, "'crates/rsk-a/src/lib.rs' is neither rsk-b's own source")
+
+
+def test_a_fuzz_target_is_evidence_for_any_crate(tree, capsys):
+    """CONTROL, and not a no-op: it is the only case that runs the SECOND arm of
+    [`evidence_homes`], so deleting that arm turns this red. The allowance is
+    deliberately loose — requiring the target to name the crate reddens
+    `rsk-mldsa`'s two, which reach it through `rsk_crypto`'s re-export."""
+    pure_evidence(tree, '"crates/rsk-b/src/kani.rs", "fuzz/fuzz_targets/t.rs"')
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_the_shipped_ledger_satisfies_the_rule():
+    """CONTROL on the real tree — the direction this change must NOT fail in, and
+    the answer to "which honest rows does it redden": none of the nine. The
+    floors keep it from passing vacuously on an emptied ledger, and they are
+    literals of this case rather than a knob the subject reads."""
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    ledger = assurance_gate.crate_ledger(repo)
+    pure = {n: e for n, e in ledger.items() if e.get("class") == "pure"}
+    paths = [(n, p) for n, e in pure.items() for p in e.get("evidence", [])]
+    for name, path in paths:
+        assert str(path).lower().endswith(assurance_gate.EVIDENCE_SUFFIX), (name, path)
+        assert str(path).startswith(assurance_gate.evidence_homes(name)), (name, path)
+    assert len(pure) >= 9 and len(paths) >= 20
 
 
 def test_partial_needs_a_gap(tree, capsys):
