@@ -26,9 +26,14 @@ use rsk_fs::storage::ram::RamStorage;
 
 use super::*;
 
+/// The pad's key cells, indexed the way [`rsk_ui::pin_grid_key`] indexes them
+/// (`row * PIN_COLS + col`), so cell 9 is Del, cell 10 the `0` key and cell 11 OK.
+const PIN_CELLS: usize = (rsk_ui::PIN_COLS * rsk_ui::PIN_ROWS) as usize;
+
 /// The panel this crate paints, as a recorder. The flow only ever *writes* to a
-/// panel, so what a test can check is that a frame was painted and that it stayed
-/// inside the glass — the pair the real ST7789 cannot report back.
+/// panel, so what a test can check is that a frame was painted, that it stayed inside
+/// the glass, and — through [`Panel::pin_pads_painted`] — which key each pad cell put
+/// on the glass: the three the real ST7789 cannot report back.
 pub struct Panel {
     px: Vec<Rgb565>,
     /// Full-frame repaints since construction. `rsk_ui::render` opens every screen
@@ -37,6 +42,10 @@ pub struct Panel {
     pub frames: usize,
     /// A pixel was addressed outside the panel.
     pub oob: bool,
+    /// The key-grid fingerprint of every *finished* frame, in paint order. A frame
+    /// ends where the next one clears, so a pad the flow has already moved past is
+    /// still readable once it returns — one panel, but every pad it drew.
+    grids: Vec<[u64; PIN_CELLS]>,
 }
 
 impl Panel {
@@ -45,7 +54,59 @@ impl Panel {
             px: vec![Rgb565::BLACK; rsk_ui::PANEL_W as usize * rsk_ui::PANEL_H as usize],
             frames: 0,
             oob: false,
+            grids: Vec::new(),
         }
+    }
+
+    /// FNV-1a per key rect, over that rect's pixels alone. Every key is the same size
+    /// with its label centred on it, so one key hashes the same wherever the grid puts
+    /// it — which is what lets a single reference frame name all twelve.
+    fn pin_cell_hashes(&self) -> [u64; PIN_CELLS] {
+        const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+        const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+        let mut out = [0u64; PIN_CELLS];
+        for row in 0..rsk_ui::PIN_ROWS {
+            for col in 0..rsk_ui::PIN_COLS {
+                let r = rsk_ui::pin_key_rect(col, row);
+                let mut h = FNV_OFFSET;
+                for y in r.y..r.y + r.h {
+                    for x in r.x..r.x + r.w {
+                        let px = self.px[y as usize * rsk_ui::PANEL_W as usize + x as usize];
+                        let packed = (u16::from(px.r()) << 11)
+                            | (u16::from(px.g()) << 5)
+                            | u16::from(px.b());
+                        for byte in packed.to_le_bytes() {
+                            h = (h ^ u64::from(byte)).wrapping_mul(FNV_PRIME);
+                        }
+                    }
+                }
+                out[(row * rsk_ui::PIN_COLS + col) as usize] = h;
+            }
+        }
+        out
+    }
+
+    /// Every PIN pad this panel painted, as the key each cell *showed*, decoded from
+    /// the pixels themselves. Frames that are not a pad drop out, so a flow's pads come
+    /// back in order with its menus and confirm screens filtered away.
+    ///
+    /// The paint-side oracle. A coordinate-typed entry is scripted from the layout the
+    /// *hit-test* will use, so a build that paints one order and hit-tests another
+    /// agrees with itself all the way to the store — only the glass disagrees.
+    pub fn pin_pads_painted(&self) -> Vec<[rsk_ui::PinKey; PIN_CELLS]> {
+        let alphabet = pin_cell_alphabet();
+        self.grids
+            .iter()
+            .copied()
+            .chain(core::iter::once(self.pin_cell_hashes()))
+            .filter_map(|frame| {
+                let mut keys = [rsk_ui::PinKey::Cancel; PIN_CELLS];
+                for (out, h) in keys.iter_mut().zip(frame) {
+                    *out = *alphabet.get(&h)?;
+                }
+                Some(keys)
+            })
+            .collect()
     }
 }
 
@@ -75,6 +136,10 @@ impl DrawTarget for Panel {
     }
 
     fn clear(&mut self, color: Rgb565) -> Result<(), Self::Error> {
+        // The frame on the glass is finished the moment the next one clears — fingerprint
+        // its pad grid before it goes, or only the last screen of a flow is ever readable.
+        let grid = self.pin_cell_hashes();
+        self.grids.push(grid);
         self.px.fill(color);
         self.frames += 1;
         Ok(())
@@ -288,17 +353,51 @@ impl Hooks for Board {
     }
 }
 
-/// A deterministic stand-in for the device DRBG (xorshift64*). Nothing under test
-/// consumes randomness for a decision — it is drawn only by the SLIP-39 split —
-/// so a fixed stream is enough and keeps every run identical.
-pub struct TestRng(u64);
+/// A deterministic stand-in for the device DRBG (xorshift64*). A fixed stream keeps
+/// every run identical, and [`Self::served`] records it — the scrambled PIN pad draws
+/// entropy that decides which digit each cell paints.
+///
+/// Eight call sites in this crate can reach it: `pin.rs`'s shuffle, `backup.rs`'s
+/// SLIP-39 split, `applets.rs`'s PIV slot keygen / retired-RSA import / RSA search, and
+/// the PIV `scan_files` + `protect_mgm_key` pair each of `run_piv_pins` and
+/// `run_protect_mgm_key` opens with. **None of them is inside `run_set_pin`** — that
+/// flow draws only through the pad — which is what lets a scrambled-entry test predict
+/// the blocks the pad will get before the flow has run.
+pub struct TestRng {
+    state: u64,
+    /// Every block served, in order. A test that predicts a draw asserts against this
+    /// instead of trusting the prediction: an unforeseen consumer ahead of it names
+    /// itself rather than silently shifting the stream out from under the taps.
+    pub served: Vec<Vec<u8>>,
+}
 
 impl TestRng {
+    fn new(seed: u64) -> Self {
+        Self {
+            state: seed,
+            served: Vec::new(),
+        }
+    }
+
     fn next(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
+        self.state ^= self.state << 13;
+        self.state ^= self.state >> 7;
+        self.state ^= self.state << 17;
+        self.state
+    }
+
+    /// The next `count` blocks of `len` bytes, without consuming them — a copy of the
+    /// state driven through [`rsk_sdk::Rng::fill`] itself, so a prediction cannot drift
+    /// from what the flow draws. [`Self::served`] is what proves it was the run's.
+    pub fn peek_fills(&self, count: usize, len: usize) -> Vec<Vec<u8>> {
+        let mut ahead = Self::new(self.state);
+        (0..count)
+            .map(|_| {
+                let mut block = vec![0u8; len];
+                rsk_sdk::Rng::fill(&mut ahead, &mut block);
+                block
+            })
+            .collect()
     }
 }
 
@@ -309,6 +408,7 @@ impl rsk_sdk::Rng for TestRng {
             let len = chunk.len();
             chunk.copy_from_slice(&n[..len]);
         }
+        self.served.push(buf.to_vec());
     }
 }
 
@@ -389,7 +489,7 @@ impl<S: Storage> Env<S> {
         note_local_activity();
         Self {
             fs: RefCell::new(Fs::new(storage)),
-            rng: RefCell::new(TestRng(0x0DDB_A11C_0FFE_E1E5)),
+            rng: RefCell::new(TestRng::new(0x0DDB_A11C_0FFE_E1E5)),
             _globals: guard,
         }
     }
@@ -432,12 +532,13 @@ pub fn nowhere() -> rsk_ui::Point {
     rsk_ui::Point::new(rsk_ui::PANEL_W - 1, 0)
 }
 
-/// The pad key that produces `key`, found through `rsk-ui`'s own grid — so a
-/// layout change moves these tests with it instead of past them.
-pub fn pin_key(key: rsk_ui::PinKey) -> rsk_ui::Point {
+/// The cell that *paints* `key` under `layout`, found through `rsk-ui`'s own grid —
+/// so a layout change moves these tests with it instead of past them. A scrambled
+/// entry must be typed through the layout that entry drew, not through the printed one.
+pub fn pin_key_on(key: rsk_ui::PinKey, layout: &rsk_ui::PinLayout) -> rsk_ui::Point {
     for row in 0..rsk_ui::PIN_ROWS {
         for col in 0..rsk_ui::PIN_COLS {
-            if rsk_ui::pin_grid_key(col, row, &rsk_ui::PinLayout::identity()) == key {
+            if rsk_ui::pin_grid_key(col, row, layout) == key {
                 return center(rsk_ui::pin_key_rect(col, row));
             }
         }
@@ -445,14 +546,64 @@ pub fn pin_key(key: rsk_ui::PinKey) -> rsk_ui::Point {
     panic!("the pad has no {key:?} key");
 }
 
-/// The taps that type `pin` and commit it with OK.
-pub fn pin_entry(pin: &[u8]) -> Vec<rsk_ui::Point> {
+/// [`pin_key_on`] the printed order — the pad every build draws with the Settings →
+/// Security scramble off, which is the shipped default.
+pub fn pin_key(key: rsk_ui::PinKey) -> rsk_ui::Point {
+    pin_key_on(key, &rsk_ui::PinLayout::identity())
+}
+
+/// The taps that type `pin` on a pad laid out as `layout`, and commit it with OK.
+pub fn pin_entry_on(pin: &[u8], layout: &rsk_ui::PinLayout) -> Vec<rsk_ui::Point> {
     let mut taps: Vec<_> = pin
         .iter()
-        .map(|&b| pin_key(rsk_ui::PinKey::Digit(b - b'0')))
+        .map(|&b| pin_key_on(rsk_ui::PinKey::Digit(b - b'0'), layout))
         .collect();
-    taps.push(pin_key(rsk_ui::PinKey::Ok));
+    taps.push(pin_key_on(rsk_ui::PinKey::Ok, layout));
     taps
+}
+
+/// The taps that type `pin` and commit it with OK.
+pub fn pin_entry(pin: &[u8]) -> Vec<rsk_ui::Point> {
+    pin_entry_on(pin, &rsk_ui::PinLayout::identity())
+}
+
+/// The layout `collect_pin` lays a scrambled pad out in, from one block of the entropy
+/// it drew — the fixture half of `pin.rs`'s `PinLayout::shuffled` call. Panics on a
+/// block of the wrong size, which is a prediction that has already gone wrong.
+pub fn shuffled_layout(block: &[u8]) -> rsk_ui::PinLayout {
+    let mut entropy = [0u8; rsk_ui::PIN_SHUFFLE_ENTROPY];
+    entropy.copy_from_slice(block);
+    rsk_ui::PinLayout::shuffled(&entropy)
+}
+
+/// What each key rect's pixels mean, read off one render of the **printed** pad — the
+/// only frame this module needs to know the appearance of. Del, OK and all ten digits
+/// each appear on it once, and a key looks the same in any cell, so it names them all.
+fn pin_cell_alphabet() -> std::collections::HashMap<u64, rsk_ui::PinKey> {
+    let printed = rsk_ui::PinLayout::identity();
+    let mut panel = Panel::new();
+    let _ = rsk_ui::render(&mut panel, &Screen::Pin(PinPad::new(0).laid_out(printed)));
+    let hashes = panel.pin_cell_hashes();
+    let mut map = std::collections::HashMap::new();
+    for row in 0..rsk_ui::PIN_ROWS {
+        for col in 0..rsk_ui::PIN_COLS {
+            let cell = (row * rsk_ui::PIN_COLS + col) as usize;
+            map.insert(hashes[cell], rsk_ui::pin_grid_key(col, row, &printed));
+        }
+    }
+    map
+}
+
+/// The key each pad cell paints under `layout` — the prediction a scripted entry is
+/// laid out from, in the order [`Panel::pin_pads_painted`] reads the glass back in.
+pub fn pin_cells_of(layout: &rsk_ui::PinLayout) -> [rsk_ui::PinKey; PIN_CELLS] {
+    let mut out = [rsk_ui::PinKey::Cancel; PIN_CELLS];
+    for row in 0..rsk_ui::PIN_ROWS {
+        for col in 0..rsk_ui::PIN_COLS {
+            out[(row * rsk_ui::PIN_COLS + col) as usize] = rsk_ui::pin_grid_key(col, row, layout);
+        }
+    }
+    out
 }
 
 /// Backdate both activity stamps by `ms`, through the same wrapping arithmetic the

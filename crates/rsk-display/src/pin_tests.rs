@@ -12,7 +12,10 @@
 use std::vec;
 
 use super::*;
-use crate::tests::{Env, NEW_PIN, PIN, Pad, WRONG_PIN, center, dev, pin_entry, pin_key};
+use crate::tests::{
+    Env, NEW_PIN, PIN, Pad, WRONG_PIN, center, dev, pin_cells_of, pin_entry, pin_entry_on, pin_key,
+    shuffled_layout,
+};
 
 /// The T9 group the tests type from: `"2abc"`, so a cycle is visible in one press.
 const ABC: usize = 1;
@@ -316,6 +319,103 @@ fn a_new_device_pin_replaces_the_old_one() {
     );
 }
 
+/// The Settings → Security scramble exists for exactly one path — a PIN typed on a pad
+/// whose digits moved — and until this nothing drove it: every coordinate-typed PIN in
+/// this crate was laid out through `PinLayout::identity()`, so the shuffled pad was
+/// painted by no test and hit-tested by none.
+///
+/// Three entries, three shuffles (`pin.rs`: one layout per entry, so "New" and "Confirm"
+/// differ): the gate on the current PIN, then New and Confirm. The taps are laid out
+/// through the predicted layouts, which is the *hit-test's* side — so on its own a stored
+/// PIN proves only that the pad hit-tested the order the fixture guessed, not that it
+/// painted it. Two assertions tie the fixture to the run: `served` says the entries drew
+/// the entropy the prediction came from, and the pixels the pad left on the panel say
+/// each entry *painted* the cell the tap was aimed at.
+#[test]
+fn a_pin_typed_on_the_scrambled_pad_is_the_pin_that_gets_stored() {
+    let env = Env::new();
+    let cfg = rsk_ui::DisplayConfig {
+        scramble_pin: true,
+        ..Default::default()
+    };
+    env.fs
+        .borrow_mut()
+        .put(EF_DISPLAY, &cfg.encode())
+        .expect("EF_DISPLAY");
+    env.set_device_pin(PIN);
+
+    // `Pad` is scripted, so every tap exists before the flow does: predict the three
+    // blocks the entries will draw, lay the taps out through them, and let the `served`
+    // assertion below settle whether the prediction was the one the run used.
+    let blocks = env.rng.borrow().peek_fills(3, rsk_ui::PIN_SHUFFLE_ENTROPY);
+    let laid: Vec<_> = blocks.iter().map(|block| shuffled_layout(block)).collect();
+    for (step, layout) in laid.iter().enumerate() {
+        assert_ne!(
+            *layout,
+            rsk_ui::PinLayout::identity(),
+            "entry {step} drew the printed order — the case degenerates into the unscrambled one"
+        );
+    }
+    assert_ne!(laid[0], laid[1], "the gate and New must not share a layout");
+    assert_ne!(laid[1], laid[2], "New and Confirm must not share a layout");
+
+    let mut taps = pin_entry_on(PIN, &laid[0]); // the gate on the current PIN
+    taps.extend(pin_entry_on(NEW_PIN, &laid[1]));
+    taps.extend(pin_entry_on(NEW_PIN, &laid[2]));
+    let mut ui = env.ui(Pad::taps(&taps));
+    ui.run_set_pin(PinScope::Device);
+
+    // Asserted narrowest first, so a red run names the side that broke. The first draw
+    // cannot be shifted by anything the flow does later, so it alone separates a fixture
+    // fault from a pad fault — and it fails in two directions, which the message covers.
+    assert_eq!(
+        env.rng.borrow().served.first(),
+        blocks.first(),
+        "the first entry did not draw the block the taps were laid out from: `None` means \
+         no entry shuffled at all (the Settings toggle is inert), a different block means \
+         something else consumed the DRBG ahead of the pad"
+    );
+    // The paint side, read back off the pixels. Every tap above is the cell the *hit-test*
+    // will read, so a pad painted from one order and tapped through another agrees with
+    // itself all the way to the store — the owner's eyes are the only witness left.
+    let painted = ui.panel.pin_pads_painted();
+    for (step, (shown, layout)) in painted.iter().zip(&laid).enumerate() {
+        assert_eq!(
+            shown,
+            &pin_cells_of(layout),
+            "entry {step} painted a pad the taps were not laid out through — the owner reads \
+             one order off the glass while the hit-test takes another"
+        );
+    }
+    assert!(
+        matches!(
+            rsk_fido::passkeys::spend_and_verify_device_pin(
+                &dev(),
+                &mut env.fs.borrow_mut(),
+                NEW_PIN
+            ),
+            rsk_fido::passkeys::LocalPin::Ok
+        ),
+        "the digits the scrambled cells paint are not the digits that were stored"
+    );
+    // The zip above is only as wide as the shorter side, so this is what says every entry
+    // was judged. It is reached only once paint and store have both agreed, which is why a
+    // wrong pad names itself above instead of arriving here as an unexplained re-prompt.
+    assert_eq!(
+        painted.len(),
+        laid.len(),
+        "one pad is painted per entry, and every one of them is judged above"
+    );
+    // Last, because it is the widest: one shuffle per entry and no more. A hoisted draw is
+    // named by the paint loop first (entry 1 gets entry 0's pad) and by the store next; on
+    // its own this reads `served` back as one block against the three predicted.
+    assert_eq!(
+        env.rng.borrow().served,
+        blocks,
+        "the entries drew a different entropy stream than the taps were laid out from"
+    );
+}
+
 #[test]
 fn changing_the_device_pin_needs_the_current_one() {
     let env = Env::new();
@@ -346,6 +446,15 @@ fn setting_the_fido_pin_from_the_panel_revokes_live_tokens() {
     ui.run_set_pin(PinScope::Fido);
     assert!(rsk_fido::passkeys::pin_is_set(&mut env.fs.borrow_mut()));
     assert_eq!(ui.hooks.pin_changed, 1);
+    // Which PIN, not just that one exists: revoking the live tokens is worth nothing if
+    // the clientPIN the host must now be told is not the one typed on the panel.
+    assert!(
+        matches!(
+            rsk_fido::passkeys::spend_and_verify_local_pin(&dev(), &mut env.fs.borrow_mut(), PIN),
+            rsk_fido::passkeys::LocalPin::Ok
+        ),
+        "the stored clientPIN is not the PIN that was typed"
+    );
 }
 
 // --- the hold-to-confirm gesture -------------------------------------------
