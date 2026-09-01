@@ -825,6 +825,21 @@ run "published run-counts"     python scripts/run_count_gate.py
 # status is held to the status the registry HOLDS for the id beside it, so
 # `PROVEN` -- no row's status anywhere -- is refused of every id.
 run "published claims"         python scripts/claims_gate.py
+# And what the pages SAY a RELEASE RUNS. Same shape, one layer out: it was prose
+# transcribed from a workflow nothing held it to -- "rebuilds all fourteen
+# flavors", "builds every artifact reproducibly, hashes it, and signs the
+# manifest" -- and that transcription has already rotted once, when the signature
+# asset was renamed `.cosign.bundle` -> `.sigstore.json` and every published
+# verify command went on naming a file that no longer exists. Every command,
+# flavor, action pin and asset name is read out of release.yml, release-build.yml
+# and nix/firmware.nix here and printed into docs/supply-chain.md. Two things it
+# refuses that no other row can see: a rebuild loop covering thirteen of the
+# fourteen images the build loop makes, so the fourteenth is signed and attested
+# with nothing having compared its bytes; and an entry claiming `source->binary`
+# off the reproducibility gate -- determinism is not semantic preservation, and
+# PLAT-TOOLCHAIN-001 is the row that owns that gap. It binds to no tag and no
+# artifact: that half needs a release, and the region says so.
+run "release manifest"        python scripts/release_gate.py
 run "token refinement export" ./scripts/token_refinement.sh --check
 run "token refinement completeness" python scripts/token_refinement_gate.py
 # The two guards above decide whether the gate covers the tree, and neither had
