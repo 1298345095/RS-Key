@@ -26,6 +26,8 @@ and not globals a case reaches in and lowers.
 
 import json
 import pathlib
+import subprocess
+import sys
 
 import pytest
 
@@ -116,6 +118,59 @@ jobs:
       - run: echo "$KANI_VERSION"
 """
 
+#: The tree the FFI derivation reads. Three of its lines are the case rather than
+#: scenery: the doc comment and the commented-out block both spell a whole
+#: `extern "C" {` and neither is a boundary, and the ABI is a STRING LITERAL the
+#: lexer blanks — a reader that pattern-matched `extern "C"` on the lexed text
+#: would find none of this and every case below would pass on an empty set.
+CRATE_LIB = '''\\
+// SPDX-License-Identifier: AGPL-3.0-only
+
+//! The modexp backend. On the host there is no `unsafe extern "C" { fn ghost(); }`
+//! at all, which this line says and does not do.
+
+// unsafe extern "C" {
+//     fn commented_out(x: *mut u32);
+// }
+
+#[cfg(target_os = "none")]
+unsafe extern "C" {
+    fn modexp(out: *mut u32, base: *const u32);
+    fn crt(out: *mut u32);
+}
+'''
+
+APP_MAIN = """\\
+// SPDX-License-Identifier: AGPL-3.0-only
+
+unsafe extern "C" {
+    static __kv_start: u32;
+}
+
+fn start() -> u32 {
+    core::ptr::addr_of!(__kv_start) as u32
+}
+"""
+
+CRATE_BUILD = '''\\
+// SPDX-License-Identifier: AGPL-3.0-only
+
+fn main() {
+    cc::Build::new()
+        .file("csrc/core.c")
+        .file("csrc/core.S")
+        .compile("core");
+}
+'''
+
+#: A vendored crate whose `extern` block is its author's boundary and not this
+#: tree's. Green, and it is the only thing that says the exclusion still applies.
+VENDORED = """\\
+unsafe extern "C" {
+    fn vendored_thing(x: *mut u32);
+}
+"""
+
 PAGE = """\
 # Supply chain
 
@@ -136,6 +191,13 @@ role = "compiler"
 provenance = "flake.lock:fenix"
 pin = "{FENIX_REV}"
 statement = "Compiles every first-party crate in the image."
+
+[[tool]]
+name = "arm-none-eabi-gcc"
+role = "compiler"
+provenance = "flake.lock:nixpkgs"
+pin = "{NIXPKGS_REV}"
+statement = "Compiles the C modexp core."
 
 [[tool]]
 name = "arm-none-eabi-as"
@@ -200,13 +262,39 @@ reason = "SDL2 alone, for the tools/emu display window."
 [[not_tcb]]
 input = "flake-utils"
 reason = "eachDefaultSystem plumbing; it emits no binary into any build."
+
+[[boundary]]
+id = "import:crate/src/lib.rs:modexp"
+provider = "arm-none-eabi-gcc"
+statement = "The modexp entry point, defined in csrc/core.c."
+
+[[boundary]]
+id = "import:crate/src/lib.rs:crt"
+provider = "arm-none-eabi-gcc"
+statement = "CRT signing, defined in csrc/core.c."
+
+[[boundary]]
+id = "import:app/src/main.rs:__kv_start"
+provider = "flip-link"
+statement = "A linker symbol whose ADDRESS is the datum, not a function."
+
+[[boundary]]
+id = "unit:crate/csrc/core.c"
+provider = "arm-none-eabi-gcc"
+statement = "The C half, compiled straight into the image."
+
+[[boundary]]
+id = "unit:crate/csrc/core.S"
+provider = "arm-none-eabi-as"
+statement = "The hand-written assembly half."
 """
 
-#: Lowered with the fixture, which carries 9 tools and 8 resolved pins. Handed to
-#: `audit` rather than monkeypatched: both arms of each floor have to be drivable
-#: without editing the number the run is judged by.
+#: Lowered with the fixture, which carries 10 tools, 9 resolved pins and 5
+#: boundaries. Handed to `audit` rather than monkeypatched: both arms of each
+#: floor have to be drivable without editing the number the run is judged by.
 RESOLVED_FLOOR = 6
 ROLE_FLOOR = 4
+BOUNDARY_FLOOR = 4
 
 
 class Tree:
@@ -218,7 +306,16 @@ class Tree:
         self.write(gate.WORKFLOWS / "ci.yml", WORKFLOW_A)
         self.write(gate.WORKFLOWS / "deep-checks.yml", WORKFLOW_B)
         self.write(gate.PAGE, PAGE)
+        self.write("crate/src/lib.rs", CRATE_LIB)
+        self.write("crate/build.rs", CRATE_BUILD)
+        self.write("app/src/main.rs", APP_MAIN)
+        self.write("third_party/vendor/src/lib.rs", VENDORED)
         self.write_lock()
+        # `gate_lines.tree_files` asks git what the tree is and has no fallback,
+        # so a fixture the FFI derivation can read is one git can list. No commit
+        # and no `add`: `--others --exclude-standard` is what makes a file just
+        # written by a case visible on the same run.
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
         self.regenerate()
 
     def write(self, rel, text):
@@ -244,7 +341,31 @@ class Tree:
     def problems(self, **kwargs):
         kwargs.setdefault("resolved_floor", RESOLVED_FLOOR)
         kwargs.setdefault("role_floor", ROLE_FLOOR)
+        kwargs.setdefault("boundary_floor", BOUNDARY_FLOOR)
         return gate.audit(self.root, **kwargs)[0]
+
+    def process(self, *argv):
+        """The gate as `scripts/check.sh` runs it: a real process whose exit code
+        is the verdict. `audit()` returning a list is what fourteen of this
+        tree's thirty gates asserted instead, and a table that drives the helper
+        cannot see a `main` that has stopped reaching it."""
+        driver = (
+            f"import functools, pathlib, sys;"
+            f" sys.path.insert(0, {str(ROOT / 'scripts')!r});"
+            f" import toolchain_gate as gate;"
+            f" gate.ROOT = pathlib.Path({str(self.root)!r});"
+            # The floors and nothing else, for the reason the module constants
+            # give: they are measured against the real tree, and a default
+            # argument is bound at def time so reassigning the constant here
+            # would change the docstring's number and not the run's.
+            f" gate.audit = functools.partial(gate.audit,"
+            f" resolved_floor={RESOLVED_FLOOR}, role_floor={ROLE_FLOOR},"
+            f" boundary_floor={BOUNDARY_FLOOR});"
+            f" raise SystemExit(gate.main({list(argv)!r}))"
+        )
+        return subprocess.run(
+            [sys.executable, "-c", driver], capture_output=True, text=True
+        )
 
 
 @pytest.fixture
@@ -446,7 +567,9 @@ def test_a_derived_value_stored_on_a_row_is_red(tree):
 def test_a_role_outside_the_vocabulary_is_red(tree):
     """An open vocabulary lets a criterion category be covered by a word nobody
     agreed on."""
-    tree.edit(gate.REGISTRY, 'role = "compiler"', 'role = "buildy-thing"')
+    # `runtime` and not `compiler`: the fixture grew a second compiler when the
+    # FFI rows needed one to name as a producer, and `edit` takes one occurrence.
+    tree.edit(gate.REGISTRY, 'role = "runtime"', 'role = "buildy-thing"')
     assert only(tree.problems(), "'buildy-thing', which is not one of")
 
 
@@ -483,14 +606,215 @@ def test_a_roster_that_resolves_nothing_is_red(tree):
     """Driven from BELOW: every per-row rule above is satisfied by a roster that
     opens no file, and rule 4's escape is satisfied by a roster of nothing but
     escapes."""
-    assert only(tree.problems(resolved_floor=9), "pin(s) resolved against a file, under the measured 9")
+    assert only(
+        tree.problems(resolved_floor=10),
+        "pin(s) resolved against a file, under the measured 10",
+    )
 
 
 def test_a_roster_collapsed_onto_one_role_is_red(tree):
     assert only(tree.problems(role_floor=8), "role(s) carried, under the measured 8")
 
 
-# ---- rule 6: the generated region --------------------------------------------
+# ---- rule 6: the FFI boundaries, both ways -----------------------------------
+
+
+def test_a_new_import_the_registry_does_not_claim_is_red(tree):
+    """The direction that matters: a crossing arrives in the tree and no row
+    describes it. Every other rule here reads the registry, so a boundary that
+    exists only in the source is invisible to all of them."""
+    tree.write("crate/src/hsm.rs", 'unsafe extern "C" {\n    fn hsm_sign(x: *mut u32);\n}\n')
+    assert only(tree.problems(), "declares boundary `import:crate/src/hsm.rs:hsm_sign`")
+
+
+def test_an_export_is_a_boundary_too(tree):
+    """The half no floor holds, because this tree exports nothing across a C ABI
+    — so if this case goes, the `export:` reader can stop matching and the
+    boundary count is unchanged. Both spellings, since `#[unsafe(no_mangle)]` and
+    the definition are separate readers that must agree on one id."""
+    tree.write(
+        "crate/src/hook.rs",
+        "#[unsafe(no_mangle)]\npub extern \"C\" fn rsk_callback(x: u32) -> u32 {\n    x\n}\n",
+    )
+    assert only(tree.problems(), "boundary `export:crate/src/hook.rs:rsk_callback`")
+
+
+def test_a_no_mangle_without_an_extern_abi_is_an_export(tree):
+    """The `#[no_mangle]` reader's own case, and the reason it exists beside the
+    definition reader: `#[unsafe(no_mangle)] pub extern "C" fn` is found by BOTH,
+    so a case written that way leaves this half deletable with the suite green.
+    A plain `#[no_mangle] pub fn` — what `#[entry]` expands to — is found only
+    here, and it still exports a symbol for a foreign caller to bind."""
+    tree.write("crate/src/entry.rs", "#[no_mangle]\npub fn rsk_entry() -> u32 {\n    0\n}\n")
+    assert only(tree.problems(), "boundary `export:crate/src/entry.rs:rsk_entry`")
+
+
+def test_a_pipe_in_a_derived_value_does_not_spill_the_row(tree):
+    """The cell rule, driven and not asserted. A `|` inside a cell ends it and the
+    row spills into the wrong columns — a defect this tree has shipped — and a
+    file name is the one derived value that can legally carry one."""
+    tree.write("crate/src/od|d.rs", 'unsafe extern "C" {\n    fn odd_sym(x: *mut u32);\n}\n')
+    tree.edit(
+        gate.REGISTRY,
+        '[[boundary]]\nid = "unit:crate/csrc/core.c"',
+        '[[boundary]]\nid = "import:crate/src/od|d.rs:odd_sym"\n'
+        'provider = "arm-none-eabi-gcc"\nstatement = "A path carrying a pipe."\n\n'
+        '[[boundary]]\nid = "unit:crate/csrc/core.c"',
+    )
+    tree.regenerate()
+    assert tree.problems() == []
+    row = next(
+        line
+        for line in (tree.root / gate.PAGE).read_text(encoding="utf-8").splitlines()
+        if "odd_sym" in line
+    )
+    assert r"crate/src/od\|d.rs" in row
+    # Four columns is five structural pipes; an escaped one is not structural.
+    assert row.count("|") - row.count("\\|") == 5, row
+
+
+def test_a_new_translation_unit_is_a_boundary(tree):
+    """`.file(…)` and not `rerun-if-changed`: a build.rs that starts compiling a
+    second C file has added foreign machine code to the image."""
+    tree.edit("crate/build.rs", '.file("csrc/core.S")', '.file("csrc/core.S")\n        .file("csrc/extra.c")')
+    assert only(tree.problems(), "declares boundary `unit:crate/csrc/extra.c`")
+
+
+def test_a_row_for_a_crossing_that_is_gone_is_red(tree):
+    """The other direction. A row outliving what it described is how a registry
+    starts saying more than the tree does, and the fix reads as deleting it —
+    which is why the message has to say the reader might be the broken half."""
+    tree.edit(
+        gate.REGISTRY,
+        'id = "import:crate/src/lib.rs:crt"',
+        'id = "import:crate/src/lib.rs:crt_v2"',
+    )
+    assert only(
+        tree.problems(),
+        "boundary `import:crate/src/lib.rs:crt_v2` is claimed by a row and no"
+        " derivation produces it",
+    )
+
+
+def test_a_boundary_whose_provider_is_not_a_registered_tool_is_red(tree):
+    """The join to the pinned closure. Without it the rows are a list of names
+    beside the table rather than part of it."""
+    tree.edit(gate.REGISTRY, 'provider = "arm-none-eabi-as"', 'provider = "some-assembler"')
+    assert only(tree.problems(), "names provider `some-assembler`")
+
+
+def test_a_boundary_produced_by_a_tool_outside_the_criterion_is_red(tree):
+    """`picotool` is in the TCB and produces no foreign half of anything. A
+    provider only checked for existence would take it."""
+    tree.edit(gate.REGISTRY, 'provider = "flip-link"', 'provider = "picotool"')
+    assert only(tree.problems(), "whose role is 'packager'")
+
+
+def test_a_boundary_claimed_twice_is_red(tree):
+    tree.edit(
+        gate.REGISTRY,
+        'id = "unit:crate/csrc/core.S"',
+        'id = "unit:crate/csrc/core.c"',
+    )
+    assert only(tree.problems(), "`unit:crate/csrc/core.c` is claimed twice")
+
+
+def test_a_derived_value_stored_on_a_boundary_is_red(tree):
+    """Same discipline as a `[[tool]]`: which file the crossing is in and what
+    guards it are DERIVED, and a stored copy of either is the rot."""
+    tree.edit(
+        gate.REGISTRY,
+        'id = "unit:crate/csrc/core.c"',
+        'id = "unit:crate/csrc/core.c"\ncompiled_by = "crate/build.rs"',
+    )
+    assert only(tree.problems(), "carries ['compiled_by']")
+
+
+def test_a_boundary_with_no_id_is_red(tree):
+    """A row with no `id` claims nothing, and a claim nothing holds is a crossing
+    read by a human and then dropped on the floor."""
+    tree.edit(gate.REGISTRY, 'id = "unit:crate/csrc/core.S"', 'name = "core.S"')
+    problems = tree.problems()
+    assert only(problems, "a [[boundary]] with no `id`")
+    # And the boundary it MEANT to claim is now unclaimed — the shape rule and
+    # the both-ways rule catching the same edit from opposite ends.
+    assert only(problems, "declares boundary `unit:crate/csrc/core.S`")
+
+
+def test_a_cc_file_argument_that_is_not_a_literal_is_red(tree):
+    """The unit reader takes the path out of the call, so a call it cannot read
+    is a translation unit nobody enumerated — not a call to skip quietly."""
+    tree.edit("crate/build.rs", '.file("csrc/core.S")', ".file(chosen_asm())")
+    problems = tree.problems()
+    assert only(problems, "a `.file(…)` whose argument is not a plain string literal")
+    assert only(problems, "boundary `unit:crate/csrc/core.S` is claimed by a row")
+
+
+def test_a_boundary_with_no_statement_is_red(tree):
+    tree.edit(
+        gate.REGISTRY,
+        'statement = "The hand-written assembly half."',
+        'statement = ""',
+    )
+    assert only(tree.problems(), "is missing ['statement']")
+
+
+def test_a_derivation_that_has_stopped_matching_is_red(tree):
+    """Driven from BELOW, like both floors above it. The unclaimed-candidate rule
+    finds nothing when the reader finds nothing, so it cannot be the guard on the
+    reader; and a registry emptied in the same commit takes the other direction
+    with it."""
+    assert only(
+        tree.problems(boundary_floor=6),
+        "boundary(s) derived from the tree, under the measured 6",
+    )
+
+
+def test_a_commented_out_extern_block_is_not_a_boundary(tree):
+    """The control that is not decoration. `CRATE_LIB` spells a whole
+    `extern "C" {` twice in text a compiler never reads — a doc comment and a
+    commented-out block — and a reader over raw source produces two boundaries
+    nothing can claim, which reads as a registry that is short."""
+    assert tree.problems() == []
+    found = gate.boundary_candidates(tree.root, [])
+    assert "import:crate/src/lib.rs:commented_out" not in found
+    assert "import:crate/src/lib.rs:ghost" not in found
+    assert "import:crate/src/lib.rs:modexp" in found
+
+
+def test_a_vendored_extern_block_is_not_this_trees_boundary(tree):
+    """A green control with a live derivation behind it: the vendored file IS
+    read by `tree_files` and IS an `extern` block, and it is out because
+    `third_party/` is somebody else's boundary — not because nothing looked."""
+    assert "vendored_thing" in (tree.root / "third_party/vendor/src/lib.rs").read_text()
+    assert not [k for k in gate.boundary_candidates(tree.root, []) if "third_party" in k]
+
+
+def test_the_guard_a_boundary_sits_under_reaches_the_page(tree):
+    """The `#[cfg]` is the host/image split, and it is DERIVED — the registry has
+    no field for it. Bracket-matched rather than line-walked, so a `cfg` broken
+    over lines is still read whole."""
+    tree.edit(
+        "crate/src/lib.rs",
+        '#[cfg(target_os = "none")]',
+        '#[cfg(all(\n    target_os = "none",\n    feature = "asm"\n))]',
+    )
+    tree.regenerate()
+    page = (tree.root / gate.PAGE).read_text(encoding="utf-8")
+    assert '#[cfg(all( target_os = "none", feature = "asm" ))]' in page
+    assert "app/src/main.rs, extern \"C\", unconditional" in page
+
+
+def test_the_region_names_every_boundary(tree):
+    """The print half of rule 6: a set derived and held and then not published is
+    a claim only a reader of this file can check."""
+    page = (tree.root / gate.PAGE).read_text(encoding="utf-8")
+    for boundary in ("modexp", "crt", "__kv_start", "core.c", "core.S"):
+        assert boundary in page, boundary
+    assert "`arm-none-eabi-as`" in page
+
+
+# ---- rule 7: the generated region --------------------------------------------
 
 
 def test_a_hand_edit_inside_the_region_is_red(tree):
@@ -543,3 +867,45 @@ def test_the_real_registry_is_green():
     """The table above runs on a fixture; this is the tree. Without it every case
     could pass over a synthetic registry while the shipped one is red."""
     assert gate.audit(ROOT)[0] == []
+
+
+def test_the_process_exits_zero_on_the_real_tree():
+    """`main`, in a process, on the tree — the whole of what `check.sh` asserts.
+    Every case above calls `audit` and would pass over a `main` that had stopped
+    reaching it."""
+    done = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/toolchain_gate.py")],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    )
+    assert done.returncode == 0, done.stderr
+    assert "4 of 6 TCB categories enumerated" in done.stdout
+
+
+def test_the_process_goes_red_on_a_boundary_nothing_claims(tree):
+    """Direction one, through the entry point rather than the helper."""
+    tree.write("crate/src/hsm.rs", 'unsafe extern "C" {\n    fn hsm_sign(x: *mut u32);\n}\n')
+    done = tree.process()
+    assert done.returncode == 1, done.stdout
+    assert "import:crate/src/hsm.rs:hsm_sign" in done.stderr
+
+
+def test_the_process_goes_red_on_a_row_for_a_crossing_that_is_gone(tree):
+    """Direction two, same way."""
+    tree.edit(
+        gate.REGISTRY,
+        'id = "unit:crate/csrc/core.S"',
+        'id = "unit:crate/csrc/core_v2.S"',
+    )
+    done = tree.process()
+    assert done.returncode == 1, done.stdout
+    assert "unit:crate/csrc/core_v2.S" in done.stderr
+
+
+def test_the_process_stays_green_on_an_unmutated_fixture(tree):
+    """The control for both of those: the same driver, the same tree, exit 0 —
+    so a red above is the mutation and not the harness."""
+    done = tree.process()
+    assert done.returncode == 0, done.stderr
+    assert "5 FFI boundary(s) derived from the tree and claimed" in done.stdout

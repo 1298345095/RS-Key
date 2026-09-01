@@ -2,11 +2,13 @@
 # Copyright (C) 2026 RS-Key contributors
 #
 # The build and verification toolchain, as a TCB a generator can enumerate.
-# HAND-WRITTEN FIELDS ONLY: a tool's name, role, provenance, pin and statement,
-# and a not-TCB input's name and reason. Everything else — which pin file each
-# provenance names, what that file says today, which of the criterion's TCB
-# categories the roster reaches, how many tools carry each role — is DERIVED by
-# scripts/toolchain_gate.py and printed into docs/supply-chain.md, never stored.
+# HAND-WRITTEN FIELDS ONLY: a tool's name, role, provenance, pin and statement, a
+# not-TCB input's name and reason, and a boundary's id, provider and statement.
+# Everything else — which pin file each provenance names, what that file says
+# today, which of the criterion's TCB categories the roster reaches, how many
+# tools carry each role, WHICH FFI BOUNDARIES THE TREE HAS and what guards each
+# one — is DERIVED by scripts/toolchain_gate.py and printed into
+# docs/supply-chain.md, never stored.
 #
 # `pin` is a VALUE and it is never the authority. Every row also carries a
 # `provenance` naming a file the gate opens on every run, and the row is refused
@@ -30,13 +32,25 @@
 # ---- What this roster does NOT enumerate -------------------------------------
 #
 # Stage 11A work 1's fourth exit criterion names six TCB categories: compiler,
-# linker, LLVM passes, assembler, bootrom and FFI. Three are here with a pin held
-# against its source file (compiler, linker, assembler). A fourth, FFI, is here
-# only as its PRODUCERS — `cortex-m`'s prebuilt asm blob and the C+asm
-# arm-none-eabi builds for rsk-rsa — which is not an enumeration of FFI
-# boundaries; assurance/platform.toml's PLAT-TOOLCHAIN-002 carries those, as
-# `unsafe` sites, which is a different set again. Two are absent and cannot be
-# added by this generator:
+# linker, LLVM passes, assembler, bootrom and FFI. Four are here. Three of those
+# are TOOLS with a pin held against its source file (compiler, linker,
+# assembler); the fourth, FFI, is the `[[boundary]]` rows below, and it is a
+# different kind of answer. A boundary is a place in the source, so what the gate
+# holds is that the SET is complete against the tree — both ways, on every run —
+# and that each crossing's foreign half comes off a pinned producer above. It
+# pins no boundary, because there is nothing there to pin.
+#
+# The `unsafe` sites of assurance/platform.toml's PLAT-TOOLCHAIN-002 are a
+# different set again, and were never this one: `unsafe` is where Rust's rules
+# are suspended, which most FFI is and most `unsafe` is not.
+#
+# The boundaries are the ones OF THIS TREE. A dependency declares its own in its
+# own source, which no reader of this checkout can enumerate — measured over
+# Cargo.lock, 25 of the 276 checksummed crates carry `extern "C"` or
+# `#[no_mangle]`, cortex-m and cortex-m-rt among them. What is recorded for those
+# is the [[tool]] pin that fixes the crate, not the symbols it crosses on.
+#
+# Two categories are absent and cannot be added by this generator:
 #
 #   * LLVM passes. rustc's LLVM version is not written in any file of this tree,
 #     and its pass pipeline is written nowhere at all. `rustc -vV` on a machine
@@ -165,3 +179,69 @@ reason = "SDL2 alone, for the tools/emu --display window (flake.nix:9-15). Nothi
 [[not_tcb]]
 input = "flake-utils"
 reason = "eachDefaultSystem plumbing (flake.nix:36). It emits no binary into any build; it decides which systems the outputs are instantiated for."
+
+# ---- The FFI boundaries -------------------------------------------------------
+# The criterion's sixth category. A boundary is every place a Rust name in this
+# tree binds to a symbol that Rust does not define: an item an `extern` block
+# declares (`import:`), an item this tree defines for a foreign caller
+# (`export:`), and a foreign translation unit a `build.rs` hands to `cc`
+# (`unit:`). The `id` is not written here so much as CLAIMED: the gate derives
+# the set from the tree on every run and holds it both ways — a boundary in the
+# tree with no row is the registry falling short, a row whose id no derivation
+# produces is a row that outlived what it described.
+#
+# `provider` is the pinned tool that produces the FOREIGN half, and it has to be
+# a `[[tool]]` above whose role answers for one of the criterion's categories.
+# That is the join to the toolchain closure: an FFI boundary enumerated with no
+# pinned producer behind it would be a list of names, which is the shape the
+# criterion asks this file not to be.
+
+[[boundary]]
+id = "import:crates/rsk-rsa/src/lib.rs:bignum_modexp_private_exponent"
+provider = "arm-none-eabi-gcc"
+statement = "csrc/bignum_high_level.c:280. The private-exponent modexp, the one RSA signing runs; its arguments are secret key material and its contract (widths, endianness, temp size) is stated in csrc/bignum_high_level.h and nowhere the Rust compiler can see."
+
+[[boundary]]
+id = "import:crates/rsk-rsa/src/lib.rs:rsa_private_exp_crt"
+provider = "arm-none-eabi-gcc"
+statement = "csrc/bignum_high_level.c:296. CRT signing. Same header contract, and the one with the most operands: nine pointers whose lengths Rust cannot check."
+
+[[boundary]]
+id = "import:crates/rsk-rsa/src/lib.rs:bignum_modexp_public_exponent"
+provider = "arm-none-eabi-gcc"
+statement = "csrc/bignum_high_level.c:69. Public-exponent modexp, the verify path. The only one of the three that returns a status; the negative returns are preconditions the C checks and the Rust signature does not."
+
+[[boundary]]
+id = "import:firmware/src/main.rs:_stack_end"
+provider = "flip-link"
+statement = "Not a function: a symbol whose ADDRESS is the datum. cortex-m-rt's link.x emits it and flip-link rewrites it when it inverts RAM, so the value MSPLIM is armed with is the linker's output and not the source's."
+
+[[boundary]]
+id = "import:firmware/src/main.rs:__kvmain_start"
+provider = "rust-lld"
+statement = "firmware/memory.x:30, an assignment the linker evaluates. The KV store's flash offset; scripts/pt.sh:43 reads the same symbol back out of the ELF, which is the other half of this boundary being checked."
+
+[[boundary]]
+id = "import:firmware/src/main.rs:__kvmain_end"
+provider = "rust-lld"
+statement = "firmware/memory.x:31. The end of the same range."
+
+[[boundary]]
+id = "import:firmware/src/main.rs:__kvcnt_start"
+provider = "rust-lld"
+statement = "firmware/memory.x:32. The counter partition's flash offset, fenced apart from the main store."
+
+[[boundary]]
+id = "import:firmware/src/main.rs:__kvcnt_end"
+provider = "rust-lld"
+statement = "firmware/memory.x:33. The end of the counter partition; scripts/check.sh:277 holds the partition table against __kvmain_start..__kvcnt_end."
+
+[[boundary]]
+id = "unit:crates/rsk-rsa/csrc/bignum_high_level.c"
+provider = "arm-none-eabi-gcc"
+statement = "The C half of rsa-armv7, compiled straight into the image by crates/rsk-rsa/build.rs and only when CARGO_CFG_TARGET_OS is `none`. It defines all three imported symbols above and calls the assembly below; csrc/bignum_high_level.h and csrc/bignum_config.h are its headers, inputs to this unit rather than units of their own."
+
+[[boundary]]
+id = "unit:crates/rsk-rsa/csrc/bignum_asm.S"
+provider = "arm-none-eabi-as"
+statement = "The hand-written Armv7-M assembly, preprocessed by gcc and assembled by as. Seven START_GLOBAL_FUNC symbols, none of them declared by any Rust extern block — the C above is their only caller. It is linked into .data so it executes from SRAM."

@@ -61,15 +61,27 @@ Root inputs of `flake.lock` deliberately outside this TCB:
 - `flake-utils` — eachDefaultSystem plumbing (flake.nix:36). It emits no binary into any build; it decides which systems the outputs are instantiated for.
 - `nixpkgs-sdl2` — SDL2 alone, for the tools/emu --display window (flake.nix:9-15). Nothing from this pin enters a firmware build, a Kani run or a TLC run; it exists because unstable's sdl2-compat emits SDL3 window events the Rust crate aborts on.
 
+**The FFI boundaries.** Every place a name in this tree binds to a symbol Rust does not define, read out of the tree on the run that wrote this table: an item an `extern` block declares (`import`), an item defined here for a foreign caller (`export`), and a foreign translation unit a `build.rs` compiles into the image (`unit`). The set is held both ways — a crossing no `[[boundary]]` row claims fails `check.sh`, and so does a row for a crossing that is no longer there.
+
+| Boundary | Kind | Derived from | Foreign side produced by |
+|---|---|---|---|
+| `bignum_modexp_private_exponent` | import | `crates/rsk-rsa/src/lib.rs, extern "C", #[cfg(target_os = "none")]` | `arm-none-eabi-gcc` |
+| `bignum_modexp_public_exponent` | import | `crates/rsk-rsa/src/lib.rs, extern "C", #[cfg(target_os = "none")]` | `arm-none-eabi-gcc` |
+| `rsa_private_exp_crt` | import | `crates/rsk-rsa/src/lib.rs, extern "C", #[cfg(target_os = "none")]` | `arm-none-eabi-gcc` |
+| `__kvcnt_end` | import | `firmware/src/main.rs, extern "C", unconditional` | `rust-lld` |
+| `__kvcnt_start` | import | `firmware/src/main.rs, extern "C", unconditional` | `rust-lld` |
+| `__kvmain_end` | import | `firmware/src/main.rs, extern "C", unconditional` | `rust-lld` |
+| `__kvmain_start` | import | `firmware/src/main.rs, extern "C", unconditional` | `rust-lld` |
+| `_stack_end` | import | `firmware/src/main.rs, extern "C", unconditional` | `flip-link` |
+| `crates/rsk-rsa/csrc/bignum_asm.S` | unit | `crates/rsk-rsa/build.rs, cc::Build` | `arm-none-eabi-as` |
+| `crates/rsk-rsa/csrc/bignum_high_level.c` | unit | `crates/rsk-rsa/build.rs, cc::Build` | `arm-none-eabi-gcc` |
+
 **Coverage against the six TCB categories.** Enumerated here, each with a pin held against its source file:
 
 - **assembler** — `arm-none-eabi-as`, `cortex-m`
 - **compiler** — `arm-none-eabi-gcc`, `rustc`
+- **ffi** — the 10 boundary(s) in the table above, each joined to the pinned tool that produces its foreign half
 - **linker** — `flip-link`, `rust-lld`
-
-Named only in part:
-
-- **ffi** — named only by its PRODUCERS — `cortex-m`'s prebuilt asm and the arm-none-eabi C+asm — which is not an enumeration of FFI boundaries; PLAT-TOOLCHAIN-002 carries the `unsafe` sites, a different set again
 
 Not enumerated by this generator at all, and not by any other:
 
@@ -77,6 +89,8 @@ Not enumerated by this generator at all, and not by any other:
 - **llvm-passes** — rustc's LLVM version is written in no file of this tree and its pass pipeline in none anywhere; `rustc -vV` would answer for one machine
 
 What the table proves is that each tool it names carries a pin equal to the value in the file that pins it. It does not prove that the tool which actually ran was that version, that a contributor's `PATH` holds it, or that a `/nix/store` path still matches its `narHash`.
+
+And the boundaries are the boundaries **of this tree**. A dependency declares its own, in its own source, where no reader of this checkout can see them: 25 of `Cargo.lock`'s 276 checksummed crates carry `extern "C"` or `#[no_mangle]`, `cortex-m` and `cortex-m-rt` among them. For those, what is recorded here is the pin that fixes the crate, not the symbols it crosses on.
 
 <!-- toolchain-tcb:end -->
 
