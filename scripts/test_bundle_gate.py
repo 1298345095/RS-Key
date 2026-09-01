@@ -77,9 +77,14 @@ def tree(tmp_path):
     directory now: a fixture holding one of two would put the shipped roster
     under its own floor and make every case in this file fail for the wrong
     reason — the failure mode this table exists to refuse.
+
+    The slice page comes too, because `METHODS` is now held against п.3 and a
+    fixture without it would report a missing page in every case here — the
+    fixture asserted instead of the rule.
     """
-    (tmp_path / bundle_gate.REGISTRY).parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(ROOT / bundle_gate.REGISTRY, tmp_path / bundle_gate.REGISTRY)
+    for fixed in (bundle_gate.REGISTRY, bundle_gate.SLICE):
+        (tmp_path / fixed).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / fixed, tmp_path / fixed)
     for relative in bundle_gate.bundles(ROOT):
         (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, tmp_path / relative)
@@ -533,6 +538,10 @@ KAT_VECTORS = "crates/rsk-mldsa/src/testvectors.rs::KeyGenKat"
 KAT_RUNNER = "tests/00_ctaphid_transport.py"
 KAT_NOT_A_RUNNER = ("scripts/bundle_gate.py", "tools/rsk/__init__.py")
 
+#: A `.py` outside `tests/` that a runner really does collect — the shape the
+#: `def` arm exists for, once the arm stopped taking any `def` at all.
+KAT_COLLECTED_CASE = "tools/rsk/test_audit.py::test_detail_of_a_single_config_write"
+
 
 def as_kat(root, artifact):
     r"""Row #5 re-methoded to `KAT/differential` and pointed at `artifact`.
@@ -596,8 +605,16 @@ def test_a_kat_row_discharged_by_a_python_file_naming_a_def_it_declares(tmp_path
     over: a script outside `tests/` discharges the row by naming the function,
     never by being a file. `symbol in text` is not that check — the name occurs
     in this file's own docstring too, which is why [`bundle_gate.definitions`]
-    parses rather than matches."""
-    assert findings(as_kat(tree(tmp_path), f"{KAT_NOT_A_RUNNER[0]}::method_references")) == []
+    parses rather than matches.
+
+    ANY `def` was the first spelling and it is not the `.rs` arm's shape: that
+    one demands `#[test]`, and this one took `method_references`, a gate function
+    that never ran a vector. It is [`bundle_gate.PYTEST_FUNCTION`]'s prefix now,
+    which is the name pytest keys on where Rust has an attribute — so the case
+    reads with a collected `def` and the gate function it used to accept is the
+    arm one file over.
+    """
+    assert findings(as_kat(tree(tmp_path), KAT_COLLECTED_CASE)) == []
 
 
 def test_a_kat_row_naming_the_vectors_and_the_script_that_ran_them(tmp_path):

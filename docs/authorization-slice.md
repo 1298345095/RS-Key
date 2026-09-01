@@ -420,7 +420,8 @@ scattered across logs. A missing field blocks exit.
    implementation, run against this one; it is discharged by the `#[test]` or the
    `tests/*.py` that RAN them, never by the table they sit in — and the gate
    holds the second half as literally as the first, a `.py` outside `tests/`
-   needing to name a `def` it declares. It is not `measurement`, which in this
+   needing to name a `def` of its own that a test runner collects, which in
+   Python is the name and not an attribute. It is not `measurement`, which in this
    contract means a result taken off a board and owes the silicon revision it was
    taken on.
 4. **Tool, version, invocation and execution environment** — for every artifact:

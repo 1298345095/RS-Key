@@ -253,7 +253,33 @@ ATTRIBUTE = re.compile(r"^[ \t]*#!?\[")
 #: rule nothing here can falsify.
 UNIT_TEST = re.compile(r"#\[test\]")
 
-#: §4.1's method vocabulary, in `docs/authorization-slice.md` п.3's order. A word
+#: [`UNIT_TEST`]'s counterpart one language over. Python has no attribute, and
+#: the NAME is what its runner keys on instead, so the name is what the `.py` arm
+#: holds: `python_functions`'s installed default, a PREFIX, read off pytest's own
+#: `pytest_addoption` rather than invented. The tree overrides it nowhere — no
+#: `pytest.ini`, no `setup.cfg`, no `[tool.pytest…]`, `third_party/` included.
+#:
+#: Two stronger shapes were refused by measurement, not by taste.
+#: **`python_files` as well**, so the file must be a `test_*.py` too: 57 of
+#: `third_party/openpgp-card-tests`' 62 collected modules are
+#: `from card_test_… import *` and hold no test of their own, so the methods
+#: `tests/third_party.py` really runs live in 26 `card_test_*.py` the pattern
+#: rejects — a differential suite is the likeliest `.py` KAT artifact this tree
+#: will ever have, and 26 honest refusals buys the refusal of two names
+#: (`narrow_gate.py::test_functions`, `token_refinement_gate.py::
+#: test_only_sources`). **pytest's ROOTS, derived from `check.sh`**: the rows
+#: hand it three (`scripts`, `tools/rsk`, `tests/interop`) while
+#: `tests/third_party.py` calls `pytest.main` over two more trees carrying 90
+#: collected `test_*.py` between them, every one of which the rule would call
+#: un-run. What the prefix alone still cannot see is a `def test_*` that runs no
+#: vector; the `.rs` arm cannot see that either, since `#[test]` says a function
+#: is a test and not what it checks.
+PYTEST_FUNCTION = "test"
+
+#: §4.1's method vocabulary, in `docs/authorization-slice.md` п.3's order — held
+#: to that page by [`vocabulary_problems`], because until it was, "in п.3's order"
+#: was a sentence and not a rule: both rosters were extended BY HAND when
+#: `KAT/differential` arrived, and nothing anywhere compared them. A word
 #: outside it is a finding and not a shrug: [`METHOD_KIND`] reads this field, so
 #: `method = "bounded proofs"` would quietly drop the rule that field carries.
 #:
@@ -270,6 +296,25 @@ METHODS = (
     "exhaustive sweep", "mutation", "trace", "measurement", "accepted risk",
     "KAT/differential",
 )
+
+#: The page [`METHODS`] says it is a copy of, and the list item that publishes the
+#: vocabulary. Anchored on the item's own heading and on the `§4.1 (…)`
+#: parenthesis — NEVER on a line number: `citation_gate` reads `.rs`, `.sh` and
+#: `.txt` only, so a line number written here would be held by nothing and rot in
+#: silence, which is how five bare citations already rotted while that row printed
+#: `ok`. (A colon and digits in this comment is itself one of that row's findings,
+#: which is the shortest possible demonstration of the rule.)
+#:
+#: `bounds_gate.SLICE` is the same path for the same page's `## The bounds`
+#: section, and that file already imports this one — one of the two should go.
+SLICE = pathlib.Path("docs/authorization-slice.md")
+SLICE_ITEM = "3. **Method and scope/bounds**"
+SLICE_VOCABULARY = re.compile(r"the method per §4\.1 \(([^)]*)\)", re.S)
+
+#: The separator between two words of that list: whitespace on BOTH sides, which
+#: is what lets the page spell `KAT/differential` with a slash of its own. The
+#: page wraps mid-list, so the halves are re-joined before they are compared.
+SLICE_SEPARATOR = re.compile(r"\s+/\s+")
 
 #: The three methods whose own word NAMES the kind of artifact discharging them.
 #: Without it a row is satisfied by any file in the tree: re-pointing the walk
@@ -571,6 +616,57 @@ def method_bounds(bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
         )
 
 
+def slice_methods(text: str) -> tuple[str, ...] | None:
+    """§4.1's vocabulary as the SLICE PAGE words it, or None if it has stopped
+    wording it.
+
+    None rather than an empty tuple, because the two are different findings: a
+    page that no longer publishes the list is a page that stopped being the
+    source, and an equality against `()` would report it as ten missing words.
+    """
+    body = text.partition(SLICE_ITEM)[2]
+    found = SLICE_VOCABULARY.search(body) if body else None
+    if found is None:
+        return None
+    return tuple(
+        " ".join(word.split()) for word in SLICE_SEPARATOR.split(found.group(1))
+    )
+
+
+def vocabulary_problems(text: str | None, methods=METHODS) -> list[str]:
+    """[`METHODS`] against the page it says it is a copy of, in order.
+
+    Two registers extended by hand on the same day and compared by nothing: the
+    tenth word went into `METHODS`, `METHOD_KIND` and п.3 in one commit and would
+    have gone into one of them just as quietly. `methods` is a PARAMETER so both
+    directions are drivable without patching the roster the shipped run is judged
+    by — the same shape as `bounds_gate`'s floors.
+
+    ORDER as well as membership, because `METHODS` claims п.3's order in as many
+    words, and a set equality would leave that half of the sentence a promise.
+    """
+    if text is None:
+        return [
+            f"{SLICE} is missing — §4.1's method vocabulary is published there and"
+            " this roster says it is a copy of it"
+        ]
+    published = slice_methods(text)
+    if published is None:
+        return [
+            f"{SLICE} no longer carries `{SLICE_ITEM}` with a `the method per §4.1"
+            " (…)` list — the roster this gate reads has stopped having a source,"
+            " and a copy of nothing agrees with everything"
+        ]
+    if published != tuple(methods):
+        return [
+            f"{SLICE} п.3 publishes {list(published)} and this gate reads"
+            f" {list(methods)} — one was extended by hand and the other was not."
+            " The page is what a reader is held to; make them the same list, in"
+            " the same order"
+        ]
+    return []
+
+
 def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """Every `[[method]]`'s `artifact` names something this tree still has, OF THE
     KIND its own `method` word calls for.
@@ -583,12 +679,26 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
     exists" for all six.
 
     `KAT/differential` owes a RUNNER on whichever half it names — a `#[test]` in
-    Rust, a `.py` under [`RUNNERS`] or one naming a `def` it declares. Written
-    for the `.rs` half alone it left the `.py` half with no requirement past the
-    file existing, and the gradient then ran backwards: `scripts/bundle_gate.py`
-    discharged a KAT obligation at exit 0 while the vectors PLUS a script was
-    refused. One counter over both halves is what makes adding the vectors to a
-    green row unable to redden it.
+    Rust, a `.py` under [`RUNNERS`] or one naming a `def` whose name pytest
+    collects on ([`PYTEST_FUNCTION`]). Written for the `.rs` half alone it left
+    the `.py` half with no requirement past the file existing, and it then ran
+    backwards: `scripts/bundle_gate.py` discharged a KAT obligation at exit 0
+    while the vectors PLUS a script was refused. One counter over both halves is
+    what makes adding the vectors to a green row unable to redden it.
+
+    The `.py` half then owed the second half of the same debt. `symbol in
+    definitions(target)` took ANY `def`, so `scripts/bundle_gate.py::
+    method_references` — this function — was green where the `.rs` arm refuses
+    `testvectors.rs::KeyGenKat` for being a declaration and not a check.
+    `scripts/rsa_vectors.py` is this tree's own instance of that shape: a KAT
+    GENERATOR whose check is the Rust that reproduces what it wrote.
+
+    What stays asymmetric, deliberately: a `.py` under `tests/` needs no symbol
+    where a `.rs` always does. The unit differs, and it differs because the
+    runner does — `scripts/emu-suites.sh` loops `tests/[0-9]*.py` and runs each
+    FILE through `tests/emu.py`, while a `.rs` file holds many `#[test]`s and
+    outlives any one of them. Requiring `::main` there would require the one
+    symbol all 65 of them have, which names nothing.
     """
     for index, row in enumerate(doc.get("method", []), 1):
         if not isinstance(row, dict) or "artifact" not in row:
@@ -656,7 +766,10 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
                         findings.append(f"{where}: {name} does not name `{symbol}`")
                     elif target.suffix == ".py" and (
                         RUNNERS in target.relative_to(root).parents
-                        or symbol in definitions(target)
+                        or (
+                            symbol.startswith(PYTEST_FUNCTION)
+                            and symbol in definitions(target)
+                        )
                     ):
                         runners += 1
                     continue
@@ -704,8 +817,11 @@ def method_references(root: pathlib.Path, bundle: pathlib.Path, doc: dict, findi
             findings.append(
                 f"{where}: a KAT/differential row naming nothing that RAN the"
                 " vectors — no `#[test]`, and no `.py` under `tests/` or naming a"
-                " `def` it declares. `testvectors.rs::KeyGenKat` is the struct the"
-                " table sits in, and a table of inputs is the input, not the check"
+                f" `def` of its own whose name starts with {PYTEST_FUNCTION!r}."
+                " `testvectors.rs::KeyGenKat` is the struct the table sits in and"
+                " `scripts/bundle_gate.py::method_references` is a gate function:"
+                " a table of inputs is the input, not the check, and so is a `def`"
+                " nothing runs"
             )
 
 
@@ -913,6 +1029,12 @@ def bundles(root: pathlib.Path) -> list[pathlib.Path]:
 def audit(root: pathlib.Path, roster_floor: int = ROSTER_FLOOR) -> tuple[list[str], str]:
     root = pathlib.Path(root)
     findings: list[str] = []
+    page = root / SLICE
+    findings.extend(
+        vocabulary_problems(
+            page.read_text(encoding="utf-8") if page.is_file() else None
+        )
+    )
     roster = bundles(root)
     if len(roster) < roster_floor:
         findings.append(
