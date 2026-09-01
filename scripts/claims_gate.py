@@ -414,13 +414,38 @@ def normalise(text: str) -> str:
     return re.sub(r"[*`]", "", text)
 
 
+#: How far into a page its generator's header must appear. The first bytes,
+#: because further down it is prose that MENTIONS a generator rather than the
+#: marker one writes. Named rather than typed at the comparison because
+#: `platform_gate.py` asks this same question of an evidence path, and a second
+#: literal there would be a second answer to it.
+HEADER_WINDOW = 600
+
+
+def is_generated(rel: str, text: str, exempt: dict[str, str]) -> bool:
+    """Whether `rel` really is the page its claimed generator writes.
+
+    Two halves, and the KEY alone is the weaker one: [`generated_pages`] says
+    which page a `*_gate.py` CLAIMS, and this adds that the page agrees, by
+    carrying that generator's own header. Split out of [`corpus`] because
+    `platform_gate.hand_written` asked the same mapping the same question and
+    read only the key — strictly weaker over the same data, so a page a
+    generator names and does not write was evidence there and prose here.
+
+    `text` is already [`normalise`]d, and the caller passes the copy it has: a
+    second read to normalise again is how the two halves come to disagree.
+    """
+    header = exempt.get(str(rel))
+    return bool(header) and header in text[:HEADER_WINDOW]
+
+
 def corpus(root: pathlib.Path) -> list[tuple[str, str]]:
     """(path, hand-written text) for every markdown a claim can be typed in."""
     exempt = generated_pages(root)
     out = []
     for rel in markdown(root):
         text = normalise((root / rel).read_text(errors="replace"))
-        if rel in exempt and exempt[rel] in text[:600]:
+        if is_generated(rel, text, exempt):
             continue
         out.append((rel, mask_regions(text)))
     return out

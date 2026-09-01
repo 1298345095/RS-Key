@@ -66,7 +66,12 @@ Seven rules, and the first is the one that earns the file:
   on, a stepping written anywhere here must be a real one whatever the class, and
   a discharge carrying one owes a raw artifact under `assurance/board/` — because
   a rule satisfied by any file that merely exists is satisfied by `README.md`,
-  which is what the review reached the hardware axis with.
+  which is what the review reached the hardware axis with. That sentence then
+  stood over the hardware axis ALONE for as long as it was written down: on every
+  other row `evidence = ["README.md"]` was exit 0, measured, and
+  `PLAT-STORE-003`'s own discharge prose records it. [`PROSE_PAGE`] is the other
+  axis's half of it, and it is a weaker rule than the board one — the comment
+  there says which attacks it does not stop rather than leaving them to be found.
 * **links resolve.** `supports` names registry properties, `depends_on` and
   `refines` name entries here, `discharges` names constants of the first
   registry — and an entry covering `model:X` must discharge `X`, so the two
@@ -435,8 +440,152 @@ def check_shape(name, entry, findings):
         )
 
 
-def check_evidence(root, name, entry, findings):
-    """A status other than `pending` owes artifacts, and a board owes a stepping."""
+#: The suffix a page of prose has here, and the one kind of file a discharge may
+#: NOT cite. Everything else is allowed — source, a model, a configuration, a
+#: recorded log, a data table — because the defect this closes is narrow and
+#: named: `check_evidence` accepted any path that exists, so
+#: `evidence = ["README.md"]` on a `model-abstraction` discharge was **exit 0**,
+#: measured on this tree before this rule. The board axis already refused that
+#: shape ([`BOARD_EVIDENCE`]), and refused it only where the row records a
+#: `board_revision`, so the module's own sentence — "a rule met by any file that
+#: merely exists is met by `README.md`" — stood unenforced over every row that
+#: records none, which today is all of them: `grep -c '^board_revision'` over the
+#: registry answers zero, because no discharge here has yet been taken on silicon.
+#:
+#: WHY THIS KIND. A hand-written page RESTATES a claim; it does not settle one.
+#: The registry already has the field for a restatement and requires it —
+#: `discharge` — so a page in `evidence` is the same sentence filed twice, and
+#: the row then reads as settled by a paragraph someone wrote.
+#:
+#: A GENERATED page is not that, and the exemption is DERIVED rather than listed:
+#: `claims_gate.generated_pages` reads every gate's own `ARTIFACT`/`GENERATED_BY`
+#: pair, so `docs/assurance-matrix.md` — `PLAT-BUILD-001`'s second artifact — is
+#: evidence because `matrix_gate.py` writes it from data, while a page that
+#: merely SAYS it was generated is not (that gate's own drive: three self-exempt
+#: spellings at exit 0). A blanket "no `.md`" would have reddened an honestly
+#: discharged row, which is the false red this half exists to avoid.
+#:
+#: That mapping is asked through [`claims_gate.is_generated`] and not read here,
+#: because reading it here read the KEY and stopped — the claim without the
+#: agreement, which is strictly weaker than the gate the mapping comes from.
+#: Measured: `docs/assurance-matrix.md` with its own header line deleted, a page
+#: `matrix_gate.py` claims and no longer marks, was **exit 0** as evidence.
+#:
+#: NOR THE PAGE THIS GATE WRITES, which the carve-out let straight back in:
+#: [`ARTIFACT`] is rendered from this registry and [`render`] emits every row's
+#: `discharge` verbatim, so `PLAT-STORE-003` `discharged` with
+#: `evidence = ["docs/platform-assumptions.md"]` was **exit 0** — the row citing
+#: its own restatement. [`circular`] is that clause, and it is not `ARTIFACT`
+#: alone: `docs/assurance-vector.md` names 67 of these rows, because
+#: `evidence_gate.py` renders it partly from this registry, and citing it is the
+#: same loop one hop out.
+#:
+#: EVERY path, not one of them. "At least one artifact" leaves the reviewer's
+#: obvious move open — append `README.md` to a row that already cites three real
+#: files and nothing sees it — and this module already refuses decoration in the
+#: other direction ("an artifact nothing rests on is decoration").
+#:
+#: WHAT IT DOES NOT CHECK, said plainly because no shape rule can check
+#: RELEVANCE and pretending otherwise is the claim inflation this registry
+#: exists to refuse:
+#: * not relevance. `evidence = ["deny.toml"]` on a `model-abstraction` discharge
+#:   is still exit 0, measured. The rule refuses a KIND of file, never an
+#:   unrelated one, and a reviewer reading this row still has to read the file.
+#: * not `.txt`. `formal/floors.txt` is a verdict table and legitimate evidence
+#:   for a run claim, so the suffix cannot stand for "prose" in general.
+#: * not a generator that lies about what it writes. The carve-out is rooted in a
+#:   DECLARATION — nothing here imports or runs a `*_gate.py` — so appending an
+#:   `ARTIFACT`/`GENERATED_BY` pair to a script that generates nothing still
+#:   mints an exemption. Measured on `scripts/spdx_gate.py`, which has neither
+#:   and no `--write` at all: four appended lines made `evidence = ["README.md"]`
+#:   legal registry-wide, exit 0. What the header half above costs that move is a
+#:   second edit — the page must carry the marker too, so `README.md` has to be
+#:   rewritten as well as named. Closing it outright means executing every other
+#:   gate's renderer from this row, and that is a bigger thing than it buys.
+#: * not the strong form. What makes [`BOARD_EVIDENCE`] work is that
+#:   `assurance/board/<ID>.toml` is a file this gate SEPARATELY VALIDATES, field
+#:   by field, against the row. The non-hardware analogue was measured and
+#:   rejected: tying evidence to the row's own candidate turns `PLAT-CRED-004`
+#:   RED — none of its three artifacts names its `covers` key `AS-CRED-5` or its
+#:   own id — and `PLAT-BUILD-001`'s `firmware/Cargo.toml` names neither
+#:   `AS-AUTH-2` nor `AlwaysUvShipped`, leaving only the generated page to tie
+#:   the row to itself, which is circular. The real strong form is a validated
+#:   `assurance/discharge/<ID>.toml` per row, and its cost is a record, a field
+#:   contract, a floor and a mutation table for three live discharges. That is
+#:   the shape to take when the count grows, not at three.
+PROSE_PAGE = ".md"
+
+
+def in_tree(rel, tree):
+    """Whether `rel` is a file this checkout HAS, spelled the way it spells it.
+
+    `(root / rel).exists()` was the first version and it answered two questions
+    this rule never asked. A DIRECTORY passed: `evidence = ["docs"]` was **exit
+    0**, which is this module's own "met by `README.md`" sentence with "the
+    directory `README.md` sits in" substituted. And so did a spelling that is not
+    in the tree at all: APFS folds case while [`PROSE_PAGE`] does not, so
+    `evidence = ["README.MD"]` — the literal page the whole rule exists to refuse
+    — was exit 0 on the machine this is developed on, and would have gone red on
+    a case-sensitive runner as `is not in the tree`, which is the right colour for
+    the wrong reason. `gate_lines.tree_files` is git's own listing: case-exact,
+    with no directories in it, so both spellings go one colour on both.
+    """
+    return pathlib.Path(str(rel)) in tree
+
+
+def hand_written(root, rel, generated):
+    """Whether `rel` is a page of prose rather than an artifact.
+
+    Case-folded, because a suffix is a spelling: [`in_tree`] has already settled
+    that the path is git's own, so what is left to ask is what KIND of file it
+    is, and `docs/UPPER.MD` is a page.
+
+    `generated` is [`claims_gate.generated_pages`]'s mapping, computed once by
+    [`audit`] and passed in: it opens every `scripts/*_gate.py`, and calling it
+    per entry read them once for each of the registry's rows. What decides is
+    that gate's own [`claims_gate.is_generated`] rather than this module's
+    reading of its mapping — the key without the header was the weaker half of
+    the same test, over the same data.
+    """
+    if not str(rel).lower().endswith(PROSE_PAGE):
+        return False
+    text = claims_gate.normalise((root / str(rel)).read_text(errors="replace"))
+    return not claims_gate.is_generated(rel, text, generated)
+
+
+def circular(root, name, rel, generated):
+    """Whether `rel` is this registry, or a page rendered from it that names `name`.
+
+    A row cannot be settled by a copy of itself. [`ARTIFACT`] is named outright
+    because this gate writes it FROM this registry, whatever it happens to print
+    there; so is [`REGISTRY`], the row's own home.
+
+    The derived half is the one that answers "or any page generated from this
+    registry": a generated page that NAMES the row carries the row, which is what
+    being rendered from it means in the only sense that matters here. Measured,
+    that is not a hypothetical second member — `docs/assurance-vector.md` names
+    67 of these rows because `evidence_gate.py` renders its outstanding list from
+    `platform_gate.entries`, and `docs/assurance-bounds.md` names three. Reading
+    the page rather than the generator's source is deliberate: which pages a
+    script writes is a declaration ([`PROSE_PAGE`] says what that costs), while
+    which pages carry this row is a fact about the bytes.
+    """
+    path = pathlib.Path(str(rel))
+    if path in (ARTIFACT, REGISTRY):
+        return True
+    if not str(rel).lower().endswith(PROSE_PAGE) or str(rel) not in generated:
+        return False
+    return name in (root / path).read_text(errors="replace")
+
+
+def check_evidence(root, name, entry, findings, generated, tree):
+    """A status other than `pending` owes artifacts, and a board owes a stepping.
+
+    `generated` and `tree` have no default on purpose: a defaulted `{}` reads
+    every page as hand-written, which is the safe direction, but a defaulted
+    `None` treated as "skip" would let a caller switch the rule off by forgetting
+    it — and an empty `tree` reads every artifact as absent, which is loud.
+    """
     status = entry.get("status")
     evidence = entry.get("evidence", [])
     evidence = evidence if isinstance(evidence, list) else [evidence]
@@ -455,9 +604,25 @@ def check_evidence(root, name, entry, findings):
                 " claim with nothing behind it is the status moving on its own"
             )
         for rel in evidence:
-            if not (root / str(rel)).exists():
+            if not in_tree(rel, tree):
                 findings.append(
-                    f"{name}: evidence {rel!r} is not in the tree"
+                    f"{name}: evidence {rel!r} is not in the tree — git's own"
+                    " listing, which has no directory in it and folds no case"
+                )
+            elif hand_written(root, rel, generated):
+                findings.append(
+                    f"{name}: evidence {rel!r} is a hand-written page — a page"
+                    " of prose restates the claim rather than settling it, and"
+                    " `discharge` is the field this registry already keeps for"
+                    " the restatement"
+                )
+            elif circular(root, name, rel, generated):
+                findings.append(
+                    f"{name}: evidence {rel!r} carries this row rather than"
+                    f" settling it — {REGISTRY} holds the row, {ARTIFACT} is"
+                    " rendered from that and emits its `discharge` verbatim,"
+                    " and a generated page that names the row is rendered from"
+                    " it too, so the claim and its evidence are one sentence"
                 )
         if not str(entry.get("revalidated_by", "")).strip():
             findings.append(
@@ -810,10 +975,15 @@ def audit(root, board_floor=None):
     }
     constants = set(model_candidates(root))
 
+    # Once, not per entry: one opens every `scripts/*_gate.py`, the other shells
+    # out to git.
+    generated = claims_gate.generated_pages(root)
+    tree = set(gate_lines.tree_files(root))
+
     owner = {}
     for name, entry in sorted(registered.items()):
         check_shape(name, entry, findings)
-        check_evidence(root, name, entry, findings)
+        check_evidence(root, name, entry, findings, generated, tree)
         check_links(name, entry, registered, properties, constants, findings)
         for target in entry.get("covers", []):
             if target not in found:
