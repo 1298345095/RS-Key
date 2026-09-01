@@ -9,7 +9,10 @@ secret-dependent comparison, branch, memory access, and private-key arithmetic
 operation that an attacker holding the device can probe over USB (CCID /
 ISO-7816 APDUs and CTAPHID / CTAP2): PIN/PUK/password verifiers, the FIDO
 `pinUvAuthToken` MAC, OATH and OTP access codes, RSA private operations, and the
-hand-written `rsk-rsa` keygen primitives.
+hand-written `rsk-rsa` modexp, sieve and primality primitives — the modexp on
+both of its callers, the prime search and the `rsa_private_exp_crt` that PIV
+GENERAL AUTHENTICATE and OpenPGP PSO:CDS / INTERNAL AUTHENTICATE / DECIPHER
+reach over USB against a long-lived key.
 
 > **What this is and isn't.** This is a *source/disassembly* audit: it
 > establishes that the generated machine code has no secret-dependent
@@ -95,6 +98,18 @@ Read out of `target/thumbv8m.main-none-eabihf/release/firmware` with `arm-none-e
 | `rsk_crypto::mac::ct_eq` | comparator | constant-time | CTAP pinUvAuthProtocol MAC verify, FIDO device-local PIN verify, FIDO's forwarder onto the canonical comparator, FIDO device-PIN hash verify, FIDO clientPIN hash verify, panel path, FIDO clientPIN hash verify, FIDO credential key-handle verify, vendor device-PIN gate, pad path, vendor device-PIN gate, OATH SET CODE, OATH VALIDATE, OATH PIN match helper, OATH PIN-gated code match, OATH's forwarder onto the canonical comparator, OpenPGP default reset-code neutralisation, OpenPGP PW1/PW3/RC verify, OpenPGP's forwarder onto the canonical comparator, OTP slot configure access code, OTP command dispatch access code, OTP slot swap access code, OTP slot swap access code, inner, OTP slot update access code, OTP access-code sweep, PIV slot metadata default-value check, PIV mutual authenticate, PIV single authenticate, PIV PIN/PUK reference verify, PIV's forwarder onto the canonical comparator |
 
 <!-- ct-sites:end -->
+
+**What holds which half of this page.** Only the table above is derived:
+`scripts/ct_gate.py` rebuilds it from the image on every gate run, and the row
+goes red when a surface stops routing through the comparator or a new one starts.
+The prose around it is held by almost nothing — `claims_gate` fires only on a
+sentence naming a registered `SEC-…` id, and this page names none. Measured with
+a refuted scope sentence in place: the claims, run-count and constant-time gates
+and `docs.sh check` were all exit 0, and the citation gate, red that day over
+line drift in other files, said nothing about this page. The single exception is
+the scope paragraph at the top of this page, which `ct_gate` refuses to let
+re-scope the `rsk-rsa` modexp as a keygen-only primitive. Nothing holds the
+findings table, the residuals, or this sentence.
 
 ## Defense-in-depth applied
 

@@ -251,7 +251,12 @@ CLOBBER_IS_NOT_THE_OPERAND = f"""{CHAIN}
 """
 
 SITE = {"CT-CMP-001": {"symbol": "rsk_crypto::mac::ct_eq", "class": "comparator"}}
-NO_FLOORS = {"run_floor": 0, "branch_floor": 0, "reasoned_floor": 0}
+NO_FLOORS = {
+    "run_floor": 0,
+    "branch_floor": 0,
+    "reasoned_floor": 0,
+    "exposed_floor": 0,
+}
 
 
 def observed(text):
@@ -314,12 +319,49 @@ def test_a_predicated_compare_of_a_spill_is_not_a_finding():
 
 def test_a_reload_of_this_frames_own_store_is_not_a_buffer_read():
     """`black_box`'s spill/reload feeds the terminal `cmp r0, #0`. The first rule
-    here whitelisted `sp` and missed the eight copies that spill through the frame
-    register `r7` instead — the shipped comparator reported itself, eight times."""
+    here whitelisted `sp` and missed the copies that spill through the frame
+    register `r7` instead — the shipped comparator reported itself.
+
+    How many, measured 2026-09-01 over the default release image rather than
+    asserted: 14 of the 39 attributed runs excuse a reload through `r7`, and the
+    `sp`-whitelist rule reports 9 of them, because a load is only reported once a
+    branch traces to it. The docstring of `ct_gate` said eight of both for its
+    whole life and a later reading said ten; neither was ever read off an ELF,
+    and the two counts were never one number. The 14 is derived by the row now
+    (`excused_loads`), so this case pins the RULE and the image pins the count.
+    """
     tail = CLEAN[CLEAN.index("10000014") - len(CHAIN) - 1 :]
     violations, _, branches, _, _ = observed(tail)
     assert branches == 1
     assert violations == []
+
+
+def test_an_excuse_that_covers_every_load_is_a_finding(monkeypatch):
+    """The hole `EXPOSED_FLOOR` closes, driven in both directions.
+
+    `reload_of_a_store` is the only rule here that EXCUSES a load, and nothing
+    else this row counts asks it — runs, branches and traced come out identical
+    whatever it answers. So a version that says True too often takes the row's
+    own mutant with it and leaves every other number in place: a check that
+    cannot fail, at exit 0. Measured the same way over the shipped image, stubbed
+    to True it reports 0 secret-dependent branches over an unchanged 39 / 25 / 22
+    with all three older floors satisfied.
+    """
+    kwargs = dict(NO_FLOORS)
+    kwargs["exposed_floor"] = 2
+    word = "still visible to the taint"
+
+    before = observed(LEAKY)
+    findings, _ = ct_gate.audit(ROOT, lines=LEAKY.splitlines(), **kwargs)
+    assert len(before[0]) == 1, before[0]
+    assert not any(word in f for f in findings), findings
+
+    monkeypatch.setattr(ct_gate, "reload_of_a_store", lambda stream, index: True)
+    after = observed(LEAKY)
+    findings, _ = ct_gate.audit(ROOT, lines=LEAKY.splitlines(), **kwargs)
+    assert after[0] == [], after[0]  # the mutant this row exists to catch, gone
+    assert after[1:] == before[1:], (before, after)  # and nothing else moved
+    assert any(word in f for f in findings), findings
 
 
 def test_a_literal_pool_load_is_not_a_buffer_read():
@@ -453,6 +495,7 @@ def test_a_site_that_resolves_to_nothing_is_a_finding():
         ({"run_floor": 10_000}, "attributed run"),
         ({"branch_floor": 10_000}, "conditional branch"),
         ({"reasoned_floor": 10_000}, "traced to a definition"),
+        ({"exposed_floor": 10_000}, "still visible to the taint"),
     ],
 )
 def test_each_floor_reports_its_own_shortfall(floors, word):
@@ -472,11 +515,12 @@ def test_the_shipped_floors_are_parameters_and_not_globals():
     measured that 15 against 24 let nine branches go silently unasked, and STAYED
     at 20 when the measurement itself fell to 22: a floor walked down after every
     narrowing follows the defect it is there to catch."""
-    assert (ct_gate.RUN_FLOOR, ct_gate.BRANCH_FLOOR, ct_gate.REASONED_FLOOR) == (
-        30,
-        20,
-        20,
-    )
+    assert (
+        ct_gate.RUN_FLOOR,
+        ct_gate.BRANCH_FLOOR,
+        ct_gate.REASONED_FLOOR,
+        ct_gate.EXPOSED_FLOOR,
+    ) == (30, 20, 20, 43)
 
 
 def test_an_unregistered_inliner_is_a_finding():
@@ -498,6 +542,53 @@ def test_a_surface_that_stopped_routing_through_it_is_a_finding():
     findings, _ = ct_gate.audit(ROOT, lines=CLEAN.splitlines(), **NO_FLOORS)
     stale = [f for f in findings if "inlines no site in the image" in f]
     assert len(stale) == 27, stale
+
+
+#: The scope clause as it read before `a4b53c2` refuted it, and the clause that
+#: replaced it. Handed to `audit` as text, never written: the page is tracked,
+#: and an interrupt mid-case would leave it modified.
+REFUTED_SCOPE = "hand-written `rsk-rsa` keygen primitives."
+SHIPPED_SCOPE = "hand-written `rsk-rsa` modexp, sieve and primality primitives"
+
+
+def refuted_page() -> str:
+    page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
+    assert SHIPPED_SCOPE in page, "the scope clause moved; re-read the page"
+    return page.replace(SHIPPED_SCOPE, REFUTED_SCOPE, 1)
+
+
+def test_the_scope_paragraph_may_not_rescope_the_modexp_to_keygen():
+    """Both directions of the only prose rule here.
+
+    The shipped sentence passes and the refuted one does not, so the rule is not
+    a constant. It is a WORD rule and cannot tell a refutation from a claim — the
+    page's own residuals say "not keygen-only" — which is why it reads the scope
+    paragraph alone, and why the case asserts the shipped page is clean rather
+    than only that the mutant reddens.
+    """
+    page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
+    assert ct_gate.scope_finding(page) is None
+    problem = ct_gate.scope_finding(refuted_page())
+    assert problem and "as keygen" in problem, problem
+
+
+def test_the_row_itself_refuses_the_refuted_scope_sentence():
+    """Through `audit`, not through the helper: a guard whose wiring nothing
+    drives can be deleted with the suite still green."""
+    findings, _ = ct_gate.audit(
+        ROOT, lines=CLEAN.splitlines(), page=refuted_page(), **NO_FLOORS
+    )
+    assert any("as keygen" in f for f in findings), findings
+
+
+def test_a_scope_paragraph_that_vanished_is_a_finding():
+    """The deletion arm the rule needs to survive its own next edit: keyed on a
+    string the page can simply drop, it would otherwise be silenced for free."""
+    page = (ROOT / ct_gate.PAGE).read_text(encoding="utf-8")
+    problem = ct_gate.scope_finding(
+        page.replace(ct_gate.SCOPE_ANCHOR, "This audit covers", 1)
+    )
+    assert problem and "no paragraph says" in problem, problem
 
 
 def test_the_page_region_is_diffed_against_the_generator():
