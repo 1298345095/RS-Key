@@ -168,6 +168,21 @@ refused_by_shape() {
   names_a_property "$1" "$2"
 }
 
+# And what a configuration that checks NO invariant may be refused BY. It declares
+# a temporal property and nothing else, so an invariant name or a deadlock in its
+# verdict is a kill for something it does not model. TLC does not always say WHICH
+# property fell -- a plain temporal refutation names none and an inline action
+# property is reported by source location -- so those two shapes are all there is
+# to hold the row to.
+refuted_by_a_property() {
+  names_a_property "$1" "$2" && return 0
+  case "$2" in
+    "RED: Error: Temporal properties were violated."*) return 0 ;;
+    "RED: Error: Action property line "*) return 0 ;;
+  esac
+  return 1
+}
+
 # floors.txt: what each configuration must produce. First match wins.
 expect_for() {
   local cfg=$1 pat rest
@@ -195,11 +210,15 @@ one() {
   # 168 of the 177 RED rows named no invariant, so the reason went uncompared on
   # 95% of them and a mutant reddening on `TypeOK` -- which every configuration
   # checks and none targets -- exited 0. The configuration itself names one.
-  local armed_n
+  local armed_n checks
   armed_n=$(armed_count "$cfg")
+  # Read once, because it answers two questions: the derived name below, and
+  # whether the row has a name to derive AT ALL. A `LiveMut_*` checks a temporal
+  # property and no invariant, so an empty answer here is a fact about the row.
+  checks=$(derived_inv "$cfg")
   if [ -z "${inv:-}" ] || [ "$inv" = "-" ]; then
     inv=""
-    [ "$armed_n" = 1 ] && inv=$(derived_inv "$cfg")
+    [ "$armed_n" = 1 ] && inv=$checks
   fi
   local t0 t1 cov=()
   # THE VACUITY QUESTION, and it is the same one `kani::cover!` answers: an
@@ -287,6 +306,16 @@ one() {
   elif [ "$got" = RED ] && [ -n "${inv:-}" ] && [ "${inv:-}" != "-" ] \
        && [ "$verdict" != "RED: $inv" ] && ! names_a_property "$cfg" "$verdict"; then
     mark="  !! expected RED: $inv"
+    FAILED=$((FAILED + 1))
+  # A row that checks NO invariant is held to a PROPERTY refutation, having no
+  # name to break. Nothing held these at all -- the three `LiveMut_*` and
+  # `TokenRefinementBadMap.cfg`, which is the whole mutation half of the liveness
+  # tier -- so each took a RED on `TypeOK`, on a name no module defines, and on a
+  # deadlock. Measured on all four. Ahead of the two-armed rule because a row with
+  # nothing to name is the narrower case, whatever it arms.
+  elif [ "$got" = RED ] && [ -z "${inv:-}" ] && [ "$armed_n" -ge 1 ] \
+       && [ -z "$checks" ] && ! refuted_by_a_property "$cfg" "$verdict"; then
+    mark="  !! expected RED on a property this configuration declares"
     FAILED=$((FAILED + 1))
   # A configuration arming two defects predicts no single name, but it does
   # predict a SET: what one of its OWN switches targets. `TypeOK`, an invariant

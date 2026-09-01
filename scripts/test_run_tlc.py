@@ -103,6 +103,7 @@ def run(
     hole: int = 0,
     truncate: pathlib.Path | None = None,
     coverage: bool = False,
+    runner: pathlib.Path | None = None,
 ):
     real_jar, java, out = fake_tlc
     env = {
@@ -118,9 +119,10 @@ def run(
         # which is the hole these cases are named for, and cost a standing rule.
         "TLC_OUT": str(out),
     }
+    script = runner or RUNNER
     return subprocess.run(
-        [str(RUNNER), cfg],
-        cwd=ROOT,
+        [str(script), cfg],
+        cwd=script.parent,
         env=env,
         capture_output=True,
         text=True,
@@ -553,3 +555,213 @@ def test_a_second_writer_cannot_punch_a_hole_in_a_live_log(fake_tlc):
     # the line above. Measured — that mutant survived until this line was added.
     assert b"Model checking completed" in body
     assert result.returncode == 0
+
+
+#: A RED naming an invariant no module defines. `TypeOK` is the wrong reason that
+#: is real; this is the wrong reason that cannot even be spelled, and a rule that
+#: catches one but not the other is reading the name rather than checking it.
+RED_UNDEFINED = RED.replace("NoAuthorizationBypass", "ZzzNoModuleDefinesThis")
+
+#: The inline action property TLC reports by SOURCE LOCATION instead of by name,
+#: which is what `TokenRefinementBadMap.cfg` really produces — read off
+#: `formal/out/TokenRefinementBadMap.log:22` of the recorded safety run.
+RED_ACTION_AT_LINE = """\
+1405 states generated
+483 distinct states found
+The depth of the complete state graph search is 6.
+Error: Action property line 130, col 17 to line 130, col 30 of module RSKeyTokenAbstract is violated.
+"""
+
+#: And the third form: TLC naming the action property it refuted. Already seen on
+#: `TokenRefinementDeadToken.cfg`, so a `LiveMut_*` whose property became an
+#: action property would print this and must not be refused for it.
+RED_NAMED_WALK = """\
+619628 states generated
+97271 distinct states found
+The depth of the complete state graph search is 9.
+Error: Action property EveryWalkCloses is violated.
+"""
+
+NO_PROPERTY = "  !! expected RED on a property this configuration declares"
+
+#: The four rows that check NO invariant at all. They declare a temporal property
+#: and nothing else, so `derived_inv` has no name to return, `armed_n` is 1, and
+#: every rule above skipped them: measured, each one accepted a RED on `TypeOK`,
+#: on a name no module defines, and on a deadlock. Three of them are the whole
+#: mutation half of the liveness tier.
+PROPERTIES_ONLY = [
+    "LiveMut_BugAssertWedgesOnTimeout.cfg",
+    "LiveMut_BugWaitScopeNotCleared.cfg",
+    "LiveMut_BugWalkNeverExpires.cfg",
+    "TokenRefinementBadMap.cfg",
+]
+
+
+@pytest.mark.parametrize("cfg", PROPERTIES_ONLY[:3])
+def test_a_properties_only_mutant_refuted_by_its_property_passes(fake_tlc, cfg):
+    """THE CONTROL. Their recorded verdict, which TLC writes without naming which
+    property fell — so the shape is all there is to hold these rows to."""
+    result = run(fake_tlc, cfg, RED_PROPERTY)
+    assert result.returncode == 0
+    assert "RED: Error: Temporal properties were violated." in result.stdout
+
+
+def test_an_inline_action_property_is_a_right_reason(fake_tlc):
+    """The other recorded shape: `TokenRefinementBadMap.cfg`'s property is inline,
+    so TLC reports it by source location and there is no name to compare."""
+    result = run(fake_tlc, "TokenRefinementBadMap.cfg", RED_ACTION_AT_LINE)
+    assert result.returncode == 0
+    assert "RED: Error: Action property line 130" in result.stdout
+
+
+def test_a_named_property_of_a_properties_only_row_is_a_right_reason(fake_tlc):
+    """And the third: TLC names an action property when it can. Refusing this
+    would red a row for producing the most informative answer of the three."""
+    result = run(fake_tlc, "LiveMut_BugWalkNeverExpires.cfg", RED_NAMED_WALK)
+    assert result.returncode == 0
+    assert NO_PROPERTY not in result.stdout
+
+
+@pytest.mark.parametrize("cfg", PROPERTIES_ONLY)
+@pytest.mark.parametrize(
+    "output",
+    [RED_TYPEOK, RED_UNDEFINED, RED_DEADLOCK],
+    ids=["typeok", "undefined-invariant", "deadlock"],
+)
+def test_a_properties_only_mutant_reddening_on_anything_else_is_rejected(
+    fake_tlc, cfg, output
+):
+    """Defect 1's shape in the rows its fix did not reach. The derived name came
+    off the INVARIANTS block, and these four have none — so the colour was the
+    only thing ever compared, and a mutant that broke the type system or wedged
+    instead of refuting its property was a kill."""
+    result = run(fake_tlc, cfg, output)
+    assert result.returncode == 1
+    assert NO_PROPERTY in result.stdout
+
+
+def test_a_property_a_properties_only_row_does_not_declare_is_still_wrong(fake_tlc):
+    """The shape is not `Action property` appearing in the line: the name, when
+    TLC gives one, is compared against what this configuration declares."""
+    result = run(
+        fake_tlc,
+        "LiveMut_BugWalkNeverExpires.cfg",
+        RED_NAMED_WALK.replace("EveryWalkCloses", "EveryWaitReleases"),
+    )
+    assert result.returncode == 1
+    assert NO_PROPERTY in result.stdout
+
+
+#: THE DELETION ARMS. One row per clause of the rule above, each naming the case
+#: that falsifies it and the DIRECTION the mutant moves in — a guard that goes red
+#: for the wrong reason proves as little as one that cannot go red, and this table
+#: is the rule's own instance of that. `real` is what the shipped runner answers
+#: and `mutated` is what the clause-less one answers; they must differ.
+#:
+#: Three clauses of the rule are NOT here and cannot be: `[ "$got" = RED ]`,
+#: `[ -z "${inv:-}" ]` and `[ "$armed_n" -ge 1 ]` are falsified only by a row that
+#: is RED with nothing armed and no invariant, or that floors names while checking
+#: none — and the roster holds neither today. They are the sibling branches'
+#: own shape, kept for that, and measured inert over all 214 configurations.
+DELETION_ARMS = [
+    (
+        "names_a_property",
+        '  names_a_property "$1" "$2" && return 0\n',
+        "",
+        "LiveMut_BugWalkNeverExpires.cfg",
+        RED_NAMED_WALK,
+        0,
+        1,
+    ),
+    (
+        "the plain temporal shape",
+        '    "RED: Error: Temporal properties were violated."*) return 0 ;;\n',
+        "",
+        "LiveMut_BugWalkNeverExpires.cfg",
+        RED_PROPERTY,
+        0,
+        1,
+    ),
+    (
+        "the source-located action property",
+        '    "RED: Error: Action property line "*) return 0 ;;\n',
+        "",
+        "TokenRefinementBadMap.cfg",
+        RED_ACTION_AT_LINE,
+        0,
+        1,
+    ),
+    (
+        "the refusal itself",
+        "  esac\n  return 1\n}",
+        "  esac\n  return 0\n}",
+        "LiveMut_BugWalkNeverExpires.cfg",
+        RED_TYPEOK,
+        1,
+        0,
+    ),
+    (
+        "the call to the shape predicate",
+        '&& [ -z "$checks" ] && ! refuted_by_a_property "$cfg" "$verdict"; then',
+        '&& [ -z "$checks" ]; then',
+        "LiveMut_BugWalkNeverExpires.cfg",
+        RED_PROPERTY,
+        0,
+        1,
+    ),
+    (
+        "the has-no-invariant test",
+        '&& [ -z "$checks" ] && ! refuted_by_a_property',
+        "&& ! refuted_by_a_property",
+        "Mut_BugBackupSealedNotAGate.cfg",
+        RED_TARGET,
+        0,
+        1,
+    ),
+    (
+        "reading the derived name once",
+        '  checks=$(derived_inv "$cfg")',
+        '  checks=""',
+        "Mut_BugResetGatesFirst.cfg",
+        RED_TARGET,
+        0,
+        1,
+    ),
+]
+
+
+@pytest.fixture
+def mutant(tmp_path):
+    """A copy of the runner in a directory of symlinks to the real model, so a
+    clause can be cut out of the script CI runs without touching the tree — and
+    the configurations, floors and lint it reads are still the shipped ones."""
+
+    def build(old: str, new: str) -> pathlib.Path:
+        d = tmp_path / f"mutant{len(list(tmp_path.glob('mutant*')))}"
+        d.mkdir()
+        for f in (ROOT / "formal").iterdir():
+            if f.suffix in (".cfg", ".tla") or f.name in ("floors.txt", "tla-lint.py"):
+                (d / f.name).symlink_to(f)
+        src = RUNNER.read_text()
+        assert src.count(old) == 1, f"anchor moved: {old!r}"
+        script = d / "run-tlc.sh"
+        script.write_text(src.replace(old, new))
+        script.chmod(0o755)
+        return script
+
+    return build
+
+
+@pytest.mark.parametrize(
+    "label,old,new,cfg,output,real_rc,mutated_rc",
+    DELETION_ARMS,
+    ids=[a[0] for a in DELETION_ARMS],
+)
+def test_every_clause_of_the_property_rule_has_a_row_that_falsifies_it(
+    fake_tlc, mutant, label, old, new, cfg, output, real_rc, mutated_rc
+):
+    """Cut one clause; the named configuration must change answer. Both codes are
+    asserted, not just the mutant's: a clause whose deletion leaves the row red
+    for a different reason would otherwise read as a kill."""
+    assert run(fake_tlc, cfg, output).returncode == real_rc
+    assert run(fake_tlc, cfg, output, runner=mutant(old, new)).returncode == mutated_rc
