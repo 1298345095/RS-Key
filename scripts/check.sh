@@ -563,6 +563,12 @@ run "constant-time sites in the image" python scripts/ct_gate.py
 # and the allocator surface of the DEFAULT image, before the three builds below
 # overwrite it with another profile's.
 run "image segments and allocator" python scripts/elf_gate.py
+# Third reader of the same window, and it needs it most: 20 of the 44 owners
+# assurance/token_refinement.toml names have NO symbol — they survive only as an
+# inlined call site in this image's DWARF — and three MUST be absent from it.
+# Both answers are profile-specific, so a row below the rebuilds would read them
+# off the no-touch binary.
+run "registered owners in the shipped image" python scripts/owner_binding_gate.py
 # The 16 MB geometry is the one that broke: the store used to end at the top of
 # the XIP window, where the bootrom's RP2350-E10 absolute block lives, and
 # `picotool partition create` refuses a table claiming it — a build the release
