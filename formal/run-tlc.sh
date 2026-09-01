@@ -178,6 +178,9 @@ refuted_by_a_property() {
   names_a_property "$1" "$2" && return 0
   case "$2" in
     "RED: Error: Temporal properties were violated."*) return 0 ;;
+    # WIDE by construction: any line of any module satisfies it. It is tight in
+    # EFFECT only because `TokenRefinementBadMap.cfg` declares exactly one
+    # property, so the location it prints can be no other property's.
     "RED: Error: Action property line "*) return 0 ;;
   esac
   return 1
@@ -313,6 +316,9 @@ one() {
   # tier -- so each took a RED on `TypeOK`, on a name no module defines, and on a
   # deadlock. Measured on all four. Ahead of the two-armed rule because a row with
   # nothing to name is the narrower case, whatever it arms.
+  # CI reaches ONE of the four: deep-checks.yml runs the `safety` tier and no
+  # workflow anywhere runs `liveness`, so the three `LiveMut_*` are hand-run and
+  # `TokenRefinementBadMap.cfg` is the only row this branch guards in CI.
   elif [ "$got" = RED ] && [ -z "${inv:-}" ] && [ "$armed_n" -ge 1 ] \
        && [ -z "$checks" ] && ! refuted_by_a_property "$cfg" "$verdict"; then
     mark="  !! expected RED on a property this configuration declares"

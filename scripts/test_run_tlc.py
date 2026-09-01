@@ -8,11 +8,22 @@ the real runner, floors and configurations so each silent-pass shape is
 permanently reproducible in the merge gate. The directory is not a detail: this
 file used to write into the real `formal/out/`, so it truncated the log of any
 real run beside it and left a NUL hole where that run kept writing.
+
+TWO DENOMINATORS COUNT `formal/floors.txt`, and `5fb1e9c`'s message mixed them.
+NON-COMMENT NON-BLANK rows include the `@TraceSecurity*Min` ratchets; rows whose
+SECOND FIELD is `RED`/`GREEN` do not. Re-measured, in that order: 77abdd3 61 and
+55, aacd7ed 67 and 61, 95b850d 70 and 64 — with 7, 9 and 9 of them carrying an
+invariant column. So "7 of 61" DID hold, at 77abdd3 under the first, and 7/55,
+9/61, 9/64 hold under the second; the claim that the pair never held at any
+revision is FALSE, and the queue item it came from was stale rather than made up.
+Name the denominator before quoting either number.
 """
 
 import os
 import pathlib
+import re
 import subprocess
+import tomllib
 
 import pytest
 
@@ -652,17 +663,69 @@ def test_a_property_a_properties_only_row_does_not_declare_is_still_wrong(fake_t
     assert NO_PROPERTY in result.stdout
 
 
+def _recorded_rows() -> dict[str, str]:
+    """Each configuration's row from `formal/runs.toml`'s `matrix` blocks, minus
+    its name: the runner's own unedited output, which is the only place in the
+    tree that records what TLC actually said on these four."""
+    runs = tomllib.loads((ROOT / "formal" / "runs.toml").read_text())
+    rows = {}
+    for recorded in runs["run"]:
+        for line in recorded["matrix"].splitlines():
+            cfg, _, rest = line.partition(" ")
+            if "states=" in rest:
+                rows[cfg] = rest
+    return rows
+
+
+@pytest.mark.parametrize("cfg", PROPERTIES_ONLY)
+def test_the_recorded_verdict_of_a_properties_only_row_is_accepted(fake_tlc, cfg):
+    """THE ORACLE, FROM THE RECORDING AND NOT FROM A SECOND TRANSCRIPTION.
+
+    The two shapes `refuted_by_a_property` accepts exist as two independent
+    hand-typed copies — one in `run-tlc.sh`, one in the constants above — and
+    NEITHER derives from `formal/runs.toml`. A TLC phrasing change moves both
+    together, so every accepting case here keeps passing over a runner that would
+    refuse the real thing: the oracle is one-sided against the tool. This drives
+    each row's recorded verdict back through the shipped runner, which puts both
+    sides on the recording.
+    """
+    verdict, _, counts = _recorded_rows()[cfg].partition("states=")
+    verdict = verdict.strip()
+    assert verdict.startswith("RED: "), f"{cfg}: recorded as {verdict!r}"
+    states, distinct = re.match(r"(\d+)\s+distinct=(\d+)", counts).groups()
+    result = run(fake_tlc, cfg, f"{states} states generated\n"
+                               f"{distinct} distinct states found\n"
+                               f"{verdict.removeprefix('RED: ')}\n")
+    assert result.returncode == 0
+    assert verdict in result.stdout
+    assert f"states={states}" in result.stdout
+
+
 #: THE DELETION ARMS. One row per clause of the rule above, each naming the case
 #: that falsifies it and the DIRECTION the mutant moves in — a guard that goes red
 #: for the wrong reason proves as little as one that cannot go red, and this table
 #: is the rule's own instance of that. `real` is what the shipped runner answers
 #: and `mutated` is what the clause-less one answers; they must differ.
 #:
-#: Three clauses of the rule are NOT here and cannot be: `[ "$got" = RED ]`,
-#: `[ -z "${inv:-}" ]` and `[ "$armed_n" -ge 1 ]` are falsified only by a row that
-#: is RED with nothing armed and no invariant, or that floors names while checking
-#: none — and the roster holds neither today. They are the sibling branches'
-#: own shape, kept for that, and measured inert over all 214 configurations.
+#:
+#: DIRECTION, because a kill in the wrong one proves nothing: eight of the nine
+#: rows here and in `SHAPE_ARMS` move 0 -> 1, which is the PERMISSIVE direction —
+#: cut an exemption and a legitimate row is refused. Only "the refusal itself"
+#: moves 1 -> 0, the silent pass. That skew is inherent to falsifying exemptions,
+#: not a gap: a clause that GRANTS one can only be falsified by losing it.
+#:
+#: Two of the three clauses this table used to call inert are in `SHAPE_ARMS`
+#: below, which was the wrong reading rather than a missing row: they are
+#: falsified by shapes the ROSTER has no member of, not by no shape at all.
+#: `[ -z "${inv:-}" ]` is the one that stays, and it is DECORATIVE — kept for
+#: symmetry with the sibling branch below it, which carries the same guard for
+#: the same reason. No coherent falsifier exists: reaching it with a name set
+#: takes a `floors.txt` row naming something for a configuration that checks no
+#: invariant, and `verdict_gate.check_reasons` (scripts/verdict_gate.py:619-634)
+#: refuses every filling of that column: `TypeOK`, a property name, and a name the
+#: configuration does not check. Named as well as numbered on purpose — `EXTS` in
+#: `citation_gate.py` is `rs|sh|txt`, so no `.py` line citation in this tree is
+#: checked by anything.
 DELETION_ARMS = [
     (
         "names_a_property",
@@ -731,25 +794,42 @@ DELETION_ARMS = [
 
 
 @pytest.fixture
-def mutant(tmp_path):
+def arena(tmp_path):
     """A copy of the runner in a directory of symlinks to the real model, so a
     clause can be cut out of the script CI runs without touching the tree — and
-    the configurations, floors and lint it reads are still the shipped ones."""
+    the configurations, floors and lint it reads are still the shipped ones.
 
-    def build(old: str, new: str) -> pathlib.Path:
-        d = tmp_path / f"mutant{len(list(tmp_path.glob('mutant*')))}"
+    `extra` writes configurations the roster has no member of. They go HERE and
+    not in `formal/`, where `scripts/config_gen_gate.py` holds every `.cfg` to
+    `gen-configs.sh`, `run-tlc.sh --tiers` holds it to a tier, and `floors.txt`
+    would owe it a verdict — three owners for a file whose only purpose is to
+    make one clause of one rule falsifiable."""
+
+    def build(old: str = "", new: str = "", extra: dict | None = None):
+        d = tmp_path / f"arena{len(list(tmp_path.glob('arena*')))}"
         d.mkdir()
         for f in (ROOT / "formal").iterdir():
             if f.suffix in (".cfg", ".tla") or f.name in ("floors.txt", "tla-lint.py"):
                 (d / f.name).symlink_to(f)
+        for name, text in (extra or {}).items():
+            (d / name).write_text(text)
         src = RUNNER.read_text()
-        assert src.count(old) == 1, f"anchor moved: {old!r}"
+        if old:
+            assert src.count(old) == 1, f"anchor moved: {old!r}"
+            src = src.replace(old, new)
         script = d / "run-tlc.sh"
-        script.write_text(src.replace(old, new))
+        script.write_text(src)
         script.chmod(0o755)
         return script
 
     return build
+
+
+@pytest.fixture
+def mutant(arena):
+    """The `arena` above with no configuration added: the shipped roster and one
+    clause cut."""
+    return lambda old, new: arena(old, new)
 
 
 @pytest.mark.parametrize(
@@ -765,3 +845,71 @@ def test_every_clause_of_the_property_rule_has_a_row_that_falsifies_it(
     for a different reason would otherwise read as a kill."""
     assert run(fake_tlc, cfg, output).returncode == real_rc
     assert run(fake_tlc, cfg, output, runner=mutant(old, new)).returncode == mutated_rc
+
+
+#: A properties-only configuration in one of the two shapes the roster has no
+#: member of. `EveryWalkCloses` is a real property of the module and
+#: `BugWalkNeverExpires` a real switch, so the only invented thing is the pairing.
+def _properties_only(armed: bool) -> str:
+    return (
+        "\\* Written by scripts/test_run_tlc.py -- not a member of any tier.\n"
+        "SPECIFICATION FairSpec\n"
+        "CONSTANTS\n"
+        '    RPs = {"r1"}\n'
+        f"    BugWalkNeverExpires = {'TRUE' if armed else 'FALSE'}\n"
+        "PROPERTIES\n"
+        "    EveryWalkCloses\n"
+    )
+
+
+#: Neither name matches a glob in `floors.txt`, which is half of what each shape
+#: needs: with no row to state a verdict, `want` is empty and the colour rule
+#: above cannot fire first and mask the clause under test.
+ZERO_ARMED = "ZeroArmedProperty.cfg"
+ARMED_NO_FLOOR = "ArmedPropertyNoFloor.cfg"
+
+#: THE SHAPE ARMS: the two clauses `DELETION_ARMS` cannot reach, because each is
+#: falsified by a configuration the tree does not contain rather than by an output
+#: the tree's own rows cannot produce.
+SHAPE_ARMS = [
+    (
+        "the armed-count floor",
+        ZERO_ARMED,
+        _properties_only(armed=False),
+        ' && [ "$armed_n" -ge 1 ] \\\n',
+        " \\\n",
+        RED_DEADLOCK,
+    ),
+    (
+        "the colour test",
+        ARMED_NO_FLOOR,
+        _properties_only(armed=True),
+        '  elif [ "$got" = RED ] && [ -z "${inv:-}" ] &&',
+        '  elif [ -z "${inv:-}" ] &&',
+        GREEN,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "label,name,text,old,new,output", SHAPE_ARMS, ids=[a[0] for a in SHAPE_ARMS]
+)
+def test_the_two_clauses_the_roster_cannot_falsify_have_an_arm_of_their_own(
+    fake_tlc, arena, label, name, text, old, new, output
+):
+    """Both were called inert and neither is.
+
+    `[ "$armed_n" -ge 1 ]` is what keeps a zero-armed properties-only row on
+    `refused_by_shape`, which accepts a deadlock, instead of on
+    `refuted_by_a_property`, which does not. `[ "$got" = RED ]` is what keeps an
+    armed properties-only row with no floors verdict from being refused while
+    GREEN. The mark is asserted and not just the code: a clause whose deletion
+    reddens the row somewhere else is not this clause's kill.
+    """
+    shipped = run(fake_tlc, name, output, runner=arena(extra={name: text}))
+    assert shipped.returncode == 0
+    assert NO_PROPERTY not in shipped.stdout
+
+    cut = run(fake_tlc, name, output, runner=arena(old, new, {name: text}))
+    assert cut.returncode == 1
+    assert NO_PROPERTY in cut.stdout
