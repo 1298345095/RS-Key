@@ -198,7 +198,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 40
+SCOPE_CEILING = 41
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -426,6 +426,16 @@ SCOPED = {
         "explored 40 459 667 states",
     ): "the same measurement in this file's own header, where it is the argument for "
     "the VERDICT column existing at all",
+    # And the third copy, which stood unregistered through every run of this gate
+    # because nothing in its block named a run: the comment saying `` `safety` ``
+    # and `` `liveness` `` that arms it went in twenty lines below, long after the
+    # sentence did.
+    (
+        "formal/run-tlc.sh",
+        "# 40 459 667 states without a counterexample",
+    ): "the same measurement in the runner's own comment, where it is the argument for "
+    "the `!! expected` mark printed under it — the observation the whole expected-verdict "
+    "apparatus in this function exists because of",
     (
         "formal/README.md",
         "swept the FIDO module's 77.6 M states",
@@ -1424,6 +1434,38 @@ def mask_regions(text):
     return out
 
 
+#: A conversion specification is a placeholder, not a measurement: the digits in
+#: `%-38s` are a FIELD WIDTH, and `printf '%-42s %-38s states=%-9s …'` was read as
+#: `42s`, `38s`, `38s states`, `9s`, `8s` and `3s` — six run-counts of a run that
+#: never happened, in the runner's own matrix line. They became findings without
+#: that line changing a byte: a comment twenty lines below it began saying
+#: `` `safety` `` and `` `liveness` ``, and a shell function has no blank line in
+#: it, so [`NAMES_A_RUN`] armed [`COUNT`] and [`CLOCK`] over all 55 lines at once.
+#:
+#: A width is REQUIRED, and that narrowing is the whole rule: the only digits a
+#: specification can contribute are its width and its precision, so `%s`, `%%`,
+#: `%F` and `%APPDATA%` can never produce a number and stay out of it. Measured
+#: over the scanned corpus: 5 matches, every one of the five widths above — and
+#: 23 in 7 files with the width made optional, `date +%F`, an SSH `ControlPath`
+#: and a Windows environment variable among them.
+FORMAT = re.compile(
+    r"%[-+#0' ]*(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:hh|ll|[hlLqjzt])?[diouxXeEfFgGaAcspnb%]"
+)
+
+#: What replaces one, and deliberately NOT a space: whitespace here could JOIN a
+#: number to a noun that `%-3s` stood between, and a line that is only a
+#: specification would go blank and move a block boundary. `~` is in no class any
+#: rule here matches, so this masking can only take a match away, never make one.
+FORMAT_FILL = "~"
+
+
+def mask_formats(text):
+    """The same text with every conversion specification blanked and its LENGTH
+    kept, so an offset taken from it still lands where it says — the discipline
+    [`mask_regions`] keeps with newlines, one level down."""
+    return FORMAT.sub(lambda found: FORMAT_FILL * len(found.group(0)), text)
+
+
 def blocks(path, text):
     """(offset, first line, text) per paragraph — or per contiguous comment run in YAML.
 
@@ -1716,6 +1758,11 @@ def scan(root, owned, values, pairs, said, findings):
         masked = mask_regions(text)
         spans = scoped_spans(rel, masked, findings)
         exempted.update(dict.fromkeys(spans, 0))
+        # And then the field widths, for every rule below and for none of the
+        # above: a registered fragment is prose somebody wrote and may say `%-38s`
+        # if it is quoting one. Length-preserving, so the spans just taken still
+        # land on the literals they cover.
+        masked = mask_formats(masked)
         # The value rule reads the whole masked file rather than its blocks: it
         # needs no trigger beside the literal, so a paragraph is not the unit of
         # anything here, and a number in a table cell is as much a second copy as

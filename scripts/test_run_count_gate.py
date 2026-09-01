@@ -1160,6 +1160,75 @@ def test_a_yaml_comment_run(tree):
     assert only(tree.problems(), "'194 configurations' is a run-count")
 
 
+#: The runner's own matrix line, verbatim. Its FIELD WIDTHS read as six
+#: run-counts — `42s`, `38s`, `38s states`, `9s`, `8s`, `3s` — of a run that
+#: never happened, and the line had not changed a byte: a comment twenty lines
+#: below it began naming a tier, and a shell function has no blank line in it.
+MATRIX_PRINTF = r"""printf '%-42s %-38s states=%-9s distinct=%-8s depth=%-3s %ss%s\n' \
+"""
+
+
+def test_a_field_width_is_not_a_measurement(tree):
+    """The runner named on purpose: with no trigger in the block no rule is armed
+    and this case would pass with the mask deleted."""
+    assert not typed(tree, "`run-tlc.sh safety` prints one row per configuration:\n"
+                     + MATRIX_PRINTF)
+
+
+def test_a_real_count_on_the_line_of_a_field_width(tree):
+    """The direction the mask could take with it — a measurement is still one
+    when a conversion specification stands beside it."""
+    assert typed(tree, "`run-tlc.sh safety` prints one row per configuration:\n"
+                 + MATRIX_PRINTF.rstrip() + "   # over 1234 rows\n")
+
+
+def test_a_real_count_on_the_line_after_a_field_width(tree):
+    assert typed(tree, "`run-tlc.sh safety` prints one row per configuration:\n"
+                 + MATRIX_PRINTF + "# and it swept 1234 states doing it\n")
+
+
+def test_a_typed_count_in_the_runner_own_comment(tree):
+    """The constructed defect, in the file the mask was written for and in the
+    shape the seventh finding had: a figure typed into a `run-tlc.sh` comment,
+    one line above the widths that must not be figures at all. `exit 0` keeps the
+    appended lines out of the `--tiers` query and inside the same block, which is
+    what arms them."""
+    tree.write(
+        "formal/run-tlc.sh",
+        RUN_TLC + "exit 0\n"
+        "# BugSetPinKeepsPpuat explored 1234 states without a counterexample.\n"
+        + MATRIX_PRINTF + '  "$cfg" "$verdict"\n',
+    )
+    problems = tree.problems()
+    assert only(problems, "'1234 states' is a run-count"), problems
+    assert not [p for p in problems if "'42s'" in p or "'38s" in p], problems
+
+
+def test_the_field_width_mask_is_what_keeps_the_runner_green(monkeypatch):
+    """The mask's deletion arm, on the tree this actually guards rather than on a
+    fixture: with `FORMAT` dead the runner's `printf` is six run-counts again,
+    which is the red this was written for."""
+    monkeypatch.setattr(run_count_gate, "FORMAT", run_count_gate.re.compile("(?!x)x"))
+    problems = run_count_gate.audit(ROOT)[0]
+    assert len(only(problems, "formal/run-tlc.sh:")) == 6, problems
+    for literal in ("'42s'", "'38s'", "'38s states'", "'9s'", "'8s'", "'3s'"):
+        assert only(problems, f"{literal} is a run-count"), literal
+
+
+def test_the_runner_own_historical_measurement_is_registered(monkeypatch):
+    """The other clause's deletion arm. The seventh finding was a REAL figure and
+    is registered, not masked — so dropping its entry brings the measurement back
+    and none of the widths with it."""
+    key = ("formal/run-tlc.sh", "# 40 459 667 states without a counterexample")
+    trimmed = {k: v for k, v in run_count_gate.SCOPED.items() if k != key}
+    assert len(trimmed) == len(run_count_gate.SCOPED) - 1, "the entry has been renamed"
+    monkeypatch.setattr(run_count_gate, "SCOPED", trimmed)
+    monkeypatch.setattr(run_count_gate, "SCOPE_CEILING", len(trimmed))
+    problems = run_count_gate.audit(ROOT)[0]
+    assert only(problems, "'40 459 667 states' is a run-count"), problems
+    assert len(only(problems, "formal/run-tlc.sh:")) == 1, problems
+
+
 def test_a_table_row_borrows_no_runner_from_its_neighbours(tree):
     """A markdown table has no blank line in it, so the whole table was one
     block and one cell naming the runner turned the trigger on for the rest.
