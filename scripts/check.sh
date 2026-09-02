@@ -790,6 +790,19 @@ run "security trace refinement" python scripts/security_trace.py --check-data fo
 # It is 21, over 24 routes -- and three of them record TWICE, so a name-set
 # equality stays green over a half-deleted guard. This derives both.
 run "ghost completeness"       python scripts/ghost_gate.py
+# And the other end of the same question: not what a ghost's writers are, but
+# where a model deliberately stops being about the product. `RSKeyAppletSeams`
+# hard-codes `\/ a = Oath` TWICE -- once to re-lock OATH on a re-SELECT, once to
+# keep the conformance recorder quiet about it -- and deleting either changed the
+# input of no gate. Nothing was a registry for that class: `git grep -i exempt
+# scripts/` found only tier exclusions. This derives the narrowings out of the
+# `.tla` (a narrowing operand, a set literal that omits what its sibling has, a
+# CASE that answers for part of its domain) and holds them to
+# assurance/model_exceptions.toml both ways -- an exception with no row, and a
+# row whose clause the model no longer has. How many there are and how many still
+# owe a mutant is DERIVED and printed on every green run; the ledger records the
+# debt with the file that would pay it, and holds that the file is not there yet.
+run "model exceptions"         python scripts/model_exception_gate.py
 # The first closed slice's raw evidence, held to stage 1A's ten-group contract.
 # Ten headings with one line each satisfy "all ten groups are present", so this
 # counts LEAVES and floors them per group — and refuses a cost written as a
