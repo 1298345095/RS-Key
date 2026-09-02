@@ -62,15 +62,15 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-REF-006` | `RequiredGateAgreesWithRelation` | 0 of 1 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-001` | `NoAuthorizationBypass` | 5 of 50 | 12 | 0 of 0 | 4 | 0 | 3 | 4 | `f52b720` stale (58 input(s) newer) | BOUNDED |
 | `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 5 of 42 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | `31c21a7` stale (3 input(s) newer) | BOUNDED |
-| `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 5 of 45 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | `31c21a7` stale (4 input(s) newer) | BOUNDED |
+| `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 5 of 45 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | `31c21a7` stale (6 input(s) newer) | BOUNDED |
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 5 of 39 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-005` | `NoUnmanageableCredential` | 5 of 40 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 5 of 40 | 3 | 0 of 0 | 1 | 0 | 3 | 0 | `31c21a7` stale (3 input(s) newer) | BOUNDED |
 | `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
 | `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
 | `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
-| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (8 input(s) newer) | MODELLED-ONLY |
-| `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (2 input(s) newer) | MODELLED-ONLY |
+| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (9 input(s) newer) | MODELLED-ONLY |
+| `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L01` | `EveryOpQuiesces` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L02` | `EveryWaitReleases` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
@@ -84,12 +84,12 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-SEAM-004` | `ReselectPreservesAccessStatus` | 2 of 18 | 1 | 1 of 2 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-SEAM-005` | `ExemptRefusalPreservesStatus` | 2 of 19 | 2 | 1 of 2 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-SEAM-006` | `AccessCodeRemovalNeedsTheCode` | 2 of 18 | 1 | 1 of 2 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-001` | `NoOrphanedMetadata` | 2 of 12 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-002` | `NoFalseAbsent` | 2 of 12 | 2 | 0 of 0 | 3 | 0 | 4 | 0 | — | BOUNDED |
-| `SEC-STORE-003` | `NoRecordLostToMetaWrite` | 2 of 13 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-004` | `NoFalseMetaAbsent` | 2 of 11 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-001` | `NoOrphanedMetadata` | 2 of 13 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-002` | `NoFalseAbsent` | 2 of 13 | 2 | 0 of 0 | 3 | 0 | 4 | 0 | — | BOUNDED |
+| `SEC-STORE-003` | `NoRecordLostToMetaWrite` | 2 of 15 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-004` | `NoFalseMetaAbsent` | 2 of 12 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-STORE-005` | `CacheHonest` | 2 of 4 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-STORE-006` | `NoSilentOrphan` | 2 of 11 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
+| `SEC-STORE-006` | `NoSilentOrphan` | 2 of 12 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-LAT-001` | `NoAuthWhenBlocked` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-LAT-002` | `WrongAttemptIsCharged` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-LAT-003` | `BudgetRisesOnlyWithItsSecret` | 1 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
@@ -166,15 +166,15 @@ Three spellings of "not current", which used to sit on two different pages and i
 |---|---|---|
 | bundle | `SEC-FIDO-001` | 58 input(s) newer than `f52b720` |
 | bundle | `SEC-FIDO-002` | 3 input(s) newer than `31c21a7` |
-| bundle | `SEC-FIDO-003` | 4 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-003` | 6 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-004` | 3 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-005` | 3 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-006` | 3 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-006A` | 1 input(s) newer than `b185fc3` |
 | bundle | `SEC-FIDO-006B` | 1 input(s) newer than `b185fc3` |
 | bundle | `SEC-FIDO-006C` | 1 input(s) newer than `b185fc3` |
-| bundle | `SEC-FIDO-007` | 8 input(s) newer than `3e08f75` |
-| bundle | `SEC-FIDO-008` | 2 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-007` | 9 input(s) newer than `3e08f75` |
+| bundle | `SEC-FIDO-008` | 3 input(s) newer than `31c21a7` |
 | bundle | `SEC-ADM-002` | no raw evidence bundle |
 | bundle | `SEC-ADM-004` | no raw evidence bundle |
 | bundle | `SEC-BOOT-001` | no raw evidence bundle |
@@ -235,6 +235,7 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-MODEL-002` | One credential per relying party is enough to carry the authorization  |
 | platform | `PLAT-MODEL-012` | `gate.ppuatStale` has no counterpart in the firmware. The model carrie |
 | platform | `PLAT-MODEL-013` | The two Kani harnesses named for this property cover the SESSION token |
+| platform | `PLAT-MODEL-015` | `RSKeyBootHardening` treats the lazy re-key as ATOMIC in thirteen of i |
 | platform | `PLAT-TRNG-001` | The RP2350's ring-oscillator TRNG delivers full-entropy words once its |
 | platform | `PLAT-TIMER-001` | `embassy_time::Instant` is monotonic and makes progress, so a timeout  |
 | platform | `PLAT-XIP-001` | Core 1 is paused for the whole of every flash erase or program, so no  |
@@ -289,7 +290,7 @@ For the commit that carries this page — which is why no commit is named here: 
 
 | Tier | Command | Taken | Against | Host |
 |---|---|---|---|---|
-| `liveness` | `./formal/run-tlc.sh liveness` | 2026-09-01 | `d544aa1` | Apple M5 Pro (18 cores) |
-| `safety` | `./formal/run-tlc.sh safety` | 2026-09-01 | `d544aa1` | Apple M5 Pro (18 cores) |
+| `liveness` | `./formal/run-tlc.sh liveness` | 2026-09-02 | `8896d3f` | Apple M5 Pro (18 cores) |
+| `safety` | `./formal/run-tlc.sh safety` | 2026-09-02 | `8896d3f` | Apple M5 Pro (18 cores) |
 
 **Raw evidence bundles:** `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-006A`, `SEC-FIDO-006B`, `SEC-FIDO-006C`, `SEC-FIDO-007`, `SEC-FIDO-008` — of 59 registered properties. Stale against this commit: `SEC-FIDO-001`, `SEC-FIDO-002`, `SEC-FIDO-003`, `SEC-FIDO-004`, `SEC-FIDO-005`, `SEC-FIDO-006`, `SEC-FIDO-006A`, `SEC-FIDO-006B`, `SEC-FIDO-006C`, `SEC-FIDO-007`, `SEC-FIDO-008`.
