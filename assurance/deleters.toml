@@ -225,7 +225,7 @@ why = "the panel's own deleteCredential — it reports the deletion to the owner
 
 [[site]]
 file = "crates/rsk-fido/src/reset.rs"
-line = 83
+line = 114
 call = "let gone = ctx.fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -236,7 +236,7 @@ why = "the seed fids ahead of the batch. Both halves are read and BOTH are carri
 
 [[site]]
 file = "crates/rsk-fido/src/reset.rs"
-line = 153
+line = 166
 call = "let gone = ctx.fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -324,7 +324,7 @@ why = "VERIFY PIN raises the same validated flag VALIDATE does, so an OTP-PIN th
 
 [[site]]
 file = "crates/rsk-oath/src/lib.rs"
-line = 1599
+line = 1613
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -456,7 +456,7 @@ why = "the generic DO writer's empty-body clear. The host reads every one of the
 
 [[site]]
 file = "crates/rsk-openpgp/src/terminate.rs"
-line = 200
+line = 218
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -500,7 +500,7 @@ why = "and its second. Both slots' valid bits come off flash in the response tha
 
 [[site]]
 file = "crates/rsk-piv/src/files.rs"
-line = 506
+line = 520
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"

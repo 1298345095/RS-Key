@@ -564,6 +564,56 @@ def cite_pattern(exts):
     group over: taking an extension back out of [`EXTS`] has to take its
     citations out of the reader too, or the deletion arm removes a name and
     measures a pattern that still matches.
+
+    ## The bare form must be BACKTICKED, and widening that was measured and REFUSED
+
+    The second alternative is zero-width and demands a backtick either side, so
+    a continuation written as plain prose -- `at :82, then the gate sweep at
+    :83` -- is read by nothing. That hole is real and it has bitten: one commit
+    moved `reset.rs` twice and left 21 such refs pointing at the wrong lines
+    while this row printed `ok`, four of them inside one clause whose whole
+    subject is the ORDER of the five lines it names.
+
+    So the citING side was widened on trial -- every bare `:NNN` bound to the
+    last `file.ext:NNN` of its paragraph, with two guards that each fix a whole
+    false-positive class: the binder reads EVERY extension (not just [`EXTS`])
+    and a ref whose nearest binder is outside them is skipped, so
+    `RSKeySecurityState.tla:1778 ... at :1195` stops binding to whatever `.rs`
+    came before; and the digits may not be followed by a letter, or
+    `0x{v:02x}` and `{n:5d}` are citations.
+
+    Measured over the pages this gate reads. On the repaired tree: 148
+    newly-read refs, 102 skipped by the guards, **12 findings of which 2 are
+    real** -- a bare `:277-288` for `presence.rs`, which has 262 lines, and a
+    bare `:633-645` for `state.rs`, which lands on a blank. The other 10 are
+    honest text: every one is a ref whose subject is `RSKeySecurityState.tla`
+    or `formal/comutants.toml`, named in the same sentence WITHOUT a line
+    number, so no binder can reach it and the ref lands on the last `.rs` name
+    instead. Strengthening the binder does not save it -- `the module's own
+    :1751 comment` sits in a sentence that has already named `state.rs:584-599`,
+    and nothing local decides between the two.
+
+    And the noise is the smaller half. Of the 148, only 12 land out of bounds or
+    on a blank; the rest are checked against a file the sentence never named and
+    PASS -- a silently wrong check, which is the failure [`AMBIGUOUS`] exists to
+    refuse, arriving here 140 at a time.
+
+    Against that, what it buys on the rot it was proposed for: run over the six
+    pages as they stood before the repair, it fires 12 times and reaches **5 of
+    the 21** stale refs -- only those that happen to land on a blank line. The
+    other 16 sit on wrong-but-non-blank lines, which no bounds rule can see and
+    only [`LOCK`] can; and the lock would first have to record them, at the
+    wrong lines they already hold.
+
+    A variant that skips any paragraph naming a non-[`EXTS`] file was priced
+    too: it removes 7 of the 10 false positives and adds a rule that turns the
+    check OFF for a whole paragraph the moment its prose cites a `.md` -- fires
+    on honest text AND stops firing silently, which is both failures at once.
+
+    So the reader stays as it is, and the hole stays named. What closes it is
+    the pages writing the continuation the way the gate already reads it,
+    inside backticks; that is a corpus repair, not a character class -- the same
+    verdict [`EXTS`] reaches one axis over, and for the same reason.
     """
     return re.compile(
         rf"(?:(?<![\w/.:-])(?P<file>[\w./-]+\.(?:{exts}))|(?<=`)(?=:[^`]*`))"
