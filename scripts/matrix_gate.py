@@ -110,7 +110,7 @@ CODE = {
 #:
 #: WHOLE-workspace, and the narrower reading is a programme decision rather than
 #: a knob here: run over the OWNER crates' closure alone, the same rule clears
-#: 737 of the 958 `gap` cells against 194 today (measured 2026-09-02). The
+#: 733 of the 954 `gap` cells against 190 today (measured 2026-09-02). The
 #: argument for leaving that on the table is in the ledger's header, beside the
 #: number.
 SAME_FEATURES = "same-cargo-features"
@@ -279,6 +279,18 @@ NOT_A_KNOB = ("name", "cargoFlags")
 ROW = re.compile(r'^run(?:_tests)?\s+"([^"]+)"\s+(\S.*)$')
 #: A `VAR=value` in a row's `env` prefix — the build knobs that row pins.
 ROW_ENV = re.compile(r"(?<![\w-])([A-Z][A-Z0-9_]*)=(\S+)")
+#: How Rust READS an environment variable, in both places a build knob can be
+#: read: `env::var` in a `build.rs` while the package is built, and `env!` /
+#: `option_env!` while it is compiled. `cargo:rerun-if-env-changed` is
+#: deliberately not one of them — it declares a cache dependency rather than a
+#: read, and every knob the firmware's build script rebuilds on it also reads by
+#: name, so counting it would be a second roster of one fact. The name has to be
+#: a literal: that script also loops `env::var(k)` over a board preset's keys,
+#: and a preset is reached by its NAME rather than by spelling its keys out,
+#: which is the note [`env_name`] already carries.
+ENV_READ = re.compile(
+    r'(?<![\w-])(?:env::var(?:_os)?|option_env!|env!)\s*\(\s*"([A-Z][A-Z0-9_]*)"'
+)
 #: The release workflow's flavor loop.
 PKG_LOOP = re.compile(r"for pkg in ([^;]+); do")
 #: Both of them: the build and the reproducibility rebuild are two lists that
@@ -1388,6 +1400,13 @@ def check_evidence(root, where, pid, column, entry, own, names):
     tests and one ignored loop — a legal basis for ten `covered` cells while the
     same ledger's prose argued it was not; the two halves of the definition were
     being read one at a time.
+
+    And a fifth, on the knob half of the first: a knob is pinned only if the
+    command the `env` prefix wraps can SEE it. The prefix used to be read on its
+    own, so `env FLASH_SIZE=16M cargo kani -p rsk-fido …` "built" the sixteen-
+    megabyte image on a package whose build script reads `AAGUID` and nothing
+    else — the `-p`/`--features`-read-out-of-any-text hole with the third field
+    playing the part. [`inert_knobs`] carries the measurement.
     """
     named = entry.get("evidence") or []
     if not named:
@@ -1408,11 +1427,20 @@ def check_evidence(root, where, pid, column, entry, own, names):
                 f"{where}: `{label}` builds {sorted(features)} and this column is"
                 f" {sorted(column.features)} — evidence from another image"
             )
+        cargo = cargo_part(command)
         open_knobs = unpinned_knobs(column, env)
         if open_knobs:
             problems.append(
                 f"{where}: `{label}` does not pin {open_knobs} — the row ran at other"
                 " build knobs than this column's, so it measured another image"
+            )
+        dead = inert_knobs(root, column, env, gate_lines.packages(cargo))
+        if dead:
+            problems.append(
+                f"{where}: `{label}` sets {dead} in an `env` prefix and no package it"
+                f" builds reads {'them' if len(dead) > 1 else 'it'} — a knob the"
+                " command in front of it never sees pins nothing, so the row built"
+                " this tree's default geometry and measured the default image"
             )
         # Held back rather than appended: the owner-crate message below is
         # emitted only over an otherwise-clean row, so raising this one inline
@@ -1425,7 +1453,6 @@ def check_evidence(root, where, pid, column, entry, own, names):
                 f" this column and executes none of it, so it cannot say {pid} holds"
                 " here. `covered` is the word for a measurement"
             )
-        cargo = cargo_part(command)
         for word in name_filters(cargo):
             if not selected_tests(root, gate_lines.packages(cargo), word):
                 inert.append(
@@ -1520,15 +1547,91 @@ def selected_tests(root, crates, word):
     return False
 
 
+def knob_pins(column):
+    """The `VAR=value` pairs a row's `env` prefix has to carry to build this column.
+
+    One reader for both knob rules, because they are two questions about the same
+    short list: whether the row SET each of them, and whether anything the row
+    builds ever READS it. A board preset is one pair however many keys it sets —
+    a row reaches a board by its name, which is [`env_name`]'s note.
+    """
+    if column.kind == "board":
+        return {"BOARD": column.name}
+    return {env_name(key): value for key, value in column.knobs.items()}
+
+
 def unpinned_knobs(column, env):
     """The column's build knobs a row leaves at some other value, as `KEY=value`."""
-    if column.kind == "board":
-        return [] if env.get("BOARD") == column.name else [f"BOARD={column.name}"]
     return sorted(
-        f"{env_name(key)}={value}"
-        for key, value in column.knobs.items()
-        if env.get(env_name(key)) != value
+        f"{var}={value}" for var, value in knob_pins(column).items() if env.get(var) != value
     )
+
+
+@functools.cache
+def env_reads(root, crate):
+    """The environment variables `crate`'s own sources read, by any [`ENV_READ`] spelling.
+
+    Measured on this tree before the rule above it was written: the five
+    variables the matrix can ask a row about — `BOARD`, `FLASH_SIZE`, `KVMAIN`,
+    `LED_KIND`, `VIDPID` — are read by `firmware` and `rsk-wipe` and by nothing
+    else in the workspace, while `rsk-fido`'s build script reads `AAGUID` and
+    `rsk-sdk`'s reads `FW_VERSION`. That last pair is the shape [`builds`] is
+    about: a knob can be read by a package the row never names.
+    """
+    where = root / member_dirs(root).get(crate, crate)
+    if not where.is_dir():
+        return frozenset()
+    return frozenset(
+        var
+        for path in sorted(where.rglob("*.rs"))
+        for var in ENV_READ.findall(path.read_text(errors="ignore"))
+    )
+
+
+@functools.cache
+def builds(root, crates):
+    """The workspace packages a row's cargo invocation compiles, dependencies included.
+
+    A build script runs for every package in the unit graph and not only for the
+    ones named on the command line, so `-p firmware` really does read whatever
+    `rsk-fido`'s `build.rs` reads. An empty selection is `--workspace` and every
+    member is walked — the permissive reading of the one input this cannot
+    resolve, and the same one [`selected_tests`] takes. The shape it cannot see
+    is `--exclude`, which `gate_lines`' package flag does not read: a second
+    answer to "what does this command select" is the drift that file exists to
+    stop, and no row in this tree pins a knob and excludes its reader.
+    """
+    manifests = workspace(root)
+    out, queue = set(), list(crates or manifests)
+    while queue:
+        crate = queue.pop()
+        if crate in out or crate not in manifests:
+            continue
+        out.add(crate)
+        queue.extend(_deps(manifests[crate]))
+    return frozenset(out)
+
+
+def inert_knobs(root, column, env, crates):
+    """The knobs a row's `env` prefix sets that nothing the row builds ever reads.
+
+    The fifth of this file's holes in one family, and the twin of the `-p` and
+    `--features` one a field over: those were read out of any text on the row
+    until they were read from the cargo invocation, and a knob was read out of
+    the `env` prefix and never asked whether the command it prefixes can see it.
+    Driven on this tree before the rule: `env FLASH_SIZE=16M cargo kani -p
+    rsk-fido --harness reset_keeps_the_pin_gate` carried `SEC-FIDO-006A` ×
+    `firmware-16mb` to `covered` at EXIT=0, on a package whose build script reads
+    `AAGUID` and nothing else. One such row per column and the maximal false
+    ledger measures 37 -> 102 `covered` over eight of the ten knob-bearing
+    columns, still at EXIT=0.
+
+    Only the knobs the row actually NAMES, so each one raises one finding:
+    a knob the prefix leaves out is already [`unpinned_knobs`]'s, and a reader
+    owed two messages about one variable is owed one.
+    """
+    reads = {var for crate in builds(root, crates) for var in env_reads(root, crate)}
+    return sorted(var for var in knob_pins(column) if var in env and var not in reads)
 
 
 def closure_delta(column, other):

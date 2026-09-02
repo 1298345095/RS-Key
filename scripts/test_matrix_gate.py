@@ -115,6 +115,26 @@ CEREMONY = """\
 pub fn shown() {}
 """
 
+#: A knob read where the real tree reads most of them: the root package's own
+#: build script, at build time. Without one, no `env` prefix in this fixture
+#: pins anything — which is the rule `inert_knobs` runs, and the reason this file
+#: had to grow a build script to keep a green direction at all.
+BUILD_RS = """\
+fn main() {
+    println!("cargo:rustc-env=PK_VIDPID={}", std::env::var("VIDPID").unwrap_or_default());
+}
+"""
+
+#: And the other shape the real tree has, which is what `builds` is about: a knob
+#: read by a DEPENDENCY the row never names — `rsk-fido`'s build script reads
+#: `AAGUID` on every `-p firmware` — and read at COMPILE time rather than build
+#: time, which is the `env!` half of `matrix_gate.ENV_READ`. One fixture line
+#: carries both, and dropping either clause turns the green case below red.
+CORE_RS = """\
+pub fn core() {}
+pub const BOARD: Option<&str> = option_env!("BOARD");
+"""
+
 #: `SEC-B-001`'s registered evidence, in the one class a `check.sh` row can run.
 #: `assurance_gate` derives a property's Kani harnesses by looking for
 #: `snake(name)` in the function names of `crates/*/src/*kani*.rs`, so the file
@@ -266,8 +286,9 @@ class Tree:
         self.write("Cargo.toml", WORKSPACE)
         self.write("firmware/Cargo.toml", MANIFEST)
         self.write("firmware/src/presence.rs", PRESENCE)
+        self.write("firmware/build.rs", BUILD_RS)
         self.write("crates/rsk-core/Cargo.toml", CORE)
-        self.write("crates/rsk-core/src/lib.rs", "pub fn core() {}\n")
+        self.write("crates/rsk-core/src/lib.rs", CORE_RS)
         self.write("crates/rsk-screen/Cargo.toml", SCREEN)
         self.write("crates/rsk-screen/src/lib.rs", CEREMONY)
         self.write("crates/rsk-screen/src/screen_kani.rs", SCREEN_KANI)
@@ -1538,3 +1559,88 @@ def test_the_page_says_so_when_every_row_carries_a_tag(tree):
     page = matrix_gate.render(tree.root)
     assert "Every P0-family row carries a production tag" in page
     assert "carry no production tag at all" not in page
+
+
+# --- a knob the command the `env` prefix wraps never sees ----------------------
+
+
+def a_covered_cell_on(tree, column, absent, row, label):
+    """Move the fixture's one `check-sh-rows` cell onto `column`, resting on `row`.
+
+    `absent` is how the column leaves the `crate-absent` list on the way, and it
+    has to: one cell disposed of twice is a different refusal, and it would
+    answer a different question from the one each case below asks.
+    """
+    tree.edit("assurance/configurations.toml", absent, "")
+    tree.edit(
+        "assurance/configurations.toml",
+        'columns = ["firmware-screen"]',
+        f'columns = ["{column}"]',
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        'evidence = ["kani (screen)"]',
+        f'evidence = ["{label}"]',
+    )
+    tree.edit("scripts/check.sh", 'run "clippy (loud)"', row + 'run "clippy (loud)"')
+
+
+def test_a_knob_no_crate_the_row_builds_reads_pins_nothing(tree, capsys):
+    """The fifth hole of one family, and the twin of the `-p`/`--features` one.
+
+    Measured on the real tree before the rule: `env FLASH_SIZE=16M cargo kani -p
+    rsk-fido --harness reset_keeps_the_pin_gate` carried `SEC-FIDO-006A` ×
+    `firmware-16mb` to `covered` at EXIT=0, on a package whose build script reads
+    `AAGUID` and nothing else; one such row per column took 37 `covered` cells to
+    102 over eight of the ten knob-bearing columns, still at EXIT=0. The row here
+    is the same shape — `rsk-screen` has no build script and no dependency with
+    one, so `BOARD` reaches nothing it compiles.
+    """
+    a_covered_cell_on(
+        tree,
+        "board-a",
+        ', "board-a"',
+        'run "kani (board-a)" env BOARD=board-a cargo kani -p rsk-screen'
+        " --harness shown_holds_on_every_build\n",
+        "kani (board-a)",
+    )
+    said = red(tree, capsys)
+    assert "`kani (board-a)` sets ['BOARD'] in an `env` prefix" in said
+    assert "no package it builds reads it" in said
+
+
+def test_a_knob_a_dependency_reads_at_compile_time_still_pins_it(tree):
+    """The green direction, and the two admitting clauses it is the arm for.
+
+    `rsk-core` is a dependency `-p firmware` never names and it reads `BOARD` —
+    with `env!` rather than in a build script, so this one case falls if `builds`
+    stops walking dependencies OR if `ENV_READ` stops reading the macro. The
+    shape is the real tree's: `rsk-fido`'s build script reads `AAGUID` on every
+    `-p firmware`, and a rule that looked only at the named packages would refuse
+    an honest row.
+    """
+    a_covered_cell_on(
+        tree,
+        "board-a",
+        ', "board-a"',
+        'run "kani (board-a)" env BOARD=board-a cargo kani -p firmware -p rsk-screen'
+        " --harness shown_holds_on_every_build\n",
+        "kani (board-a)",
+    )
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
+
+
+def test_a_knob_the_named_package_reads_in_its_build_script_pins_it(tree):
+    """And the other spelling, which is how this tree reads all five of its own:
+    `firmware`'s build script and `env::var`, on the package the row names."""
+    a_covered_cell_on(
+        tree,
+        "firmware-pinned",
+        '"firmware-pinned", ',
+        'run "kani (pinned)" env VIDPID=Pico cargo kani -p firmware -p rsk-screen'
+        " --harness shown_holds_on_every_build\n",
+        "kani (pinned)",
+    )
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0

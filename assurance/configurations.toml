@@ -78,9 +78,9 @@
 # `equivalent` derived over the OWNER crates' closure instead of the whole
 # workspace's — a cell clears wherever the crates carrying the property's tag
 # compile as they do on the default build, whatever else moved. Measured here on
-# 2026-09-02, against this ledger: it clears 737 of the 958 `gap` cells, and it
+# 2026-09-02, against this ledger: it clears 733 of the 954 `gap` cells, and it
 # reaches every one of the 28 columns that carry a gap; the shipped rule, run
-# over the whole workspace, clears 194 of the same 958. 77% of the matrix on one
+# over the whole workspace, clears 190 of the same 954. 77% of the matrix on one
 # derivation, which would be the largest weakening this row could take, so it is
 # a programme decision and not a gate edit.
 # Why not taken: roadmap §8A п.3 lets a CONCRETE equivalence proof stand in
@@ -149,7 +149,7 @@ out-of-queue = [
 # that still matches.
 #
 # Why the board and geometry columns stop where they do, and it is measured
-# rather than recalled: 194 `gap` cells over seven columns sit on a column whose
+# rather than recalled: 190 `gap` cells over seven columns sit on a column whose
 # derived feature closure is IDENTICAL to a column already disposed for that row,
 # so the gate would take an `equivalent` on any of them with no run of any kind.
 # None is closable, because the knob delta is what an equivalence still has to
@@ -160,16 +160,26 @@ out-of-queue = [
 #                `DEFAULT_KVMAIN` 1408 K reaches the store, and lets through only
 #                the six in-RAM SEAM/TRANS statements
 #   presence     a GPIO source instead of BOOTSEL reaches the four rows whose
-#                statement names presence and the four reset clauses
+#                statement QUANTIFIES OVER a presence decision, and nothing else.
+#                It used to be read as reaching the four reset clauses too, on
+#                the grounds that a reset is only ever reached through a touch —
+#                a REACHABILITY argument this file applies nowhere else, and
+#                cannot apply evenly: SEC-FIDO-003's own statement names `reset`
+#                among the invalidations it quantifies over, and it has been
+#                `equivalent` on this column since the cell was written, so the
+#                argument would have taken that row out too. The four clauses are
+#                about what a torn PREFIX of the reset leaves, and the presence
+#                gate is upstream of the first sweep
 #   LED, vidpid, display.*   reach no P0-family statement at all
 # `waveshare-one` earns all 40 because every knob it sets is the value `build.rs`
-# already resolves to, and `abrobot-4m` earns 32 because only its presence source
+# already resolves to, and `abrobot-4m` earns 36 because only its presence source
 # moves. Every other identical-closure column is at its cap. NO derivation can
 # check any of that — nothing static sees a smaller KV region — so it stays prose,
 # and the rule the gate CAN hold is the one above it: one `equivalent` cell per
-# (column, `same_as`), which is what stops a second cell appended below a refusal
-# from quietly contradicting it. Widening an existing cell's `properties` still
-# gets past that, and it puts the row list beside the `why` that refuses it.
+# COLUMN, which is what stops a second cell appended below a refusal from quietly
+# contradicting it. Widening an existing cell's `properties` is the way past it,
+# and that is the point — it puts the new rows beside the `why` that refuses the
+# rest, where a reader sees both halves of the judgement at once.
 
 [[cell]]
 # The image every piece of evidence in the registry was measured on.
@@ -301,7 +311,8 @@ defaults stops earning it."""
 [[cell]]
 # Default flash geometry; the deltas are the LED and the presence SOURCE.
 properties = [
-  "SEC-FIDO-003", "SEC-FIDO-004", "SEC-FIDO-005", "SEC-FIDO-007",
+  "SEC-FIDO-003", "SEC-FIDO-004", "SEC-FIDO-005", "SEC-FIDO-006",
+  "SEC-FIDO-006A", "SEC-FIDO-006B", "SEC-FIDO-006C", "SEC-FIDO-007",
   "SEC-FIDO-008", "SEC-STORE-001", "SEC-STORE-002", "SEC-STORE-003",
   "SEC-STORE-004", "SEC-STORE-005", "SEC-STORE-006", "SEC-LAT-001",
   "SEC-LAT-002", "SEC-LAT-003", "SEC-POL-001", "SEC-POL-002", "SEC-POL-003",
@@ -320,15 +331,29 @@ knob_delta = [
 disposition = "equivalent"
 basis = "same-cargo-features"
 why = """
-Identical cargo-feature closure AND the default flash geometry (4 MB, 1408 K KV \
-main), so the axis that could reach a persisted-state property is unmoved. What \
-is left is the LED backend, which reaches no P0-family statement at all, and \
-the presence SOURCE — a GPIO button on 23 instead of BOOTSEL. Eight rows are \
-deliberately NOT in this list and stay `gap`: the four whose statement names \
-presence, and the four reset clauses, which an operator only ever REACHES \
-through a touch. Claiming those while the column's own question asks whether \
-this button has BOOTSEL's semantics would be the two halves of one cell \
-disagreeing."""
+Identical cargo-feature closure AND the default flash geometry (4 MB, 1408 K \
+KV main), so the axis that could reach a persisted-state property is \
+unmoved. What is left is the LED backend, which reaches no P0-family \
+statement at all, and the presence SOURCE — a GPIO button on 23 instead of \
+BOOTSEL. FOUR rows are deliberately NOT in this list and stay `gap`: the \
+ones whose statement QUANTIFIES OVER a presence decision — SEC-FIDO-001's \
+gate, SEC-FIDO-002's per-transport touch, SEC-POL-004's confirmed physical \
+press and SEC-ADM-002's Confirmed operator. Claiming those while the \
+column's own question asks whether this button has BOOTSEL's semantics would \
+be the two halves of one cell disagreeing. The four reset clauses used to be \
+refused beside them, on the argument that an operator only ever REACHES a \
+reset through a touch, and that argument is withdrawn as the wrong KIND: it \
+is about reachability, and applied evenly it takes a row this cell already \
+claims — SEC-FIDO-003's own statement names `reset` among the invalidations \
+it quantifies over, and it has been in this list since the cell was written. \
+What the four clauses actually say is what a PREFIX of an authenticatorReset \
+leaves in the store, and `crates/rsk-fido/src/reset.rs` puts the whole \
+presence gate — `shows_confirm`, then the ceremony — ahead of the first \
+sweep, which samples no button. The source of the press decides whether the \
+sweep RUNS; the write ordering it is torn in the middle of is the same \
+compiled code at the same geometry. The one thing this does not claim is the \
+reverse direction: BOOTSEL sampling stalls XIP and a GPIO read does not, so \
+the column removes a hazard from the reset path rather than adding one."""
 
 [[cell]]
 properties = [
@@ -692,30 +717,44 @@ owner = "contributor"
 settled_by = "evidence"
 text = """
 `always-uv` ships `alwaysUv` ON, which changes what `SEC-FIDO-001`'s gate \
-DEMANDS rather than whether it is enforced — and `SEC-FIDO-006B` is about the \
-alwaysUv gate surviving a reset, with a compiled-in default this column moves. \
-Do the model's gate constants cover the alwaysUv-on arm? THE MODEL HALF IS \
-ANSWERED: `AlwaysUvShipped` is AS-AUTH-2 in `assurance/assumptions.toml`, and \
-`formal/AlwaysUv.cfg` runs `TypeOK` plus the eight P0-launch invariants with it \
-TRUE — GREEN over 23 521 512 distinct states at depth 51, per \
-`formal/runs.toml`. Read the cfg for that count, never this sentence: it said \
-"all six invariants", and the file has carried nine entries in every commit it \
-has ever had, so the number was wrong when it was written rather than gone \
-stale — a count restated beside a file is a count that disagrees with it. \
-THE CODE HALF IS NOT, and its cost is a number rather than an omission: \
-`cargo test -p rsk-fido --features always-uv --target "$HOST"` is 493 passed \
-and 176 FAILED (rc 101), because alwaysUv with no PIN answers `PUAT_REQUIRED` \
-and the suite is written against the default door. Write the target the way \
+DEMANDS rather than whether it is enforced — and `SEC-FIDO-006B` is about \
+the alwaysUv gate surviving a reset, with a compiled-in default this column \
+moves. Do the model's gate constants cover the alwaysUv-on arm? THE MODEL \
+HALF IS ANSWERED: `AlwaysUvShipped` is AS-AUTH-2 in \
+`assurance/assumptions.toml`, and `formal/AlwaysUv.cfg` runs `TypeOK` plus \
+the eight P0-launch invariants with it TRUE — GREEN over 23 521 512 distinct \
+states at depth 51, per `formal/runs.toml`. Read the cfg for that count, \
+never this sentence: it said "all six invariants", and the file has carried \
+nine entries in every commit it has ever had, so the number was wrong when \
+it was written rather than gone stale — a count restated beside a file is a \
+count that disagrees with it. THE CODE HALF IS NOT, and its cost is a number \
+rather than an omission: `cargo test -p rsk-fido --features always-uv \
+--target "$HOST"` came back 496 passed, 176 failed and 1 ignored — the \
+harness's own `running 673 tests`, rc 101 — run at commit `709cb52`, because \
+alwaysUv with no PIN answers `PUAT_REQUIRED` and the suite is written \
+against the default door. The run is NAMED here because the sentence it \
+replaces was not: `is 493 passed and 176 FAILED`, present tense, no commit, \
+no date, over a suite that grows most weeks — a measurement written as a \
+property of the column. The commit IS the date and is deliberately the only \
+half written here: git dates a sha exactly, and `scripts/run_count_gate.py` \
+refuses a second copy of a day its generated regions already print — the \
+tier-run table of `docs/assurance-vector.md` prints this one, and typing it \
+again here reddens that row (driven, EXIT=1). Write the target the way \
 `scripts/check.sh` does: this said `aarch64-apple-darwin`, which is one \
 maintainer's host triple pinned into a shared register, and CI runs the same \
-row at `x86_64-unknown-linux-gnu`. The pair 446/172 is NOT a superseded \
-version of this one and must not be reconciled with it: it is what \
-`assurance/bundle/logs/cargo-test-always-uv.log` holds, over 619 tests, and \
-the suite is 669 tests now — two true measurements of a growing suite, which \
-is why the bundle's own framing of that log is the thing to fix and not this \
-number. So no `check.sh` row exercises \
-this column, and `covered` may rest only on the default build or on such a row \
-— the matrix has no basis for "the model half is checked at this column's own \
+row at `x86_64-unknown-linux-gnu`. And say which convention the denominator \
+uses, because this tree has two and they differ by exactly the one ignored \
+test: 673 is passed + failed + IGNORED, which is the number the harness \
+prints and the number every count below is in. The pair 446/172 is NOT a \
+superseded version of this one and must not be reconciled with it: it is \
+what `assurance/bundle/logs/cargo-test-always-uv.log` holds, over 619 tests, \
+and 619 counts the same way — two true measurements of a growing suite, \
+which is why the bundle's own framing of that log is the thing to fix and \
+not this number. The 669 that stood here was the third convention, passed + \
+failed with the ignored test dropped; under the log's it was 670, and no \
+reader could have told the two apart. So no `check.sh` row exercises this \
+column, and `covered` may rest only on the default build or on such a row — \
+the matrix has no basis for "the model half is checked at this column's own \
 constant", which is evidence-schema work and not a cell anybody can fill \
 here."""
 
@@ -885,11 +924,17 @@ column = "abrobot-4m"
 owner = "maintainer"
 settled_by = "evidence"
 text = """
-The narrowest column with anything open, and both open groups are the same \
-question: does a GPIO button on 23 (active-low) deliver the Confirmed/Cancelled \
-semantics the presence model assumes of BOOTSEL — same debounce, same \
-cancellation, same per-transport arbitration? Four rows name presence directly; \
-the four reset clauses are reached through it."""
+The narrowest column with anything open, and it is now one group and one \
+question: does a GPIO button on 23 (active-low) deliver the \
+Confirmed/Cancelled semantics the presence model assumes of BOOTSEL — same \
+debounce, same cancellation, same per-transport arbitration? Only the four \
+rows that quantify over a presence decision are still open on it. The four \
+reset clauses used to be held here as reached-through-a-touch; that is a \
+reachability argument and it is withdrawn in the cell above, where applied \
+evenly it would have taken SEC-FIDO-003 out with them. What is left is \
+genuinely about the button: `crates/rsk-device/src/presence.rs` arbitrates \
+the scope and `firmware/src/presence.rs` holds the latch, and both compile \
+identically here — the one arm that moves is the raw sample."""
 
 [[question]]
 column = "seeed-xiao"
