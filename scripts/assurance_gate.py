@@ -344,7 +344,7 @@ def shippable_features(root: pathlib.Path) -> frozenset[str]:
 
 
 def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
-    """Files no buildable image compiles: a withheld `mod`, and its sub-tree.
+    """Files no buildable image compiles: a withheld `mod`, and what it reaches.
 
     The `kani`/`tests` filename filter this replaced read a NAME, and the six
     `*_assurance.rs` mirrors carry neither: measured, `store_assurance.rs`
@@ -353,13 +353,22 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
     `SEC-TRANS-003` — §2 principle 7 in the one direction it forbids, a
     proof-only mirror standing in for the code it mirrors.
 
-    A withheld declaration shuts the whole SUB-TREE under it, not only the file
-    it names, because everything below is reached through it and nothing below
-    repeats its `cfg`. Measured, that is eighteen files: `crates/rsk-fido/src/lib.rs`
-    says `#[cfg(test)] mod conformance;` and `conformance/mod.rs` then declares
-    its siblings plainly, so every one was a production owner-in-waiting — the
-    same mirror-for-the-code defect one directory out, harmless today only
-    because none of the eighteen carries a tag yet.
+    A file is reached two ways, so the closure is two. The DIRECTORY under a
+    withheld declaration is shut — `crates/rsk-fido/src/lib.rs` says
+    `#[cfg(test)] mod conformance;` and `conformance/mod.rs` then declares its
+    eighteen siblings plainly, every one a production owner-in-waiting. And a
+    file whose `mod` declarations ALL sit in withheld files is shut with them,
+    because a `#[path]` leaf need not live under the directory that named it:
+    `crates/rsk-oath/src/tests.rs` is withheld and names `code_tests.rs`, which
+    sits BESIDE it and not under the `tests/` that shuts. Measured,
+    eleven such files, held out today only by the legacy name filter — driven,
+    one named without `tests` or `kani` walks back into the production set.
+
+    One live declarer keeps a file: the same source can be `#[path]`-included
+    from a shipped module and from a test. Only the directory half can still
+    drop such a file (a production `#[path = "conformance/shared.rs"]` under a
+    withheld `conformance/`), and it does so LOUDLY — the file stops owning its
+    tag and `check_tags` names the unowned invariant.
 
     The closure was `matrix_gate.production_rust`'s alone. It belongs at THIS
     layer, where the reader lives and where `evidence_gate` also calls in;
@@ -372,6 +381,7 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
     )
     out: dict[pathlib.Path, str] = {}
     shut: dict[pathlib.Path, str] = {}
+    declarers: dict[pathlib.Path, set[pathlib.Path]] = {}
     for parent in sources:
         for match in MOD_DECL.finditer(parent.read_text(errors="ignore")):
             expr = None
@@ -379,27 +389,45 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
                 found = CFG_ATTR.search(line.strip())
                 if found:
                     expr = found.group("expr")
-            if expr is None or _cfg_holds(expr, shippable) is not False:
-                continue
             relative = PATH_ATTR.search(match.group("attrs"))
             name = match.group("name")
             target = parent.parent / (relative.group("rel") if relative else f"{name}.rs")
             if not target.is_file():
                 target = parent.parent / name / "mod.rs"
-            if target.is_file():
-                why = f"{parent.name} declares `mod {name}` under cfg({expr})"
-                out[target.resolve()] = why
-                # Where the refused module's own children sit: beside a `mod.rs`,
-                # in a same-stem directory otherwise. Taken off the RESOLVED
-                # target so a `#[path]` re-point carries its sub-tree with it.
-                home = target.parent if target.name == "mod.rs" else target.parent / target.stem
-                shut[home.resolve()] = why
+            if not target.is_file():
+                continue
+            # Every declaration, not only the withheld ones: what decides the
+            # second closure below is whether a file has a live declarer LEFT.
+            declarers.setdefault(target.resolve(), set()).add(parent.resolve())
+            if expr is None or _cfg_holds(expr, shippable) is not False:
+                continue
+            why = f"{parent.name} declares `mod {name}` under cfg({expr})"
+            out[target.resolve()] = why
+            # Where the refused module's own children sit: beside a `mod.rs`,
+            # in a same-stem directory otherwise. Taken off the RESOLVED
+            # target so a `#[path]` re-point carries its sub-tree with it.
+            home = target.parent if target.name == "mod.rs" else target.parent / target.stem
+            shut[home.resolve()] = why
+    # `setdefault` and the `break` pick the NEAREST reason and decide nothing
+    # else: every caller reads the KEYS, so the value is a message to whoever
+    # reads this mapping and never a membership test. Untested on purpose.
     for source in sources:
         resolved = source.resolve()
         for ancestor in resolved.parents:
             if ancestor in shut:
                 out.setdefault(resolved, f"{shut[ancestor]}, above this file")
                 break
+    # To a fixed point, because a shut leaf can declare the next one, and over a
+    # SORTED pass so which chains one round settles is not filesystem order.
+    # `<=` and not "intersects": one live declarer means an image still compiles
+    # the file, and dropping it would cost that module its tag.
+    changed = True
+    while changed:
+        changed = False
+        for target, parents in sorted(declarers.items()):
+            if target not in out and parents <= out.keys():
+                out[target] = f"{sorted(parents)[0].name} declares it and is withheld"
+                changed = True
     return out
 
 

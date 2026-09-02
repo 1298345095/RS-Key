@@ -839,7 +839,10 @@ def _mirror_tree(tree, gate: str) -> pathlib.Path:
 
     The one variable between the two cases below is `gate`, so a red that came
     from a mis-parsed tag or a file the resolver never opened would take the
-    green twin down with it.
+    green twin down with it. That twin is also the whole reason the red cannot
+    be satisfied by the tag merely being GONE: nothing asserted here could say
+    so, because `edit` proves the source line was there and the destination is
+    written two lines above — this helper can only report on itself.
     """
     edit(
         tree / "crates" / "rsk-a" / "src" / "lib.rs",
@@ -850,11 +853,70 @@ def _mirror_tree(tree, gate: str) -> pathlib.Path:
     home.mkdir()
     (home / "mod.rs").write_text("mod wire;\n")
     (home / "wire.rs").write_text("// Refines `Mini!BarNeverOpens` — SEC-T-002.\n")
-    # The property must have MOVED, not merely gone: a red arm over a fixture
-    # whose tag was only deleted is the sibling case, satisfied by absence.
-    assert "SEC-T-002" not in (tree / "crates" / "rsk-a" / "src" / "lib.rs").read_text()
-    assert "SEC-T-002" in (home / "wire.rs").read_text()
     return home / "wire.rs"
+
+
+def _undeclared_leaf(tree, gate: str, decl: str, anchor: str, leaf: str) -> pathlib.Path:
+    """The same move, onto a file NOTHING declares under the withheld module.
+
+    Undeclared on purpose. A leaf its parent names is reached by the
+    declaration closure as well, which then answers for both shapes below and
+    the ancestor walk they aim at is never asked — the two mutants those cases
+    exist to kill would both survive a fixture that declared its leaf.
+    """
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(
+        src / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        f"{gate}{decl}\n",
+    )
+    for rel in (anchor, leaf):
+        (src / rel).parent.mkdir(parents=True, exist_ok=True)
+    (src / anchor).write_text("// the withheld module itself; it declares nothing\n")
+    (src / leaf).write_text("// Refines `Mini!BarNeverOpens` — SEC-T-002.\n")
+    return src / leaf
+
+
+def _declared_chain(tree, gate: str) -> pathlib.Path:
+    """The same move onto a leaf a withheld file DECLARES, outside its sub-tree.
+
+    `probe.rs` is what `gate` withholds, and it names `helpers/relay.rs` — a file
+    no ancestor walk down from `probe/` can reach, because a `#[path]` leaf need
+    not live under the module that declared it. Eleven files on the real tree
+    have that shape, held out of the tag scan by the legacy `"tests" not in
+    name` filter alone, which one leaf named `oracle.rs` walks straight past.
+
+    Two links and not one, and `leaf.rs` sorts BEFORE `relay.rs`: a closure that
+    propagates once rather than to a fixed point settles `relay.rs` and leaves
+    the tag on `leaf.rs` in the production set. One link would score the same
+    for both, and the pass order would be the filesystem's.
+    """
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(
+        src / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        f"{gate}mod probe;\n",
+    )
+    (src / "probe.rs").write_text('#[path = "helpers/relay.rs"]\nmod relay;\n')
+    (src / "helpers").mkdir()
+    (src / "helpers" / "relay.rs").write_text('#[path = "leaf.rs"]\nmod leaf;\n')
+    (src / "helpers" / "leaf.rs").write_text(
+        "// Refines `Mini!BarNeverOpens` — SEC-T-002.\n"
+    )
+    return src / "helpers" / "leaf.rs"
+
+
+#: Two directories under the withheld `mod.rs`, so a walk that reads only the
+#: file's own parent stops one level short of the directory that is shut.
+DEPTH2 = ("mod conformance;", "conformance/mod.rs", "conformance/deep/leaf.rs")
+
+#: A `#[path]` re-point, so the sub-tree sits where the RESOLVED target is and
+#: not where the declaring file plus the module's name would put it.
+REPOINT = (
+    '#[path = "elsewhere/entry.rs"]\nmod probe;',
+    "elsewhere/entry.rs",
+    "elsewhere/entry/leaf.rs",
+)
 
 
 def test_a_tag_under_a_withheld_mod_is_not_a_production_owner(tree, capsys):
@@ -878,5 +940,79 @@ def test_a_tag_under_a_shipped_mod_is_still_a_production_owner(tree, capsys):
     tag, one attribute fewer. A sub-tree no cfg withholds still owns its
     property, so the exclusion is not a blanket refusal of directories."""
     _mirror_tree(tree, "")
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_a_tag_two_directories_under_a_withheld_mod_is_not_an_owner(tree, capsys):
+    """The ancestor walk is over every parent, not the immediate one. A rule
+    reading `resolved.parent` shuts `conformance/` and keeps everything in
+    `conformance/deep/`, which is the sub-tree it was pointed at."""
+    _undeclared_leaf(tree, "#[cfg(test)]\n", *DEPTH2)
+    red(tree, capsys, "checked by Seams.cfg but has no Refines tag")
+
+
+def test_the_same_tag_two_directories_down_under_a_shipped_mod_owns(tree, capsys):
+    """Its twin: depth is not what withholds a file, the `cfg` is."""
+    _undeclared_leaf(tree, "", *DEPTH2)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_a_tag_under_a_repointed_withheld_mod_is_not_an_owner(tree, capsys):
+    """The sub-tree follows the RESOLVED target. `#[path]` puts `mod probe;`'s
+    children under `elsewhere/entry/`, and a home computed from the declaring
+    file and the module's name names `probe/`, which holds nothing."""
+    _undeclared_leaf(tree, "#[cfg(test)]\n", *REPOINT)
+    red(tree, capsys, "checked by Seams.cfg but has no Refines tag")
+
+
+def test_the_same_tag_under_a_repointed_shipped_mod_owns(tree, capsys):
+    """Its twin: a `#[path]` re-point no cfg withholds still owns its property."""
+    _undeclared_leaf(tree, "", *REPOINT)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_a_tag_a_withheld_file_declares_out_of_its_sub_tree_is_not_an_owner(
+    tree, capsys
+):
+    """The residual the directory closure cannot see, driven on the real tree
+    before it was closed: `#[path = "helpers/oracle.rs"] mod oracle;` inside
+    `crates/rsk-led/src/tests.rs`, carrying `SEC-FIDO-008`'s only tag, was EXIT=0
+    and the table went on publishing `Rust = 1` for a file no image compiles."""
+    _declared_chain(tree, "#[cfg(test)]\n")
+    red(tree, capsys, "checked by Seams.cfg but has no Refines tag")
+
+
+def test_the_same_declared_leaf_under_a_shipped_mod_owns(tree, capsys):
+    """Its twin: the leaf is not withheld by being named, but by every module
+    that names it being withheld."""
+    _declared_chain(tree, "")
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_a_leaf_one_shipped_module_still_declares_keeps_its_tag(tree, capsys):
+    """The over-shut direction, which the census cannot show: a dropped owner
+    and a correctly dropped mirror move the same column the same way.
+
+    The same file can be `#[path]`-included from a shipped module and from a
+    test — two modules, one file — so the rule is EVERY declarer withheld and
+    not any. A closure asking whether some declarer is withheld drops this leaf
+    and takes the shipped module's tag with it.
+    """
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(
+        src / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        "#[cfg(test)]\nmod probe;\nmod second;\n",
+    )
+    for name in ("probe", "second"):
+        (src / f"{name}.rs").write_text('#[path = "helpers/oracle.rs"]\nmod oracle;\n')
+    (src / "helpers").mkdir()
+    (src / "helpers" / "oracle.rs").write_text(
+        "// Refines `Mini!BarNeverOpens` — SEC-T-002.\n"
+    )
     assert assurance_gate.run(tree) == 0
     assert "assurance-gate: ok" in capsys.readouterr().out

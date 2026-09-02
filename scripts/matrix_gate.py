@@ -665,24 +665,18 @@ def production_rust(root):
     Not a filename filter. That is what both readers here used to be, and
     `assurance_gate.cfg_excluded` was written to replace it: six `*_assurance.rs`
     mirrors carry neither `kani` nor `tests` in the name and were counted as
-    production. Measured here, the two readers differ on 18 files, all in the
+    production. Measured here, the two readers differed on 18 files, all in the
     permissive direction.
 
-    Plus the transitive half `cfg_excluded` stops one step short of. It maps an
-    unshippable `mod foo;` to `foo/mod.rs` alone, and everything beside that file
-    is reachable ONLY through it: `crates/rsk-fido/src/conformance/` is declared
-    `#[cfg(test)] mod conformance;` by that crate's `lib.rs`, and its eighteen
-    siblings were offered to [`cfg_sites`] as gate sites — an
-    `out-of-scope` cell citing one of them was EXIT=0, which is the thing that
-    function's own docstring says it prevents.
+    A memo and a name now, nothing more: `ff0b277` moved the sub-tree closure
+    this used to add on top DOWN into `cfg_excluded`, and measured, the filter
+    left behind drops 0 of 182 files — replacing this body with a bare call
+    leaves the page byte-identical. What keeps it a function is the cache: the
+    three call sites below and the two `production_rust.cache_clear()` in the
+    tests, against an `assurance_gate.production_rust` that re-reads every
+    source on each call.
     """
-    excluded = assurance_gate.cfg_excluded(root)
-    shut = {path.parent for path in excluded if path.name == "mod.rs"}
-    return [
-        path
-        for path in assurance_gate.production_rust(root)
-        if not shut.intersection(path.resolve().parents)
-    ]
+    return assurance_gate.production_rust(root)
 
 
 def owners(root):

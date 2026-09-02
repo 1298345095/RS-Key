@@ -1383,13 +1383,14 @@ def test_a_cfg_site_no_buildable_image_compiles_is_not_a_gate(tree, capsys):
 
     `cfg_sites` refused a `kani`/`tests` NAME, which is what
     `assurance_gate.cfg_excluded` was written to replace; measured on the real
-    tree, the two readers differ on 18 files. The sharpest of them is a
-    DIRECTORY, and it is why `cfg_excluded` alone is not the fix:
-    `crates/rsk-fido/src/conformance/` is `#[cfg(test)] mod conformance;` and
-    that function names only its `mod.rs`, so its eighteen siblings were still
-    offered as gate sites — an `out-of-scope` cell citing
+    tree, the two readers differed on 18 files. The sharpest of them is a
+    DIRECTORY: `crates/rsk-fido/src/conformance/` is `#[cfg(test)] mod
+    conformance;` and that function named only its `mod.rs`, so its eighteen
+    siblings were still offered as gate sites — an `out-of-scope` cell citing
     `crates/rsk-fido/src/conformance/getinfo.rs` was EXIT=0, which is exactly
-    what `cfg_sites`'s own docstring says it prevents.
+    what `cfg_sites`'s own docstring says it prevents. `ff0b277` moved that
+    closure INTO `cfg_excluded`, so the case runs there now and this row pins
+    the shape from the matrix end.
     """
     tree.write("firmware/src/conformance/mod.rs", "mod wire;\n")
     tree.write(
