@@ -2,6 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
+use rsk_fs::storage::faults::{Cut, CutMedium, RemoveStuck};
 use rsk_fs::storage::ram::RamStorage;
 
 struct CountRng(u8);
@@ -540,5 +541,110 @@ fn a_refused_removal_stops_the_wipe_instead_of_spinning_into_the_valve() {
          and the delete budget, not the `?`, is what stopped it",
         medium.attempts(),
         LIVE.len()
+    );
+}
+
+/// [`seeded`] on a medium that logs the order of the appends it serves — the only
+/// place the re-arm of the at-rest lap can be seen to land BEFORE the tombstone it
+/// covers rather than after it.
+fn seeded_cut() -> (Fs<Cut>, CutMedium) {
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    (fs, medium)
+}
+
+/// The wipe path's own re-arm, which no applet wipe in the tree had: measured at
+/// five wipe-sweep delete sites across four applets, none re-armed. A tombstone
+/// appends like a re-seal, and PW1 / PW3 / RC migrate only on their own verify
+/// (`migrate_pin_kbase`) — so a TERMINATE can leave a chip-serial-rooted verifier
+/// dumpable under a marker the lap gates on. Best-effort, and that is the whole
+/// difference from the gated sites: refusing here would leave the keys live.
+#[test]
+fn a_terminate_re_arms_the_at_rest_lap_before_the_first_tombstone() {
+    let (mut fs, medium) = seeded_cut();
+    fs.put(EF_PK_SIG.get(), &[0xAB; 40]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+
+    medium.clear_ops();
+    assert_eq!(
+        terminate_df(&dev(), &mut fs, &mut CountRng(0), true, &apdu()),
+        Sw::OK
+    );
+    medium.assert_re_armed_before(EF_PW1, |_| false, "OpenPGP TERMINATE DF");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the wipe tombstoned a possibly chip-serial-rooted verifier, so the lap \
+         must run again"
+    );
+
+    // The best-effort half, and the direction that separates a wipe from every
+    // gated site: a medium refusing only `remove(EF_HARDENED)` must still WIPE.
+    let (backend, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    fs.put(EF_PK_SIG.get(), &[0xAB; 40]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    let answered = terminate_df(&dev(), &mut fs, &mut CountRng(0), true, &apdu());
+    assert!(
+        !medium.live(EF_PK_SIG.get()),
+        "the refused re-arm stopped the wipe, which leaves the private keys LIVE — \
+         the one direction a wipe must never fail in"
+    );
+    assert_eq!(answered, Sw::OK);
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+}
+
+/// The head re-arm is BEST-EFFORT, so its refusal leaves the marker latched over
+/// every tombstone the sweep then appends — the residual the gated sites do not
+/// carry. A single-shot refusal is the only kind the pass recovers from, and the
+/// retry after the sweep is what recovers it; a persistent one is still a residual.
+#[test]
+fn a_terminate_retries_the_re_arm_after_the_sweep() {
+    let (backend, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    scan_files(&dev(), &mut fs, &mut CountRng(0)).unwrap();
+    fs.put(EF_PK_SIG.get(), &[0xAB; 40]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+    // Only the HEAD re-arm is refused; the medium serves every mutation after it.
+    medium.refuse_once(rsk_fs::EF_HARDENED);
+
+    let answered = terminate_df(&dev(), &mut fs, &mut CountRng(0), true, &apdu());
+    assert!(
+        !medium.live(rsk_fs::EF_HARDENED),
+        "the head re-arm was refused and nothing retried it, so the marker stands \
+         over the verifier this wipe just tombstoned and no later boot ever laps"
+    );
+    assert_eq!(answered, Sw::OK);
+    assert!(!medium.live(EF_PK_SIG.get()), "the wipe still ran");
+
+    // The control on the same medium, with the refusal made PERSISTENT instead:
+    // the marker survives, so the assertion above is about the retry landing and
+    // not about a marker the fixture never latched.
+    fs.put(EF_PK_SIG.get(), &[0xAB; 40]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    assert_eq!(
+        terminate_df(&dev(), &mut fs, &mut CountRng(0), true, &apdu()),
+        Sw::OK
+    );
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: a persistent refusal really does leave the marker standing"
     );
 }

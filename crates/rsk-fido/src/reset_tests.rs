@@ -7,7 +7,7 @@ use crate::consts::{EF_BACKUP_SEALED, EF_CRED, EF_LARGEBLOB, EF_PIN, EF_RP, RESE
 use crate::seed::{bump_sign_counter, global_sign_counter, load_keydev};
 use rsk_crypto::Device;
 use rsk_fs::Fs;
-use rsk_fs::storage::faults::{MetaStuck, RemoveStuck, TruncatedWalk, Undead};
+use rsk_fs::storage::faults::{Cut, CutMedium, MetaStuck, RemoveStuck, TruncatedWalk, Undead};
 use rsk_fs::storage::ram::RamStorage;
 
 struct SeqRng(u64);
@@ -1450,5 +1450,120 @@ fn a_seed_the_medium_kept_stops_the_wipe_before_the_gates() {
     assert!(
         live.contains(&"pin") && live.contains(&"backup"),
         "the gate phase must not run over a seed the medium would not remove: {live:?}"
+    );
+}
+
+/// A provisioned applet on a medium that logs the order of the appends it serves —
+/// the only place the re-arm of the at-rest lap can be seen to land BEFORE the
+/// tombstone it covers rather than after it.
+fn cut_fs_with_a_pin() -> (Fs<Cut>, CutMedium) {
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    ensure_seed(&dev(), &mut fs, &mut SeqRng(1)).unwrap();
+    fs.put(EF_CRED, &[0xC0; 100]).unwrap();
+    fs.put(EF_PIN, &[8, 4, 1, 0, 0]).unwrap();
+    (fs, medium)
+}
+
+fn run_reset<S: rsk_fs::Storage>(fs: &mut Fs<S>) -> CtapResult {
+    let mut state = FidoState::new();
+    let mut presence = crate::AlwaysConfirm;
+    let mut rng = SeqRng(3);
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev: dev(),
+        fs,
+        rng: &mut rng,
+        state: &mut state,
+        now_ms: 0,
+    };
+    reset(&mut ctx)
+}
+
+/// The reset path's own re-arm, which no applet wipe in the tree had: measured at
+/// five wipe-sweep delete sites across four applets, none re-armed. A tombstone
+/// appends like a re-seal, and `EF_PIN` migrates only on a successful verify — so a
+/// RESET can leave a chip-serial-rooted verifier dumpable under a marker the lap
+/// gates on. Best-effort, and that is the whole difference from the gated sites:
+/// refusing here would leave the passkeys live rather than in force.
+#[test]
+fn a_reset_re_arms_the_at_rest_lap_before_the_first_tombstone() {
+    let (mut fs, medium) = cut_fs_with_a_pin();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+
+    medium.clear_ops();
+    assert_eq!(run_reset(&mut fs), Ok(0));
+    medium.assert_re_armed_before(EF_PIN, |_| false, "FIDO RESET");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the reset tombstoned a possibly chip-serial-rooted verifier, so the lap \
+         must run again"
+    );
+
+    // The best-effort half, and the direction that separates a wipe from every
+    // gated site: a medium refusing only `remove(EF_HARDENED)` must still WIPE.
+    let (backend, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&dev(), &mut fs, &mut SeqRng(1)).unwrap();
+    fs.put(EF_PIN, &[8, 4, 1, 0, 0]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    let answered = run_reset(&mut fs);
+    assert!(
+        !medium.live(EF_PIN),
+        "the refused re-arm stopped the wipe, which leaves the passkeys LIVE — the \
+         one direction a reset must never fail in"
+    );
+    assert_eq!(answered, Ok(0));
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+}
+
+/// The head re-arm is BEST-EFFORT, so its refusal leaves the marker latched over
+/// every tombstone the sweep then appends — the residual the gated sites do not
+/// carry. A single-shot refusal is the only kind the pass recovers from, and the
+/// retry after the sweep is what recovers it; a persistent one is still a residual.
+#[test]
+fn a_reset_retries_the_re_arm_after_the_sweep() {
+    let (backend, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&dev(), &mut fs, &mut SeqRng(1)).unwrap();
+    fs.put(EF_PIN, &[8, 4, 1, 0, 0]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+    // Only the HEAD re-arm is refused; the medium serves every mutation after it.
+    medium.refuse_once(rsk_fs::EF_HARDENED);
+
+    let answered = run_reset(&mut fs);
+    assert!(
+        !medium.live(rsk_fs::EF_HARDENED),
+        "the head re-arm was refused and nothing retried it, so the marker stands \
+         over the verifier this reset just tombstoned and no later boot ever laps"
+    );
+    assert_eq!(answered, Ok(0));
+    assert!(!medium.live(EF_PIN), "the wipe still ran");
+
+    // The control on the same medium, with the refusal made PERSISTENT instead:
+    // the marker survives, so the assertion above is about the retry landing and
+    // not about a marker the fixture never latched.
+    fs.put(EF_PIN, &[8, 4, 1, 0, 0]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    assert_eq!(run_reset(&mut fs), Ok(0));
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: a persistent refusal really does leave the marker standing"
     );
 }

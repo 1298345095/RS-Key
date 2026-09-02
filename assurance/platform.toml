@@ -636,7 +636,7 @@ failure_direction = "security: the model proves the authorization invariants ove
 # Shipped.cfg still explores the space without the flag — registered as a
 # coverage assumption with both arms run, not as an omission. (2) No clause names
 # the record, so a torn reset that drops it early is unobserved; `snap` has no
-# field for it, which is reset.rs:207-214's own admission one layer out. (3) The
+# field for it, which is reset.rs:222-229's own admission one layer out. (3) The
 # changePIN refusal of the CURRENT PIN (clientpin.rs:294-303) is not modelled —
 # the module has no PIN VALUE to compare. (3b) The refusal is a DISABLED ACTION
 # here, where the firmware refuses only after the ladder has spent a try, read
@@ -1073,7 +1073,7 @@ supports = ["SEC-FIDO-008"]
 id = "PLAT-TOKEN-004"
 class = "model-abstraction"
 statement = "`reset()` is the only modelled deleter of `EF_PIN` and it is not the only deleter: `rsk_fs::Fs::factory_wipe` bypasses it entirely, and no configuration in this tree runs that path."
-discharge = "Modelling the second path, or a stated argument that its reboot makes the question vacuous. crates/rsk-fido/src/reset.rs:152 and :185 both say in as many words that `Fs::factory_wipe` bypasses that file and needs the same rule; the entry point is crates/rsk-fs/src/fs.rs:447 and its live callers are crates/rsk-device/src/ccid.rs:311, crates/rsk-display/src/pin.rs:685 and firmware/src/worker.rs:397. It is the SAME unmodelled path PLAT-MODEL-006 names as what would make `RamNeverOutlivesFlashSeed` bite, reached from the other side: here the question is whether the wipe kills the session before the record, and worker.rs:397 answers it with a reboot the model does not represent either."
+discharge = "Modelling the second path, or a stated argument that its reboot makes the question vacuous. crates/rsk-fido/src/reset.rs:167 and :185 both say in as many words that `Fs::factory_wipe` bypasses that file and needs the same rule; the entry point is crates/rsk-fs/src/fs.rs:447 and its live callers are crates/rsk-device/src/ccid.rs:311, crates/rsk-display/src/pin.rs:685 and firmware/src/worker.rs:397. It is the SAME unmodelled path PLAT-MODEL-006 names as what would make `RamNeverOutlivesFlashSeed` bite, reached from the other side: here the question is whether the wipe kills the session before the record, and worker.rs:397 answers it with a reboot the model does not represent either."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage: the second route to a device with no PIN record is outside every configuration, so a session surviving it is a state no run visits"
@@ -1115,7 +1115,7 @@ supports = ["SEC-FIDO-006A"]
 id = "PLAT-PINGATE-002"
 class = "model-abstraction"
 statement = "`SEC-FIDO-006A`'s isolated RED is a localisation and not a demonstration of unique reach: its falsifying state also falsifies `NoAccessibleSecretWithoutGate`, and the two properties share one model switch and one production function."
-discharge = "A configuration or a witness exhibiting a state where this clause falls and `NoAccessibleSecretWithoutGate` holds, and the recorded tier contains none. Measured: `SoloClause_ResetKeepsThePinGate.cfg`'s State 16 has store.cred = {r1}, SeedReachable, pin.everSet TRUE and pin.set FALSE, so `formal/RSKeySecurityState.tla:1779` is false there too; `assurance_gate.co_refuted` credits `BugResetGatesFirst` to both names; and the two `Refines` tags sit at `crates/rsk-fido/src/reset.rs:199` and `:217`, on `is_fido_gate_fid` and the `is_fido_gate_record` it wraps. The converse IS witnessed — `Solo_NoAccessibleSecretWithoutGate.cfg` falls on the stranded-grant conjunct at `formal/RSKeySecurityState.tla:1788` where snap.surv is empty and this clause is vacuous — so the pair is asymmetric rather than redundant. What would settle it is a switch that breaks the snapshot comparison without touching the steady-state ghost `everSet`, and the model has none."
+discharge = "A configuration or a witness exhibiting a state where this clause falls and `NoAccessibleSecretWithoutGate` holds, and the recorded tier contains none. Measured: `SoloClause_ResetKeepsThePinGate.cfg`'s State 16 has store.cred = {r1}, SeedReachable, pin.everSet TRUE and pin.set FALSE, so `formal/RSKeySecurityState.tla:1779` is false there too; `assurance_gate.co_refuted` credits `BugResetGatesFirst` to both names; and the two `Refines` tags sit at `crates/rsk-fido/src/reset.rs:214` and `:232`, on `is_fido_gate_fid` and the `is_fido_gate_record` it wraps. The converse IS witnessed — `Solo_NoAccessibleSecretWithoutGate.cfg` falls on the stranded-grant conjunct at `formal/RSKeySecurityState.tla:1788` where snap.surv is empty and this clause is vacuous — so the pair is asymmetric rather than redundant. What would settle it is a switch that breaks the snapshot comparison without touching the steady-state ghost `everSet`, and the model has none."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "coverage in the reading direction: `co = 1` on this row and `co = 1` on SEC-FIDO-004 are the same patch counted twice, and a reader who adds the two columns double-counts one experiment"

@@ -62,7 +62,7 @@ threat_clause = "docs/threat-model.md#TM-ZEROIZATION"
 # crates/rsk-fido/src/config.rs:405-409 — "`keydev_dec` carries no channel, token
 # or timer and lives until power-off (audit run-34 #28). That is accepted". So
 # the registered source is a clause the property's own subject is carved out of.
-threat_clause_reading = "the anchor is topical and not the claim: TM-ZEROIZATION is end-of-use wiping, this property is an ORDERING between the RAM copy and the flash record across a reset. What would fix it is a threat-model sentence naming the vendor-unlock RAM seed and the reset ordering — reset.rs:62-66 already carries the argument in prose — or a re-source onto a clause about the wipe order. TM-HOST-POWER-CUT is the nearest existing clause and is about a torn flash WRITE, not about volatile state outliving it"
+threat_clause_reading = "the anchor is topical and not the claim: TM-ZEROIZATION is end-of-use wiping, this property is an ORDERING between the RAM copy and the flash record across a reset. What would fix it is a threat-model sentence naming the vendor-unlock RAM seed and the reset ordering — reset.rs:69-73 already carries the argument in prose — or a re-source onto a clause about the wipe order. TM-HOST-POWER-CUT is the nearest existing clause and is about a torn flash WRITE, not about volatile state outliving it"
 # What `assurance_gate.py` derives as `rust = 1`. Read the derivation before the
 # column: `grep_word` matches the bare invariant name ANYWHERE in a production
 # file and returns FILE NAMES, so the column counts files that MENTION it, not
@@ -85,7 +85,7 @@ owners_writers = [
   "crates/rsk-fido/src/state.rs:431 — `*self = Self::new()` inside `FidoState::reset`, which drops the old value",
   "crates/rsk-fido/src/state.rs:701 — `Drop for FidoState`, the exhaustive destructuring that zeroizes it",
   "crates/rsk-fido/src/config.rs:428 — AUT_DISABLE's clear; the model omits this action outright",
-  "crates/rsk-fido/src/reset.rs:66 — `ctx.state.reset()` AHEAD of every flash write, which is the ordering the invariant IS",
+  "crates/rsk-fido/src/reset.rs:73 — `ctx.state.reset()` AHEAD of every flash write, which is the ordering the invariant IS",
 ]
 owners_readers = [
   "crates/rsk-fido/src/lib.rs:106 — `Ctx::load_keydev`, RAM first then flash: the concrete SeedReachable, and the chokepoint nine call sites reach it through",
@@ -200,7 +200,7 @@ bound_files_in_argument = 6
 stops_files_in_argument = "anything in a seventh file — and the measurement is the point: the slice page estimated three files, named the tag's file, and missed both writers and the ordering site"
 bound_crates = 2
 stops_crates = "a site outside the two crates. A holder of the RAM copy in a third would be outside the argument"
-shipped_relation = "the four writers are one producer (vendor.rs:591) and three destroyers (vendor.rs:590, config.rs:428, and reset.rs:66 through FidoState::reset -> Drop); the four readers are crates/rsk-fido/src/lib.rs:106, config.rs:415, config.rs:421 and vendor.rs:961; the two projection sites are crates/rsk-device/src/ctap.rs:221 and crates/rsk-fido/src/reset_assurance.rs:49 and BOTH are cfg-gated, so neither is in a shipped image. Six files and two crates against the THREE files docs/authorization-slice.md:484-487 estimated (seed.rs, state.rs, lib.rs) — the estimate named the tag's file and missed both writers and the ordering site, and seed.rs is the one of the three that contains no `keydev_dec` at all. This bound is a count of sites, not a shrink of a shipped constant, because a review has no other unit"
+shipped_relation = "the four writers are one producer (vendor.rs:591) and three destroyers (vendor.rs:590, config.rs:428, and reset.rs:73 through FidoState::reset -> Drop); the four readers are crates/rsk-fido/src/lib.rs:106, config.rs:415, config.rs:421 and vendor.rs:961; the two projection sites are crates/rsk-device/src/ctap.rs:221 and crates/rsk-fido/src/reset_assurance.rs:49 and BOTH are cfg-gated, so neither is in a shipped image. Six files and two crates against the THREE files docs/authorization-slice.md:484-487 estimated (seed.rs, state.rs, lib.rs) — the estimate named the tag's file and missed both writers and the ordering site, and seed.rs is the one of the three that contains no `keydev_dec` at all. This bound is a count of sites, not a shrink of a shipped constant, because a review has no other unit"
 cfg = "none — every writer and reader above is unconditional production code; the two projection sites are not, and the bound counts them apart for that reason"
 features = "none"
 
@@ -261,7 +261,7 @@ registered = "yes — assurance/platform.toml PLAT-MODEL-005, pending, and it is
 
 [[assumption]]
 id = "AS-RAM-4"
-statement = "The RAM copy dies by Rust drop-and-replace, not by an explicit clear, on the path the invariant is about: `reset.rs:66` calls `FidoState::reset`, which assigns `*self = Self::new()` and lets `Drop for FidoState` zeroize the field."
+statement = "The RAM copy dies by Rust drop-and-replace, not by an explicit clear, on the path the invariant is about: `reset.rs:73` calls `FidoState::reset`, which assigns `*self = Self::new()` and lets `Drop for FidoState` zeroize the field."
 kind = "compiler"
 discharger = "stage 11's source-to-binary work, and nothing here. The model writes `ram' = FALSE` outright (RSKeySecurityState.tla:1225); the code's equivalent is state.rs:426-436 plus the exhaustive destructuring at :665-703, whose own comment says a field added later stops the pattern compiling. What no proof in this tree covers is that the emitted image does what the `Drop` says"
 expressible = "no — a fact about a compiler, not about the model"

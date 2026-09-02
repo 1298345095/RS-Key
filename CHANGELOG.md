@@ -2740,6 +2740,55 @@ and to the statuses it quotes.
 
 ### Security
 
+- **The last three applet wipes re-arm the at-rest scrub too, so no reset path in
+  the tree still tombstones a chip-serial-rooted verifier under a latched
+  marker.** `wipe_oath` and `wipe_piv` were closed at 0x09C0; the three
+  `wipe-sweep` rows of `assurance/deleters.toml` left un-re-armed there were FIDO
+  `authenticatorReset` (two rows, one function) and OpenPGP TERMINATE DF. A
+  tombstone appends like a re-seal — `rsk-fs`'s `EF_HARDENED` doc has always said
+  "and from any that deletes one" — and neither `is_fido_fid` nor
+  `is_openpgp_fid` covers `0xCE14`, so the marker outlived every one of these
+  wipes. FIDO's `EF_PIN` and OpenPGP's PW1 / PW3 / RC have no eager boot
+  migration: they re-key on their own successful verify
+  (`clientpin.rs`'s `verify_pin`, `pin.rs`'s `migrate_pin_kbase`), so a card
+  reset before that verify left the pre-OTP verifier — rooted in
+  `HKDF("NO-OTP", serial_hash)`, which the public chip serial alone derives —
+  readable in a flash dump and brute-forceable offline, with no later boot ever
+  lapping over it.
+
+  Each site takes the pair the two closed ones carry: `request_rescrub` at the
+  head, ahead of every tombstone, and again after the sweeps. **Best-effort, not
+  gated, and that is the whole difference from the re-key sites**: "leave the
+  record in force" means, on a wipe, leave the secrets LIVE, so a refused re-arm
+  must not stop the reset — the shape `neutralize_default_reset_code` set. The
+  second call recovers a single-shot refusal of the first and costs no append
+  where the first landed, because `Fs::delete` skips a backend it already marked
+  absent. FIDO's retry stands ahead of `ensure_seed` rather than after it, for
+  two measured reasons: the sweeps' `?` can skip everything below them, and
+  nothing after the sweeps supersedes a weak-sealed copy — `ensure_seed` writes
+  to fids the sweep has just tombstoned, and `journal::fold_and_scrub`'s
+  `EF_AUDIT_META` and ring slots are written with plain `fs.put` / `fs.delete`
+  and are not sealed at all.
+
+  `reset.rs`'s two registry rows are one function: `sweep` is called from `reset`
+  and nowhere else in the crate but its own tests, so one re-arm at the head of
+  `reset` covers both. `wipe_openpgp` likewise has exactly one production caller,
+  `terminate_df`, so the pair sits inside the wipe and `scan_files`'
+  re-provisioning stays outside it — the arrangement `reset_files`/`wipe_piv`
+  already had.
+
+  Two cases per applet, and both mutants read in the right direction. The re-arm
+  moved to the END of the wipe: `FIDO RESET: 0x1080 was superseded BEFORE the lap
+  was re-armed …` over `[… Remove(0xcf00), Remove(0x1080), Remove(0xce14), …]`,
+  and `OpenPGP TERMINATE DF: 0x1081 was superseded BEFORE the lap was re-armed …`
+  over a log with `Remove(0x1081)` three places ahead of `Remove(0xce14)`. The
+  re-arm made *gating* instead: "the refused re-arm stopped the wipe, which leaves
+  the passkeys LIVE — the one direction a reset must never fail in", and the
+  OpenPGP twin naming the private keys. That oracle stands FIRST in each case,
+  ahead of any status word, so a mutant falls on the wipe and not on a binding.
+
+  **bcdDevice → 0x09C2.**
+
 - **A refused re-arm at the head of an applet wipe left the marker latched over
   every tombstone the sweep then appended, and nothing retried it.** Best-effort
   (0x09C0) buys the ORDER and closes "nothing re-armed at all"; it does not buy

@@ -49,6 +49,13 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
         crate::Presence::Timeout => return Err(CtapError::UserActionTimeout),
         crate::Presence::Cancelled => return Err(CtapError::KeepAliveCancel),
     }
+    // A tombstone appends like a re-seal, and `EF_PIN` migrates only on a successful
+    // verify — so this can supersede a chip-serial-rooted verifier and owes the
+    // at-rest lap (rsk-fs `EF_HARDENED`) a re-arm, ahead of the sweeps.
+    //
+    // The failure does NOT stop the write, unlike the gated sites: "leave the
+    // record in force" means, on a wipe, leave the secrets live.
+    let _ = rsk_fs::request_rescrub(ctx.fs);
     // Drop every FIDO file, then regenerate the seed. The flash `Fs` is shared
     // with the OpenPGP applet, so delete only live, FIDO-owned keys
     // ([`is_fido_fid`]) — a blind 0..256 EF_CRED/EF_RP sweep would write a
@@ -81,6 +88,14 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
     // before the gate phase could drop `EF_BACKUP_SEALED` over a seed still live.
     orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
     orphaned |= sweep(ctx, is_fido_gate_fid)?;
+    // Best-effort leaves the marker latched over every tombstone above when the
+    // head re-arm was refused, so retry it once the sweep is done: a single-shot
+    // refusal is the only kind either call recovers from (`rsk_otp`'s BUMP_TRIES
+    // states the same), and where the head landed this costs no append at all —
+    // `Fs::delete` skips a backend it already marked absent. Ahead of `ensure_seed`,
+    // which the `?` above can skip and which supersedes nothing: it writes to fids
+    // this sweep has just tombstoned.
+    let _ = rsk_fs::request_rescrub(ctx.fs);
     ensure_seed(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?;
     // Privacy: fold the journal window into the epoch (per-event details are
     // scrubbed, aggregate history stays attested), then record the reset.

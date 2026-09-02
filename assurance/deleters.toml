@@ -204,7 +204,7 @@ why = "the panel's own deleteCredential — it reports the deletion to the owner
 
 [[site]]
 file = "crates/rsk-fido/src/reset.rs"
-line = 76
+line = 83
 call = "let gone = ctx.fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -215,7 +215,7 @@ why = "the seed fids ahead of the batch. Both halves are read and BOTH are carri
 
 [[site]]
 file = "crates/rsk-fido/src/reset.rs"
-line = 138
+line = 153
 call = "let gone = ctx.fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
@@ -435,7 +435,7 @@ why = "the generic DO writer's empty-body clear. The host reads every one of the
 
 [[site]]
 file = "crates/rsk-openpgp/src/terminate.rs"
-line = 193
+line = 200
 call = "let gone = fs.force_delete_halves(fid);"
 verb = "force_delete_halves"
 answer = "read"
