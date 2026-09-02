@@ -55,15 +55,28 @@ Six rules are about the bundle being EVIDENCE rather than prose:
   corrected mutant that supersedes it or the reason it stands, and the success
   line counts it apart from the verdicts.
 
-Deliberately not here: whether the numbers are RIGHT. Nothing can check that a
-recorded wall-clock is the one the run took, or that a row calling itself
-`modelled` was read that way. What this row keeps honest is that no field of the
-contract was quietly dropped, that every claim it makes about the tree resolves
-in the tree, and that no cost was written as a range.
+A seventh is about the numbers themselves, and only the numbers a LOG can
+settle: a count printed next to an artifact is a transcription of that artifact,
+so it must be an integer the artifact prints. 198 of the tree's 492
+measurement-shaped numbers reach a log that way — 195 through the configuration
+they name, 3 through the log itself — and the floor is what keeps that from
+quietly becoming none. `assurance/configurations.toml` already forbids the one
+drift it was written for by hand ("the pair 446/172 is NOT a superseded version
+of this one and must not be reconciled with it") and nothing read that sentence:
+446 and 172 are integers of `cargo-test-always-uv.log`, 493 and 176 are not, and
+rewriting one pair into the other was exit 0.
+
+Deliberately not here: whether the OTHER numbers are right. Nothing can check
+that a recorded wall-clock is the one the run took, that a row calling itself
+`modelled` was read that way, or that a number naming no artifact came off
+anything. What this row keeps honest is that no field of the contract was
+quietly dropped, that every claim it makes about the tree resolves in the tree,
+and that no cost was written as a range.
 """
 
 import ast
 import functools
+import gzip
 import hashlib
 import pathlib
 import re
@@ -410,6 +423,51 @@ INVERSE_FIELDS = ("disposition", "superseded_by")
 #: verdict(s) and 10 disposed as inverse" at exit 0: a table that killed nothing,
 #: read as one that killed ten. Under the measured 10, like every ratchet here.
 VERDICT_FLOOR = 8
+
+#: How a bundle writes a big number: `106 956 959`, where the log wrote
+#: `106956959` and `45,810`. Both sides are reduced to their digits before they
+#: are compared, so the grouping is a spelling and not a difference.
+GROUPED = r"[\d\s,]"
+
+#: A digit run that starts a TOKEN. A line-range citation followed by the word
+#: `states` — as one `result` leaf of SEC-FIDO-006B is written — is a range and a
+#: verb, not a count; without this it was the one false finding the tree produced.
+STARTS = r"(?<![-:.\w])"
+
+#: What TLC prints in its own summary, in the spelling the bundles quote it in.
+#: The join for these is the CONFIGURATION name, so the vocabulary is TLC's and
+#: nothing else's: letting `passed`/`failed` through here attributed
+#: `cargo-test-always-uv.log`'s 446 to `tlc-AlwaysUv.log`, measured.
+QUOTED_SEARCH = {
+    "states": re.compile(rf"{STARTS}(\d{GROUPED}*?)\s*states\b"),
+    "distinct": re.compile(rf"{STARTS}(\d{GROUPED}*?)\s*distinct\b"),
+    "depth": re.compile(rf"\bdepth\s+{STARTS}(\d[\d ]*)"),
+}
+
+#: And what a test runner prints. Only reachable where the leaf names the LOG,
+#: because that is the only join that says which runner the number came out of.
+QUOTED_RESULT = {
+    "passed": re.compile(rf"{STARTS}(\d{GROUPED}*?)\s*(?:passed|passing)\b"),
+    "failed": re.compile(rf"{STARTS}(\d{GROUPED}*?)\s*(?:failed|FAILED|failures?)\b"),
+}
+
+#: An integer as a log prints one. Leading zeros are dropped on both sides so
+#: `08` and `8` are one number.
+INTEGER = re.compile(r"\d+")
+
+#: `Name.cfg`, the way a bundle names a configuration mid-sentence.
+CONFIGURATION = re.compile(r"\b([A-Za-z][A-Za-z0-9_]*)\.cfg\b")
+
+#: A log, by path or by bare filename.
+LOG_NAME = re.compile(r"[A-Za-z0-9_.\-/]*\.log(?:\.gz)?")
+
+#: What [`quoted_numbers`] must reach. THE POINT OF THE RULE, not decoration:
+#: `check_evidence`'s only shape rule keyed on a `board_revision` no row carried,
+#: so it guarded zero rows while reading as if it guarded the hardware axis. The
+#: measured tree is 198 numbers over 63 joins; AT the measurement like every
+#: ratchet here, so a join that stops forming is a finding rather than a quieter
+#: summary line.
+QUOTE_FLOOR, QUOTE_JOIN_FLOOR = 198, 63
 
 #: The two rosters above must name the same ten groups. One in `GROUPS` and not
 #: in `FLOORS` is a `KeyError`; one in `FLOORS` and not in `GROUPS` is silently
@@ -1013,6 +1071,155 @@ def mutation_dispositions(bundle: pathlib.Path, doc: dict, findings: list[str]) 
     return inverse
 
 
+def log_integers(root: pathlib.Path, target: str, cache: dict) -> frozenset[str]:
+    """Every integer the log at `target` prints, memoised per audit.
+
+    Lazily, because the corpus holds a 339 KB `.gz` that is 15.8 MB of CBMC
+    unwinding lines and no leaf joins to it — reading it eagerly would put that
+    decompression in every one of this table's cases.
+    """
+    if target not in cache:
+        path = root / target
+        raw = path.read_bytes() if path.is_file() else b""
+        if path.suffix == ".gz":
+            try:
+                raw = gzip.decompress(raw)
+            except (OSError, EOFError):
+                raw = b""
+        text = raw.decode("utf-8", "replace")
+        cache[target] = frozenset(
+            match.group(0).lstrip("0") or "0" for match in INTEGER.finditer(text)
+        )
+    return cache[target]
+
+
+def parsed(root: pathlib.Path, bundle: pathlib.Path) -> dict | None:
+    """The bundle, or `None` if TOML cannot read it.
+
+    Both passes below walk EVERY bundle, and a file the glob found and tomllib
+    cannot parse must not take the row down with a traceback: `audit_one` already
+    reports it as a finding, and this pass has nothing to add.
+    """
+    try:
+        return tomllib.loads((root / bundle).read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, OSError, UnicodeDecodeError):
+        return None
+
+
+def log_corpus(root: pathlib.Path) -> tuple[set[str], dict[str, set[str]], dict[str, set[str]]]:
+    """The bundled logs, indexed the three ways a leaf can name one.
+
+    Tree-wide and not per bundle: `SEC-FIDO-006B` quotes a log `SEC-FIDO-001`
+    carries, and that is the join the whole rule exists for. Every path here is
+    already held to its own byte count and digest above, so the log a number is
+    compared against is the one the run wrote.
+    """
+    paths: set[str] = set()
+    by_name: dict[str, set[str]] = {}
+    by_configuration: dict[str, set[str]] = {}
+    for bundle in bundles(root):
+        doc = parsed(root, bundle)
+        for row in (doc or {}).get("artifact", []):
+            if not isinstance(row, dict):
+                continue
+            target = str(row.get("path", ""))
+            name = pathlib.PurePosixPath(target).name
+            paths.add(target)
+            by_name.setdefault(name, set()).add(target)
+            if name.startswith("tlc-"):
+                stem = name[len("tlc-"):].partition(".log")[0]
+                by_configuration.setdefault(stem, set()).add(target)
+    return paths, by_name, by_configuration
+
+
+def quoted_join(doc: dict, bundle: pathlib.Path, key: str, value: str, corpus) -> tuple[set[str], dict]:
+    """Which log a leaf's numbers are about, and which vocabulary to read.
+
+    Two joins, and the NAMED one wins: a leaf can say `AlwaysUv.cfg` in one
+    clause and `cargo-test-always-uv.log` in the next, and reading the
+    configuration first sent that log's `446 passed` to TLC's summary.
+    """
+    paths, by_name, by_configuration = corpus
+    named: set[str] = set()
+    for match in LOG_NAME.finditer(value):
+        token = match.group(0)
+        if token in paths:
+            named.add(token)
+        else:
+            named |= by_name.get(pathlib.PurePosixPath(token).name, set())
+    # An `[[artifact]].run` names its log in the field beside it rather than in
+    # its own prose, which is where `172 failures` and four `depth N` sit.
+    if not named and key.startswith("artifact[") and key.endswith(".run"):
+        index = int(key.partition("[")[2].partition("]")[0]) - 1
+        target = str(doc["artifact"][index].get("path", ""))
+        if target in paths:
+            named = {target}
+    if named:
+        return named, {**QUOTED_SEARCH, **QUOTED_RESULT}
+    # ONE configuration, not one that happens to have a log: a sentence naming
+    # `Historical_E76.cfg` and `Mut_BugSeedDoesNotLead.cfg` carries a number
+    # belonging to the second, and only the first has an artifact here.
+    spelled = {match.group(1) for match in CONFIGURATION.finditer(value)}
+    if len(spelled) == 1:
+        found = by_configuration.get(spelled.pop(), set())
+        # Ten bundles carry a `tlc-ForceChange.log` of their own and they are not
+        # the same run — 177 s in one, 178 s in another. Accepting the union
+        # lets a number true of any bundle's copy stand in this one, so the
+        # bundle's OWN copy is the log when it has one.
+        own = {one for one in found if f"/{bundle.stem}/" in one}
+        return own or found, QUOTED_SEARCH
+    return set(), {}
+
+
+def quoted_numbers(root: pathlib.Path, findings: list[str]) -> tuple[int, int]:
+    """A number printed next to a log must occur in that log.
+
+    The narrow, measured version of that sentence. `assurance/configurations.toml`
+    already forbids the specific drift by hand — "the pair 446/172 is NOT a
+    superseded version of this one and must not be reconciled with it" — and
+    nothing enforced it: `446` and `172` are integers of
+    `cargo-test-always-uv.log`, `493` and `176` are not, and rewriting one pair
+    into the other was exit 0.
+
+    What it does NOT claim: that the log is the run's, which the digest above
+    holds; or that an unjoined number is right. 198 of the tree's 492
+    measurement-shaped numbers reach a log, and the rest name no artifact at all.
+    """
+    corpus = log_corpus(root)
+    cache: dict[str, frozenset[str]] = {}
+    checked, joins = 0, set()
+    for bundle in bundles(root):
+        doc = parsed(root, bundle)
+        if doc is None:
+            continue
+        for key, value in walk(doc):
+            if not isinstance(value, str):
+                continue
+            named, shapes = quoted_join(doc, bundle, key, value, corpus)
+            if not named:
+                continue
+            quoted = [
+                (shape, match.group(1))
+                for shape, pattern in shapes.items()
+                for match in pattern.finditer(value)
+            ]
+            if not quoted:
+                continue
+            joins.add((str(bundle), tuple(sorted(named))))
+            printed = set().union(*(log_integers(root, one, cache) for one in named))
+            for shape, text in quoted:
+                checked += 1
+                digits = re.sub(r"\D", "", text).lstrip("0") or "0"
+                if digits not in printed:
+                    findings.append(
+                        f"{bundle} `{key}`: {digits} {shape} is in no line of"
+                        f" `{sorted(named)[0]}` — a number printed next to a log is a"
+                        " transcription of it, and re-measuring the run does not"
+                        " re-measure the log"
+                    )
+    return checked, len(joins)
+
+
 def bundles(root: pathlib.Path) -> list[pathlib.Path]:
     """Every bundle in the tree, as a path relative to `root`.
 
@@ -1048,6 +1255,19 @@ def audit(root: pathlib.Path, roster_floor: int = ROSTER_FLOOR) -> tuple[list[st
         findings.extend(one)
         if summary:
             summaries.append(summary)
+    quoted, joins = quoted_numbers(root, findings)
+    # The floor is the rule's own non-degeneracy row. Every clause of
+    # [`quoted_join`] can stop matching without a single finding being lost —
+    # the numbers simply stop being read — and the summary line would say the
+    # same either way.
+    if quoted < QUOTE_FLOOR or joins < QUOTE_JOIN_FLOOR:
+        findings.append(
+            f"{BUNDLE_DIR}: {quoted} quoted number(s) over {joins} log join(s),"
+            f" under the floor of {QUOTE_FLOOR} over {QUOTE_JOIN_FLOOR} — a"
+            " transcription rule that joins nothing reads as one that holds every"
+            " number in the tree"
+        )
+    summaries.append(f"{quoted} quoted number(s) held to {joins} log(s)")
     return findings, "bundle-gate: ok — " + "; ".join(summaries)
 
 

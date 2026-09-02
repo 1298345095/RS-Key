@@ -1225,3 +1225,159 @@ def test_the_registry_line_picked_is_the_subject_s():
     # No subject, or one the roster does not carry: the whole corpus, which is
     # the previous behaviour and refuses nothing extra.
     assert bundle_gate.registry_line(corpus, "SEC-NOPE-999") == corpus
+
+
+# ---- a number printed next to a log occurs in that log ----------------------
+#
+# The measured population is 198 numbers over 63 joins, and the arms below are
+# one per clause of `quoted_join` plus the floor: each deletes its clause alone
+# and the gate goes green over the defect underneath it.
+
+QUOTED = "is in no line of"
+RECONCILED = ("is 446 passed and 172 failed", "is 493 passed and 176 failed")
+
+
+def edit_in(root, bundle, old, new, count=1):
+    """`edit`, on a bundle other than [`bundle_gate.BUNDLE`]."""
+    path = root / bundle_gate.BUNDLE_DIR / bundle
+    text = path.read_text()
+    assert text.count(old) >= count, old
+    path.write_text(text.replace(old, new, count))
+
+
+def quoted(root):
+    """THIS rule's findings, and the population it reached.
+
+    Scoped to the rule rather than to `audit`, because a green arm here asserts
+    that the transcription rule says nothing — not that every other rule in the
+    file is also green, which is `test_the_real_bundle_is_green`'s claim and not
+    this table's.
+    """
+    reported = []
+    return reported, bundle_gate.quoted_numbers(root, reported)
+
+
+def test_a_run_result_reconciled_with_a_later_measurement(tmp_path):
+    """The defect this rule was written for. `assurance/configurations.toml`
+    forbids exactly this by hand — "the pair 446/172 is NOT a superseded version
+    of this one and must not be reconciled with it" — and until now nothing read
+    it: `446` and `172` are integers of the log, `493` and `176` are not."""
+    root = tree(tmp_path)
+    edit_in(root, "SEC-FIDO-006B.toml", *RECONCILED)
+    reported = findings(root)
+    assert any(QUOTED in p and "493 passed" in p for p in reported), reported
+    assert any(QUOTED in p and "176 failed" in p for p in reported), reported
+
+
+def test_an_artifact_run_is_joined_to_the_path_beside_it(tmp_path):
+    """An `[[artifact]].run` names its log in the neighbouring field, not in its
+    own prose. Five rows quote a number that way, `172 failures` among them."""
+    root = tree(tmp_path)
+    edit(root, "the 172 failures", "the 176 failures")
+    reported = findings(root)
+    assert any(QUOTED in p and "176 failed" in p and "artifact[10].run" in p for p in reported), reported
+
+
+def test_a_search_number_is_joined_by_the_configuration_it_names(tmp_path):
+    """195 of the 198 arrive this way: the leaf says `ForceChange.cfg` and the
+    tree carries `tlc-ForceChange.log`."""
+    root = tree(tmp_path)
+    edit_in(root, "SEC-FIDO-003.toml", "depth 46, 177 s", "depth 47, 177 s")
+    reported = findings(root)
+    assert any(QUOTED in p and "47 depth" in p for p in reported), reported
+
+
+def test_the_log_is_the_quoting_bundle_s_own_copy(tmp_path):
+    """Six bundles carry a `tlc-ForceChange.log` and they are not the same run.
+    Against the union, any number true of any copy stood in this one: 49 is a
+    depth of another bundle's ForceChange and of nothing in this one."""
+    root = tree(tmp_path)
+    edit_in(root, "SEC-FIDO-003.toml", "depth 46, 177 s", "depth 49, 177 s")
+    reported = findings(root)
+    assert any(QUOTED in p and "49 depth" in p for p in reported), reported
+    assert any("SEC-FIDO-003/tlc-ForceChange.log" in p for p in reported), reported
+
+
+def test_a_number_reworded_out_of_the_rule_s_reach(tmp_path):
+    """The floor is the rule's own non-degeneracy row. Every join can stop
+    matching with no finding lost — the numbers simply stop being read — and the
+    summary line reads the same either way. `depth of 46` is not `depth 46`."""
+    root = tree(tmp_path)
+    edit_in(root, "SEC-FIDO-003.toml", "depth 46, 177 s", "depth of 46, 177 s")
+    reported = findings(root)
+    assert any("under the floor of" in p and "quoted number" in p for p in reported), reported
+
+
+def test_the_floors_are_the_measured_tree(tmp_path):
+    """AT the measurement and not under it, so a join that stops forming is a
+    diff someone has to write rather than a quieter summary line."""
+    quoted, joins = bundle_gate.quoted_numbers(tree(tmp_path), [])
+    assert (quoted, joins) == (bundle_gate.QUOTE_FLOOR, bundle_gate.QUOTE_JOIN_FLOOR)
+
+
+def test_a_line_range_citation_is_not_a_measurement(tmp_path):
+    """The control, and not a no-op. One `result` leaf of SEC-FIDO-006B ends a
+    line-range citation on the word `states`, which is a range and a verb — the
+    one false finding the shipped tree produced without `STARTS`. This moves the
+    digits that would be read, and the leaf stays green."""
+    root = tree(tmp_path)
+    edit_in(root, "SEC-FIDO-006B.toml", "-225 states and", "-987 states and")
+    reported, population = quoted(root)
+    assert reported == []
+    # Not a no-op: without `STARTS` the same leaf is `987 states` against a log
+    # that prints no 987, which is how this control was measured.
+    assert population == (bundle_gate.QUOTE_FLOOR, bundle_gate.QUOTE_JOIN_FLOOR)
+    assert re.search(bundle_gate.STARTS + r"\d", "sh" + ":400-987") is None
+    assert re.search(bundle_gate.STARTS + r"\d", "at 987 states") is not None
+
+
+def test_a_leaf_naming_two_configurations_joins_neither(tmp_path):
+    """`Historical_E76.cfg` and `Mut_BugSeedDoesNotLead.cfg` in one sentence,
+    where the number belongs to the second and only the first has a log here.
+    Resolving "the one that has an artifact" reported that true number as false."""
+    corpus = bundle_gate.log_corpus(tree(tmp_path))
+    where = pathlib.Path("SEC-FIDO-005.toml")
+    named, shapes = bundle_gate.quoted_join(
+        {}, where, "result.x", "Historical_E76.cfg, and Mut_BugSeedDoesNotLead.cfg at 1 875 109 states", corpus
+    )
+    assert (named, shapes) == (set(), {})
+    named, _ = bundle_gate.quoted_join(
+        {}, where, "result.x", "Historical_E76.cfg alone at 1 875 109 states", corpus
+    )
+    assert named == {"assurance/bundle/logs/SEC-FIDO-005/tlc-Historical_E76.log"}
+
+
+def test_a_runner_s_vocabulary_does_not_reach_a_configuration_s_log(tmp_path):
+    """The join decides the vocabulary. A leaf that names only `AlwaysUv.cfg`
+    and quotes a cargo run would otherwise send `446 passed` to TLC's summary —
+    inert on the tree as it stands, because that leaf names the log too."""
+    root = tree(tmp_path)
+    corpus = bundle_gate.log_corpus(root)
+    where = pathlib.Path("SEC-FIDO-006B.toml")
+    named, shapes = bundle_gate.quoted_join({}, where, "result.x", "AlwaysUv.cfg — 446 passed", corpus)
+    assert named and shapes == bundle_gate.QUOTED_SEARCH
+    named, shapes = bundle_gate.quoted_join(
+        {}, where, "result.x", "assurance/bundle/logs/cargo-test-always-uv.log is 446 passed", corpus
+    )
+    assert named == {"assurance/bundle/logs/cargo-test-always-uv.log"}
+    assert set(shapes) == set(bundle_gate.QUOTED_SEARCH) | set(bundle_gate.QUOTED_RESULT)
+
+
+def test_a_grouped_number_and_the_log_s_own_spelling_are_one_number(tmp_path):
+    """`106 956 959` here, `106956959` and `45,810` there. Both sides are reduced
+    to their digits, so the grouping is a spelling and not a difference."""
+    root = tree(tmp_path)
+    edit_in(root, "SEC-FIDO-003.toml", "106 956 959 states", "106956959 states")
+    assert quoted(root)[0] == []
+    edit_in(root, "SEC-FIDO-003.toml", "106956959 states", "106 956 950 states")
+    assert any(QUOTED in p and "106956950 states" in p for p in quoted(root)[0]), quoted(root)[0]
+
+
+def test_the_gzipped_log_is_never_decompressed_for_a_join(tmp_path):
+    """15.8 MB of CBMC unwinding lines behind a 339 KB `.gz`, and no leaf joins
+    to it. Reading the corpus eagerly would put that in every case above."""
+    root = tree(tmp_path)
+    cache = {}
+    bundle_gate.quoted_numbers(root, [])
+    assert not any(name.endswith(".gz") for name in bundle_gate.log_corpus(root)[0] & set(cache))
+    assert bundle_gate.log_integers(root, "assurance/bundle/logs/kani-state-tier.log.gz", cache)

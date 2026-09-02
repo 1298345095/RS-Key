@@ -151,7 +151,7 @@ assurance/bundle/SEC-FIDO-005.toml	formal/gen-configs.sh	185-187	elif [ -n "$on"
 assurance/bundle/SEC-FIDO-005.toml	formal/gen-configs.sh	322-322	emit Historical_E76.cfg BugSeedDoesNotLead TRUE TRUE	emit Historical_E76.cfg BugSeedDoesNotLead TRUE TRUE
 assurance/bundle/SEC-FIDO-005.toml	formal/gen-configs.sh	329-329	for b in "${BUGS[@]}"; do emit "Mut_$b.cfg" "$b" FALSE TRUE; done	for b in "${BUGS[@]}"; do emit "Mut_$b.cfg" "$b" FALSE TRUE; done
 assurance/bundle/SEC-FIDO-005.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
-assurance/bundle/SEC-FIDO-005.toml	scripts/bundle_gate.py	1005-1005	verdicts = len(named) - inverse	verdicts = len(named) - inverse
+assurance/bundle/SEC-FIDO-005.toml	scripts/bundle_gate.py	1063-1063	verdicts = len(named) - inverse	verdicts = len(named) - inverse
 assurance/bundle/SEC-FIDO-005.toml	scripts/comutate.py	328-356	def solo_index(root: pathlib.Path) -> dict[str, list[str]]:	return out
 assurance/bundle/SEC-FIDO-005.toml	scripts/comutate.py	873-875	# Sequential runs share the main build cache: only the patched	"CARGO_TARGET_DIR": str(root / "target"),
 assurance/bundle/SEC-FIDO-005.toml	scripts/platform_gate.py	926-954	def check_bundles(root, ids, findings):	)
