@@ -122,7 +122,7 @@ Committed history only, so an uncommitted edit to an input is invisible until it
 | ID | Taken at | Freshness | Behind | Claims that inherit it |
 |---|---|---|---|---|
 | `PLAT-BUILD-001` | `bd1cff7` | **stale** | `docs/assurance-matrix.md` | `SEC-FIDO-001`, `SEC-FIDO-004`, `SEC-FIDO-006`, `SEC-FIDO-006B` |
-| `PLAT-CRED-004` | `0eb2a5f` | **stale** | `formal/gen-configs.sh`, `formal/runs.toml` | `SEC-FIDO-005` |
+| `PLAT-CRED-004` | `0eb2a5f` | **stale** | `formal/RSKeySecurityState.tla`, `formal/gen-configs.sh`, `formal/runs.toml` | `SEC-FIDO-005` |
 | `PLAT-MODEL-010` | `f5577ab` | **stale** | `formal/RSKeySecurityState.tla`, `formal/comutants.toml` | `SEC-FIDO-001`, `SEC-FIDO-003`, `SEC-FIDO-004` |
 
 ## Where the accepted risks are published
