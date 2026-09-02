@@ -927,16 +927,29 @@ def host_triple() -> str:
     return re.search(r"^host: (\S+)$", out.stdout, re.M).group(1)
 
 
+def worktree_path(bug: str) -> pathlib.Path:
+    """Where one comutant is measured.
+
+    A function rather than a literal because `test_comutate.py` has to arrange a
+    stale registration at this exact path; a second typing of it leaves that case
+    green over the defect the moment the path moves, which was measured.
+    """
+    return pathlib.Path("/tmp") / f"rsk-comutant-{bug}"
+
+
 def run_one(root: pathlib.Path, bug: str, entry: dict, host: str) -> tuple[str, str]:
     """(verdict, detail) for one comutant, measured in a throwaway worktree."""
-    wt = pathlib.Path("/tmp") / f"rsk-comutant-{bug}"
+    wt = worktree_path(bug)
     if wt.exists():
         subprocess.run(
             ["git", "worktree", "remove", "--force", str(wt)], cwd=root, check=False
         )
         shutil.rmtree(wt, ignore_errors=True)
+    # --force clears a registration that outlived its directory (a swept /tmp, a
+    # reboot) at THIS path only, where `worktree prune` drops a sibling's too. A
+    # non-empty directory still refuses, so every other add failure stays loud.
     subprocess.run(
-        ["git", "worktree", "add", "--detach", str(wt), "HEAD"],
+        ["git", "worktree", "add", "--force", "--detach", str(wt), "HEAD"],
         cwd=root,
         check=True,
         capture_output=True,

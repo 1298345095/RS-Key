@@ -317,6 +317,26 @@ def test_green_slice_is_gap(tmp_path):
     assert verdict == "gap"
 
 
+def test_a_registration_that_outlived_its_directory_still_measures(tmp_path):
+    # A swept /tmp or a reboot takes the directory and leaves `.git/worktrees`
+    # naming it, so `wt.exists()` prunes nothing and the add dies "missing but
+    # already registered". The dev loop's, not CI's: `comutants` checks out fresh.
+    root = git_tree(tmp_path)
+    wt = comutate.worktree_path("BugAlpha")
+    shutil.rmtree(wt, ignore_errors=True)
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(wt), "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    shutil.rmtree(wt)
+    assert not wt.exists(), "the reproduction needs the directory GONE"
+    entry = {"file": "src/lib.rs", "find": "GUARD_LINE\n", "slice": ["false"]}
+    verdict, _ = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "killed", verdict
+
+
 def test_drifted_anchor_in_run_is_named(tmp_path):
     root = git_tree(tmp_path)
     entry = {"file": "src/lib.rs", "find": "NO_SUCH\n", "slice": ["true"]}
