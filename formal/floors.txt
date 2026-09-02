@@ -47,10 +47,10 @@
 \* Re-derived to a third of the distinct count `runs.toml` records for the safety
 \* run at 9cafee7, the same rule as its siblings.
 Shipped.cfg                          GREEN   25854624
-\* AS-AUTH-2's other arm: the same six invariants over a build that SHIPS
+\* AS-AUTH-2's other arm: its own nine invariants over a build that SHIPS
 \* alwaysUv. 23 521 512 distinct at depth 51 on a reduced retry ladder (2 : 1) --
 \* the arm buys the reachability question, not the ladder -- so a third is the
-\* floor, the same rule as its siblings.
+\* floor, the same rule as its siblings. Nine is counted in the cfg, not here.
 AlwaysUv.cfg                         GREEN   7800000
 \* `WidePerms`'s other arm: all sixteen permission subsets a host can obtain,
 \* against the five the model carries. One relying party, because the wide

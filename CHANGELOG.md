@@ -1482,22 +1482,28 @@ and to the statuses it quotes.
   `--features always-uv`, so `gate.alwaysUv` is a free state variable rather than
   the compiled default every reset restores — is now `AlwaysUvShipped` in
   `assurance/assumptions.toml`, read by `Init`, `GatesLive` and `ResetSweepGates`
-  and assigned **both ways**: FALSE by the 89 configurations the shipped image is
-  about, TRUE by the new `AlwaysUv.cfg`, which runs all six invariants with
-  alwaysUv on — GREEN over 23 521 512 distinct states at depth 51. An assumption
-  no run can vary is an axiom, which is the rule `assumption_gate.py` already
-  carried and nothing this slice needed had met. `GatesLive` reads
-  `gate.alwaysUv # AlwaysUvShipped` rather than `gate.alwaysUv`, and that is
-  closer to the tree, not further: `EF_ALWAYS_UV` exists only as an OVERRIDE, so
-  there is a record for the reset sweep to delete exactly when the two differ.
+  and assigned **both ways**: FALSE by the 89 configurations the shipped image
+  was about on the day this landed (the roster grows; count them in `formal/`,
+  not here), TRUE by the new `AlwaysUv.cfg`, which runs the nine invariants its
+  own `INVARIANTS` block names, with alwaysUv on — GREEN over 23 521 512
+  distinct states at depth 51. An assumption no run can vary is an axiom, which
+  is the rule `assumption_gate.py` already carried and nothing this slice needed
+  had met. `GatesLive` reads `gate.alwaysUv # AlwaysUvShipped` rather than
+  `gate.alwaysUv`, and that is closer to the tree, not further: `EF_ALWAYS_UV`
+  exists only as an OVERRIDE, so there is a record for the reset sweep to delete
+  exactly when the two differ.
   **`Shipped.cfg` was re-run and came back at 77 563 872 distinct — bit-identical
   to its count before the constant existed**, which is the measurement rather
   than the argument that the arm the image ships did not move. The
   `firmware-always-uv` settling question records the other half: its model arm is
   answered and its code arm is not, and the cost of the second is now a number —
-  `cargo test -p rsk-fido --features always-uv` is 446 passed and **172 failed**,
-  because alwaysUv with no PIN answers `PUAT_REQUIRED` and the suite is written
-  against the default door.
+  `cargo test -p rsk-fido --features always-uv` was 446 passed and **172 failed**
+  at `f52b720` on 2026-08-27, over the 619 tests the suite held that day, which is
+  the run `assurance/bundle/logs/cargo-test-always-uv.log` records. That reading
+  is dated because it is this entry's and stays this entry's: the suite grows, so
+  a later count is a second true measurement and not a correction of this one,
+  and a bare pair cannot say which of the two it is. alwaysUv with no PIN answers
+  `PUAT_REQUIRED` and the suite is written against the default door.
 
 - **A recorded mutant reddens a Kani harness, for the first time.** All 67
   co-refutation slices ran `cargo test -p …`, so no proof in this tree was

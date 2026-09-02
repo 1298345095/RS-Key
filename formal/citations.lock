@@ -239,7 +239,7 @@ assurance/bundle/SEC-FIDO-006B.toml	crates/rsk-fido/src/reset_assurance.rs	267-2
 assurance/bundle/SEC-FIDO-006B.toml	crates/rsk-fido/src/reset_assurance_tests.rs	45-63	#[test]	}
 assurance/bundle/SEC-FIDO-006B.toml	crates/rsk-fido/src/reset_assurance_tests.rs	57-57	assert!(!always_uv.reset_keeps_the_always_uv_gate(&volatile));	assert!(!always_uv.reset_keeps_the_always_uv_gate(&volatile));
 assurance/bundle/SEC-FIDO-006B.toml	crates/rsk-fido/src/reset_refinement_kani.rs	141-159	#[kani::proof]	}
-assurance/bundle/SEC-FIDO-006B.toml	formal/floors.txt	50-50	\* AS-AUTH-2's other arm: the same six invariants over a build that SHIPS	\* AS-AUTH-2's other arm: the same six invariants over a build that SHIPS
+assurance/bundle/SEC-FIDO-006B.toml	formal/floors.txt	50-50	\* AS-AUTH-2's other arm: its own nine invariants over a build that SHIPS	\* AS-AUTH-2's other arm: its own nine invariants over a build that SHIPS
 assurance/bundle/SEC-FIDO-006B.toml	formal/gen-configs.sh	105-107	ALL_INV=(NoAuthorizationBypass NoCrossTransportTouchConsumption	NoUnmanageableCredential ResetNeverWeakensSurvivingState)
 assurance/bundle/SEC-FIDO-006B.toml	formal/gen-configs.sh	182-189	# Solo: ONLY the invariant this mutant must break, so a mutant caught by	for i in "${ALL_INV[@]}" "${EXTRA_INV[@]}"; do echo "    $i"; done
 assurance/bundle/SEC-FIDO-006B.toml	formal/gen-configs.sh	197-198	if [ "${clauses:-0}" = 1 ]; then	for i in "${CLAUSE_INV[@]}"; do echo "    $i"; done

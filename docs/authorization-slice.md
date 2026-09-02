@@ -39,7 +39,7 @@ the second column.
 | `formal/RSKeyTokenRefinement.tla`, `RSKeyTokenView.tla` | native `INSTANCE` refinement B→A over `TokenGamma`, plus `R1oStep`'s outcome obligation and `R1oOutcomeCoverage`'s equality guard on 23 outcome-producing action names | any coverage guard on the `viol` ghost — the outcome set and the authorization-recording set are different sets |
 | `formal/RSKeyTokenExport.tla`, `scripts/export_token_relation.py`, `scripts/generate_token_edges.py` | the A relation serialized to Rust and checked exhaustively on the host, so A's semantics cannot drift from the generated table | give A an oracle *independent* of A: the export is A, so it can only catch transcription errors |
 | `assurance/token_refinement.toml` + `scripts/token_refinement_gate.py` | the ownership ledger for the token half: 10 volatile writers, 12 persistent writers, 7 outcome producers, each with a derived-and-checked disposition | own anything outside the token: the retry budget, the soft lock, the reset window and the walk owner have no ledger anywhere |
-| `formal/RSKeySecurityState.tla` | tier B: 53 actions, six named invariants, `Guard`/`Policy` separation so an invariant can be falsified rather than restated | close the ghost's completeness — see the B map below, where the count is off by ten |
+| `formal/RSKeySecurityState.tla` | tier B: 53 actions, the named invariants `docs/testing.md`'s generated row counts off `Shipped.cfg` — six of them are the ones `formal/README.md` maps to Rust, and this cell read `six` for the whole set — `Guard`/`Policy` separation so an invariant can be falsified rather than restated | close the ghost's completeness — see the B map below, where the count is off by ten |
 | `formal/TraceSecurity*.tla`, `scripts/security_trace.py`, `formal/traces/security-phase4.jsonl` | runtime correspondence: a 40-line recorded emulator session replayed as 74 steps, 41 state boundaries, 15 outcome boundaries, 7 gate boundaries, with `R4c` predicting the gate's answer, and eight `TraceSecurityBad*.cfg` — seven registered RED with the invariant each must break named, one a deliberate GREEN control — proving the replay can refuse | reach the property. The row itself prints `distinct_actions=22` of the model's 53, and only **10 of the 21** actions that record this invariant are among them — the whole `credentialManagement` family is unreached, which is the family the one existing Kani harness is about. Nor does it witness a board: the apparatus is `tools/emu` and its fidelity is an assumption nothing here discharges |
 | `formal/comutants.toml` + `scripts/comutate.py` | 69 patched code twins and 4 recorded-unreachable, floored at 0 pending; 11 of them belong to `NoAuthorizationBypass` and all 11 are `expect = "killed"` | falsify a **proof**. Measured: 0 of the 69 `slice` invocations run `cargo kani` — every one is a `cargo test -p …`. The property's only Kani harness is reddened by no recorded mutant |
 | `assurance/configurations.toml` + `scripts/matrix_gate.py` + [assurance matrix](assurance-matrix.md) | the configuration axis: 40 P0-family properties × 31 build configurations = 1240 cells, of which 37 covered, 139 equivalent, 0 conditional, 106 out-of-scope and 958 gap | decide this row's 24 gaps. `SEC-FIDO-001` is `covered` on `firmware`, `equivalent` on `firmware-pico` and `waveshare-one`, `out-of-scope` on the four `no-touch` images, and `gap` on the other 24 |
@@ -587,8 +587,21 @@ repeating here because they answer questions this page could only pose:
   requirement** — which an oracle transcribed from the code could not have shown;
 - **the matrix closed no cell, and the reason is a number.** The model half of
   the `firmware-always-uv` settling question is answered — `AlwaysUv.cfg` runs
-  all six invariants with `alwaysUv` as the compiled default — but
-  `cargo test -p rsk-fido --features always-uv` is 446 passed and **172 failed**,
-  because alwaysUv with no PIN answers `PUAT_REQUIRED` and the suite is written
-  against the default door. No `check.sh` row exercises that column, and
-  `covered` may rest only on the default build or on such a row.
+  the nine invariants its own `INVARIANTS` block names, with `alwaysUv` as the
+  compiled default — but `cargo test -p rsk-fido --features always-uv` was
+  446 passed and **172 failed** at `f52b720` on 2026-08-27, over the 619 tests the
+  suite held that day, which is the run
+  `assurance/bundle/logs/cargo-test-always-uv.log` records. Read the pair
+  with its run or not at all: the suite grows, so a later count of the same
+  command is a second true measurement and not a correction of this one, and a
+  bare pair names neither run. Re-running the command is what the settling
+  question in `assurance/configurations.toml` does, spelling the target the way
+  `scripts/check.sh` writes a host row; this page keeps the log's, because a
+  second pair transcribed here is only a third copy to hold in step — that
+  register's own was typed at `b245fee` and the command already answers
+  differently. alwaysUv with no PIN answers `PUAT_REQUIRED` and the suite is
+  written against the default door. No `check.sh` row exercises that column, and
+  `covered` may rest only on the default build or on such a row. The nine is
+  read off that block rather than restated here: this bullet said "all six
+  invariants" from the day it was typed, and the file has never named fewer than
+  nine, so the number was wrong when written rather than gone stale.
