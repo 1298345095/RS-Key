@@ -60,7 +60,7 @@ Every one of the 11 is a `p0-launch` row of `assurance/configurations.toml`, all
 
 > **Row note (`shipped_relation`).** the disagreement set is exact, not sampled: every (state, op) pair of AStates × Ops is compared
 
-#### Method 3 — tier B: the nine invariants over the shipped constants
+#### Method 3 — tier B: every invariant Shipped.cfg names, over the shipped constants
 
 `model-check` over Shipped.cfg. cfg: none. features: none.
 
@@ -480,7 +480,7 @@ Every one of the 11 is a `p0-launch` row of `assurance/configurations.toml`, all
 | `bound_tags` | `2` | which side of the implication a tag is on. The rule counts to one and the sweep measures that either tag alone clears it, so a tree whose only tag sits on a half that cannot falsify the invariant is still green |
 | `bound_owner_configurations` | `9` | any configuration outside the nine the rule reads. A tag is owed only for the invariants those nine check, so an invariant checked nowhere among them owes none |
 
-> **Row note (`shipped_relation`).** the sweep is over EVERY subset of the two tags — none, each alone, both — driven through `check_tags`, the gate's own entry point, with `production_rust` pointed at copies rather than at the tree, so nothing was edited. The rule it exercises is scripts/assurance_gate.py:689-698: for each of the nine OWNER_CFGS, every invariant that configuration checks must carry a Refines tag SOMEWHERE in production Rust. It is a count-to-one rule and the sweep is what makes that a measurement instead of a reading: either tag alone clears it, and the rule knows nothing about which side of the implication a tag is on
+> **Row note (`shipped_relation`).** the sweep is over EVERY subset of the two tags — none, each alone, both — driven through `check_tags`, the gate's own entry point, with `production_rust` pointed at copies rather than at the tree, so nothing was edited. The rule it exercises is scripts/assurance_gate.py:814-823: for each of the nine OWNER_CFGS, every invariant that configuration checks must carry a Refines tag SOMEWHERE in production Rust. It is a count-to-one rule and the sweep is what makes that a measurement instead of a reading: either tag alone clears it, and the rule knows nothing about which side of the implication a tag is on
 
 ### `SEC-FIDO-005` — `NoUnmanageableCredential`
 

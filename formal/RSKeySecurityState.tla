@@ -1600,11 +1600,11 @@ TokenOutcomeActions ==
      "DeleteCredStart", "ResetRefused", "ResetFinish", "ResetAborts"}
 
 (***************************************************************************)
-(* LIVENESS. All six invariants are safety -- "the bad thing does not        *)
-(* happen" -- and a device that starts a ceremony and never finishes it       *)
-(* satisfies every one of them. A WEDGE is a liveness failure, and RS-Key has *)
-(* shipped one, so the safety-only reading was a real blind spot rather than  *)
-(* a theoretical one.                                                         *)
+(* LIVENESS. Every name an INVARIANTS block carries is a safety property --   *)
+(* "the bad thing does not happen" -- and a device that starts a ceremony and *)
+(* never finishes it satisfies all of them. A WEDGE is a liveness failure,    *)
+(* and RS-Key has shipped one, so the safety-only reading was a real blind    *)
+(* spot rather than a theoretical one. Count them in the cfg, not here.       *)
 (*                                                                            *)
 (* A fairness assumption that is not true of the implementation makes its      *)
 (* property meaningless, so each is justified against the code and the         *)
@@ -1691,10 +1691,10 @@ EveryWalkCloses == walk.open ~> ~walk.open
 OpAdvancesIsOneActivity == ENABLED OpAdvances => ~Idle
 
 (***************************************************************************)
-(* THE INVARIANTS. The names are load-bearing: the same six must appear on  *)
-(* the Rust side, in the Kani harnesses and in the stateful fuzz targets,   *)
-(* so one property can be traced end to end. formal/README.md carries the   *)
-(* invariant -> Rust construct table.                                       *)
+(* THE INVARIANTS. The names are load-bearing: each one below must appear   *)
+(* on the Rust side, in the Kani harnesses and in the stateful fuzz         *)
+(* targets, so one property can be traced end to end. formal/README.md      *)
+(* carries the invariant -> Rust construct table; count them there.         *)
 (***************************************************************************)
 
 \* A `"Name" \notin viol` clause is only as strong as the completeness of the
