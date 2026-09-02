@@ -3,8 +3,8 @@
 # Copyright (C) 2026 RS-Key contributors
 """The mutation table for `level11c_gate.py`, in the diff that adds the guard.
 
-Three families, because a guard that only sees a mistyped number is half a guard
-and this tree has shipped that half five times:
+A guard that only sees a mistyped number is half a guard, and this tree has
+shipped that half five times over. So the table has three families:
 
 * **defect** — the page states a value the tree does not say;
 * **removal** — the sentence carrying the value is deleted or reworded away.
