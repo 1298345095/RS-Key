@@ -92,7 +92,7 @@ assurance/bundle/SEC-FIDO-003.toml	fuzz/fuzz_targets/fido_session.rs	1430-1433	a
 assurance/bundle/SEC-FIDO-003.toml	scripts/citation_gate.py	568-571	return re.compile(	)
 assurance/bundle/SEC-FIDO-003.toml	scripts/evidence_gate.py	459-490	def freshness(root, commit, inputs):	return ("fresh" if not behind else "stale"), behind
 assurance/bundle/SEC-FIDO-003.toml	scripts/kani.sh	299-299	export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft"	export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft"
-assurance/bundle/SEC-FIDO-003.toml	scripts/platform_gate.py	1132-1160	def check_bundles(root, ids, findings):	)
+assurance/bundle/SEC-FIDO-003.toml	scripts/platform_gate.py	1522-1550	def check_bundles(root, ids, findings):	)
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-device/src/ctap.rs	201-201	persistent_grant_record: fs.has_key(EF_PAUTHTOKEN),	persistent_grant_record: fs.has_key(EF_PAUTHTOKEN),
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-device/src/ctap.rs	236-236	persistent_grant: fs.has_key(EF_PAUTHTOKEN),	persistent_grant: fs.has_key(EF_PAUTHTOKEN),
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-fido/src/clientpin.rs	413-416	// §6.5.5.7.2 step 12 / .3 step 11: a `pcmr` request is answered with the	// exists only while some platform holds the grant (`EF_PAUTHTOKEN`).
@@ -138,7 +138,7 @@ assurance/bundle/SEC-FIDO-004.toml	scripts/citation_gate.py	368-374	def bundle_p
 assurance/bundle/SEC-FIDO-004.toml	scripts/comutate.py	898-902	"RUSTFLAGS": (	).strip(),
 assurance/bundle/SEC-FIDO-004.toml	scripts/evidence_gate.py	459-490	def freshness(root, commit, inputs):	return ("fresh" if not behind else "stale"), behind
 assurance/bundle/SEC-FIDO-004.toml	scripts/ghost_gate.py	64-64	INVARIANT = "NoAuthorizationBypass"	INVARIANT = "NoAuthorizationBypass"
-assurance/bundle/SEC-FIDO-004.toml	scripts/platform_gate.py	1132-1160	def check_bundles(root, ids, findings):	)
+assurance/bundle/SEC-FIDO-004.toml	scripts/platform_gate.py	1522-1550	def check_bundles(root, ids, findings):	)
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	795-795	/// Refines `RSKeySecurityState!NoUnmanageableCredential` — SEC-FIDO-005.	/// Refines `RSKeySecurityState!NoUnmanageableCredential` — SEC-FIDO-005.
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	853-853	bump_rp(fs, seed, rp_id_hash, rp_id)?;	bump_rp(fs, seed, rp_id_hash, rp_id)?;
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	867-867	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
@@ -171,7 +171,7 @@ assurance/bundle/SEC-FIDO-005.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...
 assurance/bundle/SEC-FIDO-005.toml	scripts/bundle_gate.py	1450-1450	verdicts = len(named) - inverse	verdicts = len(named) - inverse
 assurance/bundle/SEC-FIDO-005.toml	scripts/comutate.py	328-356	def solo_index(root: pathlib.Path) -> dict[str, list[str]]:	return out
 assurance/bundle/SEC-FIDO-005.toml	scripts/comutate.py	891-893	# Sequential runs share the main build cache: only the patched	"CARGO_TARGET_DIR": str(root / "target"),
-assurance/bundle/SEC-FIDO-005.toml	scripts/platform_gate.py	1132-1160	def check_bundles(root, ids, findings):	)
+assurance/bundle/SEC-FIDO-005.toml	scripts/platform_gate.py	1522-1550	def check_bundles(root, ids, findings):	)
 assurance/bundle/SEC-FIDO-006.toml	crates/rsk-device/src/lib.rs	54-54	/// power-cycled, and §6.6 opens the `authenticatorReset` window only just after a	/// power-cycled, and §6.6 opens the `authenticatorReset` window only just after a
 assurance/bundle/SEC-FIDO-006.toml	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 assurance/bundle/SEC-FIDO-006.toml	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
@@ -337,7 +337,7 @@ assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/reset_assurance.rs	245-26
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/reset_refinement_kani.rs	41-46	fn symbolic_volatile() -> ResetVolatileView {	}
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/reset_tests.rs	1185-1185	fn a_torn_reset_never_leaves_the_session_running_on_a_wiped_seed() {	fn a_torn_reset_never_leaves_the_session_running_on_a_wiped_seed() {
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/seed.rs	102-102	Ok(fs.try_has_key(EF_KEY_DEV_ENC)? && !fs.try_has_key(EF_KEY_DEV)?)	Ok(fs.try_has_key(EF_KEY_DEV_ENC)? && !fs.try_has_key(EF_KEY_DEV)?)
-assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/seed.rs	592-592	/// Refines `RSKeySecurityState!RamNeverOutlivesFlashSeed` — SEC-FIDO-007.	/// Refines `RSKeySecurityState!RamNeverOutlivesFlashSeed` — SEC-FIDO-007.
+assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/seed.rs	596-596	/// Refines `RSKeySecurityState!RamNeverOutlivesFlashSeed` — SEC-FIDO-007.	/// Refines `RSKeySecurityState!RamNeverOutlivesFlashSeed` — SEC-FIDO-007.
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/state.rs	338-339	/// Soft-lock: the seed decrypted by a vendor `UNLOCK`. RAM-only — held until	/// power-off, a reset, or an `AUT_DISABLE`; zeroized on `Drop` and on overwrite.
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/state.rs	386-386	keydev_dec: None,	keydev_dec: None,
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/state.rs	413-413	pub fn clear_keydev_dec(&mut self) {	pub fn clear_keydev_dec(&mut self) {
@@ -473,8 +473,8 @@ assurance/platform.toml	fuzz/fuzz_targets/power_cut.rs	202-202	(!credential_usab
 assurance/platform.toml	scripts/check.sh	174-223	assurance_trace_is_image_neutral() {	}
 assurance/platform.toml	scripts/check.sh	489-489	run_tests "test (host)"              cargo test --workspace --exclude firmware --exclude rsk-wipe --target "$HOST"	run_tests "test (host)"              cargo test --workspace --exclude firmware --exclude rsk-wipe --target "$HOST"
 assurance/platform.toml	scripts/fuzz-all.sh	41-41	mapfile -t targets < <(cargo fuzz list)	mapfile -t targets < <(cargo fuzz list)
-assurance/platform.toml	scripts/kani_gate.py	320-339	def workflow_pins(root):	}
-assurance/platform.toml	scripts/kani_gate.py	627-638	elif len(said) > 1:	)
+assurance/platform.toml	scripts/kani_gate.py	389-409	def workflow_pins(root):	}
+assurance/platform.toml	scripts/kani_gate.py	697-708	elif len(said) > 1:	)
 assurance/platform.toml	tests/29_reset_power_cut.py	191-194	assert assertion_status != 0, (	)
 assurance/platform.toml	tests/54_sram_residue.py	48-48	Run on 2026-08-05, Waveshare RP2350 Zero (silicon A4, secure boot off, picotool	Run on 2026-08-05, Waveshare RP2350 Zero (silicon A4, secure boot off, picotool
 assurance/token_refinement.toml	crates/rsk-device/src/ctap.rs	122-122	*st = rsk_fido::FidoState::new();	*st = rsk_fido::FidoState::new();
@@ -688,7 +688,7 @@ formal/README.md	crates/rsk-oath/src/lib.rs	540-542	// states left a host unable
 formal/README.md	crates/rsk-oath/src/lib.rs	1160-1161	self.validated = false;	self.otp_pin_verified = false;
 formal/README.md	crates/rsk-oath/src/lib.rs	1224-1228	/// `select` recomputes `validated` from whether a code is set.	self.chain = Chain::None;
 formal/README.md	crates/rsk-oath/src/lib.rs	1226-1226	self.validated = false;	self.validated = false;
-formal/README.md	crates/rsk-oath/src/lib.rs	1589-1589	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
+formal/README.md	crates/rsk-oath/src/lib.rs	1595-1595	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
 formal/README.md	crates/rsk-openpgp/src/internalaut.rs	45-48	// §7.2.13 names PW1 no. 82 and nothing else; PW3 used to stand in, and a	return Err(Sw::SECURITY_STATUS_NOT_SATISFIED);
 formal/README.md	crates/rsk-openpgp/src/keys.rs	405-419	/// Bump the 3-byte big-endian PSO:CDS counter. If the PW-status "PW1 valid for	sess.has_pw1 = false;
 formal/README.md	crates/rsk-openpgp/src/lib.rs	343-346	/// valid AID and an ICC power cycle clear them (the dispatcher's `deselect`).	self.reset_session();
@@ -709,7 +709,7 @@ formal/README.md	crates/rsk-openpgp/src/terminate.rs	187-187	if deleted > WIPE_M
 formal/README.md	crates/rsk-piv/src/auth.rs	57-65	/// skips the PIN; listing known gated values made unknown bytes ungated.	}
 formal/README.md	crates/rsk-piv/src/auth.rs	63-63	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,	PINPOLICY_ALWAYS => sess.has_pin && sess.pin_fresh,
 formal/README.md	crates/rsk-piv/src/auth.rs	113-117	/// nothing clears the PIN's own status — 9B included, hence `is_key`.	self.sess.pin_fresh = false;
-formal/README.md	crates/rsk-piv/src/files.rs	493-493	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
+formal/README.md	crates/rsk-piv/src/files.rs	499-499	if deleted > RESET_MAX_DELETES {	if deleted > RESET_MAX_DELETES {
 formal/README.md	crates/rsk-piv/src/lib.rs	183-186	fn set_pin(&mut self, verified: bool) {	}
 formal/README.md	crates/rsk-piv/src/lib.rs	199-203	self.clear_challenge();	pub struct PivApplet<'a> {
 formal/README.md	crates/rsk-piv/src/lib.rs	365-368	if !reselect {	// The default PIN/PUK/retry/mgmt/attestation files are provisioned once

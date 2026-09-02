@@ -34,7 +34,7 @@ grown past sixty, and no rule holds a number a docstring states. Measured, the
 [`main`] was the wrong function: `--write` returns before the audit, and a red run
 prints on stderr. The page is what a reader who never runs the gate sees.
 
-Eleven rules, and the first is the one that earns the file:
+Twelve rules, and the first is the one that earns the file:
 
 * **candidates are DERIVED, and every one is claimed.** Five derivations, each
   floored where its source exists and it found nothing:
@@ -82,13 +82,26 @@ Eleven rules, and the first is the one that earns the file:
   `docs/limitations.md` section that names the row, and that page's ids resolve back.
 * **the page is generated.** `docs/platform-assumptions.md` is written from the
   entries and byte-diffed, so a status cannot move without the diff that says so.
-* **the unsafe page is held to the tree.** AGENTS.md requires `docs/unsafe.md`
-  updated for every new site and nothing checked it: measured, that page's own
-  `Runtime sites:` read 21 over a tree carrying 22, and the two `link_section`
-  attributes in `rsk-rsa` were on no line of it. So the count is derived and
-  compared, and every file carrying a site must be NAMED there
-  ([`check_unsafe_page`]) — which is not a claim that the JUSTIFICATIONS are
-  right, only that the enumeration has the same members as the tree.
+* **the unsafe page is held to the tree, both ways.** AGENTS.md requires
+  `docs/unsafe.md` updated for every new site and nothing checked it: measured,
+  that page's own `Runtime sites:` read 21 over a tree carrying 22, and the two
+  `link_section` attributes in `rsk-rsa` were on no line of it. The count is
+  derived and compared; so, now, is the FILE list in both directions, the
+  numbering (it must partition the runtime sites), and the two markers this
+  page's own opening sentence promises under every justification. The first
+  version held the files ⊆ only, and a review drove four spellings through it at
+  exit 0 ([`check_unsafe_page`]). None of this claims a JUSTIFICATION is right —
+  only that page and tree enumerate the same sites.
+* **a row NAMES where each site it claims lives, and the page draws the same
+  grouping.** `covers` was checked for EXISTENCE both ways and for nothing else,
+  which is not something a row can be WRONG about: measured, collapsing all 31
+  site keys onto `PLAT-UNSAFE-009` — one of the two `discharged` rows — and
+  emptying the other eleven was
+  byte-identical output at exit 0. So a row must name the FILE of every site it
+  covers in its own words ([`check_covered_files`]), and each numbered section of
+  `docs/unsafe.md` names the row it enumerates and spans exactly that row's
+  runtime sites ([`check_page_sections`]). Six rows were already wrong about the
+  first half in the small.
 
 `contradicts` is the one link kind of stage 1B п.3 left out. No pair in this
 registry contradicts another, so the field would have no instance — and a rule
@@ -214,6 +227,15 @@ UNSAFE = re.compile(r"\bunsafe\b")
 #: new top-level crate — `rsk-wipe/`'s own shape — was invisible. `third_party/`
 #: is out for the reason `citation_gate.py` gives: a vendored fork's `unsafe` is
 #: its author's invariant, not this tree's.
+#:
+#: A review reported this clause DECORATIVE: emptying the tuple is byte-identical,
+#: because none of the 16 vendored `.rs` carries the token even in prose. That
+#: verdict is REFUTED, and by the error it shares with the `~n` one below — the
+#: arm was run on a tree where the clause cannot fire. Driven on its own defect
+#: input (one `unsafe` block added under `third_party/`), the clause INTACT is
+#: byte-identical and the clause REMOVED is exit 1 with three findings: the site
+#: unclaimed, the page count 22 against 23, and the page naming no site in a
+#: vendored file. It is load-bearing the moment a vendored crate grows one.
 UNSAFE_EXCLUDED = ("third_party/",)
 
 #: A Rust identifier, and the run of `#[…]` attributes an item may wear before
@@ -227,9 +249,42 @@ ATTR_RUN = re.compile(r"\s*#!?\[")
 #: `rsk-wipe` agree — both open `connect_internal_flash`, `flash_exit_xip` — and
 #: separate on the sixth (`flash_range_erase` against `flash_range_program`).
 #: Fewer words collide, more words make an edit three statements away rename the
-#: site. Collisions are not an error: [`site_keys`] suffixes them, so the rule
-#: degrades to an ordinal over the duplicates alone rather than over the file.
+#: site. It is a FLOOR and not a length: [`site_keys`] spends more words on a
+#: collision, so two sites that agree at six and part at seven get seven, and
+#: what used to be an ordinal over them is gone.
 SITE_WORDS = 6
+
+#: A `name = "value"` pair an attribute DECLARES, read out of raw source. The
+#: lexer blanks the value, and for a placement attribute it is the entire claim —
+#: see [`unsafe_sites`].
+#:
+#: The PAIR and not the bare literal, and escape-aware, because a review drove
+#: both: `#[unsafe(/* see "alpha" */ link_section = ".data.one")]` named the site
+#: after the COMMENT — the one thing reading raw source must not allow — and
+#: `#[unsafe(export_name = "a\b", link_section = ".data.one")]` made
+#: `[^"\\]*` re-anchor on the escaped quote and capture the text BETWEEN the two
+#: literals, so the slug read `export_name-link_section-link_section` and the
+#: section name was gone. A pair needs a NAME, and [`unsafe_sites`] refuses one
+#: whose name the lexer blanked, which is what puts comments back out of reach.
+#: A raw string (`r#"…"#`) matches nothing here and contributes no words: no
+#: attribute in this tree writes one, and a rule with no instance is decoration.
+ATTR_DECLARED = re.compile(r'([A-Za-z_]\w*)\s*=\s*"((?:[^"\\]|\\.)*)"')
+
+#: What separates two sites whose own code cannot separate them. A character no
+#: Rust identifier carries, so `TIED_MARK in key` is the whole test, and
+#: [`check_site_ordinals`] reports every key wearing one.
+#:
+#: The commit that introduced site keys recorded the `~n` removal arm at exit 0
+#: and called the clause DECORATIVE. That verdict was wrong and the reason is the
+#: most useful thing on this page: the arm was run on a CLEAN tree, where no two
+#: sites collide and the clause cannot fire. Driven on its own defect input — a
+#: duplicate site added, its substitution asserted — the clause INTACT is exit 1
+#: with two findings (`…~2 … claimed by no entry`, and the page count one short),
+#: and REMOVED it is exit 0 with the duplicate wholly invisible: the two keys
+#: collapse into one that is already registered, and the count comes back into
+#: agreement. So `~n` was load-bearing, and what replaced it spends words instead
+#: of positions.
+TIED_MARK = "~"
 
 #: A site is in a BUILD SCRIPT (host-side, never in the image), or it is a
 #: DECLARATION the compiler cannot check rather than an operation — the two
@@ -241,6 +296,51 @@ DECLARATION_KINDS = frozenset({"attr", "extern"})
 #: The page's own count of the sites it enumerates, as it writes it. Anchored on
 #: the words rather than on a line, because the sentence is reflowed prose.
 RUNTIME_SITES = re.compile(r"Runtime sites:\s*(\d+)")
+
+#: A numbered justification heading of [`UNSAFE_PAGE`]: `### 4.` or `### 5–12.`.
+#: All three dashes, because the page writes the en dash, a contributor will type
+#: the hyphen, and the em dash is what that page already uses as a separator on
+#: the same line — a range spelled with it read as a single number.
+NUMBERED_HEADING = re.compile(r"^### (?P<first>\d+)(?:[–—-](?P<last>\d+))?\.(?P<rest>.*)$", re.M)
+
+#: The same heading WITH the registry row it enumerates. Two patterns and not one
+#: optional group, because a heading that carries no id has to be a finding rather
+#: than a heading the grouping rules do not reach: a review collapsed every site
+#: onto one row, deleted the ids from the other seven headings, and the whole
+#: thing was byte-identical at exit 0 — the page still showed eight
+#: justifications and seven of them anchored to nothing.
+#:
+#: The id is on the HEADING and not in the registry because the ordinal is the
+#: page's — putting `5-12` in a row would be a transcribed position, which is the
+#: shape this module refuses.
+PAGE_SECTION = re.compile(
+    NUMBERED_HEADING.pattern.replace(r"(?P<rest>.*)$", r".*?`(?P<row>PLAT-[A-Z]+-\d{3})`\s*$"),
+    re.M,
+)
+
+#: What is on the page but not OF it: a fenced block and an HTML comment. Blanked
+#: before anything below reads the page, and length-preserving so every offset
+#: still lines up. Measured, both ways: a whole numbered justification wrapped in
+#: `<!-- -->` — heading, prose and both markers — is invisible in the built book
+#: and was byte-identical at exit 0, and so was the same section inside a `~~~`
+#: fence. A rule that reads a page as a string reads what the page does not show.
+PAGE_HIDDEN = re.compile(r"(?ms)^(?P<fence>```|~~~).*?^(?P=fence).*?$|<!--.*?-->")
+
+#: A URL, taken out before [`RS_PATH`] reads the page. `docs/unsafe.md` links
+#: embassy and cortex-m, and a link ending in `.rs` is a claim about somebody
+#: else's tree: unstripped, one upstream permalink reddens this gate.
+URL = re.compile(r"\bhttps?://\S+")
+
+#: What this page's own opening sentence promises under every justification. A
+#: heading whose body was deleted keeps its number and its id, and these are what
+#: says the justification went with it.
+SECTION_MARKERS = ("*Safe alternative:*", "*Containment:*")
+
+#: A first-party source PATH as the page writes one. It must carry a `/`: the
+#: page also says `main.rs` and `core1.rs` as shorthand inside prose about a file
+#: it has already named in full, and reading those as claims would make the
+#: page's own abbreviations into files that must exist.
+RS_PATH = re.compile(r"\b[\w.-]+(?:/[\w.-]+)+\.rs\b")
 
 GENERATED_BY = "Generated by scripts/platform_gate.py --write"
 
@@ -363,6 +463,16 @@ def board_only_candidates(root):
     }
 
 
+def _blank(found):
+    """A match's span, with every non-space character replaced by a space.
+
+    Length-preserving, so an offset taken after the substitution still lines up
+    with the file — the same discipline `gate_lines.rust_code` keeps, and the
+    reason a blanked region cannot shift a `re.M` anchor onto the wrong line.
+    """
+    return re.sub(r"\S", " ", found.group(0))
+
+
 def _matching(code, i, opener, closer):
     """The index just past the `closer` that balances the `opener` at `i`."""
     depth = 0
@@ -389,13 +499,13 @@ def _past_attributes(code, i):
     return i
 
 
-def unsafe_sites(code):
-    """(offset, kind, slug) per `unsafe` token in already-lexed Rust `code`.
+def unsafe_sites(code, raw):
+    """(offset, kind, words) per `unsafe` token in already-lexed Rust `code`.
 
     The KIND is the token that follows: `fn`, `impl`, `extern`, an `attr` for the
-    2024 `#[unsafe(…)]` form, and `block` for everything else. The SLUG is the
-    first [`SITE_WORDS`] words of the site's OWN code — its balanced `{ … }`, or
-    up to the `;` where it has none.
+    2024 `#[unsafe(…)]` form, and `block` for everything else. The WORDS are the
+    site's OWN code — its balanced `{ … }`, or up to the `;` where it has none —
+    and [`site_keys`] takes the first [`SITE_WORDS`] of them.
 
     Deliberately content and not position. An ordinal — the n-th `unsafe` in the
     file — is derivable and stable-looking and is the shape this repo has already
@@ -404,10 +514,24 @@ def unsafe_sites(code):
     denotes a different site. That is green, and it is a row whose justification
     has silently re-pointed. A slug moves only when the site's own code moves.
 
-    An `attr` reads past its attribute to the item, because the discriminating
-    half of `#[unsafe(link_section = "…")]` is a string LITERAL and the lexer has
-    already blanked it — the two in `rsk-rsa` are otherwise the same three
-    characters, and would be one candidate for two placements.
+    An `attr` reads past its attribute to the item AND takes the VALUES it
+    declares out of `raw`, which is the one place this module reads source the
+    lexer has not blanked. The reason is measured: with the literal dropped, the
+    whole subject of `PLAT-UNSAFE-010` and `-011` — WHICH section the item is
+    placed in — is invisible, and renaming `.start_block` to anything at all was
+    byte-identical output at exit 0.
+
+    Reading raw source is exactly what this module refuses everywhere else, so
+    the door is held open one inch: a value counts only when its NAME survives
+    the lexer. A review drove the version without that clause and a comment wrote
+    the slug — `#[unsafe(/* see "alpha" */ …)]` produced
+    `attr:link_section-alpha-…`, which then moves when the comment is edited.
+    A name inside a comment is blanked in `code`, and that is the whole test.
+
+    What this still cannot see is a section named INDIRECTLY:
+    `#[unsafe(link_section = SEC_A)]` keys on `sec_a`, not on what `SEC_A`
+    expands to, so changing the constant's VALUE is invisible. No attribute in
+    this tree writes one; a row that starts to would owe a different rule.
     """
     for found in UNSAFE.finditer(code):
         after = found.end()
@@ -423,7 +547,12 @@ def unsafe_sites(code):
                 (p for p in (code.find(c, item) for c in "{;=") if p >= 0),
                 default=len(code),
             )
-            span = f"{code[found.end():end]} {code[item:stop]}"
+            declared = " ".join(
+                pair.group(2)
+                for pair in ATTR_DECLARED.finditer(raw, found.end(), end)
+                if not code[pair.start(1)].isspace()
+            )
+            span = f"{code[found.end():end]} {declared} {code[item:stop]}"
         else:
             word = WORD.match(code, after)
             kind = word.group(0) if word and word.group(0) in ("fn", "impl", "extern") else "block"
@@ -437,32 +566,52 @@ def unsafe_sites(code):
         words = [w.lower() for w in WORD.findall(span) if w != "unsafe"]
         if words and words[0] == kind:
             words = words[1:]  # `extern:extern-…` says the same thing twice
-        yield found.start(), kind, "-".join(words[:SITE_WORDS]) or "anonymous"
+        yield found.start(), kind, words
 
 
-def site_keys(code):
-    """`<kind>:<slug>` per site, in source order, duplicates suffixed `~2`, `~3`.
+def site_keys(code, raw):
+    """`<kind>:<slug>` per site, in source order; a collision separated by MORE
+    of the colliding sites' own words, never by where they sit.
 
-    Two sites that agree on kind and on their first six words are the same
-    construct written twice, so the ordinal that separates them moves only when
-    another COPY is inserted between them — not when any site at all is.
+    A plain `~2` over the duplicates was the first version and it carries the
+    exact defect the ordinal above was rejected for, measured rather than
+    reasoned: register `~2`, then SWAP the two colliding functions in the file
+    and the output is byte-identical at exit 0 with each row's justification
+    silently attached to the other one. Extending the slug instead moves a key
+    only when the code under it moves.
+
+    The ordinal survives for sites whose word lists are EQUAL, where no amount of
+    their own code separates them — and there it can never be silent, because
+    [`check_site_ordinals`] reports it. That is the honest residue: two sites the
+    registry cannot name apart, said out loud rather than numbered.
     """
+    sites = [(kind, words) for _offset, kind, words in unsafe_sites(code, raw)]
     seen = {}
-    for _offset, kind, slug in unsafe_sites(code):
-        key = f"{kind}:{slug}"
+    for index, (kind, words) in enumerate(sites):
+        rivals = [
+            other
+            for position, (other_kind, other) in enumerate(sites)
+            if position != index and other_kind == kind and other[:SITE_WORDS] == words[:SITE_WORDS]
+        ]
+        length = SITE_WORDS
+        while rivals and length < len(words):
+            length += 1
+            rivals = [other for other in rivals if other[:length] == words[:length]]
+        key = f"{kind}:" + ("-".join(words[:length]) or "anonymous")
         seen[key] = seen.get(key, 0) + 1
-        yield key if seen[key] == 1 else f"{key}~{seen[key]}"
+        yield key if seen[key] == 1 else f"{key}{TIED_MARK}{seen[key]}"
 
 
 def unsafe_files(root):
-    """rel -> its lexed code, for every first-party `.rs` carrying the token."""
+    """rel -> (its lexed code, its raw text), per first-party `.rs` with the token."""
     out = {}
     for rel in sorted(gate_lines.tree_files(root)):
         if rel.suffix != ".rs" or str(rel).startswith(UNSAFE_EXCLUDED):
             continue
-        code = gate_lines.rust_code((root / rel).read_text(errors="replace"))
+        raw = (root / rel).read_text(errors="replace")
+        code = gate_lines.rust_code(raw)
         if UNSAFE.search(code):
-            out[rel] = code
+            out[rel] = (code, raw)
     return out
 
 
@@ -477,9 +626,30 @@ def unsafe_candidates(root):
     """
     return {
         f"{rel}#{key}": f"an `unsafe` site in {rel}, justified in {UNSAFE_PAGE}"
-        for rel, code in unsafe_files(root).items()
-        for key in site_keys(code)
+        for rel, (code, raw) in unsafe_files(root).items()
+        for key in site_keys(code, raw)
     }
+
+
+def check_site_ordinals(found, findings):
+    """The one position left in a site key, and it is never silent.
+
+    [`site_keys`] separates a collision with the sites' own words; what it cannot
+    separate is two sites whose word lists are EQUAL, and the `~n` there is a
+    POSITION — the thing this whole derivation exists to avoid. So it is reported
+    rather than shipped: the registry cannot name those two apart, and a swap of
+    their enclosing items would re-point both rows with nothing to see.
+    """
+    for key in unsafe_keys(found):
+        if TIED_MARK in key:
+            findings.append(
+                f"unsafe:{key}: two sites in {key.split('#', 1)[0]} whose own code"
+                " is identical, so the only thing separating them is where they"
+                f" sit — reordering them re-points every row that names a `{TIED_MARK}n`"
+                " key, with no diff. Registering them does not settle it and this"
+                " will stay red until they differ: name a local, or call the"
+                " helper the second one wants, so each site says which it is"
+            )
 
 
 def unsafe_keys(found):
@@ -507,7 +677,7 @@ def runtime_sites(found):
     ]
 
 
-def check_unsafe_page(root, found, findings):
+def check_unsafe_page(root, found, registered, findings):
     """`docs/unsafe.md` has the same members as the tree, both ways.
 
     AGENTS.md makes updating that page a rule for every new site and no gate read
@@ -516,16 +686,33 @@ def check_unsafe_page(root, found, findings):
     section's own prose ("three call sites") and not with its heading — and the
     two `link_section` attributes in `rsk-rsa` were named nowhere on it.
 
-    What this does NOT check is whether a justification is right, or still about
-    the site it sits under; that is a reading, and the registry rows are where
-    it is written down. It checks the two things a count and a file list can:
-    that the page's own number is the tree's, and that no file carrying a site
-    is missing from the page entirely.
+    The first version held the count both ways and the FILES only one way, and a
+    review drove four spellings straight through it, each byte-identical at exit
+    0: four `.rs` paths added to the page that carry no site, an invented section
+    claiming five sites that do not exist, a justification body deleted out from
+    under its heading, and all eight numbered headings collapsed onto `### 99.`.
+    Each is closed by reading the page's own shape rather than more prose —
+    [`PAGE_SECTION`]'s numbering has to PARTITION the runtime sites, the `.rs`
+    paths it names have to be the files that carry them, and a section has to
+    carry the two things this page's own opening sentence promises under every
+    justification (why a safe alternative does not work, and how the risk is
+    contained). And then a second review drove three more, all of which are here:
+    a section wrapped in an HTML comment or a fence ([`PAGE_HIDDEN`]), a heading
+    with its row id deleted ([`NUMBERED_HEADING`]), and an upstream permalink
+    ending in `.rs` reddening the ⊇ direction for a file in somebody else's tree
+    ([`URL`]).
+
+    What this still does NOT check is whether a justification is RIGHT; that is a
+    reading, and the registry rows are where it is written down. What it does now
+    check is that the page and the registry draw the SAME grouping: each numbered
+    heading names the row it enumerates and spans exactly that row's runtime
+    sites, which is what stops one row answering for all of them.
     """
     page = root / UNSAFE_PAGE
-    text = page.read_text(errors="replace") if page.is_file() else ""
+    text = PAGE_HIDDEN.sub(_blank, page.read_text(errors="replace") if page.is_file() else "")
     stated = RUNTIME_SITES.findall(text)
-    want = len(runtime_sites(found))
+    runtime = runtime_sites(found)
+    want = len(runtime)
     if len(stated) != 1:
         findings.append(
             f"{UNSAFE_PAGE}: {len(stated)} `Runtime sites: <n>` statements — the"
@@ -538,12 +725,167 @@ def check_unsafe_page(root, found, findings):
             f" {want} — a site added without its entry leaves the page's own"
             " number as the only thing that says so, which is why it is derived"
         )
-    for rel in sorted({key.split("#", 1)[0] for key in unsafe_keys(found)}):
-        if rel not in text:
+    carriers = {key.split("#", 1)[0] for key in unsafe_keys(found)}
+    named = set(RS_PATH.findall(URL.sub(" ", text)))
+    for rel in sorted(carriers - named):
+        findings.append(
+            f"{UNSAFE_PAGE}: names no site in {rel}, which carries one —"
+            " AGENTS.md makes this page the enumeration, and a file absent"
+            " from it is a justification nobody wrote"
+        )
+    for rel in sorted(named - carriers):
+        findings.append(
+            f"{UNSAFE_PAGE}: names {rel}, which carries no `unsafe` site — the"
+            " enumeration may not be LONGER than the tree either, or a page"
+            " that has outlived the code reads as coverage of it"
+        )
+    check_page_sections(text, runtime, registered, findings)
+
+
+# The mutation table for the site-key and grouping clauses, driven on THIS
+# checkout rather than on the fixture, and each removal arm run on its OWN defect
+# input — a removal arm on a clean tree is what recorded the previous `~n` clause
+# as decorative when it was load-bearing. Every row is a byte delta against an
+# unmutated run, never a bare exit code.
+#
+#   clause                  defect arm                       arm with the clause out
+#   slug extension          ALPHA -> GAMMA on a colliding     ZERO DELTA, exit 0: both
+#                           pair: exit 1, `covers '…-alpha',  sites collapse to `…~2` and
+#                           which no derivation produces`     the 7th word is past the slug
+#   raw attr literal        `.probe_section` renamed: exit 1, ZERO DELTA, exit 0 — which
+#                           `covers '…link_section-           is what made PLAT-UNSAFE-010
+#                           probe_section-…'`                 and -011 unfalsifiable
+#   tied-key report         two byte-identical sites: exit 1, ZERO DELTA, exit 0: `~2`
+#                           `whose own code is identical`     derives and says nothing
+#   check_covered_files     the 31-site collapse: exit 1, 5x  those 5 findings vanish;
+#                           `covers an `unsafe` site in <f>    the collapse is exit 0
+#                           and never names that file`         but for the section rules
+#   page ⊇ .rs paths        4 paths with no site: exit 1, 4x  ZERO DELTA, exit 0
+#                           `names <f>, which carries no`
+#   numbering partitions    a fabricated `### 23–27.`: exit 1, ZERO DELTA, exit 0
+#                           `cover [1..27] and the tree has 22`
+#   section markers         `### 4.`'s body deleted: exit 1,  ZERO DELTA, exit 0
+#                           2x `carries no `*Safe …:*``
+#   section names a row     `PLAT-BOGUS-999`: exit 1,         ZERO DELTA, exit 0
+#                           `is not a row of assurance/…`
+#   section size            the collapse: exit 1, 8x `spans   those 8 vanish
+#                           N site(s) and the row covers 0`
+#   row without a section   the collapse: exit 1, `covers 22  it vanishes
+#                           runtime … and has no numbered`
+#
+# A second review then walked the collapse straight past all of that, and the six
+# rows it forced are here too:
+#
+#   heading carries an id   the collapse with the seven other  ZERO DELTA, exit 0 —
+#                           ids deleted from their headings:   the page shows eight
+#                           exit 1, 7x `carries no `PLAT-…``   justifications, seven
+#                                                              anchored to nothing
+#   fences/comments blanked a `### 16–17.` section wrapped in  ZERO DELTA, exit 0, and
+#                           `<!-- -->` (and again in a `~~~`   the built page has lost
+#                           fence): exit 1, `cover [1..15,     the justification
+#                           18..22]` + the row has no section
+#   covers names a PATH     a row naming its file only inside  ZERO DELTA on the rule
+#                           a URL superstring: exit 1, `never  (the page byte-diff was
+#                           names that file`                   the only delta)
+#   URLs stripped           an upstream permalink ending .rs:  a FALSE red — `names
+#                           ZERO DELTA, exit 0                 github.com/…/gpio.rs`
+#   attr name survives      `/* see "alpha" */` before the     the slug reads
+#   the lexer               attribute's pair: the slug is      `link_section-alpha-…`
+#                           the plain one                      and a COMMENT keys a site
+#   escape-aware pair       `export_name = "a\b", link_section the slug reads
+#                           = ".data.one"`: both values, in    `export_name-link_section-
+#                           order                              link_section` and the
+#                                                              section name is GONE
+#
+# What still gets through, measured and not guessed, and both are the same shape:
+# a SWAP of two sites between two rows that preserves both group sizes and both
+# file sets is byte-identical, exit 0 (`PLAT-UNSAFE-002` and `-003` are one site
+# each in one file, so their `covers` can be exchanged with nothing to see).
+# Closing it needs the page to enumerate sites by KEY rather than by ordinal,
+# which is a page rewrite and not this change. So is a section named INDIRECTLY —
+# `#[unsafe(link_section = SEC_A)]` keys on the constant's NAME, never on what it
+# expands to; no attribute in this tree writes one.
+def check_page_sections(text, runtime, registered, findings):
+    """The numbered justifications partition the runtime sites, one row each.
+
+    Four things, and the middle two are the anti-collapse rule. The numbers have
+    to be 1..N with nothing missing and nothing twice — a fabricated section and
+    eight headings collapsed onto one number both die here. Every numbered
+    heading has to CARRY a row id, and then to span exactly the runtime sites
+    that row covers, so `covers` is no longer a set the registry may draw any way
+    it likes: the page draws it too, and the two have to agree. And a heading
+    with no body is a justification that was deleted rather than written, caught
+    by the two markers this page puts under every one of them.
+
+    The id clause is the newest and it is the one a review needed: with only the
+    span rule, the collapse was reachable again by deleting the ids from the
+    seven headings it emptied — every remaining constraint then applied to one
+    heading, and the page still showed eight justifications.
+    """
+    sections = list(PAGE_SECTION.finditer(text))
+    anchored = {found.start() for found in sections}
+    for found in NUMBERED_HEADING.finditer(text):
+        if found.start() not in anchored:
             findings.append(
-                f"{UNSAFE_PAGE}: names no site in {rel}, which carries one —"
-                " AGENTS.md makes this page the enumeration, and a file absent"
-                " from it is a justification nobody wrote"
+                f"{UNSAFE_PAGE}: section `{found['first']}` carries no"
+                " `PLAT-…` id — the page's numbering IS the registry's grouping,"
+                " so a numbered justification anchored to no row is one every"
+                " rule below stops applying to"
+            )
+    # A section's BODY runs to the next numbered heading, or to the end of the
+    # page. Sliced rather than split on `###`, so an unnumbered `###` between two
+    # of them cannot make a body look empty.
+    ends = [match.start() for match in sections[1:]] + [len(text)]
+    seen, owners = [], {}
+    for found, end in zip(sections, ends):
+        first, last = int(found["first"]), int(found["last"] or found["first"])
+        seen += list(range(first, last + 1))
+        name = found["row"]
+        body = text[found.end() : end]
+        if name not in registered:
+            findings.append(
+                f"{UNSAFE_PAGE}: section `{found['first']}` names {name}, which is"
+                f" not a row of {REGISTRY} — the page's enumeration is anchored on"
+                " the registry, and an id nothing resolves anchors nothing"
+            )
+        elif name in owners:
+            findings.append(
+                f"{UNSAFE_PAGE}: {name} has two numbered sections — a row is one"
+                " obligation, so two headings over it is a grouping the registry"
+                " does not make"
+            )
+        else:
+            owners[name] = last - first + 1
+        for marker in SECTION_MARKERS:
+            if marker not in body:
+                findings.append(
+                    f"{UNSAFE_PAGE}: section `{found['first']}` ({name}) carries no"
+                    f" `{marker}` — this page's own opening sentence promises one"
+                    " under every justification, and a heading whose body is gone"
+                    " otherwise reads as an enumerated site"
+                )
+    if seen != list(range(1, len(runtime) + 1)):
+        findings.append(
+            f"{UNSAFE_PAGE}: the numbered sections cover {seen or 'nothing'} and"
+            f" the tree has {len(runtime)} runtime site(s) — the numbering is the"
+            " page's own partition of them, so a gap, a repeat or a number past"
+            " the end is a site enumerated twice or not at all"
+        )
+    for name, entry in sorted(registered.items()):
+        covered = sum(1 for key in runtime if f"unsafe:{key}" in entry.get("covers", []))
+        if covered and name not in owners:
+            findings.append(
+                f"{name}: covers {covered} runtime `unsafe` site(s) and has no"
+                f" numbered section in {UNSAFE_PAGE} — the page is the enumeration"
+                " and a row that claims sites it does not enumerate is one row"
+                " answering for another's"
+            )
+        elif name in owners and owners[name] != covered:
+            findings.append(
+                f"{name}: its {UNSAFE_PAGE} section spans {owners[name]} site(s)"
+                f" and the row covers {covered} — the page and the registry are"
+                " two halves of one grouping, and a `covers` set nothing else"
+                " draws is a set one row can grow to hold every site"
             )
 
 
@@ -884,6 +1226,54 @@ def check_links(name, entry, ids, properties, constants, findings):
             " then the constant's candidate is claimed by some other entry and the"
             " two registries hold two answers about it"
         )
+
+
+#: Where a row is allowed to say WHERE a site it covers lives. The union of its
+#: own text and its own artifacts rather than the discharge prose alone: a
+#: `pending` row has no `evidence` and a settled one has already listed the files
+#: there, so requiring one field would move a path from where it belongs to where
+#: the rule looks.
+SITE_FIELDS = ("statement", "discharge", "evidence", "revalidated_by")
+
+
+def check_covered_files(name, entry, findings):
+    """A row NAMES the file of every `unsafe` site it claims.
+
+    The `covers` relation was checked for EXISTENCE in both directions and for
+    nothing else, and that is not a constraint a row can be WRONG about: measured
+    on this checkout, collapsing all 31 site keys onto `PLAT-UNSAFE-009` and
+    emptying the other eleven was byte-identical output at exit 0 — one row
+    answering for every site, under the strongest disposition the registry has
+    (`discharged`, which two of the twelve carry). This is the half a row can be
+    wrong about. A collapse then has to claim, in the row's own words, that the
+    reading covers files the row never mentions, and six rows here were already
+    wrong about it in the small: `PLAT-UNSAFE-006` covered a `core1.rs` site
+    while its discharge named neither file.
+
+    Deliberately the FILE and not the site key. The key is the site's own code and
+    already reddens when it moves; what this adds is that the row says where to go
+    and look, which is the thing a reader needs and a collapse cannot fake.
+
+    A PATH the row writes, not a substring of its prose. A substring test was the
+    first version and a review walked it: `https://example.invalid/xfirmware/src/
+    main.rs.bak` satisfies `firmware/src/main.rs`, so any superstring pays the
+    rule. It is the same [`RS_PATH`] the page half uses, which is the point — two
+    halves of one rule enforced at two strengths is the weaker one being the rule.
+    """
+    said = [entry.get(field, "") for field in SITE_FIELDS]
+    text = " ".join(
+        part for value in said for part in (value if isinstance(value, list) else [str(value)])
+    )
+    named = set(RS_PATH.findall(text))
+    sites = [c.split(":", 1)[1] for c in entry.get("covers", []) if c.startswith("unsafe:")]
+    for rel in sorted({site.split("#", 1)[0] for site in sites}):
+        if rel not in named:
+            findings.append(
+                f"{name}: covers an `unsafe` site in {rel} and never names that"
+                " file — a row that does not say where its sites are can be"
+                " grown to cover any of them, which is how one row comes to"
+                " answer for a whole page of justifications"
+            )
 
 
 #: `assurance/board/<ID>.toml`: the raw record a hardware measurement leaves
@@ -1425,6 +1815,17 @@ def settled_freshness(root, registered, tree):
 
     Computed once by [`audit`] and handed to [`render`], because it shells out to
     git per input and both of them want the same answer.
+
+    What the FILE-level anchor costs, measured at `be18565` and left here rather
+    than in the page it is about — a number in a generated page rots with nothing
+    to say so, which is this module's own founding complaint. Of the 200 commits
+    before that one, 33 touch `firmware/src/main.rs` and so flip `PLAT-UNSAFE-001`
+    stale; `git log -L` over the two lines that row covers finds ONE commit in the
+    whole history and none of it inside that window. The site axis it wants is the
+    `covers` key, which is the site's own code. A `git log -L` anchor was priced
+    too: 84 ms against 11 ms for `git log -1 -- <file>` (median of seven), though
+    it is CHEAPER than the unbounded `git log -- <rel>` [`last_commit`] runs, so
+    the cost is not the argument — the line numbers are.
     """
     out, memo = {}, {}
     for name, entry in sorted(registered.items()):
@@ -1530,6 +1931,7 @@ def audit(root, board_floor=None):
         check_freshness(name, entry, findings, dated.get(name))
         check_out_of_scope(name, entry, findings, headings, mentions)
         check_links(name, entry, registered, properties, constants, findings)
+        check_covered_files(name, entry, findings)
         for target in entry.get("covers", []):
             if target not in found:
                 findings.append(
@@ -1552,7 +1954,8 @@ def audit(root, board_floor=None):
     check_bundles(root, registered, findings)
     check_board_records(root, registered, findings, board_floor)
     check_published_ids(registered, findings, mentions)
-    check_unsafe_page(root, found, findings)
+    check_site_ordinals(found, findings)
+    check_unsafe_page(root, found, registered, findings)
 
     try:
         want = render(root, registered, dated)
@@ -1724,7 +2127,19 @@ def render(root, registered=None, dated=None):
         f" candidate that no longer exists. {len(unsafe_keys(found))} of them are"
         " `unsafe` sites, keyed by their own code rather than by a position, so"
         " that a site inserted above another cannot renumber a row onto a"
-        " different one.",
+        " different one — and where two sites agree, the key spends MORE of their"
+        " own words rather than numbering them, because a `~2` re-points on a"
+        " reorder and that is the same defect one layer down.",
+        "",
+        "Which sites go under which row is not the registry's to choose alone."
+        " `docs/unsafe.md` numbers its justifications, each heading names the row"
+        " it enumerates, and the numbering has to partition the runtime sites with"
+        " each row's section spanning exactly the sites that row covers. Every row"
+        " also has to NAME, in its own words, the file of each site it claims."
+        " Without those two, `covers` was checked only for existence in both"
+        f" directions: collapsing all {len(unsafe_keys(found))} site keys onto one"
+        " discharged row and emptying the eleven others was byte-identical output"
+        " at exit 0.",
         "",
         "## The registry",
         "",
@@ -1758,6 +2173,17 @@ def render(root, registered=None, dated=None):
         f" itself. Stale is not a red: {len(stale)} of {len(settled)} are stale"
         " right now, and a gate red in its resting state is one nobody reads. What"
         " it costs instead is this page — a row going stale is a diff.",
+        "",
+        "That price is worth stating for the `unsafe` rows, because the input is a"
+        " whole FILE and the claim is two lines of it. `PLAT-UNSAFE-001` is"
+        " anchored on `firmware/src/main.rs`, so ANY commit touching that file"
+        " flips it stale and owes this page a regeneration — including the many"
+        " that cannot touch what the row is about. The site-level axis such a row"
+        " wants is already elsewhere: its `covers` keys are the sites' own code,"
+        " so a site that is rewritten reddens the row outright rather than dating"
+        " it. Re-anchoring freshness on the site would mean `git log -L` over a"
+        " line range — keyed on line numbers that shift, for a second answer to a"
+        " question `covers` already answers by content.",
         "",
         "| ID | Taken at | Freshness | Behind | Claims that inherit it |",
         "|---|---|---|---|---|",

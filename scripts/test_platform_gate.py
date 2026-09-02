@@ -43,6 +43,21 @@ rule leaves the three red cases finding NOTHING, and dropping the generated-page
 carve-out reddens `PLAT-BUILD-001` on the real checkout, which is the false red
 and the opposite direction.
 
+The `unsafe` cases carry the newest holes, and two of them are corrections of
+verdicts written down in this table's own prose. An insert case and a duplicate
+case were both here and a REORDER was not — so the `~2` over two colliding sites
+had exactly the defect the file-position ordinal was rejected for, measured on
+the checkout: register `~2`, swap the two functions, byte-identical at exit 0
+with each justification silently attached to the other one. The `~n` clause was
+then recorded as DECORATIVE off a removal arm at exit 0, and `UNSAFE_EXCLUDED`
+after it; both arms were run on a CLEAN tree, where neither clause can fire.
+Driven on their own defect inputs — a duplicate site, and one `unsafe` under
+`third_party/` — the first is exit 1 with two findings and the second exit 1 with
+three. Both verdicts are wrong, and the arms are recorded beside the code they
+are about. A collision case here also has to collide AT the boundary: written
+with five words against six, the keys differ with no rule applied, and the case
+passes over a derivation that only counts.
+
 Then a review drove FOUR spellings past that rule, each measured at exit 0 on the
 real checkout, and every one of them has a case here: the page this gate itself
 writes, cited by a row that page is rendered FROM (and this registry, the same
@@ -215,6 +230,21 @@ pub fn steal() {
 }
 """
 
+#: Two sites that AGREE on all six of [`platform_gate.SITE_WORDS`] and part on the
+#: seventh — `rsk-wipe`'s pair one word further along. Written out rather than
+#: derived from `UNSAFE_RS`, because the collision has to be at the boundary: with
+#: five words against six the keys differ with no rule applied at all, and every
+#: case here then passes over a derivation that only counts.
+COLLIDING_RS = """\
+pub fn alpha() {
+    unsafe { core::ptr::null::<u8>().read().wrapping_add(ALPHA) };
+}
+
+pub fn beta() {
+    unsafe { core::ptr::null::<u8>().read().wrapping_add(BETA) };
+}
+"""
+
 #: The three shapes the review drove past the first version of the derivation:
 #: a line comment, a doc comment and a string literal, each carrying the word.
 PROSE_RS = """\
@@ -237,6 +267,11 @@ UNSAFE_MD = """\
 
 **Runtime sites: 2.** One in `crates/rsk-a/src/lib.rs` and one in
 `firmware/src/main.rs`, each a read through a null pointer.
+
+### 1\u20132. The null reads \u2014 `PLAT-TOOLCHAIN-001`
+
+*Safe alternative:* none, the fixture needs a site.
+*Containment:* the fixture never runs.
 """
 
 #: Two crates, and only one declares an `abstracts` list — so the derivation is
@@ -327,7 +362,7 @@ covers = ["backend:rsk-a/tear"]
 id = "PLAT-TOOLCHAIN-001"
 class = "toolchain"
 statement = "Every unsafe upholds an invariant the compiler cannot check."
-discharge = "A source audit per site."
+discharge = "A source audit per site, in crates/rsk-a/src/lib.rs and firmware/src/main.rs."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: the one class safe Rust does not rule out"
@@ -491,6 +526,24 @@ class Tree:
 @pytest.fixture
 def tree(tmp_path):
     return Tree(tmp_path)
+
+
+def sites_by_key(tree, rel):
+    """key -> the site's own source text, for one file of the fixture.
+
+    What a site key has to be STABLE against is a permutation of the file, and a
+    key SET cannot see that: the two strings are the same either way, and each
+    naming the other body is exactly the defect. So the cases below compare what
+    each key denotes.
+    """
+    raw = (tree.root / rel).read_text()
+    code = gate_lines.rust_code(raw)
+    return {
+        key: raw[offset : offset + 60]
+        for key, (offset, _kind, _words) in zip(
+            platform_gate.site_keys(code, raw), platform_gate.unsafe_sites(code, raw)
+        )
+    }
 
 
 def only(problems, needle):
@@ -1108,7 +1161,7 @@ def test_every_syntactic_form_of_unsafe_still_counts(tree):
         ("unsafe impl Send for T {}", "impl:send-for-t"),
         ('unsafe extern "C" { fn g(); }', "extern:fn-g"),
         ('#[unsafe(link_section = ".data")]\npub static X: u8 = 0;',
-         "attr:link_section-pub-static-x-u8"),
+         "attr:link_section-data-pub-static-x-u8"),
     ):
         tree.write("crates/rsk-c/src/lib.rs", body + "\n")
         tree.git("add", "-A")
@@ -2062,27 +2115,80 @@ def test_inserting_a_site_does_not_re_point_an_existing_row(tree):
     assert not only(tree.problems(), "which no derivation produces")
 
 
-def test_two_identical_sites_in_one_file_are_told_apart(tree):
-    """`rsk-wipe`'s shape at six words, forced here at one.
+def test_two_colliding_sites_are_separated_by_their_own_words(tree):
+    """`rsk-wipe`'s shape at six words, forced here at one — and the arm that
+    refuses the ordinal a second time, one level down.
 
-    Two sites agreeing on kind and on their first `SITE_WORDS` words are the same
-    construct twice; the suffix is an ordinal over THOSE and moves only when
-    another copy is inserted between them — not when any site at all is.
+    `~2` over the duplicates was the first version, and it carries the exact
+    defect `<path>#<n-th unsafe>` was rejected for: measured on the checkout,
+    register `~2` and then SWAP the two colliding functions and the output is
+    byte-identical at exit 0 with each row's justification now attached to the
+    other one. So a collision spends MORE of the sites' own words instead.
+    """
+    tree.write("crates/rsk-c/src/lib.rs", COLLIDING_RS)
+    tree.git("add", "-A")
+    found = {k for k in platform_gate.candidates(tree.root) if "rsk-c" in k}
+    assert found == {
+        "unsafe:crates/rsk-c/src/lib.rs#block:core-ptr-null-u8-read-wrapping_add-alpha",
+        "unsafe:crates/rsk-c/src/lib.rs#block:core-ptr-null-u8-read-wrapping_add-beta",
+    }, sorted(found)
+    assert not [k for k in found if platform_gate.TIED_MARK in k], sorted(found)
+
+
+def test_reordering_two_colliding_sites_does_not_re_point_a_row(tree):
+    """The case the first version had no arm for, and the defect it was blind to.
+
+    An insert case and a duplicate case were both here; a REORDER was not, and it
+    is the one an ordinal over the duplicates gets wrong. Written both ways: the
+    swap moves no key (nothing about either site changed), and editing the word
+    that separates them DOES move one — which under `~2` was byte-identical,
+    because the seventh word was past the end of the slug either way.
+    """
+    tree.write("crates/rsk-c/src/lib.rs", COLLIDING_RS)
+    tree.git("add", "-A")
+    before = sites_by_key(tree, "crates/rsk-c/src/lib.rs")
+    first, second = COLLIDING_RS.split("\n\n")
+    tree.edit("crates/rsk-c/src/lib.rs", f"{first}\n\n{second}", f"{second}\n\n{first}")
+    # The MAPPING and not the key set. A set comparison passes under the ordinal
+    # BY CONSTRUCTION — `~1` and `~2` are the same two strings after a swap, and
+    # each denoting the other body is the whole defect. Measured: with the
+    # extension removed this assertion is the one that falls.
+    assert sites_by_key(tree, "crates/rsk-c/src/lib.rs") == before, "a swap re-pointed a key"
+    tree.edit("crates/rsk-c/src/lib.rs", "BETA", "GAMMA")
+    moved = {k for k in platform_gate.candidates(tree.root) if "rsk-c" in k}
+    assert "unsafe:crates/rsk-c/src/lib.rs#block:core-ptr-null-u8-read-wrapping_add-gamma" in moved
+    assert (
+        "unsafe:crates/rsk-c/src/lib.rs#block:core-ptr-null-u8-read-wrapping_add-beta" not in moved
+    ), sorted(moved)
+
+
+def test_sites_their_own_code_cannot_separate_are_reported(tree):
+    """The residue, and it is never silent.
+
+    Two sites whose word lists are EQUAL leave nothing but a position to tell
+    them apart. The key still carries an ordinal — dropping it would collapse two
+    candidates into one and lose a site — but the pair is a finding, because a
+    row naming `~2` re-points if anyone reorders them.
     """
     tree.append("crates/rsk-a/src/lib.rs", UNSAFE_RS.replace("steal", "again"))
     found = platform_gate.candidates(tree.root)
     assert "unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read~2" in found, sorted(found)
-    assert only(tree.problems(), "#block:core-ptr-null-u8-read~2: derived from")
+    assert only(tree.problems(), "whose own code is identical")
 
 
-def test_an_attribute_site_is_named_by_the_item_it_decorates(tree):
-    """The lexer has already blanked the one thing that separates two of these.
+def test_an_attribute_site_is_named_by_its_section_and_by_its_item(tree):
+    """Both halves, because each was a hole on its own.
 
-    `rsk-rsa` carries `#[cfg_attr(target_os = "none", unsafe(link_section = …))]`
-    twice, and the section NAME is a string literal — blanked before the token is
-    ever found, so a slug read from the attribute alone makes the two placements
-    one candidate. Reading past it to the item is what tells them apart, and the
-    intervening `#[inline(never)]` is why the attribute run is skipped.
+    The ITEM half first: `rsk-rsa` carries the attribute twice with an
+    `#[inline(never)]` between the second and its `fn`, and reading the attribute
+    alone made the two placements one candidate.
+
+    The SECTION half is the newer one and it is what makes `PLAT-UNSAFE-010` and
+    `-011` falsifiable at all. Their whole subject is WHICH section the item is
+    placed in, that name is a string literal, and the lexer blanks it — so
+    renaming `.start_block` to anything at all was byte-identical output at exit
+    0, measured on the checkout. Asserted here by two placements of the same
+    item shape that differ ONLY in the section they name.
     """
     tree.write(
         "crates/rsk-c/src/lib.rs",
@@ -2092,8 +2198,49 @@ def test_an_attribute_site_is_named_by_the_item_it_decorates(tree):
     tree.git("add", "-A")
     found = {k for k in platform_gate.candidates(tree.root) if "rsk-c" in k}
     assert found == {
-        "unsafe:crates/rsk-c/src/lib.rs#attr:link_section-pub-static-a-u8",
-        "unsafe:crates/rsk-c/src/lib.rs#attr:link_section-pub-fn-b",
+        "unsafe:crates/rsk-c/src/lib.rs#attr:link_section-data-one-pub-static-a",
+        "unsafe:crates/rsk-c/src/lib.rs#attr:link_section-data-two-pub-fn-b",
+    }, sorted(found)
+    # And the section name is the discriminator, not decoration beside it: the
+    # arm that was exit 0 before the raw literal was read.
+    tree.edit("crates/rsk-c/src/lib.rs", ".data.two", ".data.three")
+    moved = {k for k in platform_gate.candidates(tree.root) if "rsk-c" in k}
+    assert "unsafe:crates/rsk-c/src/lib.rs#attr:link_section-data-three-pub-fn-b" in moved
+    assert "unsafe:crates/rsk-c/src/lib.rs#attr:link_section-data-two-pub-fn-b" not in moved
+
+
+def test_a_comment_inside_an_attribute_cannot_write_a_slug(tree):
+    """The raw read is one inch of door, and this is what holds it there.
+
+    A review drove the version without the name clause and a comment wrote the
+    slug: `#[unsafe(/* see "alpha" */ link_section = ".data.one")]` keyed on
+    `alpha`, so editing a COMMENT moved a site — the exact class the lexer
+    exists to stop, walked in through the one place this module reads raw
+    source. Three spellings, and the first version was green over all three:
+    a quoted word in a comment, a comment shaped like a real `name = "value"`
+    pair, and an escaped quote in an EARLIER literal, which made `[^"\\\\]*`
+    re-anchor and capture the text between the two literals — the slug then read
+    `export_name-link_section-link_section` and the section name was gone.
+    """
+    plain = 'unsafe:crates/rsk-c/src/lib.rs#attr:link_section-data-one-pub-static-a'
+    for body in (
+        '#[unsafe(/* see "alpha" */ link_section = ".data.one")]\npub static A: u8 = 0;\n',
+        '#[unsafe(/* q = "boom" */ link_section = ".data.one")]\npub static A: u8 = 0;\n',
+        '#[unsafe(link_section = ".data.one")]\npub static A: u8 = 0;\n',
+    ):
+        tree.write("crates/rsk-c/src/lib.rs", body)
+        tree.git("add", "-A")
+        found = {k for k in platform_gate.candidates(tree.root) if "rsk-c" in k}
+        assert found == {plain}, (body, sorted(found))
+    # The escape case keeps BOTH declared values and does not lose the section.
+    tree.write(
+        "crates/rsk-c/src/lib.rs",
+        '#[unsafe(export_name = "a\\b", link_section = ".data.one")]\npub static A: u8 = 0;\n',
+    )
+    tree.git("add", "-A")
+    found = {k for k in platform_gate.candidates(tree.root) if "rsk-c" in k}
+    assert found == {
+        "unsafe:crates/rsk-c/src/lib.rs#attr:export_name-link_section-a-b-data-one"
     }, sorted(found)
 
 
@@ -2127,7 +2274,10 @@ def test_a_file_carrying_a_site_must_be_named_on_the_unsafe_page(tree):
               '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",',
               '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",\n'
               '  "unsafe:crates/rsk-b/src/lib.rs#block:core-ptr-null-u8-read",')
+    tree.edit("assurance/platform.toml", "and firmware/src/main.rs.",
+              "firmware/src/main.rs and crates/rsk-b/src/lib.rs.")
     tree.edit("docs/unsafe.md", "Runtime sites: 2.", "Runtime sites: 3.")
+    tree.edit("docs/unsafe.md", "### 1\u20132.", "### 1\u20133.")
     tree.git("add", "-A")
     tree.regenerate()
     assert only(tree.problems(), "names no site in crates/rsk-b/src/lib.rs")
@@ -2135,6 +2285,159 @@ def test_a_file_carrying_a_site_must_be_named_on_the_unsafe_page(tree):
     # what settles it, and nothing else about the page changed.
     tree.append("docs/unsafe.md", "\nAlso `crates/rsk-b/src/lib.rs`.\n")
     assert tree.problems() == []
+
+
+def test_the_page_may_not_name_a_file_that_carries_no_site(tree):
+    """The other direction, and it was open: ⊆ only.
+
+    Measured on the checkout, four `.rs` paths added to that page carry no site
+    and were byte-identical at exit 0. A page longer than the tree reads as
+    coverage of code that is gone, which is the same lie as the count being low.
+    Only a PATH counts — the page's own `main.rs` shorthand is not a claim.
+    """
+    tree.append("docs/unsafe.md", "\nAlso `crates/rsk-gone/src/lib.rs`.\n")
+    assert only(tree.problems(), "names crates/rsk-gone/src/lib.rs, which carries no")
+    tree.edit("docs/unsafe.md", "`crates/rsk-gone/src/lib.rs`", "`gone.rs`")
+    assert tree.problems() == []
+
+
+def test_one_row_may_not_answer_for_every_site(tree):
+    """The finding this whole grouping half was written for.
+
+    `covers` was checked for EXISTENCE both ways and nothing else, so measured on
+    the checkout: collapse all 31 site keys onto the one `discharged` row, empty
+    the other eleven, and the output is byte-identical at exit 0 — one row
+    standing for a whole page of justifications, under the strongest disposition
+    the registry has. Forced here at two rows and two sites.
+    """
+    tree.edit(
+        "assurance/platform.toml",
+        'covers = [\n  "unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",\n'
+        '  "unsafe:firmware/src/main.rs#block:core-ptr-null-u8-read",\n]',
+        'covers = []',
+    )
+    tree.edit(
+        "assurance/platform.toml",
+        'covers = ["backend:rsk-a/tear"]',
+        'covers = [\n  "backend:rsk-a/tear",\n'
+        '  "unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",\n'
+        '  "unsafe:firmware/src/main.rs#block:core-ptr-null-u8-read",\n]',
+    )
+    problems = tree.problems()
+    assert only(problems, "PLAT-STORE-001: covers an `unsafe` site in crates/rsk-a/src/lib.rs")
+    assert only(problems, "PLAT-STORE-001: covers an `unsafe` site in firmware/src/main.rs")
+    assert only(problems, "PLAT-STORE-001: covers 2 runtime `unsafe` site(s) and has no")
+    assert only(problems, "PLAT-TOOLCHAIN-001: its docs/unsafe.md section spans 2 site(s)")
+
+
+def test_a_row_names_the_file_of_every_site_it_covers(tree):
+    """The half a row can be WRONG about, and six rows here already were.
+
+    `PLAT-UNSAFE-006` covered a `core1.rs` site while its discharge named neither
+    file; five more were the same shape. A row that does not say where its sites
+    are can be grown to cover any of them with nothing to read.
+    """
+    tree.edit("assurance/platform.toml", "and firmware/src/main.rs.", "and elsewhere.")
+    assert only(tree.problems(), "covers an `unsafe` site in firmware/src/main.rs and never names")
+    # A PATH, not a substring: a superstring paid the first version of this rule,
+    # while the page half of the SAME rule already compared path sets. Two
+    # strengths for one rule is the weaker one being the rule.
+    tree.edit("assurance/platform.toml", "and elsewhere.",
+              "and https://example.invalid/xfirmware/src/main.rs.bak.")
+    assert only(tree.problems(), "covers an `unsafe` site in firmware/src/main.rs and never names")
+    # Green from any of its own fields, not the discharge alone: a `pending` row
+    # has no `evidence` and a settled one has already listed its files there.
+    tree.edit("assurance/platform.toml", "and https://example.invalid/xfirmware/src/main.rs.bak.",
+              "and elsewhere.\"\nevidence = [\"firmware/src/main.rs\"]\nunused = \"")
+    assert not only(tree.problems(), "covers an `unsafe` site in firmware/src/main.rs and never names")
+
+
+def test_the_page_numbering_partitions_the_runtime_sites(tree):
+    """Three spellings, each byte-identical at exit 0 on the checkout before this.
+
+    A fabricated section claiming sites past the end, every heading collapsed
+    onto one number, and a number used twice. The page's own ordinals ARE its
+    partition of the sites, so a gap or a repeat is a site enumerated twice or
+    not at all — and nothing else on the page says which.
+    """
+    tree.append("docs/unsafe.md", "\n### 3–7. Five sites that do not exist — `PLAT-TOOL-001`\n\n"
+                                  "*Safe alternative:* none.\n*Containment:* none.\n")
+    assert only(tree.problems(), "the numbered sections cover [1, 2, 3, 4, 5, 6, 7]")
+    tree.edit("docs/unsafe.md", "### 3–7. Five sites that do not exist — `PLAT-TOOL-001`\n\n"
+                                "*Safe alternative:* none.\n*Containment:* none.\n", "")
+    tree.edit("docs/unsafe.md", "### 1–2.", "### 99.")
+    assert only(tree.problems(), "the numbered sections cover [99]")
+
+
+def test_a_numbered_section_owes_the_body_the_page_promises(tree):
+    """A heading with its justification deleted keeps its number and its id.
+
+    Measured on the checkout: deleting a justification body outright was
+    byte-identical at exit 0. The two markers are this page's own opening
+    sentence — every entry says why a safe alternative does not work and how the
+    risk is contained — so their absence is the body's absence.
+    """
+    tree.edit("docs/unsafe.md", "*Safe alternative:* none, the fixture needs a site.\n", "")
+    assert only(tree.problems(), "carries no `*Safe alternative:*`")
+    tree.edit("docs/unsafe.md", "*Containment:* the fixture never runs.\n", "")
+    assert only(tree.problems(), "carries no `*Containment:*`")
+
+
+def test_a_numbered_heading_with_no_row_id_is_a_finding(tree):
+    """The spelling a second review walked the whole anti-collapse rule through.
+
+    With only the span rule, a heading that carries no id matches nothing and so
+    is constrained by nothing: collapse every site onto one row, delete the ids
+    from the headings you emptied, and the page still shows its justifications
+    while every rule below applies to the one heading left. Measured on the
+    checkout at eight headings and 22 sites: byte-identical, exit 0.
+    """
+    tree.edit("docs/unsafe.md", " — `PLAT-TOOLCHAIN-001`", "")
+    assert only(tree.problems(), "section `1` carries no `PLAT-…` id")
+
+
+def test_a_section_the_page_does_not_show_does_not_count(tree):
+    """A rule that reads a page as a string reads what the page does not show.
+
+    Measured on the checkout, both byte-identical at exit 0: a whole numbered
+    justification wrapped in `<!-- -->`, and the same one inside a `~~~` fence.
+    The built book loses the justification; the gate counted it as present, with
+    both markers, numbered.
+    """
+    for hide, show in (("<!--\n", "-->\n"), ("~~~text\n", "~~~\n")):
+        tree.edit("docs/unsafe.md", "### 1–2.", f"{hide}### 1–2.")
+        tree.append("docs/unsafe.md", show)
+        assert only(tree.problems(), "the numbered sections cover nothing"), hide
+        tree.edit("docs/unsafe.md", f"{hide}### 1–2.", "### 1–2.")
+        tree.edit("docs/unsafe.md", show, "")
+    assert tree.problems() == []
+
+
+def test_the_page_does_not_owe_a_site_for_an_upstream_link(tree):
+    """The ⊇ direction's false red, and the carve-out is URLs and nothing wider.
+
+    `docs/unsafe.md` links embassy and cortex-m; a permalink ending in `.rs` is a
+    claim about somebody else's tree, and unstripped it reddened this gate for a
+    file that could never carry a site here. The green arm is paired with the red
+    one so the carve-out is not "any path with a dot in it".
+    """
+    tree.append("docs/unsafe.md", "\nSee https://example.invalid/a/b/gpio.rs for the pattern.\n")
+    assert tree.problems() == []
+    tree.append("docs/unsafe.md", "\nAnd `vendor/a/b/gpio.rs`.\n")
+    assert only(tree.problems(), "names vendor/a/b/gpio.rs, which carries no")
+
+
+def test_a_numbered_section_names_a_row_of_the_registry(tree):
+    """The anchor, both ways: an id that resolves to nothing anchors nothing, and
+    two headings over one row is a grouping the registry does not make."""
+    tree.edit("docs/unsafe.md", "`PLAT-TOOLCHAIN-001`", "`PLAT-BOGUS-999`")
+    assert only(tree.problems(), "names PLAT-BOGUS-999, which is not a row of")
+    tree.edit("docs/unsafe.md", "`PLAT-BOGUS-999`", "`PLAT-TOOLCHAIN-001`")
+    tree.edit("docs/unsafe.md", "### 1–2. The null reads",
+              "### 1. The first null read — `PLAT-TOOLCHAIN-001`\n\n"
+              "*Safe alternative:* none.\n*Containment:* none.\n\n"
+              "### 2. The null reads")
+    assert only(tree.problems(), "PLAT-TOOLCHAIN-001 has two numbered sections")
 
 
 def test_a_build_script_site_is_not_a_runtime_site(tree):
@@ -2146,6 +2449,8 @@ def test_a_build_script_site_is_not_a_runtime_site(tree):
               '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",',
               '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",\n'
               '  "unsafe:crates/rsk-a/build.rs#block:core-ptr-null-u8-read",')
+    tree.edit("assurance/platform.toml", "and firmware/src/main.rs.",
+              "firmware/src/main.rs and crates/rsk-a/build.rs.")
     # Named on the page like the real build scripts are — the file half of the
     # rule is about EVERY file with a site, and only the COUNT is partitioned.
     tree.append("docs/unsafe.md", "\nBuild-time: `crates/rsk-a/build.rs`.\n")
@@ -2170,6 +2475,6 @@ def test_a_declaration_site_is_not_a_runtime_site(tree):
               '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",',
               '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",\n'
               '  "unsafe:crates/rsk-a/src/lib.rs#extern:fn-r",\n'
-              '  "unsafe:crates/rsk-a/src/lib.rs#attr:link_section-pub-static-z-u8",')
+              '  "unsafe:crates/rsk-a/src/lib.rs#attr:link_section-x-pub-static-z-u8",')
     tree.regenerate()
     assert tree.problems() == []
