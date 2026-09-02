@@ -506,7 +506,7 @@ STORE_BUGS=(BugDeleteValueBeforeMeta BugDeleteMetaOnlyUnderPresent
             BugDeleteHidesFaultedDrop
             BugCacheFaultAsAbsent BugTruncatedScanDecidesAll
             BugMetaAddDropsOnFault BugMetaDeleteDropsOnFault
-            BugMetaWriteTearsBlob)
+            BugMetaWriteTearsBlob BugMetaDeleteTearsBlob)
 
 store_target() {
   case "$1" in
@@ -518,6 +518,7 @@ store_target() {
     BugMetaAddDropsOnFault)        echo NoRecordLostToMetaWrite ;;
     BugMetaDeleteDropsOnFault)     echo NoFalseMetaAbsent ;;
     BugMetaWriteTearsBlob)         echo NoRecordLostToMetaWrite ;;
+    BugMetaDeleteTearsBlob)        echo NoRecordLostToMetaWrite ;;
   esac
 }
 STORE_INV=(NoOrphanedMetadata NoSilentOrphan NoFalseAbsent NoRecordLostToMetaWrite

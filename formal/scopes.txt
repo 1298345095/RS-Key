@@ -18,6 +18,13 @@
 \* Until this file nothing stopped those domains being narrowed to a singleton,
 \* and all three rows would have stayed GREEN over a live defect.
 \*
+\* A FOURTH joined that class after the sweep above and was driven against the
+\* minimum rather than assumed to fit: `BugMetaDeleteTearsBlob`, `meta_delete`'s
+\* torn rewrite. Its violation is a BYSTANDER's record going, so at one FID it
+\* explores its whole space without a counterexample and falls at two -- which is
+\* also what separates it from its inverse, an arm that would redden on the
+\* subject's own record being dropped as asked.
+\*
 \* TWO columns are written by hand: the measured minimum, and THE INVARIANT IT
 \* WAS MEASURED AGAINST. The second is not decoration -- a minimum only binds
 \* configurations that check that invariant. The fairness row sits in the safety

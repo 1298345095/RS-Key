@@ -473,8 +473,9 @@ SCOPED = {
         "names all seven rows it\nwould blind",
     ): "how many `floors.txt` rows carry a fourth column, a property of that file",
     # Reached by widening a published unit into the vocabulary the shape scan
-    # already enumerates: `79 entries` is the roster, a sentence five commits in
-    # this series have now had to hand-correct — 69 -> 71 -> 72 -> 73 -> 76 -> 79.
+    # already enumerates: `80 entries` is the roster, a sentence six commits in
+    # this series have now had to hand-correct — 69 -> 71 -> 72 -> 73 -> 76 -> 79
+    # -> 80.
     (
         "formal/README.md",
         "**31 of 31 mutants are caught",
@@ -483,7 +484,7 @@ SCOPED = {
     "claim, and the generated roster line carries the same 30",
     (
         "docs/formal.md",
-        "79 entries: all 75 executable patches are killed",
+        "80 entries: all 75 executable patches are killed",
     ): "the whole-tree roster restated in the page that introduces the phase-2 "
     "table, whose generated region beside it gives the phase-2 line and not this "
     "total",
@@ -493,7 +494,7 @@ SCOPED = {
     # boot family takes the roster to 79 and it stays gone.
     (
         "formal/README.md",
-        "**79 entries: 75 executable patches killed",
+        "**80 entries: 75 executable patches killed",
     ): "the co-mutant roster restated where its composition is broken down, which the "
     "generated line beside it does not give — the copy that read 69, then 71, 72 and "
     "73, re-measured by hand in four commits of this series. Its own claim that a "

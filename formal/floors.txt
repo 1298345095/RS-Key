@@ -303,6 +303,18 @@ SoloClause_*.cfg                     RED     -
 PermWideMut_*.cfg                    RED     -
 SeamMut_*.cfg                        RED     -
 SeamSolo_*.cfg                       RED     -
+\* WHAT THESE TWO FAMILIES DERIVE, said here because the metadata-WRITE pair is
+\* where reading the column literally goes wrong. Each store mutant arms exactly
+\* ONE switch, so `run-tlc.sh` takes the expected invariant off the
+\* configuration's own INVARIANTS block and the `-` is a derivation, not a
+\* blank: `BugMetaWriteTearsBlob` and `BugMetaDeleteTearsBlob` -- `meta_add`'s
+\* rewrite and `meta_delete`'s -- both owe RED at NoRecordLostToMetaWrite, and
+\* neither may be satisfied by TypeOK, which every row here also checks.
+\* Spelling that in an EXACT row is refused rather than redundant:
+\* `verdict_gate.check_conflicts` reads (RED, no floor, NoRecordLostToMetaWrite)
+\* against the family's (RED, no floor, -) as an exact row and a family
+\* disagreeing over one configuration, which is the shape it exists to refuse.
+\* Measured, not argued: adding that row makes the gate say so and exit 1.
 StoreMut_*.cfg                       RED     -
 StoreSolo_*.cfg                      RED     -
 \* The store's induction probe, and it is the one that FOUND something.

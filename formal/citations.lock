@@ -877,8 +877,11 @@ formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	735-735	let n = if self.known_abse
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	735-737	let n = if self.known_absent(EF_META) {	} else {
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	742-744	if r.is_none() && self.storage.last_error() {	}
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	752-752	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	753-753	self.mark_present(EF_META);	self.mark_present(EF_META);
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	765-795	pub fn meta_delete(&mut self, fid: u16) -> Result<()> {	}
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	774-774	None if self.storage.last_error() => return Err(Error::MemoryFatal),	None if self.storage.last_error() => return Err(Error::MemoryFatal),
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	780-780	self.mark_present(EF_META);	self.mark_present(EF_META);
+formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	793-793	self.storage.write(EF_META, &out[..w]) // EF_META stays present	self.storage.write(EF_META, &out[..w]) // EF_META stays present
 formal/RSKeyStore.tla	crates/rsk-fs/src/powercut.rs	43-51	pub fn delete_landed(	}
 formal/RSKeyStore.tla	crates/rsk-fs/src/powercut_model.rs	47-47	fn dead(&self) -> bool;	fn dead(&self) -> bool;
 formal/RSKeyTransport.tla	crates/rsk-usb/src/ctaphid.rs	210-210	pub const CTAP_MAX_MESSAGE: usize = INIT_DATA + 128 * CONT_DATA; // 7609	pub const CTAP_MAX_MESSAGE: usize = INIT_DATA + 128 * CONT_DATA; // 7609
@@ -923,6 +926,7 @@ formal/comutants.toml	crates/rsk-fido/src/reset_tests.rs	638-638	assert!(is_fido
 formal/comutants.toml	crates/rsk-fido/src/state_tests.rs	119-119	assert_eq!(st.pin_lock(), LOCKED);	assert_eq!(st.pin_lock(), LOCKED);
 formal/comutants.toml	crates/rsk-fido/src/state_tests.rs	134-134	assert_eq!(st.pin_lock().mismatches, 2);	assert_eq!(st.pin_lock().mismatches, 2);
 formal/comutants.toml	crates/rsk-fs/src/fs.rs	752-752	self.storage.write(EF_META, &out[..w])?;	self.storage.write(EF_META, &out[..w])?;
+formal/comutants.toml	crates/rsk-fs/src/fs.rs	793-793	self.storage.write(EF_META, &out[..w]) // EF_META stays present	self.storage.write(EF_META, &out[..w]) // EF_META stays present
 formal/comutants.toml	crates/rsk-fs/src/fs_tests.rs	384-384	assert!(	assert!(
 formal/comutants.toml	crates/rsk-fs/src/fs_tests.rs	445-445	assert!(	assert!(
 formal/comutants.toml	crates/rsk-fs/src/storage.rs	78-78	map: HashMap<u16, Vec<u8>>,	map: HashMap<u16, Vec<u8>>,

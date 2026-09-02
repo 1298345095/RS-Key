@@ -34,11 +34,11 @@
 (* THE THREE ORACLE PROPERTIES, mapped. powercut.rs names Atomicity,          *)
 (* Durability and Enumeration. Atomicity -- a torn write lands the old value  *)
 (* or the new one, never a third -- is a property of the log-structured       *)
-(* append, so it is a MODELLING ASSUMPTION here (Put/MetaAdd land atomically) *)
-(* rather than a falsifiable invariant; the Rust oracle's `Tear::Garbage`     *)
-(* control is what checks it at the code level. Durability is                 *)
-(* NoFalseAbsent (a spurious absent read IS the "committed key lost"          *)
-(* disaster) together with NoRecordLostToMetaWrite. Enumeration is            *)
+(* append, so it is a MODELLING ASSUMPTION here (Put and both EF_META         *)
+(* rewrites land atomically) rather than a falsifiable invariant; the Rust    *)
+(* oracle's `Tear::Garbage` control is what checks it at the code level.      *)
+(* Durability is NoFalseAbsent (a spurious absent read IS the "committed key  *)
+(* lost" disaster) together with NoRecordLostToMetaWrite. Enumeration is      *)
 (* NoOrphanedMetadata (a deleted file's record must not linger in the walk).  *)
 (*****************************************************************************)
 EXTENDS Naturals
@@ -97,7 +97,15 @@ CONSTANTS
     \* switch denies that -- the blob afterwards is an ARBITRARY subset -- so
     \* `PLAT-FLASH-001` gains a row that goes red when it is false, instead of being
     \* prose no configuration can contradict.
-    BugMetaWriteTearsBlob
+    BugMetaWriteTearsBlob,
+    \* fs.rs:793 -- `meta_delete`'s own rewrite, EF_META's SECOND write site and the
+    \* one the switch above does not reach: `meta_add` was given a failing arm and
+    \* `meta_delete` was left with a faulted READ only. Same denial of
+    \* `PLAT-FLASH-001`, a different moment -- `mark_present(EF_META)` runs at
+    \* fs.rs:780, BEFORE this write, where its sibling's sits AFTER (fs.rs:753).
+    \* Dropping `f`'s record is what the call is FOR, so only a bystander's loss
+    \* is the violation.
+    BugMetaDeleteTearsBlob
 
 \* Two VALUES so an overwrite is observable. `NoVal` is the absent sentinel --
 \* distinct from both stored values, so "reads back absent" and "reads back v1"
@@ -230,6 +238,27 @@ MetaDelete(f) ==
        /\ viol' = viol \cup
             (IF \E g \in Fids : meta[g] THEN {"NoFalseMetaAbsent"} ELSE {})
        /\ UNCHANGED << val, meta, present, decided, dead >>
+    \* THE REWRITE ITSELF TEARS (fs.rs:793). Written the way `MetaAdd`'s tear is:
+    \* the shipped arm of a failed rewrite is a STUTTER, which `[][Next]_vars`
+    \* already admits, so only the denial of the backend assumption is a disjunct.
+    \* Two things keep it from being that arm under a second name, and both are
+    \* read off the code rather than chosen. (1) `metaAbsent' = FALSE`, because
+    \* fs.rs:780 marks EF_META present BEFORE this write; the sibling leaves it
+    \* UNCHANGED because a `meta_add` that failed never reaches its fs.rs:753.
+    \* (2) the survivors are a subset of the records that STOOD -- a rewrite that
+    \* drops records cannot mint one -- where the sibling's `torn` ranges over the
+    \* whole domain, the record it was adding included.
+    \/ /\ BugMetaDeleteTearsBlob
+       /\ \E torn \in SUBSET { g \in Fids : meta[g] } :
+            /\ meta' = [g \in Fids |-> g \in torn]
+            \* `f`'s record going is what the caller asked for. Losing a BYSTANDER's
+            \* is the defect, and the `g # f` is what separates this from its
+            \* inverse: without it the arm would redden on the operation working.
+            /\ viol' = viol \cup
+                 (IF \E g \in Fids : (g # f) /\ meta[g] /\ ~(g \in torn)
+                    THEN {"NoRecordLostToMetaWrite"} ELSE {})
+       /\ metaAbsent' = FALSE
+       /\ UNCHANGED << val, present, decided, dead >>
 
 (***************************************************************************)
 (* Delete -- the only op with a cut point, because it is two backend        *)
@@ -385,11 +414,12 @@ NoSilentOrphan == "NoSilentOrphan" \notin viol
 NoFalseAbsent ==
     \A f \in Fids : (decided[f] /\ ~present[f]) => ~Live(f)
 
-\* DURABILITY, the writer half. A `meta_add` of one FID never drops another's
-\* committed record -- the "torn meta_add wiped every existing record" crash,
-\* where a faulted EF_META read was rebuilt from empty. Ghost, one writer:
-\* MetaAdd. (MetaDelete of `f` legitimately touches only `f`, so it is not a
-\* writer here.)
+\* DURABILITY, the writer half. A metadata rewrite for one FID never drops
+\* another's committed record -- the "torn meta_add wiped every existing record"
+\* crash, where a faulted EF_META read was rebuilt from empty. Ghost, TWO writers:
+\* MetaAdd, and MetaDelete's torn-rewrite arm. A CLEAN MetaDelete of `f` touches
+\* only `f` and writes nothing here; what makes the torn arm a writer is that one
+\* rewrite carries the whole blob, so a drop of one record can take the rest.
 NoRecordLostToMetaWrite == "NoRecordLostToMetaWrite" \notin viol
 
 \* SEC-STORE-004. EF_META's presence cache may say "absent" only when it really

@@ -631,6 +631,28 @@ supply cut on a board. What the model row buys is that the assumption became
 DENIABLE — `StoreSolo_BugMetaWriteTearsBlob.cfg` goes RED on
 `NoRecordLostToMetaWrite` — rather than prose no configuration can reach."""
 
+[comutant.BugMetaDeleteTearsBlob]
+status = "unreachable"
+evidence = """the same backend assumption its sibling denies, at
+`meta_delete`'s own rewrite (`crates/rsk-fs/src/fs.rs:793`) instead of
+`meta_add`'s (`crates/rsk-fs/src/fs.rs:752`), and no `Storage` in this tree
+can tear either.
+Re-enumerated rather than inherited, because the roster grew: FIVE fault
+backends in `crates/rsk-fs/src/storage.rs` now — `MetaStuck`, `ProbeStuck`,
+`RemoveStuck`, `TruncatedWalk` and `Undead` — and every one delegates `write`
+to `RamStorage::write`, which inserts `data.to_vec()` whole and answers
+`Ok(())`; so do all seven local backends in `fs_tests.rs`. The one
+write-failing medium, `crates/rsk-openpgp/src/dying_storage.rs`, spends its
+budget BEFORE `self.inner.write`, so it drives the `?` and leaves the blob
+untouched. A patch could make the rewrite lose records, but only by rewriting
+`rebuild_meta` — which models a DIFFERENT defect (a wrong rebuild) from the one
+the switch is about (a right rebuild the medium half-lands). What the model row
+buys is that PLAT-FLASH-001 is now deniable at BOTH EF_META write sites rather
+than one: `StoreSolo_BugMetaDeleteTearsBlob.cfg` goes RED on
+`NoRecordLostToMetaWrite`, and it is a bystander's record that goes -- measured
+by the arm staying GREEN at a single FID, where the subject's own drop is all
+there is to lose."""
+
 [comutant.BugMetaDeleteDropsOnFault]
 status = "patch"
 file = "crates/rsk-fs/src/fs.rs"
