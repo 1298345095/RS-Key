@@ -599,6 +599,18 @@ covers = ["slice:AS-NTAI-3"]
 supports = ["SEC-FIDO-003"]
 
 [[assumption]]
+id = "PLAT-MODEL-015"
+class = "model-abstraction"
+statement = "`RSKeyBootHardening` treats the lazy re-key as ATOMIC in thirteen of its fifteen configurations. `LazyRekey` writes the re-keyed record and re-arms `request_rescrub` in one step, so the ORDER of the two flash appends is not represented and no defect in it is visible to those thirteen rows. The firmware makes two separate appends, and a reset between them leaves `EF_HARDENED` set over a superseded copy."
+discharge = "The two `Historical_Boot*` rows, once a recorded tier run holds them: `RekeyOrderModelled = TRUE` splits the action into `RekeyBegin`/`RekeyFinish` and `BugRecordWriteBeforeRearm` picks the order, so the write-then-rearm arm is expectedly RED on `MarkerNeverLies` and the rearm-then-write arm GREEN. Until `formal/runs.toml` records both, the split is observed only by hand-run single configurations, which is why this row is pending rather than discharged. What it will still NOT say: the thirteen atomic rows stay atomic on purpose — they are where every other boot property is checked, and pinning `rekeying` to `{FALSE}` there is what keeps their state spaces comparable to the recorded ones."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "coverage: a reader who takes the thirteen GREEN boot rows for coverage of the ordering is wrong, because the ordering is not in their state space at all. The direction is silent, not loud — an ordering defect does not redden them, it is invisible to them"
+covers = ["model:RekeyOrderModelled"]
+discharges = ["RekeyOrderModelled"]
+supports = ["SEC-BOOT-001"]
+
+[[assumption]]
 id = "PLAT-MODEL-014"
 class = "model-abstraction"
 statement = "The relational pre-state this property compares against is a GHOST in both tiers — `snap` in `RSKeySecurityState` and `ResetSnapshot` in `crates/rsk-fido/src/reset_assurance.rs` — and no shipped image holds it. So nothing in the firmware can observe, let alone enforce, the property at runtime: the write ORDER is the whole implementation, and a device that had reordered its phases would answer every command exactly as one that had not."
