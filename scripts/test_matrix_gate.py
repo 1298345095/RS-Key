@@ -118,9 +118,13 @@ pub fn shown() {}
 #: A knob read where the real tree reads most of them: the root package's own
 #: build script, at build time. Without one, no `env` prefix in this fixture
 #: pins anything — which is the rule `inert_knobs` runs, and the reason this file
-#: had to grow a build script to keep a green direction at all.
+#: had to grow a build script to keep a green direction at all. Both spellings
+#: of the read, as every one of the real tree's 38 declarations is written: the
+#: `rerun-if-env-changed` line is what `unreadable_env_reads` holds the literal
+#: read to, and dropping one of the two is a case below.
 BUILD_RS = """\
 fn main() {
+    println!("cargo:rerun-if-env-changed=VIDPID");
     println!("cargo:rustc-env=PK_VIDPID={}", std::env::var("VIDPID").unwrap_or_default());
 }
 """
@@ -1644,3 +1648,191 @@ def test_a_knob_the_named_package_reads_in_its_build_script_pins_it(tree):
     )
     matrix_gate.run(tree.root, write=True)
     assert tree.run() == 0
+
+
+# --- the other three spellings of "which packages does this row build" ---------
+
+
+@pytest.mark.parametrize("flag", ["--manifest-path", "--manifest-path="])
+def test_a_manifest_path_row_is_read_as_the_crate_it_names(tree, capsys, flag):
+    """The same hole as above, one spelling over, and it survived the fix for it.
+
+    Both operand forms, because `--package=x` selecting for one guard and not the
+    other is the drift `gate_lines` was written for, and an `=` is how it started.
+
+    Driven on the real tree with `-p` the only spelling read: `env
+    FLASH_SIZE=16M cargo kani --manifest-path crates/rsk-fido/Cargo.toml
+    --harness reset_keeps_the_pin_gate` walked past the knob rule — no `-p`, so
+    `builds` took the whole workspace, in which `firmware` reads every knob — and
+    the cell was then refused for naming no owner crate, which is a different
+    sentence and only accidentally true. `scripts/check.sh` writes this flag
+    twenty times, fifteen of them on a row.
+    """
+    a_covered_cell_on(
+        tree,
+        "board-a",
+        ', "board-a"',
+        'run "kani (board-a)" env BOARD=board-a cargo kani '
+        f"{flag} crates/rsk-screen/Cargo.toml".replace("= ", "=")
+        + " --harness shown_holds_on_every_build\n",
+        "kani (board-a)",
+    )
+    said = red(tree, capsys)
+    assert "`kani (board-a)` sets ['BOARD'] in an `env` prefix" in said
+    assert "no package it builds reads it" in said
+    assert "no row named here selects" not in said, (
+        "the knob rule is what this row breaks; the owner rule catching it instead"
+        " is the accident that hid the hole"
+    )
+
+
+def test_a_manifest_path_names_the_owner_crate_too(tree):
+    """The green direction of the same widening, and the reason it has to be one
+    answer: this row selects `rsk-screen` by its manifest and `firmware` by name,
+    so the knob is read and the property's owner is compiled. Read `-p` alone and
+    the cell is refused for selecting no owner — a false alarm on an honest row.
+    """
+    a_covered_cell_on(
+        tree,
+        "firmware-pinned",
+        '"firmware-pinned", ',
+        'run "kani (pinned)" env VIDPID=Pico cargo kani -p firmware'
+        " --manifest-path crates/rsk-screen/Cargo.toml"
+        " --harness shown_holds_on_every_build\n",
+        "kani (pinned)",
+    )
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
+
+
+def test_an_exclude_narrows_what_the_row_builds(tree, capsys):
+    """`--workspace --exclude a --exclude b` is the host rows' own spelling, and
+    it selects the tree LESS those names. Read as "no selection", it read as the
+    whole workspace instead — the permissive direction, and the one the commit
+    that closed the `-p` spelling recorded as standing looseness."""
+    a_covered_cell_on(
+        tree,
+        "board-a",
+        ', "board-a"',
+        'run "kani (board-a)" env BOARD=board-a cargo kani --workspace'
+        " --exclude firmware --exclude rsk-core"
+        " --harness shown_holds_on_every_build\n",
+        "kani (board-a)",
+    )
+    said = red(tree, capsys)
+    assert "`kani (board-a)` sets ['BOARD'] in an `env` prefix" in said
+    assert "no package it builds reads it" in said
+
+
+def test_an_exclude_that_keeps_the_reader_still_pins_the_knob(tree):
+    """And its green arm, which is what stops the rule above from being a ban on
+    the flag: `rsk-core` reads `BOARD` and this row still compiles it, because
+    excluding a crate from `--workspace` does not remove it from the unit graph
+    of one that depends on it."""
+    a_covered_cell_on(
+        tree,
+        "board-a",
+        ', "board-a"',
+        'run "kani (board-a)" env BOARD=board-a cargo kani --workspace'
+        " --exclude rsk-core"
+        " --harness shown_holds_on_every_build\n",
+        "kani (board-a)",
+    )
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
+
+
+def test_a_generated_package_operand_is_refused_rather_than_guessed(tree, capsys):
+    """`-p "$c"` names a crate no reader here can resolve. Both guesses are
+    wrong: "selects nothing" makes it the whole workspace and every knob reads,
+    "selects nothing at all" refuses an honest row for the wrong reason."""
+    a_covered_cell_on(
+        tree,
+        "board-a",
+        ', "board-a"',
+        'run "kani (board-a)" env BOARD=board-a cargo kani -p "$crate"'
+        " --harness shown_holds_on_every_build\n",
+        "kani (board-a)",
+    )
+    said = red(tree, capsys)
+    assert "selects its packages with [\'-p \"$crate\"\']" in said
+    assert "may not rest on a selection nobody can read" in said
+
+
+def test_a_manifest_outside_the_workspace_is_refused(tree, capsys):
+    """The other unresolvable spelling, and the one this checkout really writes:
+    `tools/emu/Cargo.toml` is a workspace of its own, so which members it
+    compiles is not a question this file's manifest map can answer."""
+    a_covered_cell_on(
+        tree,
+        "board-a",
+        ', "board-a"',
+        'run "kani (board-a)" env BOARD=board-a cargo kani'
+        " --manifest-path tools/emu/Cargo.toml"
+        " --harness shown_holds_on_every_build\n",
+        "kani (board-a)",
+    )
+    said = red(tree, capsys)
+    assert "--manifest-path tools/emu/Cargo.toml" in said
+    assert "names no `[workspace] member` this gate can resolve" in said
+
+
+# --- the two spellings of a READ, held to each other ---------------------------
+
+
+def test_a_read_this_gate_cannot_lex_is_named_rather_than_blamed_on_the_row(tree, capsys):
+    """The false negative the union closes, driven on the real tree first.
+
+    Rewrite `firmware/build.rs`'s `env::var("FLASH_SIZE")` as the equally valid
+    `use std::env::var; var("FLASH_SIZE")` and `ENV_READ` loses the knob — so a
+    row that really does build `firmware` at `FLASH_SIZE=16M` was told no package
+    it builds reads it, which is false. A false negative on an honest row is
+    worse than the hole it closes, so the repair is not a longer regex: the row
+    stays green and the SPELLING is refused, at the site, by name.
+    """
+    tree.edit(
+        "firmware/build.rs",
+        'std::env::var("VIDPID")',
+        'std::env::var_os("VIDPID").map(|v| v.into_string().unwrap())'.replace(
+            "var_os", "vaross"
+        ),
+    )
+    said = red(tree, capsys)
+    assert "declares `cargo:rerun-if-env-changed=VIDPID`" in said
+    assert "no `env::var(\"VIDPID\")` in `firmware` that this gate can read" in said
+
+
+def test_a_knob_read_only_in_a_spelling_this_gate_cannot_lex_still_pins_it(tree):
+    """The half that makes the case above a repair rather than a second alarm.
+
+    The same rewrite, and the `covered` cell resting on a row that pins `VIDPID`
+    keeps its knob: the union is what the row is judged against, and the one
+    finding names the spelling instead of accusing the row.
+    """
+    a_covered_cell_on(
+        tree,
+        "firmware-pinned",
+        '"firmware-pinned", ',
+        'run "kani (pinned)" env VIDPID=Pico cargo kani -p firmware -p rsk-screen'
+        " --harness shown_holds_on_every_build\n",
+        "kani (pinned)",
+    )
+    matrix_gate.run(tree.root, write=True)
+    tree.edit("firmware/build.rs", 'std::env::var("VIDPID")', 'vaross("VIDPID")')
+    problems = matrix_gate.audit(tree.root)[0]
+    assert [p for p in problems if "rerun-if-env-changed" in p]
+    assert not [p for p in problems if "`kani (pinned)` sets" in p], (
+        "the row pins VIDPID and the gate lost only the spelling of the read"
+    )
+
+
+def test_a_rerun_declared_for_a_knob_nothing_reads_is_refused(tree, capsys):
+    """And the direction that stops the union being a way to claim a reader: a
+    package could otherwise pin any knob with one dead `println!`."""
+    tree.edit(
+        "firmware/build.rs",
+        'println!("cargo:rerun-if-env-changed=VIDPID");',
+        'println!("cargo:rerun-if-env-changed=VIDPID");\n'
+        '    println!("cargo:rerun-if-env-changed=KVMAIN");',
+    )
+    assert "declares `cargo:rerun-if-env-changed=KVMAIN`" in red(tree, capsys)

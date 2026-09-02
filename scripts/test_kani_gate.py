@@ -23,6 +23,7 @@ import pytest
 
 import gate_lines
 import kani_gate
+import roster_gate
 
 #: The workflow the fixture writes the `all` tier into. `kani_gate.py` no longer
 #: names it: the pin is read from every workflow now, so a constant pointing at
@@ -529,6 +530,96 @@ def test_a_commented_out_roster_in_the_gate_script_counts_too(tree):
         "set -euo pipefail\n# was: cargo kani -p rsk-a -p rsk-b\n",
     )
     assert only(tree.problems(), "scripts/check.sh writes its own `cargo kani")
+
+
+def test_a_roster_in_the_flake_check(tree):
+    """The identical hand-off, one file over, and it SURVIVED the fix for it.
+
+    `nix/checks.nix` runs `cargo`, `roster_gate.READ` has read it since the day
+    that guard was written, and the same `OTHER_GUARDS` line hands `kani` over
+    from it. Measured on the shipped tree after `7ab2428`: a live
+    `cargo kani -p rsk-sha512 -p rsk-ec` in its build phase was EXIT 0 under both
+    guards. Naming one more file would have been the third instance of the same
+    repair; `sources` asks the checkout instead.
+    """
+    tree.write(roster_gate.FLAKE, "buildPhase = ''\n  cargo kani -p rsk-a -p rsk-b\n'';\n")
+    assert only(tree.problems(), "nix/checks.nix writes its own `cargo kani")
+
+
+def test_a_roster_in_any_other_shell_script(tree):
+    """Third of the four: nothing made `scripts/check.sh` the only script that
+    can run one, and a `scripts/prove.sh` was as invisible as the flake."""
+    tree.write("scripts/prove.sh", "#!/usr/bin/env bash\ncargo kani -p rsk-a -p rsk-b\n")
+    assert only(tree.problems(), "scripts/prove.sh writes its own `cargo kani")
+
+
+def test_a_roster_in_a_yaml_workflow(tree):
+    """Fourth: the glob was `*.yml`, and GitHub reads `*.yaml` as a workflow too."""
+    tree.write(
+        kani_gate.WORKFLOWS / "extra.yaml",
+        "jobs:\n  j:\n    steps:\n      - run: cargo kani -p rsk-a -p rsk-b\n",
+    )
+    assert only(tree.problems(), "extra.yaml writes its own `cargo kani")
+
+
+def test_a_roster_an_expansion_fills_in(tree):
+    """And the spelling no package flag matches: the operand is not a crate name,
+    so the roster is the loop and the flag reads as selecting nothing."""
+    tree.edit(
+        kani_gate.CHECK,
+        "set -euo pipefail\n",
+        'set -euo pipefail\nfor c in rsk-a rsk-b; do cargo kani -p "$c"; done\n',
+    )
+    said = only(tree.problems(), "scripts/check.sh writes its own `cargo kani")
+    assert said and '-p "$c"' in said[0]
+
+
+def test_a_roster_written_as_a_manifest_path(tree):
+    """A crate picked by its directory is the same second list, spelled so the
+    package flag walks past it."""
+    tree.edit(
+        kani_gate.CHECK,
+        "set -euo pipefail\n",
+        "set -euo pipefail\ncargo kani --manifest-path crates/rsk-a/Cargo.toml\n",
+    )
+    said = only(tree.problems(), "scripts/check.sh writes its own `cargo kani")
+    assert said and "--manifest-path crates/rsk-a/Cargo.toml" in said[0]
+
+
+def test_the_tier_runner_may_write_every_roster_it_likes(tree):
+    """The one file the rule is not about — it OWNS the lists — and the green
+    direction of the walk: everything else under `scripts/` is now read."""
+    assert "-p" not in RUNNER
+    tree.edit(kani_gate.RUNNER, "TIERS=", 'CMD="cargo kani -p rsk-a -p rsk-b"\nTIERS=')
+    assert tree.problems() == []
+
+
+def test_a_tier_named_in_a_script_that_is_not_a_ci_row_does_not_count(tree):
+    """The cost of the walk, priced and paid for by [`Source.ci`].
+
+    `scripts/reproduce.sh` prints two recipe strings naming six tiers between
+    them, and `formal/run-tlc.sh` names the runner twice in prose. Counted as CI
+    rows, the first hides a deleted workflow row and the second reports two tiers
+    that do not exist — one hole and one false alarm out of the same widening.
+    """
+    tree.write(
+        "scripts/reproduce.sh",
+        '#!/usr/bin/env bash\nRECIPE="./scripts/kani.sh all"\n'
+        "# the way scripts/kani.sh does it\n",
+    )
+    tree.edit(DEEP_YML, "run: ./scripts/kani.sh all", "run: true")
+    assert only(tree.problems(), "no CI row runs the `all` tier")
+    assert not only(tree.problems(), "which is not a tier")
+
+
+def test_the_pin_is_read_from_a_yaml_workflow_too(tree):
+    """The glob decided which files carry a pin as well as which carry a roster,
+    so widening it moves both."""
+    tree.write(
+        kani_gate.WORKFLOWS / "extra.yaml",
+        'jobs:\n  j:\n    env:\n      KANI_VERSION: "9.9.9"\n',
+    )
+    assert only(tree.problems(), "written 3 time(s) across 3 workflow file(s)")
 
 
 def test_an_honest_kani_row_in_the_gate_script_is_green(tree, monkeypatch):

@@ -19,6 +19,13 @@ a *package flag* is lives here for the same reason and later: the two had
 drifted into different answers, one taking `--package` and the other not,
 neither taking `--package=x`, so the same command read as two rosters.
 
+The whole of "which packages is this command about" followed, and later still,
+because a quarter of that answer each is what the three guards were reading —
+`roster_gate` knew `--exclude`, `matrix_gate` knew only `-p`, and none of them
+could see an operand an expansion fills in. [`selection`] is that answer; a
+caller resolves a manifest path against its own checkout, which is the half
+that cannot live here.
+
 How to read *Rust* joined for the same reason and later still. `platform_gate.py`
 grew a lexer so its unsafe inventory would not be written by a comment saying a
 file has none; `shrink_gate.py` needs the same answer about `#[cfg(kani)]`, and a
@@ -28,6 +35,7 @@ Deliberately not here: what a roster *owes*. That differs per script and is the
 reason there are two of them.
 """
 
+import collections
 import pathlib
 import re
 import subprocess
@@ -47,6 +55,55 @@ RUN_KEY = re.compile(r"run:\s*(?:(?P<fold>[|>])[-+\d]*)?\s*")
 #: The package-selection flag in the spellings cargo takes: `-p x`,
 #: `--package x`, `--package=x`.
 PKG = re.compile(r"(?<![\w-])(?:-p|--package)[=\s]+([\w-]+)(?![\w-])")
+#: The same flag with an operand a substitution fills in — `-p "$c"`, the shape a
+#: `for c in …; do cargo kani -p "$c"; done` roster takes. [`PKG`] reads nothing
+#: there and the row then looks like one that selects nothing, which is the
+#: permissive answer; this one says the selection is unreadable so a caller can
+#: refuse it. A sigil rather than "anything but a name", so prose writing
+#: `-p <crate>` stays prose.
+PKG_GENERATED = re.compile(r"""(?<![\w-])(?:-p|--package)[=\s]+["']?[$@{%]\S*""")
+#: `--manifest-path <path>`: cargo's OTHER answer to which package, and the one
+#: `scripts/check.sh` writes twenty times against `tools/tui`, `tools/emu` and
+#: `fuzz`. Read here rather than beside each caller for the reason the package
+#: flag is: they had drifted into two answers once already.
+MANIFEST_PATH = re.compile(r"""(?<![\w-])--manifest-path[=\s]+["']?([^\s"']+)""")
+#: `--exclude x`, the third: `--workspace --exclude firmware` selects the tree
+#: less that name, and a reader that stops at [`PKG`] reads it as the whole one.
+EXCLUDE = re.compile(r"(?<![\w-])--exclude[=\s]+([\w-]+)(?![\w-])")
+#: And its generated operand, on [`PKG_GENERATED`]'s rule and for its reason.
+EXCLUDE_GENERATED = re.compile(r"""(?<![\w-])--exclude[=\s]+["']?[$@{%]\S*""")
+
+#: What a cargo command says about which packages it is about. Four fields
+#: rather than four functions, because the question is one question and the
+#: guards that ask it were reading a quarter of the answer each: `roster_gate`
+#: knew `--exclude` and not `--manifest-path`, `matrix_gate` knew neither, and
+#: `kani_gate` could not see a `-p` an expansion fills in.
+Selection = collections.namedtuple("Selection", "named manifests excluded generated")
+
+
+def selection(text):
+    """Every way `text` names the packages it is about, in one answer.
+
+    Deliberately syntactic and deliberately NOT resolved: which workspace member
+    a manifest path is depends on the checkout, and the checkout belongs to the
+    caller. What is here is the reading of the FLAGS — the half that was being
+    written twice, and that had already drifted into two answers over `-p`.
+
+    `generated` is the operands no reader can resolve, and it is a third thing
+    beside naming a crate and naming none: a row whose selection an expansion
+    fills in selects something, and reading it as "selects nothing" is the
+    permissive direction in every caller here.
+    """
+    return Selection(
+        named=frozenset(PKG.findall(text)),
+        manifests=tuple(MANIFEST_PATH.findall(text)),
+        excluded=frozenset(EXCLUDE.findall(text)),
+        generated=tuple(
+            found.group(0).strip()
+            for pattern in (PKG_GENERATED, EXCLUDE_GENERATED)
+            for found in pattern.finditer(text)
+        ),
+    )
 
 
 def invocation(verbs):
@@ -60,8 +117,14 @@ def invocation(verbs):
 
 
 def packages(text):
-    """The crates `text` selects by a readable package flag."""
-    return frozenset(PKG.findall(text))
+    """The crates `text` selects by a readable package flag.
+
+    One field of [`selection`] rather than its own read of [`PKG`]: two callers
+    asking "which crates does this name" off two matchers is the drift this file
+    exists to stop, and it is how `--package=x` came to be a selection to one
+    guard and not to the other.
+    """
+    return selection(text).named
 
 
 def strip_packages(text):

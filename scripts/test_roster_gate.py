@@ -375,13 +375,24 @@ def test_the_kani_hand_over_has_a_catcher():
     read the workflows and docs/testing.md — so the row above was skipped here,
     unseen there, and both guards printed `ok` over a second roster in the gate.
     Asserted against the real checkout, because that is where the hole was.
+
+    Over EVERY file this guard reads, not `check.sh` alone. Naming one file was
+    the first repair and it left the identical hand-off open on the next: a live
+    `cargo kani -p rsk-sha512 -p rsk-ec` in `nix/checks.nix` — read here since
+    the day this guard was written, handed over by the line above — measured
+    GREEN under both guards afterwards. Derived from `READ` so the next file
+    added here cannot be the third instance.
     """
     assert roster_gate.OTHER_GUARDS == ("kani",), (
         "a verb handed over needs a guard that catches it, and this case knows only"
         " `kani` -> kani_gate.py; name the catcher for the new one here"
     )
-    read = [rel for rel, _text, _how in kani_gate.sources(roster_gate.ROOT)]
-    assert roster_gate.CHECK in read, f"kani_gate.sources does not read {roster_gate.CHECK}"
+    read = {source.path for source in kani_gate.sources(roster_gate.ROOT)}
+    missed = sorted(str(rel) for rel in set(roster_gate.READ) - read)
+    assert not missed, (
+        f"kani_gate.sources does not read {missed}, which this guard reads and"
+        " hands the `kani` verb away from — a roster there is caught by nobody"
+    )
 
 
 # --- the guard's own two self-checks ------------------------------------------

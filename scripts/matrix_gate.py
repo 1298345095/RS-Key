@@ -281,16 +281,28 @@ ROW = re.compile(r'^run(?:_tests)?\s+"([^"]+)"\s+(\S.*)$')
 ROW_ENV = re.compile(r"(?<![\w-])([A-Z][A-Z0-9_]*)=(\S+)")
 #: How Rust READS an environment variable, in both places a build knob can be
 #: read: `env::var` in a `build.rs` while the package is built, and `env!` /
-#: `option_env!` while it is compiled. `cargo:rerun-if-env-changed` is
-#: deliberately not one of them — it declares a cache dependency rather than a
-#: read, and every knob the firmware's build script rebuilds on it also reads by
-#: name, so counting it would be a second roster of one fact. The name has to be
-#: a literal: that script also loops `env::var(k)` over a board preset's keys,
-#: and a preset is reached by its NAME rather than by spelling its keys out,
-#: which is the note [`env_name`] already carries.
+#: `option_env!` while it is compiled. The name has to be a literal: the firmware
+#: script also loops `env::var(k)` over a board preset's keys, and a preset is
+#: reached by its NAME rather than by spelling its keys out, which is the note
+#: [`env_name`] already carries.
 ENV_READ = re.compile(
     r'(?<![\w-])(?:env::var(?:_os)?|option_env!|env!)\s*\(\s*"([A-Z][A-Z0-9_]*)"'
 )
+#: The OTHER spelling of the same fact, and the reason it is one: cargo reruns a
+#: build script when a declared variable changes, so a script that reads a knob
+#: it never declares rebuilds stale, and one that declares a knob it never reads
+#: has a dead line. Two spellings of one thing, held to each other by
+#: [`unreadable_env_reads`] and unioned by [`env_reads`], rather than one of them
+#: picked. Picking cost a measured false alarm in the direction that matters
+#: most: rewrite `env::var("FLASH_SIZE")` as the equally valid
+#: `use std::env::var; var("FLASH_SIZE")` and [`ENV_READ`] loses the knob, so an
+#: HONEST row — one that really does build `firmware` at `FLASH_SIZE=16M` — was
+#: refused for "no package it builds reads it", which is false. A false negative
+#: on an honest row is worse than the hole it was closing, and the repair is not
+#: a longer regex: the union keeps the row green and the cross-check names the
+#: spelling this file cannot see, at the site, the way a floor a counter cannot
+#: read is refused by name rather than skipped.
+RERUN_ENV = re.compile(r"cargo:{1,2}rerun-if-env-changed=([A-Z][A-Z0-9_]*)")
 #: The release workflow's flavor loop.
 PKG_LOOP = re.compile(r"for pkg in ([^;]+); do")
 #: Both of them: the build and the reproducibility rebuild are two lists that
@@ -788,7 +800,7 @@ def expand(doc, problems):
 def audit(root):
     """(problems, one-line summary) for the matrix, the ledger and the artifact."""
     root = pathlib.Path(root)
-    problems = []
+    problems = list(unreadable_env_reads(root))
     manifests = workspace(root)
     cols = columns(root, manifests)
     by_name = {column.name: column for column in cols}
@@ -1407,6 +1419,17 @@ def check_evidence(root, where, pid, column, entry, own, names):
     megabyte image on a package whose build script reads `AAGUID` and nothing
     else — the `-p`/`--features`-read-out-of-any-text hole with the third field
     playing the part. [`inert_knobs`] carries the measurement.
+
+    And a sixth, which is the fifth one's own input: WHICH packages the row
+    compiles, in all four spellings cargo has for it rather than in `-p` alone.
+    [`cargo_roots`] carries that, and the coupling is the finding — the knob rule
+    and the owner rule read the same answer, so widening one without the other
+    opens the hole it closes. Measured on the shipped tree with only `-p` read:
+    a `--manifest-path crates/rsk-fido/Cargo.toml` row and a `--workspace
+    --exclude firmware --exclude rsk-wipe` row both walked past the knob rule —
+    `builds` saw no selection and took the whole workspace, in which `firmware`
+    reads every knob — and both were then caught one clause down for naming no
+    owner crate, which is a different sentence and only accidentally true.
     """
     named = entry.get("evidence") or []
     if not named:
@@ -1428,13 +1451,21 @@ def check_evidence(root, where, pid, column, entry, own, names):
                 f" {sorted(column.features)} — evidence from another image"
             )
         cargo = cargo_part(command)
+        roots, unreadable = cargo_roots(root, cargo)
         open_knobs = unpinned_knobs(column, env)
         if open_knobs:
             problems.append(
                 f"{where}: `{label}` does not pin {open_knobs} — the row ran at other"
                 " build knobs than this column's, so it measured another image"
             )
-        dead = inert_knobs(root, column, env, gate_lines.packages(cargo))
+        if unreadable:
+            problems.append(
+                f"{where}: `{label}` selects its packages with {list(unreadable)}, which"
+                " names no `[workspace] member` this gate can resolve — which packages"
+                " the row compiles decides both the knob rule and the owner rule, and"
+                " `covered` may not rest on a selection nobody can read"
+            )
+        dead = inert_knobs(root, column, env, roots or frozenset())
         if dead:
             problems.append(
                 f"{where}: `{label}` sets {dead} in an `env` prefix and no package it"
@@ -1454,14 +1485,14 @@ def check_evidence(root, where, pid, column, entry, own, names):
                 " here. `covered` is the word for a measurement"
             )
         for word in name_filters(cargo):
-            if not selected_tests(root, gate_lines.packages(cargo), word):
+            if not selected_tests(root, roots or frozenset(), word):
                 inert.append(
                     f"{where}: `{label}` filters `cargo test` on `{word}`, and no"
-                    f" `#[test]` in {sorted(gate_lines.packages(cargo)) or 'the workspace'}"
+                    f" `#[test]` in {sorted(roots or ()) or 'the workspace'}"
                     " carries that name — the row runs 0 tests and exits 0, which is"
                     " a green row that measured nothing"
                 )
-        runs_owner |= bool(own.get(pid, frozenset()) & gate_lines.packages(cargo))
+        runs_owner |= bool(own.get(pid, frozenset()) & (roots or frozenset()))
         produces |= any(names_artifact(artifact).search(command) for artifact in artifacts)
     if not runs_owner and not problems:
         problems.append(
@@ -1568,8 +1599,28 @@ def unpinned_knobs(column, env):
 
 
 @functools.cache
+def env_spellings(root, crate):
+    """(the variables `crate` READS by name, the ones it only DECLARES a rerun on).
+
+    Two sets and not one, because they are the same fact written two ways and the
+    file needs both answers: their union is what a package reads (a knob whose
+    read this file cannot lex is still read), their difference is a spelling no
+    reader here can see. [`RERUN_ENV`] carries the measurement that made the
+    split necessary.
+    """
+    where = root / member_dirs(root).get(crate, crate)
+    if not where.is_dir():
+        return frozenset(), frozenset()
+    read, declared = set(), set()
+    for path in sorted(where.rglob("*.rs")):
+        text = path.read_text(errors="ignore")
+        read.update(ENV_READ.findall(text))
+        declared.update(RERUN_ENV.findall(text))
+    return frozenset(read), frozenset(declared - read)
+
+
 def env_reads(root, crate):
-    """The environment variables `crate`'s own sources read, by any [`ENV_READ`] spelling.
+    """The environment variables `crate`'s own sources read, by either spelling.
 
     Measured on this tree before the rule above it was written: the five
     variables the matrix can ask a row about — `BOARD`, `FLASH_SIZE`, `KVMAIN`,
@@ -1577,15 +1628,82 @@ def env_reads(root, crate):
     else in the workspace, while `rsk-fido`'s build script reads `AAGUID` and
     `rsk-sdk`'s reads `FW_VERSION`. That last pair is the shape [`builds`] is
     about: a knob can be read by a package the row never names.
+
+    The declared half is unioned in rather than trusted alone: on its own it
+    would let a package claim a reader with one dead `println!`, which is the
+    permissive direction. What stops that is [`unreadable_env_reads`], which is
+    red on exactly the rows this union is green on.
     """
-    where = root / member_dirs(root).get(crate, crate)
-    if not where.is_dir():
-        return frozenset()
-    return frozenset(
-        var
-        for path in sorted(where.rglob("*.rs"))
-        for var in ENV_READ.findall(path.read_text(errors="ignore"))
-    )
+    read, declared_only = env_spellings(root, crate)
+    return read | declared_only
+
+
+def unreadable_env_reads(root):
+    """Knobs a package declares a rerun on and no reader here can find it reading.
+
+    The live half of the knob rule, and deliberately live: it runs over the
+    workspace on every invocation, where [`inert_knobs`] runs only under a
+    `covered` cell whose basis is `check-sh-rows` — of which this ledger has
+    none today, so that clause's only exercise is its fixture.
+
+    Measured on this tree: 38 declarations across `firmware`, `rsk-wipe`,
+    `rsk-fido` and `rsk-sdk`, and every one of them is also a literal read, so
+    this is silent. It is not silent on the rewrite that motivated it.
+    """
+    return [
+        f"{member_dirs(root)[crate]} declares `cargo:rerun-if-env-changed={var}`"
+        f" and no `env::var(\"{var}\")` in `{crate}` that this gate can read —"
+        " the knob rule reads the literal spelling, so a row that DOES build this"
+        " knob would be told no package it builds reads it. Write the read out,"
+        " or drop the declaration"
+        for crate in sorted(member_dirs(root))
+        for var in sorted(env_spellings(root, crate)[1])
+    ]
+
+
+def cargo_roots(root, cargo):
+    """(the workspace packages `cargo` NAMES or None if it names none, unreadable spellings).
+
+    `gate_lines.selection` reads the flags; this resolves them against THIS
+    checkout, which is the half that cannot live there. All four of cargo's
+    spellings, because reading only `-p` was the same hole one field over as the
+    two this file has already closed: `--manifest-path crates/rsk-fido/Cargo.toml`
+    and `--workspace --exclude firmware --exclude rsk-wipe` each select something
+    quite different from the whole tree, `scripts/check.sh` writes the first
+    twenty times over (fifteen of them on a `run` row, every one naming a
+    manifest outside this workspace) and the second five, and neither was read.
+
+    `None` is the answer for a command that names no selection, and it is not the
+    empty set: the two callers below have to read that case in OPPOSITE
+    directions and one value cannot carry both. [`builds`] takes it as
+    `--workspace` — the permissive reading of an input nothing can resolve, and
+    the same one [`selected_tests`] takes — while the owner-crate rule takes it
+    as naming nobody, because a row that names no crate is not a row about this
+    property. Reading it one way in both places is a hole either way round:
+    permissively, a bare `cargo test --workspace` becomes evidence about every
+    property in the tree; strictly, every `--exclude` row is refused for a reason
+    that is not true of it.
+
+    An unresolvable spelling is neither, and it is returned rather than guessed —
+    a manifest outside `[workspace] members` (`tools/emu/Cargo.toml`), one behind
+    a substitution (`"$src/Cargo.toml"`), a generated `-p`. Guessing costs a hole
+    in one direction and a false alarm in the other, and there is no third answer
+    that is true of both `tools/emu` and `$src`.
+    """
+    sel = gate_lines.selection(cargo)
+    by_dir = {rel: name for name, rel in member_dirs(root).items()}
+    named, unreadable = set(sel.named), list(sel.generated)
+    for raw in sel.manifests:
+        where = str(pathlib.PurePosixPath(raw).parent)
+        if where in ("", "."):
+            continue  # the workspace root: every member, which is the default below
+        if where in by_dir:
+            named.add(by_dir[where])
+        else:
+            unreadable.append(f"--manifest-path {raw}")
+    if not named and sel.excluded:
+        named = set(workspace(root)) - set(sel.excluded)
+    return (frozenset(named) or None), tuple(unreadable)
 
 
 @functools.cache
@@ -1594,12 +1712,9 @@ def builds(root, crates):
 
     A build script runs for every package in the unit graph and not only for the
     ones named on the command line, so `-p firmware` really does read whatever
-    `rsk-fido`'s `build.rs` reads. An empty selection is `--workspace` and every
-    member is walked — the permissive reading of the one input this cannot
-    resolve, and the same one [`selected_tests`] takes. The shape it cannot see
-    is `--exclude`, which `gate_lines`' package flag does not read: a second
-    answer to "what does this command select" is the drift that file exists to
-    stop, and no row in this tree pins a knob and excludes its reader.
+    `rsk-fido`'s `build.rs` reads. `crates` comes from [`cargo_roots`], which
+    reads all four of cargo's selection spellings; an empty one is that
+    function's `None` — no selection named — and every member is walked.
     """
     manifests = workspace(root)
     out, queue = set(), list(crates or manifests)
