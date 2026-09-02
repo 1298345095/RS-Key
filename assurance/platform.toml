@@ -338,6 +338,7 @@ discharge = "Two halves, and the split is what keeps this row honest. (1) The in
 # make the reader think the severity waits on silicon when it does not.
 discharge_owner = "contributor"
 status = "accepted-risk"
+out_of_scope_by = "docs/limitations.md#cryptography"
 failure_direction = "security, and only through the boundary: if an in-scope observation turns out to be time-resolved, or if an RP2350 SRAM read's cycle count does follow its address, what the pattern exposes is `dP`/`dQ` themselves — a long-lived private key, over four surfaces a host drives at will"
 
 # ---- Build configuration, threat model, model abstraction --------------------
@@ -351,6 +352,7 @@ discharge_owner = "contributor"
 status = "discharged"
 evidence = ["firmware/Cargo.toml", "docs/assurance-matrix.md"]
 revalidated_by = "any change to firmware/Cargo.toml's [features] default set, or a new flake package building the firmware with a different one"
+evidence_commit = "bd1cff79a042405164f614dba1d3b826528e83ac"
 failure_direction = "coverage: the arm the shipped tree does not take is the STRICTER one — a token for every makeCredential and getAssertion"
 covers = ["slice:AS-AUTH-2", "model:AlwaysUvShipped"]
 discharges = ["AlwaysUvShipped"]
@@ -400,6 +402,7 @@ statement = "Every shipped image is built with `CONSTANT_MEMORY_ACCESS_PATTERN 0
 discharge = "A build and a board, in that order, and neither has been taken — every number below is COUNTED FROM THE SOURCE and none of it is a measurement. (1) Build `firmware` with the flag defined and confirm `bignum_table_select` is in the image. That is minutes, and it settles the size cost, which is not only flash: both halves are RAM-resident by section — the C carries `BIGNUM_RAMFUNC`, which is `section(\".data.bignum_hl\")`, and the asm's whole translation unit is `.section .data.bignum_asm` — so the flag spends SRAM on a part whose stack ceiling is already the binding one. (2) A board, because nothing else can run it: `crates/rsk-rsa/build.rs` compiles the C and the asm only for `target_os = \"none\"`, so no host test and no `tools/emu` run reaches this arm at all, and the transpose's correctness is exercised by an on-card RSA sign at each of the three widths and by nothing else. The Bellcore check in `crt::private_op` turns a wrong transpose into a refused signature rather than a bad one, so a passing on-card sign IS the proof — and a failing one is a key that stops working, which is why this may not be turned on blind. (3) Time one PIV GENERAL AUTHENTICATE or one OpenPGP PSO:CDS on each arm for the real cost. Counted from the instruction mix, `bignum_table_select` reads 16 x `half` bytes per window where the shipped arm reads `half`, against a window that already spends four squarings and one multiply, so the overhead is of the order of a tenth of the private operation and is LARGER at RSA-2048 than at RSA-4096 — the multiply cost grows quadratically in the width and the table scan only linearly. WHAT TAKES THE DEFERRAL OFF, since an `accepted-risk` row may carry no `revalidated_by`: `PLAT-CRYPTO-002` being re-opened by any of its triggers, or a board becoming available for the three widths — whichever comes first. The flag is the fix; this row exists so that not taking it is a decision with a price rather than a header default."
 discharge_owner = "contributor"
 status = "accepted-risk"
+out_of_scope_by = "docs/limitations.md#cryptography"
 failure_direction = "split, and the split is why it is deferred rather than taken: leaving it 0 keeps the residual `PLAT-CRYPTO-002` argues is LOW, while turning it on today would put an arm nothing in this tree can execute onto the four USB-reachable private-key surfaces, where a wrong result is a refused signature and a refused signature is a key that no longer works"
 depends_on = ["PLAT-CRYPTO-002"]
 
@@ -446,6 +449,7 @@ discharge_owner = "contributor"
 status = "discharged"
 evidence = ["formal/RSKeySecurityState.tla", "formal/ForceChange.cfg", "formal/comutants.toml"]
 revalidated_by = "a new reader or writer of EF_MINPINLEN[1]: the model carries the flag at the two get_pin_token doors, the changePIN clear and the reset sweep, and `git grep -n 'force_change_pending\\|clear_force_change' -- crates` is the list it is held to — a fourth site, or a second clear, unsettles it"
+evidence_commit = "f5577ab57885ae8b1a5a93574aca0343763e7b25"
 failure_direction = "security: the model proves the authorization invariants over a state space with one gate fewer than the firmware has"
 # WHAT IS STILL NARROWER, said here rather than left to be discovered. (1) The
 # configurations the tiers are about run with `ForceChangeModelled = FALSE`, so
@@ -831,6 +835,7 @@ evidence = [
     "assurance/bundle/logs/SEC-FIDO-005/tlc-Historical_E76.log",
 ]
 revalidated_by = "any edit that moves what this run observed: the emit at `formal/gen-configs.sh:322`, the conjunct at `formal/RSKeySecurityState.tla:1405`, `formal/Historical_E76.cfg`'s constants or its INVARIANTS block — and any `--record` that replaces the safety tier, because this rests on ONE recorded run of ONE arm and a re-run is where it would stop being true. `grep -l FixSweepDropsCredsBeforeRpEntries formal/*.cfg` is the roster it is held to: a second file assigning the constant unsettles the `exactly one` half."
+evidence_commit = "0eb2a5f83bb5f758ac76d53a3ffeafe443f4a481"
 failure_direction = "coverage: a model constant nothing branches on is a comment with a type, and this one names a repair a reader could take for a checked alternative"
 covers = ["slice:AS-CRED-5"]
 supports = ["SEC-FIDO-005"]

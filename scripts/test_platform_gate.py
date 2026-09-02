@@ -169,6 +169,31 @@ VECTOR_PAGE = """\
 | PLAT-FLASH-001 | a board run |
 """
 
+#: The page that publishes what the project does not defend against, shaped like
+#: the real one in the three ways the rules read: a section that NAMES a row (so
+#: the pin has something to agree with), a section that names none (so "the
+#: anchor resolves" is not the same rule as "the section is about this row"), and
+#: a FENCED block carrying a heading and an id — both invisible, because a `#`
+#: inside a code sample is not a section and an id inside one is not a citation.
+#: `## Silicon & desk` is not decoration either: it is the double-dash anchor,
+#: which is what a slugger that collapses runs of dropped characters gets wrong.
+LIMITATIONS_PAGE = """\
+# Limitations — what this fixture does not do
+
+## Silicon & desk
+
+- **A residual, deferred with a stated price.** See `PLAT-CRYPTO-001`.
+
+## Protocol / compatibility
+
+- **A feature gap no row of the registry is about.**
+
+```text
+## A heading inside a fence
+PLAT-BOGUS-999
+```
+"""
+
 EMU_SHIM = '''\
 """The shim."""
 UNSUPPORTED = {
@@ -246,10 +271,22 @@ discharge = "The manifest."
 discharge_owner = "contributor"
 status = "discharged"
 evidence = ["assurance/properties.toml"]
-revalidated_by = "any change to the manifest"
+revalidated_by = "any change to the manifest, or to assurance/crates.toml"
+evidence_commit = "0000000000000000000000000000000000000000"
 failure_direction = "coverage: the arm the tree does not take is the stricter one"
 covers = ["model:WorldIsFlat"]
 discharges = ["WorldIsFlat"]
+supports = ["SEC-T-001"]
+
+[[assumption]]
+id = "PLAT-CRYPTO-001"
+class = "crypto-primitive"
+statement = "A residual the page publishes and this registry accepts."
+discharge = "A hardening with a stated price, deferred rather than taken."
+discharge_owner = "contributor"
+status = "accepted-risk"
+out_of_scope_by = "docs/limitations.md#silicon--desk"
+failure_direction = "security: a residual nobody wrote down anywhere a user reads"
 
 [[assumption]]
 id = "PLAT-FLASH-001"
@@ -282,6 +319,21 @@ status = "pending"
 failure_direction = "security: the one class safe Rust does not rule out"
 covers = ["unsafe:crates/rsk-a/src/lib.rs", "unsafe:firmware/src/main.rs"]
 """
+
+#: The placeholder `Tree.__init__` swaps for the commit it just made. A literal
+#: sha of the right SHAPE, so a fixture that forgot the swap reads
+#: `unknown-commit` — the finding — rather than the missing-field one, which is a
+#: different rule and would report this file's own mistake as that rule's case.
+COMMIT_AT_INIT = "0" * 40
+
+#: `git commit` with an identity and WITHOUT a signature. `commit.gpgsign = true`
+#: is a plausible global and it costs 0.166 s a commit measured here — 173 cases
+#: is 29 s of the suite spent signing throwaway fixtures, and what it signs is a
+#: temp directory nobody will ever verify.
+COMMIT_AS = (
+    "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+    "-c", "commit.gpgsign=false", "commit", "-q",
+)
 
 #: The `PLAT-STORE-001` block verbatim, so the deletion test removes ONE row and
 #: reddens for one reason. A truncation would take PLAT-TOOLCHAIN-001 with it and
@@ -341,6 +393,7 @@ class Tree:
             BOARD_RECORD.replace("PLAT-FLASH-001", "PLAT-TOOL-001"),
         )
         self.write("docs/authorization-slice.md", DESIGN_PAGE)
+        self.write("docs/limitations.md", LIMITATIONS_PAGE)
         # A generated page and the generator that claims it, plus the same
         # header over a page nothing writes — the two arms of the prose-page
         # exemption, which is derived from the pair and not from the header.
@@ -363,6 +416,16 @@ class Tree:
         # twelve files the first derivation produced were exactly this.
         self.write("crates/rsk-a/src/prose.rs", PROSE_RS)
         self.git("init", "-q")
+        # A real commit, because the freshness axis is pure committed history and
+        # a fixture that only ever `git add`s has none: without one every settled
+        # row reads `unknown-commit` and no case below can tell the axis working
+        # from the axis blind. `assurance/board/` is held OUT of it for the
+        # opposite reason — `check_expected_predates` walks a record's history for
+        # a `planned` version, and committing the planned records here would hand
+        # that rule the version it is looking for and switch it off.
+        self.git("add", "-A", "--", ".", ":(exclude)assurance/board")
+        self.git(*COMMIT_AS, "-m", "the fixture")
+        self.edit("assurance/platform.toml", COMMIT_AT_INIT, self.head())
         self.git("add", "-A")
         self.regenerate()
 
@@ -384,14 +447,18 @@ class Tree:
     def git(self, *args):
         subprocess.run(["git", "-C", str(self.root), *args], check=True, capture_output=True)
 
+    def head(self):
+        done = subprocess.run(
+            ["git", "-C", str(self.root), "rev-parse", "HEAD"],
+            check=True, capture_output=True, text=True,
+        )
+        return done.stdout.strip()
+
     def commit(self, message="a state of the tree"):
         """A real commit, because `check_expected_predates` reads history and a
         fixture that only ever `git add`s has none to read."""
         self.git("add", "-A")
-        self.git(
-            "-c", "user.name=t", "-c", "user.email=t@example.invalid",
-            "commit", "-q", "-m", message,
-        )
+        self.git(*COMMIT_AS, "-m", message)
 
     def regenerate(self):
         self.write("docs/platform-assumptions.md", platform_gate.render(self.root))
@@ -803,7 +870,11 @@ def test_a_page_its_generator_claims_but_does_not_mark_is_not_evidence(tree):
 
 
 def test_a_discharge_with_no_revalidation_trigger_is_a_finding(tree):
-    tree.edit("assurance/platform.toml", 'revalidated_by = "any change to the manifest"\n', "")
+    tree.edit(
+        "assurance/platform.toml",
+        'revalidated_by = "any change to the manifest, or to assurance/crates.toml"\n',
+        "",
+    )
     assert only(tree.problems(), "with no `revalidated_by`")
 
 
@@ -892,7 +963,7 @@ def test_a_status_that_moves_without_the_page_is_a_finding(tree):
 
 
 def test_a_hand_edit_of_the_page_is_a_finding(tree):
-    tree.edit("docs/platform-assumptions.md", "Discharged: 1 of 6.", "Discharged: 5 of 6.")
+    tree.edit("docs/platform-assumptions.md", "Discharged: 1 of 7.", "Discharged: 5 of 7.")
     assert only(tree.problems(), "docs/platform-assumptions.md is not what the generator writes")
 
 
@@ -900,7 +971,7 @@ def test_the_page_carries_every_entry_and_its_status(tree):
     page = (tree.root / "docs/platform-assumptions.md").read_text()
     for name in ("PLAT-TOOL-001", "PLAT-MODEL-001", "PLAT-BUILD-001", "PLAT-FLASH-001"):
         assert f"`{name}`" in page, name
-    assert "Discharged: 1 of 6." in page
+    assert "Discharged: 1 of 7." in page
 
 
 # --- rule 7: the bundle's own `registered` field -------------------------------
@@ -1612,3 +1683,288 @@ def test_the_owner_is_refused_by_its_vocabulary_and_not_by_an_escape(tree):
     )
     assert only(tree.problems(), "discharge_owner 'contri|butor' is not one")
     assert "discharge_owner" not in platform_gate.RENDERED_PROSE
+
+
+# --- rule 9: a settled result is dated, and goes stale when an input moves ------
+#
+# Stage 10's exit criterion 3 — "every assumption automatically marks dependent
+# claims stale" — measured at 0: `grep -c stale scripts/platform_gate.py` found
+# nothing, and the tree's only freshness machine (`evidence_gate.freshness`) reads
+# bundles, not this registry. These cases are that axis. Being stale is NOT a
+# finding, for the reason it is not one there: 11 of the 11 bundles that record a
+# commit are stale, so a red on staleness is a gate red at rest. The staleness
+# lands on the page, and the page's byte-diff is what makes it something a person
+# has to write down — which is what the last three cases here drive.
+
+
+def test_a_settled_row_with_no_evidence_commit_is_a_finding(tree):
+    """`revalidated_by` is a sentence saying what would unsettle the row, and
+    before this nothing could tell whether it had happened."""
+    tree.edit("assurance/platform.toml", f'evidence_commit = "{tree.head()}"\n', "")
+    assert only(tree.problems(), "with no `evidence_commit`")
+
+
+def test_an_evidence_commit_under_a_pending_row_is_a_finding(tree):
+    """The other half of `check_evidence`'s own sentence — an artifact nothing
+    rests on is decoration — asked of the date rather than of the artifact. That
+    `elif` cannot say it: `evidence_commit` is not one of the three fields it
+    reads, and widening it was measured against the rule it would weaken."""
+    tree.edit(
+        "assurance/platform.toml",
+        'status = "pending"\nfailure_direction = "security: every trace-linked',
+        f'status = "pending"\nevidence_commit = "{COMMIT_AT_INIT}"\n'
+        'failure_direction = "security: every trace-linked',
+    )
+    assert only(tree.problems(), "carries an\n `evidence_commit`".replace("\n", ""))
+
+
+def test_an_evidence_commit_this_history_does_not_have_is_a_finding(tree):
+    """`evidence_gate`'s own words: an evidence date nothing can check. The
+    fixture's placeholder is a sha of the right SHAPE, so this rule is what a
+    forgotten substitution would report — not the missing-field rule."""
+    tree.edit("assurance/platform.toml", tree.head(), COMMIT_AT_INIT)
+    assert only(tree.problems(), "is not a commit this history has")
+
+
+def test_a_settled_row_is_fresh_until_an_input_it_cites_moves(tree):
+    """Both directions of the axis over one input, through the page."""
+    assert "| `PLAT-BUILD-001` | `" in platform_gate.render(tree.root)
+    assert "**fresh**" in platform_gate.render(tree.root)
+    tree.append("assurance/properties.toml", "\n")
+    tree.commit("the evidence moves")
+    assert "**stale**" in platform_gate.render(tree.root)
+    assert "`assurance/properties.toml`" in platform_gate.render(tree.root)
+
+
+def test_the_inputs_include_the_paths_the_trigger_names_and_evidence_does_not(tree):
+    """The union half, driven by the file only `revalidated_by` names.
+
+    `assurance/crates.toml` is in no `evidence` list here and neither is
+    `formal/gen-configs.sh` on the real checkout, where `PLAT-CRED-004`'s whole
+    discharge rests on an emit in that file. Read from `evidence` alone that row
+    is behind one input; read from the union it is behind two, and the second is
+    the one its own trigger sentence points at."""
+    assert "assurance/crates.toml" in platform_gate.revalidation_inputs(
+        tree.root, platform_gate.entries(tree.root, [])["PLAT-BUILD-001"],
+        set(gate_lines.tree_files(tree.root)),
+    )
+    tree.append("assurance/crates.toml", "\n# a change to a file only the trigger names\n")
+    tree.commit("an input the evidence list does not carry moves")
+    assert "`assurance/crates.toml`" in platform_gate.render(tree.root)
+
+
+def test_an_input_that_was_never_committed_counts_as_behind(tree):
+    """A git failure and a never-committed file take the same road, and it is the
+    loud one: a guard that reads either as `nothing changed` reports fresh
+    evidence over a history it could not open."""
+    tree.write("assurance/board/flash-cut.log", "a capture\n")
+    tree.git("add", "-A")
+    tree.edit(
+        "assurance/platform.toml",
+        'evidence = ["assurance/properties.toml"]',
+        'evidence = ["assurance/properties.toml", "assurance/board/flash-cut.log"]',
+    )
+    assert "`assurance/board/flash-cut.log`" in platform_gate.render(tree.root)
+
+
+def test_the_freshness_of_a_row_is_on_the_page(tree):
+    """The rendering is the enforcement: staleness is not a finding, so a verdict
+    that never reached the page would be an axis nothing in `check.sh` can see."""
+    tree.append("assurance/properties.toml", "\n")
+    tree.commit("the evidence moves")
+    assert only(tree.problems(), "is not what the generator writes")
+
+
+def test_what_goes_stale_with_a_row_is_derived_from_its_own_links(tree):
+    """Stage 10 п.3's `dependent claims`, from the links the registry carries."""
+    registered = platform_gate.entries(tree.root, [])
+    assert platform_gate.inherits("PLAT-BUILD-001", registered) == ["SEC-T-001"]
+    tree.edit(
+        "assurance/platform.toml",
+        'id = "PLAT-MODEL-001"\nclass = "model-abstraction"',
+        'id = "PLAT-MODEL-001"\ndepends_on = ["PLAT-BUILD-001"]\nclass = "model-abstraction"',
+    )
+    registered = platform_gate.entries(tree.root, [])
+    assert platform_gate.inherits("PLAT-BUILD-001", registered) == [
+        "SEC-T-001", "PLAT-MODEL-001",
+    ]
+
+
+# --- rule 10: an accepted risk says where it is published ----------------------
+#
+# Stage 9 п.5 and stage 10 п.5 both turn on it and both were unverifiable:
+# measured, ZERO rows of any `assurance/*.toml` referenced `docs/limitations.md`,
+# and `scripts/test_threat_gate.py` has a case recording it as cited by nothing.
+# The obligation is DERIVED from the page — a row is owed a pin when the page
+# already names it — the way `check_bundles` derives `registered` rather than
+# reading a field that can disagree with the tree.
+
+
+def test_an_accepted_risk_the_page_names_owes_a_pin(tree):
+    tree.edit(
+        "assurance/platform.toml",
+        'out_of_scope_by = "docs/limitations.md#silicon--desk"\n',
+        "",
+    )
+    assert only(tree.problems(), "publishes this row and it carries no")
+
+
+def test_a_pin_under_a_status_that_accepted_no_risk_is_a_finding(tree):
+    """The decoration direction. `PLAT-FLASH-001` is the shape on the real
+    checkout: the page names it and it is `pending`, so it is owed nothing and
+    may claim nothing."""
+    tree.edit(
+        "assurance/platform.toml",
+        'status = "pending"\nfailure_direction = "security: a torn write',
+        'status = "pending"\nout_of_scope_by = "docs/limitations.md#silicon--desk"\n'
+        'failure_direction = "security: a torn write',
+    )
+    assert only(tree.problems(), "carries `out_of_scope_by`")
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "docs/limitations.md#Silicon--desk",  # an anchor mdBook lower-cases
+        "./docs/limitations.md#silicon--desk",  # the page by another path
+        "docs/limitations.md",  # the page and nothing more
+        "limitations.md#silicon--desk",  # the link a reader of the page would write
+        "docs/limitations.md#silicon desk",  # a heading where an anchor goes
+    ],
+)
+def test_a_pin_in_a_spelling_that_resolves_to_nothing_is_a_finding(tree, spelling):
+    """Each one falls through every rule below it while LOOKING published, which
+    is what `threat_gate.check_sources` refuses in the same words."""
+    tree.edit(
+        "assurance/platform.toml", "docs/limitations.md#silicon--desk", spelling
+    )
+    assert only(tree.problems(), "is not `docs/limitations.md#<anchor>`")
+
+
+def test_a_pin_to_a_section_that_is_not_on_the_page_is_a_finding(tree):
+    tree.edit(
+        "assurance/platform.toml",
+        "docs/limitations.md#silicon--desk",
+        "docs/limitations.md#no-such-section",
+    )
+    assert only(tree.problems(), "is no section of that page")
+
+
+def test_a_pin_to_a_section_that_does_not_publish_the_row_is_a_finding(tree):
+    """`lychee --offline` does not check fragments and mdBook does not check
+    which section a fragment lands in, so an anchor that resolves is not the same
+    claim as a section that is about this row."""
+    tree.edit(
+        "assurance/platform.toml",
+        "docs/limitations.md#silicon--desk",
+        "docs/limitations.md#protocol--compatibility",
+    )
+    assert only(tree.problems(), "which does not name this row")
+
+
+def test_a_heading_rename_moves_the_anchor_and_the_pin_goes_red(tree):
+    """The one edit that breaks the link with nothing in the registry touched."""
+    tree.edit("docs/limitations.md", "## Silicon & desk", "## Silicon and desk")
+    assert only(tree.problems(), "is no section of that page")
+
+
+def test_the_anchor_is_mdbooks_own_normalisation(tree):
+    """A KAT against a real `scripts/docs.sh build`, not against a reading of
+    mdBook's source: these five ids were read out of `book/limitations.html`. The
+    double dash is the one a slugger that collapses runs gets wrong — the dropped
+    character leaves the space on either side of it."""
+    assert platform_gate.normalize_id("Cryptography") == "cryptography"
+    assert platform_gate.normalize_id("Backup & migration") == "backup--migration"
+    assert platform_gate.normalize_id("Hardware / physical") == "hardware--physical"
+    assert platform_gate.normalize_id("Protocol / compatibility") == "protocol--compatibility"
+    assert platform_gate.normalize_id(
+        "Limitations — what RS-Key does not do, and why"
+    ) == "limitations--what-rs-key-does-not-do-and-why"
+
+
+def test_an_id_on_the_page_that_is_no_row_of_the_registry_is_a_finding(tree):
+    """The reverse direction, and the cheap half: the page sends a reader to
+    three of these ids in prose, and a rename would leave it authoritative and
+    pointing at nothing."""
+    tree.edit("docs/limitations.md", "`PLAT-CRYPTO-001`", "`PLAT-GONE-001`")
+    assert only(tree.problems(), "which is no entry of assurance/platform.toml")
+
+
+def test_a_heading_and_an_id_inside_a_fence_are_not_read(tree):
+    """The green arm, and it is load-bearing rather than decorative: the fixture's
+    fence carries `PLAT-BOGUS-999` and a `##` line, and dropping the fence skip
+    turns the first into an unregistered id and the second into an anchor the
+    page does not have."""
+    headings, mentions = platform_gate.limitations_page(tree.root)
+    assert "a-heading-inside-a-fence" not in headings
+    assert not any("PLAT-BOGUS-999" in ids for ids in mentions.values())
+    tree.edit("docs/limitations.md", "```text\n## A heading inside a fence\n", "")
+    tree.edit("docs/limitations.md", "PLAT-BOGUS-999\n```\n", "PLAT-BOGUS-999\n")
+    assert only(tree.problems(), "PLAT-BOGUS-999, which is no entry")
+
+
+def test_where_a_risk_is_published_is_on_the_page(tree):
+    """The rendering, driven the way the freshness one is: a heading rename that
+    the registry follows leaves every rule green and the page wrong."""
+    tree.edit("docs/limitations.md", "## Silicon & desk", "## Silicon & the desk")
+    tree.edit(
+        "assurance/platform.toml",
+        "docs/limitations.md#silicon--desk",
+        "docs/limitations.md#silicon--the-desk",
+    )
+    assert only(tree.problems(), "is not what the generator writes")
+    assert "silicon--the-desk" in platform_gate.render(tree.root)
+
+
+def test_a_row_the_page_does_not_name_is_owed_no_pin(tree):
+    """The obligation is DERIVED, so it is not `every accepted-risk row`. On the
+    real checkout that is the honest half: 2 of the 4 accepted-risk rows are model
+    OVER-APPROXIMATIONS whose route reads `nothing to run`, and that page opens by
+    saying it covers feature and hardware gaps — an anchor minted for them would
+    publish a proof-scope note as a user-facing limitation."""
+    tree.edit("docs/limitations.md", "See `PLAT-CRYPTO-001`.", "Nobody is named here.")
+    tree.edit(
+        "assurance/platform.toml",
+        'out_of_scope_by = "docs/limitations.md#silicon--desk"\n',
+        "",
+    )
+    assert not only(tree.problems(), "carries no")
+    assert "**not published there**" in platform_gate.render(tree.root)
+
+
+def test_an_evidence_commit_that_is_a_ref_and_not_a_sha_is_a_finding(tree):
+    """`git cat-file -e HEAD^{commit}` succeeds, so the `unknown-commit` rule
+    cannot see this: a date written `HEAD` resolves, moves with the checkout, and
+    reports every row fresh forever. Measured at exit 0 before the shape rule."""
+    tree.edit("assurance/platform.toml", tree.head(), "HEAD")
+    assert only(tree.problems(), "is not a full commit sha")
+
+
+def test_an_abbreviated_evidence_commit_is_a_finding(tree):
+    """The weaker half of the same rule, and it is a different failure: an
+    abbreviation resolves today and stops being unique as history grows."""
+    tree.edit("assurance/platform.toml", tree.head(), tree.head()[:12])
+    assert only(tree.problems(), "is not a full commit sha")
+
+
+def test_a_heading_of_the_published_page_is_a_table_cell_too(tree, capsys):
+    """The new cells come from a file `check_cells` does not read.
+
+    `RENDERED_PROSE` names the two REGISTRY fields that reach the page as prose,
+    and a heading of `docs/limitations.md` is now a third source that is neither.
+    The named half cannot see it; the half that RAISES can, and that is the one
+    standing between a `<` and a published page — `--write` refuses and leaves the
+    page alone, and `audit` reports it rather than a traceback. A `|` is escaped
+    as `\\|` and as nothing else."""
+    tree.edit("docs/limitations.md", "## Silicon & desk", "## Silicon <b>&</b> desk")
+    tree.edit("assurance/platform.toml", "#silicon--desk", "#silicon-bb-desk")
+    before = (tree.root / platform_gate.ARTIFACT).read_text()
+    assert platform_gate.run(tree.root, write=True) == 1
+    assert (tree.root / platform_gate.ARTIFACT).read_text() == before
+    assert "not written" in capsys.readouterr().err
+    assert only(tree.problems(), "cannot be generated")
+    tree.edit("docs/limitations.md", "## Silicon <b>&</b> desk", "## Silicon | desk")
+    tree.edit("assurance/platform.toml", "#silicon-bb-desk", "#silicon--desk")
+    assert "| `PLAT-CRYPTO-001` | [Silicon \\| desk](limitations.md#silicon--desk) |" in (
+        platform_gate.render(tree.root)
+    )

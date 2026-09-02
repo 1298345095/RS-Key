@@ -112,6 +112,31 @@ The candidates are DERIVED — 111 of them, from the slice bundles and design pa
 | `PLAT-TRNG-001` | `trng` | The RP2350's ring-oscillator TRNG delivers full-entropy words once its health check passes, so every key, nonce, blinding factor and pinUvAuthToken drawn after boot is unpredictable to a host. | **pending** | A board measurement of the raw source before whitening, on a known stepping and at the temperature and supply corners the datasheet qualifies — not a statistical test of the whitened output, which passes over a stuck source. The boot health check was raised 25 -> 1000 samples after a stall was measured, so the startup transient is the part that is known and the steady state is the part that is not. | maintainer | `SEC-FIDO-003`, `SEC-FIDO-008` |
 | `PLAT-XIP-001` | `multicore-xip` | Core 1 is paused for the whole of every flash erase or program, so no instruction is fetched from XIP while the array is unreadable, and the inter-core FIFO makes progress so the pause is released. | **pending** | A board measurement: core 1 executing from XIP across a store write, with the pause instrumented. `firmware/src/core1.rs` carries the two `unsafe` sites this rests on and `docs/unsafe.md` justifies them as Rust invariants — which is a different question from whether the silicon behaves as the pause assumes, and that difference is why this row is not `PLAT-TOOLCHAIN-002`'s. | maintainer | `SEC-STORE-002` |
 
+## Freshness
+
+A settled row records the commit its result was taken at, and 3 of these do. An input is COVERED when the commit that last touched it is an ancestor of that one; a row behind any of its inputs is **stale**, and the claims resting on it inherit that. The inputs are derived, not listed: a row's `evidence`, plus every in-tree path its own `revalidated_by` names — which is how `formal/gen-configs.sh` reaches `PLAT-CRED-004`, whose whole discharge rests on an emit in that file and whose `evidence` does not mention it.
+
+Committed history only, so an uncommitted edit to an input is invisible until it lands — the same hole `docs/assurance-vector.md` names about itself. Stale is not a red: 3 of 3 are stale right now, and a gate red in its resting state is one nobody reads. What it costs instead is this page — a row going stale is a diff.
+
+| ID | Taken at | Freshness | Behind | Claims that inherit it |
+|---|---|---|---|---|
+| `PLAT-BUILD-001` | `bd1cff7` | **stale** | `docs/assurance-matrix.md` | `SEC-FIDO-001`, `SEC-FIDO-004`, `SEC-FIDO-006`, `SEC-FIDO-006B` |
+| `PLAT-CRED-004` | `0eb2a5f` | **stale** | `formal/gen-configs.sh`, `formal/runs.toml` | `SEC-FIDO-005` |
+| `PLAT-MODEL-010` | `f5577ab` | **stale** | `formal/RSKeySecurityState.tla`, `formal/comutants.toml` | `SEC-FIDO-001`, `SEC-FIDO-003`, `SEC-FIDO-004` |
+
+## Where the accepted risks are published
+
+4 rows accept a risk rather than discharging it, and an accepted risk that is not published is a decision only this file knows about. `docs/limitations.md` is where the project publishes them; a row the page names pins the section back, and the pin and the page must agree about which section that is.
+
+| ID | Published as |
+|---|---|
+| `PLAT-BUILD-005` | [Cryptography](limitations.md#cryptography) |
+| `PLAT-CRYPTO-002` | [Cryptography](limitations.md#cryptography) |
+| `PLAT-MODEL-008` | **not published there** |
+| `PLAT-MODEL-014` | **not published there** |
+
+The 2 unpublished rows are model OVER-APPROXIMATIONS whose discharge route reads `nothing to run`, and that page opens by saying it covers feature and hardware gaps. An anchor minted for them would publish a proof-scope note as a user-facing limitation, so the status word is what is carrying two different things here, and splitting it is a decision and not a generated table's.
+
 ## The graph
 
 Stage 1B п.3's link vocabulary, less `contradicts`: no pair here contradicts another, and a link kind with no instance is a rule whose only exercise is its own mutation.

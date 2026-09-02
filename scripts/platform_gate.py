@@ -30,13 +30,11 @@ of entries is discharged at all**. The count is DERIVED — [`run`] prints it on
 GREEN literal run and [`render`] opens the generated page with it — because the
 typed copy that stood here read `two of thirty-three` against a registry that had
 grown past sixty, and no rule holds a number a docstring states. Measured, the
-"prints it on every run" this sentence used to claim was false in two directions
-and [`main`] was the wrong function: `--write` prints `wrote …` and returns
-before the audit, and a red run prints findings on stderr and returns 1. The page
-is the copy a reader who never runs the gate sees, which is why it is generated
-and not typed.
+"prints it on every run" this sentence claimed was false in two directions and
+[`main`] was the wrong function: `--write` returns before the audit, and a red run
+prints on stderr. The page is what a reader who never runs the gate sees.
 
-Eight rules, and the first is the one that earns the file:
+Ten rules, and the first is the one that earns the file:
 
 * **candidates are DERIVED, and every one is claimed.** Five derivations, each
   floored where its source exists and it found nothing:
@@ -62,22 +60,26 @@ Eight rules, and the first is the one that earns the file:
   nobody.
 * **a claim of discharge owes evidence.** Anything but `pending` needs artifacts
   in the tree; a silicon-class discharge needs the stepping it was taken on, a
-  stepping written anywhere here must be a real one whatever the class, and a
-  discharge carrying one owes a raw artifact under `assurance/board/` — a rule
-  satisfied by any file that merely exists is satisfied by `README.md`, which is
-  what the review reached the hardware axis with. That sentence then stood over
-  that axis ALONE: on every other row `evidence = ["README.md"]` was exit 0,
-  measured, and `PLAT-STORE-003`'s discharge records it. [`PROSE_PAGE`] is the
-  other axis's half, weaker than the board one, and names what it does not stop.
+  stepping written anywhere must be real whatever the class, and one carrying a
+  stepping owes a raw artifact under `assurance/board/` — a rule met by any file
+  that merely exists is met by `README.md`, which is how the review reached the
+  hardware axis. That sentence then stood over that axis ALONE for as long as it
+  was written down: on every other row `evidence = ["README.md"]` was exit 0,
+  measured, and `PLAT-STORE-003`'s discharge records it. [`PROSE_PAGE`] is that
+  axis's half and weaker: the comment there says which attacks it does not stop.
 * **a maintainer-owned row owes a validated RECORD.** `assurance/board/<id>.toml`,
-  its plan half refused empty, its result half refused before the run, `expected`
-  older in git than it, and an outcome the row's status must match BOTH ways.
+  plan half refused empty, result half refused while `planned`, `expected` older
+  in git than it and `planned` there, an outcome the status must match BOTH ways.
 * **links resolve.** `supports` names registry properties, `depends_on` and
   `refines` name entries here, `discharges` names constants of the first
   registry — and an entry covering `model:X` must discharge `X`, so the two
   registries cannot drift into two answers about the same constant.
 * **a cell stays a cell.** A line break in `statement` or `discharge` takes Owner
   and Supports off the published row; a `<` publishes raw HTML or ends the build.
+* **a settled result is DATED.** A full-sha `evidence_commit`, read against the
+  row's `evidence` and the paths its own `revalidated_by` names; stale is a page.
+* **an accepted risk says WHERE it is published.** `out_of_scope_by` resolves to a
+  `docs/limitations.md` section that names the row, and that page's ids resolve back.
 * **the page is generated.** `docs/platform-assumptions.md` is written from the
   entries and byte-diffed, so a status cannot move without the diff that says so.
 
@@ -166,11 +168,9 @@ HAND_FIELDS = {
     "failure_direction",
 }
 LINKS = ("depends_on", "refines", "discharges", "supports", "covers")
-#: Stage 10's per-assumption list wants a revalidation trigger too, and it is here
-#: rather than in [`HAND_FIELDS`] because it is only answerable once: a trigger
-#: for a measurement nobody has made is a placeholder, and 17 placeholders are
-#: what a required field would produce today. A discharge owes one.
-OPTIONAL = set(LINKS) | {"evidence", "board_revision", "revalidated_by"}
+#: Optional because each is answerable ONCE, by the status that earns it: a trigger,
+#: a date or a published risk on a row with none is a placeholder — 17 of the first.
+OPTIONAL = set(LINKS) | {"evidence", "board_revision", "revalidated_by", "evidence_commit", "out_of_scope_by"}
 
 #: `PLAT-<AREA>-<NNN>`. The area is free so a new class does not need a new
 #: pattern, and the number is what makes the id stable across a re-sort.
@@ -636,9 +636,9 @@ def check_evidence(root, name, entry, findings, generated, tree):
                 " `board_revision` — a platform result names the platform it"
                 " was taken on"
             )
-        if board and not any(
-            str(rel).startswith(BOARD_EVIDENCE) for rel in evidence
-        ):
+        # DECORATIVE today: 0 of 74 rows carry a `board_revision`, so cutting this
+        # arm leaves the summary byte-identical; a discharge carrying one wakes it.
+        if board and not any(str(rel).startswith(BOARD_EVIDENCE) for rel in evidence):
             findings.append(
                 f"{name}: a discharge on {board!r} cites no artifact under"
                 f" {BOARD_EVIDENCE} — a rule met by any file that merely exists"
@@ -954,6 +954,340 @@ def check_bundles(root, ids, findings):
                 )
 
 
+#: The page that publishes what this project does NOT defend against, and the one
+#: an `accepted-risk` row has to point INTO. `scripts/test_threat_gate.py` has a
+#: case recording it as cited by nothing yet, and that was literal: before this
+#: rule, ZERO rows of any `assurance/*.toml` named it, so stage 9 п.5 and stage 10
+#: п.5 — "the accepted risk is published" — were both claims about a page no
+#: register referenced and no gate could check.
+LIMITATIONS = pathlib.Path("docs/limitations.md")
+
+#: An `out_of_scope_by` value: that page, then a RENDERED anchor. The fragment is
+#: an mdBook id and NOT a registry id, which is the one place this parts company
+#: with `threat_gate.REF` — `docs/threat-model.md` carries no anchors and is
+#: addressed by clause id, while this page is addressed by the heading a reader
+#: lands on. Narrow on purpose: `#Cryptography`, `./docs/limitations.md#…`, a bare
+#: path and a fragment with a space each fall through every rule below while
+#: LOOKING published, which is the spelling `threat_gate.check_sources` refuses in
+#: the same words.
+OUT_OF_SCOPE_REF = re.compile(rf"^{re.escape(str(LIMITATIONS))}#([a-z0-9_-]+)$")
+
+#: A markdown heading of that page, and the fenced run to skip over it — the two
+#: shapes `threat_gate.clause_units` reads `docs/threat-model.md` with, for its
+#: reason: a `#` inside a code sample is not a section, and a section that is not
+#: there is an anchor that sends a reader nowhere.
+PAGE_HEADING = re.compile(r"^(#{1,6})\s+(\S.*?)\s*$")
+PAGE_FENCE = re.compile(r"^\s*(?:```|~~~)")
+
+#: This registry's ids as PROSE writes them, which is the other direction of the
+#: same citation. Three are on the page today.
+PAGE_ENTRY_ID = re.compile(r"\bPLAT-[A-Z]+-\d{3}\b")
+
+
+def normalize_id(text):
+    """mdBook's own `normalize_id`, which is what decides the anchor.
+
+    Not reasoned about: measured against `book/limitations.html` out of a real
+    `scripts/docs.sh build`, where `## Backup & migration` is `backup--migration`
+    and `## Hardware / physical` is `hardware--physical`. TWO dashes, because the
+    dropped character leaves the space on either side of it — a slugger that
+    collapses the run links to an anchor the page does not have, and `lychee
+    --offline` does not check fragments, so nothing else in this tree would say so.
+    """
+    out = []
+    for char in str(text):
+        if char.isalnum() or char in "_-":
+            out.append(char.lower() if "A" <= char <= "Z" else char)
+        elif char.isspace():
+            out.append("-")
+    return "".join(out)
+
+
+def limitations_page(root):
+    """(anchor -> heading text, anchor -> the ids that section names).
+
+    One pass for both, because they are the two directions of one citation: a row
+    pins a section, and the section names the row. `setdefault` on a repeated
+    anchor keeps the FIRST, which is the id mdBook leaves unsuffixed.
+    """
+    path = root / LIMITATIONS
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    headings, mentions, anchor, fenced = {}, {}, "", False
+    for line in text.splitlines():
+        if PAGE_FENCE.match(line):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        found = PAGE_HEADING.match(line)
+        if found:
+            anchor = normalize_id(found.group(2))
+            headings.setdefault(anchor, found.group(2))
+            mentions.setdefault(anchor, set())
+            continue
+        for name in PAGE_ENTRY_ID.findall(line):
+            mentions.setdefault(anchor, set()).add(name)
+    return headings, mentions
+
+
+def check_out_of_scope(name, entry, findings, headings, mentions):
+    """An `accepted-risk` row says WHERE its risk is published, and the page agrees.
+
+    The obligation is DERIVED from the page rather than declared here, the way
+    `check_bundles` derives `registered`: a row is owed a pin when the page
+    already names it. That is 2 of the 4 accepted-risk rows and it is deliberately
+    not 4 — `PLAT-MODEL-008` and `PLAT-MODEL-014` are model OVER-APPROXIMATIONS
+    whose discharge route reads "nothing to run", and this page opens by saying it
+    covers feature and hardware gaps. Minting an anchor for them would publish a
+    proof-scope note as a user-facing limitation, which is a page saying something
+    it does not mean; the honest reading is that `accepted-risk` is carrying two
+    different things and splitting it is the maintainer's call.
+    """
+    published = {n for ids in mentions.values() for n in ids}
+    ref = str(entry.get("out_of_scope_by", "")).strip()
+    if entry.get("status") == "accepted-risk":
+        if not ref and name in published:
+            findings.append(
+                f"{name}: {LIMITATIONS} publishes this row and it carries no"
+                " `out_of_scope_by` — a risk the page names and the registry does"
+                " not point back at is a citation with one end, and which section"
+                " publishes it is then a thing only a reader can find"
+            )
+    elif ref:
+        findings.append(
+            f"{name}: status {entry.get('status')!r} carries `out_of_scope_by` —"
+            " the field says a risk was ACCEPTED and published, and a row that has"
+            " not accepted one is pointing at a section about something else"
+        )
+    if not ref:
+        return
+    found = OUT_OF_SCOPE_REF.match(ref)
+    if not found:
+        findings.append(
+            f"{name}: out_of_scope_by {ref!r} is not `{LIMITATIONS}#<anchor>` —"
+            " the anchor is the mdBook id of a heading, lower-cased with every"
+            " dropped character leaving its spaces behind, and any other spelling"
+            " resolves to nothing while reading as published"
+        )
+        return
+    anchor = found.group(1)
+    if anchor not in headings or name not in mentions.get(anchor, set()):
+        why = (
+            "is no section of that page"
+            if anchor not in headings
+            else f"is {headings[anchor]!r}, which does not name this row"
+        )
+        findings.append(
+            f"{name}: out_of_scope_by anchor `#{anchor}` {why} — the pin and the"
+            " page have to agree about WHICH section publishes the risk, or the"
+            " row points at a heading that stopped being about it"
+        )
+
+
+def check_published_ids(ids, findings, mentions):
+    """Every `PLAT-…` the page writes is an entry of this registry.
+
+    The reverse of the rule above and the cheaper half: `docs/limitations.md` sends
+    a reader to three of these ids in prose, and a rename or a deletion here would
+    leave the page authoritative and pointing at nothing. Not the other reverse —
+    holding every SECTION to an accepted-risk row was measured and refused: the
+    page has 5, and at most 2 could ever be claimed, because the rest publish
+    feature gaps (brainpool, X448, the USB identity) that are not platform
+    assumptions at all. A rule red by construction over content it has no business
+    governing is the decoration this file refuses everywhere else.
+    """
+    for anchor, names in sorted(mentions.items()):
+        for name in sorted(names):
+            if name not in ids:
+                findings.append(
+                    f"{LIMITATIONS}#{anchor} names {name}, which is no entry of"
+                    f" {REGISTRY} — the page reads as authoritative about a row"
+                    " that was renamed or deleted out from under it"
+                )
+
+
+#: The suffixes a path can have in this tree, used to read the in-tree paths a
+#: row's own `revalidated_by` names. Filtered through `in_tree` afterwards, which
+#: is what makes it a derivation rather than a guess: `formal/*.cfg` and
+#: `git grep -n '…' -- crates` both survive this pattern and neither is a file, so
+#: git's own listing is what decides.
+PROSE_PATH = re.compile(
+    r"[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:md|toml|tla|cfg|rs|py|sh|txt|log|json|nix|lock)"
+)
+
+
+def revalidation_inputs(root, entry, tree):
+    """The files a settled row's claim is ABOUT: its `evidence`, plus every
+    in-tree path its own `revalidated_by` names.
+
+    The union and not `evidence` alone, and the reason is measured rather than
+    symmetric with `evidence_gate.evidence_inputs`. `PLAT-CRED-004`'s trigger
+    sentence names an emit in `formal/gen-configs.sh` that its whole discharge
+    rests on, and that file is in no `evidence` list: read from `evidence`
+    only, that row is behind ONE input; read from the union it is behind two, and
+    the second is the file the row itself says would unsettle it. Nothing is added
+    for the other two rows, so this is one measured input on one of three and not
+    a wider net for its own sake.
+
+    Not a second hand-written list either — `revalidated_by` is already there and
+    already required of a settled row; what is new is reading it instead of only
+    printing it.
+    """
+    evidence = entry.get("evidence", [])
+    evidence = evidence if isinstance(evidence, list) else [evidence]
+    prose = set(PROSE_PATH.findall(str(entry.get("revalidated_by", ""))))
+    return sorted({str(rel) for rel in evidence} | {p for p in prose if in_tree(p, tree)})
+
+
+def last_commit(root, rel):
+    """The commit that last touched `rel`, or `""` — never a silent success.
+
+    A git failure returns `""` and `freshness` reads that as NOT covered, which is
+    the direction `evidence_gate.git`'s docstring names: a guard that reads a git
+    failure as "nothing changed" reports fresh evidence over a history it could
+    not open.
+    """
+    done = subprocess.run(
+        ["git", "-C", str(root), "log", "-1", "--format=%H", "--", str(rel)],
+        capture_output=True, text=True, check=False,
+    )
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def freshness(root, commit, inputs, memo=None):
+    """(verdict, the inputs the recorded commit does not cover).
+
+    `evidence_gate.freshness`'s rule, asked of this registry's rows: an input is
+    covered when the commit that last touched it IS, or is an ancestor of, the
+    commit the row recorded. Pure committed history, so writing the page and then
+    committing it cannot change the answer between the two — and so the hole is
+    the same one that page names: an uncommitted edit to an input is invisible
+    until it lands.
+
+    `memo` is [`settled_freshness`]'s per-run cache of the `git log` half, and it
+    is per RUN and not a module global: two rows here share
+    `formal/RSKeySecurityState.tla`, and a cache that outlived one call would
+    answer from a history a fixture has since committed to.
+    """
+    known = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "-e", f"{commit}^{{commit}}"],
+        capture_output=True, text=True, check=False,
+    )
+    if known.returncode:
+        return "unknown-commit", []
+    memo = {} if memo is None else memo
+    behind = []
+    for rel in inputs:
+        if rel not in memo:
+            memo[rel] = last_commit(root, rel)
+        last = memo[rel]
+        if not last:
+            behind.append(rel)  # never committed, or a history that would not open
+            continue
+        # A commit is its own ancestor, so this is the same answer for one less
+        # process — and it is the common one, because the commit a result was
+        # taken at is usually the one that wrote the artifacts it rests on.
+        if last == commit:
+            continue
+        done = subprocess.run(
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", last, commit],
+            capture_output=True, text=True, check=False,
+        )
+        if done.returncode:
+            behind.append(rel)
+    return ("fresh" if not behind else "stale"), behind
+
+
+#: The statuses that owe a date. The same pair `check_evidence` already makes owe
+#: `evidence` and `revalidated_by`: a result was recorded, so there is a commit it
+#: was recorded AT. `accepted-risk` is not one — nothing was measured, so there is
+#: no run for a date to be about, and a date there would be the decoration the
+#: `elif` above already refuses in its own words.
+SETTLED = ("discharged", "refuted")
+
+#: What a date has to LOOK like: a full object name. Not `[0-9a-f]+`, because git
+#: resolves an abbreviation and a REF alike — `evidence_commit = "HEAD"` passes
+#: `cat-file`, dates the result at whatever is checked out, and reports every row
+#: fresh forever, which is this module's "met by README.md" sentence with a
+#: revision substituted. Measured: exit 0 before this line. An abbreviation is out
+#: for the weaker but real reason that it stops being unique as history grows.
+COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def settled_freshness(root, registered, tree):
+    """id -> (commit, verdict, inputs it is behind), for every dated settled row.
+
+    Computed once by [`audit`] and handed to [`render`], because it shells out to
+    git per input and both of them want the same answer.
+    """
+    out, memo = {}, {}
+    for name, entry in sorted(registered.items()):
+        commit = str(entry.get("evidence_commit", "")).strip()
+        if entry.get("status") not in SETTLED or not commit:
+            continue
+        inputs = revalidation_inputs(root, entry, tree)
+        out[name] = (commit, *freshness(root, commit, inputs, memo))
+    return out
+
+
+def check_freshness(name, entry, findings, vector):
+    """A settled row is DATED, and only a settled row is.
+
+    Stage 10 п.3 asks that an assumption mark its dependent claims stale, and
+    `grep -c stale` over this file answered 0: the registry had `revalidated_by`,
+    a sentence naming what would unsettle a row, and no machine could tell whether
+    that had happened. `evidence_gate` had the machine and reads bundles, not this
+    file.
+
+    Being STALE is not a finding here, for the reason it is not one there: measured
+    over the 11 bundles that record a commit, 11 are stale, so a red on staleness
+    is a gate that is red as its resting state. What is a finding is a settled row
+    with no date at all, and one whose date this history does not have — the two
+    ways the axis stops being computable. The staleness itself lands on
+    [`ARTIFACT`], where a row going stale is a diff someone has to write and read.
+    """
+    commit = str(entry.get("evidence_commit", "")).strip()
+    if entry.get("status") in SETTLED:
+        if not commit:
+            findings.append(
+                f"{name}: status {entry.get('status')!r} with no `evidence_commit`"
+                " — a result with no date cannot go stale, so `revalidated_by`"
+                " stays a sentence nothing checks and the row reads settled"
+                " through the change that unsettles it"
+            )
+    elif commit:
+        findings.append(
+            f"{name}: status {entry.get('status')!r} carries an"
+            " `evidence_commit` — a date on a result nobody took, which is the"
+            " same decoration as evidence under an undischarged row"
+        )
+    if commit and not COMMIT_SHA.fullmatch(commit):
+        findings.append(
+            f"{name}: `evidence_commit` {commit[:20]!r} is not a full commit sha"
+            " — git resolves a ref and an abbreviation alike, so a date written"
+            " `HEAD` moves with the checkout and reports the row fresh forever"
+        )
+    if commit and vector and vector[1] == "unknown-commit":
+        findings.append(
+            f"{name}: `evidence_commit` {commit[:12]} is not a commit this history"
+            " has — an evidence date nothing can check"
+        )
+
+
+def inherits(name, registered):
+    """What goes stale with `name`: the properties it supports, then the rows that
+    rest on it. Stage 10 п.3's "dependent claims", derived from the links the
+    registry already carries rather than from a second list of them.
+    """
+    onward = sorted(
+        other
+        for other, entry in registered.items()
+        for kind in ("depends_on", "refines")
+        if name in entry.get(kind, [])
+    )
+    return sorted(registered[name].get("supports", [])) + onward
+
+
 def audit(root, board_floor=None):
     """(findings, one-line summary) for the registry, its candidates and its page."""
     root = pathlib.Path(root)
@@ -979,12 +1313,16 @@ def audit(root, board_floor=None):
     # out to git.
     generated = claims_gate.generated_pages(root)
     tree = set(gate_lines.tree_files(root))
+    headings, mentions = limitations_page(root)
+    dated = settled_freshness(root, registered, tree)
 
     owner = {}
     for name, entry in sorted(registered.items()):
         check_shape(name, entry, findings)
         check_cells(name, entry, findings)
         check_evidence(root, name, entry, findings, generated, tree)
+        check_freshness(name, entry, findings, dated.get(name))
+        check_out_of_scope(name, entry, findings, headings, mentions)
         check_links(name, entry, registered, properties, constants, findings)
         for target in entry.get("covers", []):
             if target not in found:
@@ -1007,9 +1345,10 @@ def audit(root, board_floor=None):
 
     check_bundles(root, registered, findings)
     check_board_records(root, registered, findings, board_floor)
+    check_published_ids(registered, findings, mentions)
 
     try:
-        want = render(root, registered)
+        want = render(root, registered, dated)
     except (OSError, ValueError, KeyError) as error:
         findings.append(f"{ARTIFACT} cannot be generated: {error}")
     else:
@@ -1117,10 +1456,12 @@ def cell(text):
     return text.replace("|", "\\|")
 
 
-def render(root, registered=None):
+def render(root, registered=None, dated=None):
     """`docs/platform-assumptions.md` as the tree makes it."""
     root = pathlib.Path(root)
     registered = entries(root, []) if registered is None else registered
+    if dated is None:
+        dated = settled_freshness(root, registered, set(gate_lines.tree_files(root)))
     found = candidates(root)
     rows = sorted(registered.items())
     pending = [n for n, e in rows if e.get("status") == "pending"]
@@ -1186,6 +1527,70 @@ def render(root, registered=None):
             f" **{entry.get('status')}** | {cell(entry.get('discharge'))} |"
             f" {entry.get('discharge_owner')} | {supports} |"
         )
+    settled = [n for n, e in rows if e.get("status") in SETTLED]
+    stale = [n for n in settled if dated.get(n, ("", "", []))[1] == "stale"]
+    out += [
+        "",
+        "## Freshness",
+        "",
+        f"A settled row records the commit its result was taken at, and {len(settled)}"
+        " of these do. An input is COVERED when the commit that last touched it is"
+        " an ancestor of that one; a row behind any of its inputs is **stale**, and"
+        " the claims resting on it inherit that. The inputs are derived, not"
+        " listed: a row's `evidence`, plus every in-tree path its own"
+        " `revalidated_by` names — which is how `formal/gen-configs.sh` reaches"
+        " `PLAT-CRED-004`, whose whole discharge rests on an emit in that file and"
+        " whose `evidence` does not mention it.",
+        "",
+        "Committed history only, so an uncommitted edit to an input is invisible"
+        " until it lands — the same hole `docs/assurance-vector.md` names about"
+        f" itself. Stale is not a red: {len(stale)} of {len(settled)} are stale"
+        " right now, and a gate red in its resting state is one nobody reads. What"
+        " it costs instead is this page — a row going stale is a diff.",
+        "",
+        "| ID | Taken at | Freshness | Behind | Claims that inherit it |",
+        "|---|---|---|---|---|",
+    ]
+    for name in settled:
+        commit, verdict, behind = dated.get(name, ("", "undated", []))
+        onward = ", ".join(f"`{c}`" for c in inherits(name, registered)) or "—"
+        out.append(
+            f"| `{name}` | `{commit[:7] or '—'}` | **{verdict}** |"
+            f" {', '.join(f'`{cell(rel)}`' for rel in behind) or '—'} | {onward} |"
+        )
+    headings, mentions = limitations_page(root)
+    accepted = [n for n, e in rows if e.get("status") == "accepted-risk"]
+    out += [
+        "",
+        "## Where the accepted risks are published",
+        "",
+        f"{len(accepted)} rows accept a risk rather than discharging it, and an"
+        " accepted risk that is not published is a decision only this file knows"
+        f" about. `{LIMITATIONS}` is where the project publishes them; a row the"
+        " page names pins the section back, and the pin and the page must agree"
+        " about which section that is.",
+        "",
+        "| ID | Published as |",
+        "|---|---|",
+    ]
+    for name in accepted:
+        ref = str(registered[name].get("out_of_scope_by", "")).strip()
+        anchor = ref.partition("#")[2]
+        out.append(
+            f"| `{name}` | "
+            + (f"[{cell(headings.get(anchor, anchor))}]({LIMITATIONS.name}#{anchor})"
+               if ref else "**not published there**")
+            + " |"
+        )
+    out.append(
+        f"\nThe {sum(1 for n in accepted if not str(registered[n].get('out_of_scope_by', '')).strip())}"
+        " unpublished rows are model OVER-APPROXIMATIONS whose discharge route"
+        " reads `nothing to run`, and that page opens by saying it covers feature"
+        " and hardware gaps. An anchor minted for them would publish a proof-scope"
+        " note as a user-facing limitation, so the status word is what is carrying"
+        " two different things here, and splitting it is a decision and not a"
+        " generated table's."
+    )
     out += [
         "",
         "## The graph",
