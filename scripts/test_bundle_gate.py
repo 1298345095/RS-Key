@@ -1617,7 +1617,12 @@ def test_the_row_and_not_the_helper(tmp_path):
     tree this ships into can be red for a rule this table does not own, and an
     arm asserting the control's exit code would then be measuring that instead.
     What is drift-proof is that the defect run's own exit code is a failing one
-    and that the ONE line it prints which the control does not is this rule's.
+    and that the ONE FINDING it prints which the control does not is this rule's.
+
+    Findings, not lines, and that distinction is why this case failed the day
+    `bundle_gate` first went green: `bundle-gate:` heads the red path only, so a
+    GREEN control puts it in the delta too and a line count reads 2. The banner
+    is not a finding; it is how the reader knows findings follow.
     """
     root = tree(tmp_path)
     control_code, control_err = gate_process(root)
@@ -1625,7 +1630,12 @@ def test_the_row_and_not_the_helper(tmp_path):
     target = drop(root, "SEC-FIDO-004/orphan-run.log")
     defect_code, defect_err = gate_process(root)
     assert defect_code == 1, (defect_code, defect_err)
-    appeared = set(defect_err.splitlines()) - set(control_err.splitlines())
+    banner = "bundle-gate:"
+    appeared = {
+        l
+        for l in set(defect_err.splitlines()) - set(control_err.splitlines())
+        if l.strip() != banner
+    }
     assert len(appeared) == 1, appeared
     line = appeared.pop()
     assert ORPHAN in line and target in line, line
