@@ -672,6 +672,13 @@ run "ci scope rules"           ./scripts/ci-scope.sh --self-test
 # It costs ~7 s and needs nothing the shell has not already fetched.
 run "complexity ratchet"       ./scripts/complexity_gate.sh
 run "ci knob groups"           ./scripts/ci-knobs.sh --self-test
+# The reproduction runner an external reviewer is handed. Its own phase list is
+# the thing that rots: a new evidence runner, a new weekly job or a gate row that
+# starts needing something a clean checkout has not got would leave the script
+# claiming to reproduce a tree it no longer describes. `--self-test` holds all
+# three against the tree, and this row is what drives it -- the same shape as the
+# two rows above, and the reason they are rows rather than comments.
+run "reproduction runner"      ./scripts/reproduce.sh --self-test
 # The Kani proofs run nightly, but their roster is a hand-written `-p` list and a
 # crate absent from it is simply not proven — `rsk-ui` and `rsk-led` never were,
 # under a row named "prove every harness". Checking the roster is a grep, so it

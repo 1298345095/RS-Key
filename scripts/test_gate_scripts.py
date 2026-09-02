@@ -91,6 +91,10 @@ NAMED = {
     "gate_union.py": ("test_gate_union.py", "check.sh"),
     "complexity_gate.sh": ("test_complexity_gate.py", "check.sh"),
     "token_refinement.sh": ("test_token_refinement.py", "check.sh"),
+    # The reproduction runner: a `--self-test` row like the two in
+    # `UNROSTERED`, and the one of that shape with a table of its own, so it
+    # belongs here rather than in the carve-out that forbids one.
+    "reproduce.sh": ("test_reproduce.py", "check.sh"),
 }
 #: The pytest invocation that has to reach the tests, wherever it is spelled.
 COLLECTS = re.compile(r"pytest\s+([^\n|;&]*)")
