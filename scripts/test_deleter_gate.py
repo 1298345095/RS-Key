@@ -41,6 +41,28 @@ fn wipe(fs: &mut Fs) -> Result<()> {
 
 MINTER = "fn head(fs: &mut Fs) { let _ = fs.meta_add(SLOT, &[0]); }\n"
 
+#: `Fs`'s own backend removals: one that re-arms the at-rest lap and one that
+#: leaves it to its callers. Line numbers matter here — the ledger below cites
+#: lines 6 and 13 — so keep the shape when editing, or edit both.
+FS = """\
+impl<S: Storage> Fs<S> {
+    pub fn factory_wipe(&mut self, keep: u16) -> Result<()> {
+        let _ = crate::request_rescrub(self);
+        for fid in self.keys() {
+            if fid != keep {
+                self.storage.remove(fid)?;
+            }
+        }
+        self.storage.compact()
+    }
+
+    pub fn delete(&mut self, fid: u16) -> Result<()> {
+        self.storage.remove(fid)?;
+        Ok(())
+    }
+}
+"""
+
 LEDGER = """\
 head_minters = ["crates/rsk-piv"]
 
@@ -76,6 +98,24 @@ class = "secret-or-gate"
 metadata = "none"
 disposition = "must-read"
 why = "a survivor is a live key."
+
+[[fs_removal]]
+file = "crates/rsk-fs/src/fs.rs"
+line = 6
+method = "factory_wipe"
+call = "self.storage.remove(fid)?;"
+rearms = true
+scrub = "re-arms"
+why = "the wipe supersedes a pre-OTP-sealed verifier, so it re-arms the lap first."
+
+[[fs_removal]]
+file = "crates/rsk-fs/src/fs.rs"
+line = 13
+method = "delete"
+call = "self.storage.remove(fid)?;"
+rearms = false
+scrub = "deferred-to-caller"
+why = "request_rescrub is written in terms of delete; the callers decide."
 """
 
 
@@ -86,6 +126,7 @@ class Tree:
         self.root = root
         self.write("crates/rsk-app/src/lib.rs", CALLER)
         self.write("crates/rsk-piv/src/keygen.rs", MINTER)
+        self.write("crates/rsk-fs/src/fs.rs", FS)
         self.write("assurance/deleters.toml", LEDGER)
         # `sources` asks git what the tree is, so the fixture must be a checkout
         # — and one that ignores build output, like the real one.
@@ -120,6 +161,11 @@ def red(tree, capsys):
     """Run the guard, require it red, and hand back what it said."""
     assert tree.run() == 1
     return capsys.readouterr().err
+
+
+def tree_ledger():
+    """The ledger's path inside a fixture tree, so a case can edit it by content."""
+    return str(deleter_gate.LEDGER)
 
 
 # --- both directions, and the wiring ------------------------------------------
@@ -381,6 +427,161 @@ def test_a_ufcs_caller_is_on_the_roster(tree, capsys):
     said = red(tree, capsys)
     assert "Fs::force_delete(fs, SEED)" in said
     assert "<Fs<S>>::delete(fs, INDEX)" in said
+
+
+# --- the second roster: what `Fs` removes on its own behalf ---------------------
+# `Fs::factory_wipe` erases the device through `self.storage.remove`, from inside
+# `crates/rsk-fs`. `remove` is not one of `VERBS` and `crates/rsk-fs` is not in
+# scope, so the roster above cannot see it — twice over, which is what makes the
+# hole invisible to a count. Each case below breaks one clause of the derivation
+# that closed it.
+
+
+def test_a_new_backend_removal_in_fs_with_no_disposition_is_rejected(tree, capsys):
+    """The direction the whole table is for: a new way a record leaves the medium
+    arrives, and nothing says whether it owes the at-rest lap a re-arm."""
+    # Appended, so the two disposed-of citations do not move with it — a case that
+    # shifted them would go red for the wrong reason.
+    tree.edit(
+        "crates/rsk-fs/src/fs.rs",
+        "        Ok(())\n    }\n}",
+        "        Ok(())\n"
+        "    }\n"
+        "\n"
+        "    pub fn wipe_audit_ring(&mut self) -> Result<()> {\n"
+        "        self.storage.remove(RING)?;\n"
+        "        Ok(())\n"
+        "    }\n"
+        "}",
+    )
+    said = red(tree, capsys)
+    assert "removes from the backend inside `wipe_audit_ring`" in said
+    assert "does not dispose of it" in said
+
+
+def test_a_disposition_for_a_backend_removal_that_is_gone_is_rejected(tree, capsys):
+    """The other direction, and the line count is kept so the sibling entry's
+    citation does not move with it."""
+    tree.edit(
+        "crates/rsk-fs/src/fs.rs",
+        "    pub fn delete(&mut self, fid: u16) -> Result<()> {\n        self.storage.remove(fid)?;",
+        "    pub fn delete(&mut self, fid: u16) -> Result<()> {\n        self.forget(fid);",
+    )
+    assert "removes nothing" in red(tree, capsys)
+
+
+def test_deleting_the_re_arm_flips_the_derived_axis(tree, capsys):
+    """`rearms` is derived from the METHOD BODY, so the fix it records cannot be
+    deleted with this row green — which is the whole reason it is derived rather
+    than written down beside the entry. Same line count, so the citation holds and
+    the axis is the only thing that moves."""
+    tree.edit(
+        "crates/rsk-fs/src/fs.rs",
+        "        let _ = crate::request_rescrub(self);",
+        "        let _ = self.write_gen();",
+    )
+    said = red(tree, capsys)
+    assert "`factory_wipe` does not re-arm the at-rest scrub" in said
+    assert "re-decide the path, do not re-label it" in said
+
+
+def test_relabelling_a_re_arm_instead_of_re_deciding_is_rejected(tree, capsys):
+    """The pair that makes the judgement falsifiable by the code: `scrub` is the
+    hand-written half and `rearms` the derived one, and they must agree."""
+    tree.edit(tree_ledger(), 'scrub = "re-arms"', 'scrub = "deferred-to-caller"')
+    assert "disposed of as `deferred-to-caller` while `rearms = true`" in red(tree, capsys)
+
+
+def test_an_invented_scrub_vocabulary_is_rejected(tree, capsys):
+    tree.edit(tree_ledger(), 'scrub = "re-arms"', 'scrub = "sort-of"')
+    assert "is not one of" in red(tree, capsys)
+
+
+def test_a_backend_removal_that_changed_method_is_rejected(tree, capsys):
+    """The citation half: a removal that moved into another method is a different
+    decision, and the entry must say which method it disposed of."""
+    tree.edit("crates/rsk-fs/src/fs.rs", "pub fn factory_wipe(", "pub fn wipe_everything(")
+    assert "is in `wipe_everything`, disposed of as `factory_wipe`" in red(tree, capsys)
+
+
+def test_an_empty_fs_removal_roster_is_rejected(tree, capsys):
+    """The failure a verdict column cannot show, for this roster too: a derivation
+    that finds nothing satisfies every rule above it. Driven by breaking the code
+    the matcher reads, which is what an edit to it would do — and the ledger's own
+    entries go with it, because otherwise the row goes red on THOSE (`which removes
+    nothing`) whether the floor is there or not, which is a red for another
+    clause's reason wearing this one's name."""
+    tree.edit("crates/rsk-fs/src/fs.rs", "                self.storage.remove(fid)?;", "                self.drop_it(fid);")
+    tree.edit("crates/rsk-fs/src/fs.rs", "        self.storage.remove(fid)?;", "        self.drop_it(fid);")
+    path = tree.root / deleter_gate.LEDGER
+    path.write_text(path.read_text()[: path.read_text().index("[[fs_removal]]")])
+    assert "under the floor of" in red(tree, capsys)
+
+
+def test_a_helper_inside_a_method_does_not_steal_its_removal(tree):
+    """The other direction of the same walk, end to end: a nested `fn` between a
+    method's `fn` and its removal must not become the method the removal is
+    attributed to. Without the indent rule this row goes red saying the wipe is
+    `near` and does not re-arm — red, and about a function that removes nothing."""
+    tree.edit(
+        "crates/rsk-fs/src/fs.rs",
+        "        let _ = crate::request_rescrub(self);",
+        "        let _ = crate::request_rescrub(self);\n"
+        "        fn near(x: u16) -> bool { x == 0 }",
+    )
+    # The insert moves the cited lines with it, so move the citations too — the
+    # case is about attribution, not about a citation going stale.
+    tree.edit(str(deleter_gate.LEDGER), "line = 6", "line = 7")
+    tree.edit(str(deleter_gate.LEDGER), "line = 13", "line = 14")
+    assert tree.run() == 0
+
+
+def test_a_block_helper_that_has_already_closed_does_not_steal_it_either(tree):
+    """The one-line shape above is skipped for having no closing brace to find; a
+    helper with a body needs the other half of the rule, that its brace comes AFTER
+    the line. Its indent is SHALLOWER than a removal nested in a loop, so an indent
+    test alone hands the wipe to a two-line predicate."""
+    tree.edit(
+        "crates/rsk-fs/src/fs.rs",
+        "        let _ = crate::request_rescrub(self);",
+        "        let _ = crate::request_rescrub(self);\n"
+        "        fn near(x: u16) -> bool {\n"
+        "            x == 0\n"
+        "        }",
+    )
+    tree.edit(str(deleter_gate.LEDGER), "line = 6", "line = 9")
+    tree.edit(str(deleter_gate.LEDGER), "line = 13", "line = 16")
+    assert tree.run() == 0
+
+
+def test_an_fs_removal_field_nobody_reads_is_refused(tree, capsys):
+    _insert(tree, "[[fs_removal]]\n", 'nonsense_field_nobody_holds = "x"\n')
+    assert "which nothing reads" in red(tree, capsys)
+
+
+def test_an_fs_removal_with_no_reason_is_rejected(tree, capsys):
+    tree.edit(
+        tree_ledger(),
+        'why = "the wipe supersedes a pre-OTP-sealed verifier, so it re-arms the lap first."',
+        'why = "   "',
+    )
+    assert "a disposition with no reason is not one" in red(tree, capsys)
+
+
+def test_the_derivation_reads_the_method_body_not_the_next_fn(tree):
+    """A nested helper must not end the span early: a re-arm standing after one
+    still belongs to the method, and taking the span to the next `fn` would call
+    the method un-armed."""
+    lines = [
+        "    pub fn wipe(&mut self) -> Result<()> {",
+        "        fn near(x: u16) -> bool { x == 0 }",
+        "        let _ = crate::request_rescrub(self);",
+        "        self.storage.remove(FID)",
+        "    }",
+    ]
+    assert deleter_gate.enclosing(lines, 3) == ("wipe", lines[:4])
+    # And the helper's OWN removal still belongs to the helper.
+    assert deleter_gate.enclosing(["    pub fn outer() {", "        fn inner() {", "            s.storage.remove(X);", "        }", "    }"], 2)[0] == "inner"
 
 
 # --- the keys the file may carry ----------------------------------------------

@@ -904,6 +904,108 @@ fn factory_wipe_removes_the_gate_records_last() {
     }
 }
 
+/// The device-wide wipe is a tombstone sweep like the four applet ones, so it owes
+/// the at-rest lap the same re-arm — and the `compact()` at its tail is what makes
+/// that look unnecessary. It is not: the lap sits behind every `?` above it, and
+/// neither caller reboots on a failure (`worker.rs` folds to `.is_ok()` and skips
+/// the reboot; `rsk-display`'s `pin.rs` paints "wipe failed" and returns), so a
+/// wipe that dies mid-sweep leaves the marker latched over the tombstones it had
+/// already written and no later boot ever laps over them.
+#[test]
+fn a_factory_wipe_that_dies_mid_sweep_re_armed_the_lap_first() {
+    // The verifier a card reset supersedes without re-keying it — FIDO's EF_PIN,
+    // OpenPGP's PW1 — still sealed under the chip-serial root at the tombstone.
+    const VERIFIER: u16 = 0x1080;
+
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.put(VERIFIER, b"pre-otp verifier").unwrap();
+    fs.put(crate::EF_HARDENED, b"\x01").unwrap();
+    assert!(
+        fs.has_data(crate::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+    medium.clear_ops();
+
+    // One mutation, then the medium dies: whichever append the wipe makes first is
+    // the only one that lands. Ordering the verifier `first` keeps that append
+    // deterministic — `for_each_key` yields in ring order, phases do not.
+    medium.arm(1);
+    assert_eq!(
+        fs.factory_wipe(|_| false, |fid| fid == VERIFIER, |_| false),
+        Err(Error::MemoryFatal),
+        "fixture: the cut must kill the wipe, or the tail `compact()` runs and \
+         there is no error path under test"
+    );
+    assert!(
+        medium.value(crate::EF_HARDENED).is_none(),
+        "the wipe returned Err with the marker still latched, so `run_at_rest_lap` \
+         gates itself off forever and every copy this wipe superseded stays \
+         readable in a flash dump — {:?}",
+        medium.ops()
+    );
+}
+
+/// The success path's half of the same rule: `EF_HARDENED` is in neither the
+/// preserve set nor `first`/`last`, so the sweep drops it in phase 1 in flash-ring
+/// order — after an arbitrary prefix of tombstones. A cut in that window is the
+/// state `request_rescrub`'s own doc calls the one order cannot cover.
+#[test]
+fn a_factory_wipe_re_arms_the_lap_before_it_supersedes_anything() {
+    const VERIFIER: u16 = 0x1080;
+    const GATE: u16 = 0xD180;
+
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.put(VERIFIER, b"pre-otp verifier").unwrap();
+    fs.put(GATE, b"retry counter").unwrap();
+    fs.put(crate::EF_HARDENED, b"\x01").unwrap();
+    // The fixture's own writes are supersessions of `VERIFIER` too, and they sit
+    // ahead of anything the wipe does.
+    medium.clear_ops();
+
+    fs.factory_wipe(|_| false, |fid| fid == VERIFIER, |fid| fid == GATE)
+        .expect("a healthy medium wipes");
+    medium.assert_re_armed_before(VERIFIER, |_| false, "factory wipe");
+}
+
+/// Best-effort, and this is the direction that separates the wipe from every gated
+/// re-key site: a refused re-arm leaves a marker standing, a refused WIPE leaves
+/// the secrets themselves live. `request_rescrub` answers rather than swallowing
+/// (0x09BE), so the swallow has to be here, at the call.
+#[test]
+fn a_refused_re_arm_does_not_stop_a_factory_wipe() {
+    const VERIFIER: u16 = 0x1080;
+
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.put(VERIFIER, b"pre-otp verifier").unwrap();
+    fs.put(crate::EF_HARDENED, b"\x01").unwrap();
+    // Single-shot: the one refusal a retry recovers from, and the only one that
+    // tells a swallowed re-arm from a gating one — a persistent refusal stops the
+    // sweep's own phase-1 removal of EF_HARDENED and fails the wipe either way.
+    medium.refuse_once(crate::EF_HARDENED);
+
+    // `first`, so the verifier's removal cannot land after EF_HARDENED's: phases
+    // are ordered, `for_each_key` inside one is not.
+    let wiped = fs.factory_wipe(|_| false, |fid| fid == VERIFIER, |_| false);
+    assert!(
+        !medium.live(VERIFIER),
+        "the refused re-arm stopped the wipe before it erased anything, so every \
+         secret is still on the medium — the one direction a wipe must not fail in"
+    );
+    assert_eq!(
+        wiped,
+        Ok(()),
+        "a refusal of `remove(EF_HARDENED)` became the wipe's own answer, and the \
+         device reported `wipe failed` over a medium it had in fact cleared"
+    );
+    assert!(
+        !medium.live(crate::EF_HARDENED),
+        "the sweep's own phase-1 removal is this re-arm's retry, and it did not run"
+    );
+}
+
 /// `Storage` whose `remove` starts failing after `budget` successes.
 struct CountedRemove {
     inner: RamStorage,

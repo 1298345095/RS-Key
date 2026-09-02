@@ -57,6 +57,26 @@ What is checked, and the direction of each:
 * the roster is not empty. A derivation that finds nothing satisfies every rule
   above, which is the failure mode a verdict column cannot show.
 
+And a SECOND roster, over the removals `Fs` performs on its own behalf. The
+delete family is not the only way a record leaves the medium: `Fs::factory_wipe`
+erases the whole device through `self.storage.remove`, which is not one of the
+four verbs, from inside `crates/rsk-fs` — which `SKIP_DIRS` excludes. So the 43
+sites above never included the one sweep that erases everything, and "all five
+`wipe-sweep` rows closed" said nothing about it. A registry that is complete
+over a predicate nobody checked measures the predicate's blind spot, not the
+tree. What is derived for each, and the direction:
+
+* the enclosing method, and the call text at the recorded line, the way the
+  citations above are held. A new removal path in `Fs` arrives undisposed-of and
+  the row goes red;
+* whether that method re-arms the at-rest scrub (`request_rescrub`, rsk-fs
+  `EF_HARDENED`). DERIVED from the method BODY, so deleting the call flips the
+  axis rather than passing as an unrelated edit — a tombstone appends like a
+  re-seal, so a sweep that supersedes a pre-OTP-sealed record under a latched
+  marker leaves it readable in a flash dump for the life of the key;
+* `scrub` and `rearms` must agree, the pair that makes the judgement falsifiable
+  by the code rather than by a reviewer's memory.
+
 Deliberately not here: whether a disposition is *right*. That is prose in the
 ledger, and no script can check it. What this row keeps honest is that each one
 is still about a site that exists, still describes what that site does with the
@@ -137,6 +157,29 @@ BOUNDARY = re.compile(r"[;{},]$|^$|^//|^/\*|^\*")
 #: landed; floored well under that so ordinary movement does not trip it and a
 #: broken derivation does.
 FLOOR_SITES = 30
+
+#: A removal `Fs` performs on its own behalf, through the backend rather than
+#: through the delete family. `crates/rsk-fs` is out of `SKIP_DIRS`' scope and
+#: `remove` is not one of `VERBS`, so these are invisible to the roster above —
+#: twice over, which is why they are derived here instead of by widening either.
+FS_CRATE = "crates/rsk-fs"
+FS_REMOVE = re.compile(r"\.storage\.remove\s*\(")
+
+#: The method a removal sits in, walked back to. `rustfmt` puts an `impl` method's
+#: `fn` and its closing brace at one indent, which is what makes the span exact —
+#: and the span is what the `rearms` axis is derived over.
+FN = re.compile(r"^(\s*)(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+(\w+)")
+
+#: The at-rest lap's re-arm (`crate::request_rescrub`, rsk-fs `EF_HARDENED`).
+REARM = re.compile(r"\brequest_rescrub\s*\(")
+
+
+#: What a `scrub` disposition claims, and the derived `rearms` it must agree with.
+SCRUBS = {"re-arms": True, "deferred-to-caller": False}
+
+#: The `Fs` roster cannot empty out silently either. One is the floor because the
+#: derivation is over a single crate: at zero every rule below it passes.
+FLOOR_REMOVALS = 1
 
 DISPOSITIONS = {"must-read": "read", "best-effort": "discarded"}
 #: The derived `answer` as a verb, so a message reads as a sentence.
@@ -233,6 +276,60 @@ def sites(root):
     return found
 
 
+def one_liner(text):
+    """A `fn` whose body opens and closes on its own line: it encloses nothing
+    below it, and it has no closing brace of its own for the span walk to find, so
+    it would otherwise swallow every removal after it in the real method."""
+    return "}" in text and text.count("{") == text.count("}")
+
+
+def enclosing(lines, index):
+    """`(method name, body lines)` for the `fn` that `lines[index]` sits in.
+
+    The nearest preceding `fn` is NOT it: a nested helper sits between a method's
+    `fn` and its body, and walking back to the first one names the helper for a
+    removal that is not in it — with the whole entry then red about a function that
+    removes nothing. So a candidate must CONTAIN the line: its closing brace, at its
+    own indent, has to come after it. A helper whose body opens and closes on its
+    own line has no such brace to find and encloses nothing, so it is skipped by
+    shape. Taking the span to that brace rather than to the next `fn` is the other
+    half — a helper must not end a method's span early and hide the re-arm after it.
+    """
+    for at in range(index, -1, -1):
+        opened = FN.match(lines[at])
+        if not opened or one_liner(lines[at]):
+            continue
+        indent, name = opened.group(1), opened.group(2)
+        close = f"{indent}}}"
+        end = next(
+            (n for n in range(at + 1, len(lines)) if lines[n].rstrip() == close),
+            len(lines),
+        )
+        if end > index:
+            return name, lines[at:end]
+    return None, []
+
+
+def fs_removals(root):
+    """[(file, line, call text, method, re-arms)] — `Fs`'s own backend removals."""
+    found = []
+    for relative in sorted(gate_lines.tree_files(root)):
+        rel = relative.as_posix()
+        if relative.suffix != ".rs" or not rel.startswith(FS_CRATE + "/"):
+            continue
+        if CFG_GATED.search(relative.name):
+            continue
+        lines = (root / relative).read_text().splitlines()
+        for number, line in enumerate(lines, 1):
+            if not FS_REMOVE.search(line):
+                continue
+            method, body = enclosing(lines, number - 1)
+            found.append(
+                (rel, number, line.strip(), method, any(REARM.search(b) for b in body))
+            )
+    return found
+
+
 def minters(root):
     """The crates that write an EF_META head, derived from the calls."""
     out = set()
@@ -263,7 +360,11 @@ SITE_FIELDS = (
     "verb",
     "why",
 )
-TABLES = ("head_minters", "site")
+TABLES = ("fs_removal", "head_minters", "site")
+
+#: What an `[[fs_removal]]` may say. Same rule as `SITE_FIELDS`: a key nothing
+#: reads is a key nothing holds.
+FS_REMOVAL_FIELDS = ("call", "file", "line", "method", "rearms", "scrub", "why")
 
 
 def audit(root):
@@ -364,6 +465,82 @@ def audit(root):
                 " re-enumerates from the backend, so a false-absent key is"
                 " re-found on every pass and the wipe does not terminate"
             )
+    problems += audit_fs_removals(root, doc)
+    return problems
+
+
+def audit_fs_removals(root, doc):
+    """The second roster: what `Fs` removes on its own behalf, and whether it
+    re-arms the at-rest lap over what it supersedes."""
+    problems = []
+    derived = fs_removals(root)
+    if len(derived) < FLOOR_REMOVALS:
+        return [
+            f"{len(derived)} backend removals derived inside {FS_CRATE}, under the"
+            f" floor of {FLOOR_REMOVALS} — `Fs::factory_wipe` erases the device"
+            " through one, so a derivation that finds none is broken rather than"
+            " a tree with no wipe in it"
+        ]
+
+    ledger = {(e["file"], e["line"]): e for e in doc.get("fs_removal", [])}
+    if len(ledger) != len(doc.get("fs_removal", [])):
+        problems.append("two `fs_removal` entries name the same file and line")
+    by_key = {(rel, line): (call, method, rearms) for rel, line, call, method, rearms in derived}
+    for key in sorted(by_key.keys() - ledger.keys()):
+        rel, line = key
+        problems.append(
+            f"{rel}:{line} `{by_key[key][0]}` removes from the backend inside"
+            f" `{by_key[key][1]}` and {LEDGER} does not dispose of it — the delete"
+            " family's roster cannot see this one, twice over"
+        )
+    for key in sorted(ledger.keys() - by_key.keys()):
+        rel, line = key
+        elsewhere = [
+            str(n) for r, n, call, _, _ in derived
+            if r == rel and call == ledger[key]["call"]
+        ]
+        where = f"; it is at :{', :'.join(elsewhere)} now" if elsewhere else ""
+        problems.append(
+            f"{LEDGER} disposes of a backend removal at {rel}:{line}, which removes"
+            f" nothing{where}"
+        )
+
+    for key in sorted(by_key.keys() & ledger.keys()):
+        rel, line = key
+        call, method, rearms = by_key[key]
+        entry = ledger[key]
+        where = f"{rel}:{line}"
+        if entry["call"] != call:
+            problems.append(
+                f"{where} was disposed of as `{entry['call']}` and reads `{call}` now"
+            )
+        if entry["method"] != method:
+            problems.append(
+                f"{where} is in `{method}`, disposed of as `{entry['method']}`"
+            )
+        if entry["rearms"] != rearms:
+            did = "re-arms" if rearms else "does not re-arm"
+            problems.append(
+                f"{where}: `{method}` {did} the at-rest scrub and is disposed of as"
+                f" `rearms = {str(entry['rearms']).lower()}` — a tombstone appends"
+                " like a re-seal, so re-decide the path, do not re-label it"
+            )
+
+    for entry in doc.get("fs_removal", []):
+        where = f"{entry['file']}:{entry['line']}"
+        if stray := sorted(set(entry) - set(FS_REMOVAL_FIELDS)):
+            problems.append(f"{where}: carries {stray}, which nothing reads")
+        if entry["scrub"] not in SCRUBS:
+            problems.append(
+                f"{where}: scrub `{entry['scrub']}` is not one of {sorted(SCRUBS)}"
+            )
+        elif SCRUBS[entry["scrub"]] != entry["rearms"]:
+            problems.append(
+                f"{where}: disposed of as `{entry['scrub']}` while `rearms ="
+                f" {str(entry['rearms']).lower()}`"
+            )
+        if not entry.get("why", "").strip():
+            problems.append(f"{where}: a disposition with no reason is not one")
     return problems
 
 
@@ -390,10 +567,14 @@ def run(root):
     kinds = {k: 0 for k in ("conditional", "unconditional")}
     for entry in doc.get("site", []):
         kinds[REMOVAL[entry["verb"]]] = kinds[REMOVAL[entry["verb"]]] + 1
+    inside = fs_removals(root)
+    rearming = sum(1 for *_, rearms in inside if rearms)
     print(
         f"deleter-gate: ok — {total} call sites, each disposed of; "
         + ", ".join(f"{n} {k}" for k, n in kinds.items())
         + " backend removal"
+        + f"; {len(inside)} removals inside {FS_CRATE}, {rearming} re-arming the"
+        " at-rest scrub"
     )
     return 0
 

@@ -450,6 +450,10 @@ impl<S: Storage> Fs<S> {
         first: impl Fn(u16) -> bool,
         last: impl Fn(u16) -> bool,
     ) -> Result<()> {
+        // Every tombstone below appends like a re-seal, so the at-rest lap owes a
+        // re-arm ahead of the first — best-effort, because on a wipe a stopped
+        // re-arm means live secrets. Phase 1 removes EF_HARDENED itself, retrying it.
+        let _ = crate::request_rescrub(self);
         // `first` wins over `last` if a caller ever hands in overlapping predicates:
         // deleting a record early can only ever be safe, deleting it late cannot.
         let phase_of = |fid: u16| {

@@ -2740,6 +2740,50 @@ and to the statuses it quotes.
 
 ### Security
 
+- **`Fs::factory_wipe` was the sixth `wipe-sweep` site all along, and its
+  `compact()` was not the exemption two commits took it for.** `88bbcdc` and
+  `14224cc` closed five reset paths against the at-rest scrub class — a tombstone
+  appends like a re-seal, so a sweep that supersedes a pre-OTP-sealed verifier
+  under a latched `EF_HARDENED` leaves it readable in a flash dump for the life of
+  the key. Both commits recorded that the device-wide wipe needed nothing, because
+  it ends with `self.storage.compact()`. That lap sits behind every `?` above it.
+
+  Measured: on a `Cut` medium that dies after the first tombstone lands,
+  `factory_wipe` returns `Err(MemoryFatal)` with the verifier gone and
+  `EF_HARDENED` still standing, and **neither caller reboots** —
+  `firmware/src/worker.rs` folds the wipe to `.is_ok()` and skips the reboot, and
+  the trusted display's `pin.rs` paints "wipe failed" and returns. No later boot
+  laps, because `run_at_rest_lap` gates on the marker and nothing else. The
+  success path carries the same order defect on its own: `EF_HARDENED` is in
+  neither the preserve set nor `first`/`last`, so the sweep drops it in phase 1 in
+  flash-ring order, after an arbitrary prefix of tombstones.
+
+  The fix is the head re-arm the five closed sites carry, ahead of the first
+  append and **best-effort** — on a wipe, "leave the record in force" means leave
+  the secrets live, so a refused re-arm must not stop the erase. No tail retry:
+  phase 1 removes `EF_HARDENED` itself, so the marker is provably gone on the `Ok`
+  path and the `?` returns before a retry could run on the `Err` one. Putting
+  `EF_HARDENED` in `first` instead was measured and rejected — its removal there
+  is `self.storage.remove(fid)?`, which propagates, so a single-shot refusal
+  becomes the wipe's own answer; and it only moves the marker into the same phase
+  as the FIDO device seed, whose order against it is still the flash ring's.
+
+- **`scripts/deleter_gate.py` could not see the wipe that erases everything, twice
+  over.** `factory_wipe` removes through `self.storage.remove` — not one of the
+  four delete verbs — from inside `crates/rsk-fs`, which the roster's scope
+  excludes. So "5 of 5 `wipe-sweep` rows closed" was a statement about 43 sites
+  that never included the device-wide one. Measured before choosing: widening
+  `VERBS` with `remove` alone still finds it zero times (43 -> 45 sites, none in
+  `Fs`); narrowing `SKIP_DIRS` alone likewise (43 -> 48, and none of the 5 added
+  is the wipe); doing both reaches 66 and drags in 21 `Storage`-impl forwardings
+  whose answer has no metadata half to dispose of. So the removals `Fs` performs
+  on its own behalf are derived separately, into a new `[[fs_removal]]` table in
+  `assurance/deleters.toml` — enclosing method and call text held against the
+  code, and whether the method re-arms the scrub **derived from its body**, so the
+  fix above cannot be deleted with the row green.
+
+  **bcdDevice → 0x09C3.**
+
 - **The last three applet wipes re-arm the at-rest scrub too, so no reset path in
   the tree still tombstones a chip-serial-rooted verifier under a latched
   marker.** `wipe_oath` and `wipe_piv` were closed at 0x09C0; the three

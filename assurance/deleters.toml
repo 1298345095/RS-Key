@@ -63,6 +63,27 @@
 # with the `Result`. It is in the file so that a site changing from one to the
 # other cannot pass as an unrelated edit — the gate compares them and requires
 # the disposition to agree.
+#
+# `[[fs_removal]]` at the foot is the SECOND roster, and it exists because the
+# scope above has a hole the counts cannot show. `Fs::factory_wipe` erases the
+# whole device through `self.storage.remove` — not one of the four verbs, and
+# inside `crates/rsk-fs`, which the scope excludes — so it is invisible to the
+# roster twice over, and "all five `wipe-sweep` rows closed" (88bbcdc, 14224cc)
+# said nothing about the one sweep that erases everything. Neither widening
+# `VERBS` nor narrowing `SKIP_DIRS` reaches it on its own; both together drag in
+# 21 `Storage`-impl forwardings whose answer has no metadata half to dispose of.
+# So the removals `Fs` makes on its own behalf are derived separately, with
+# `method` and `call` held against the code the way the citations above are.
+#
+# scrub — what the method does about the at-rest lap (rsk-fs `EF_HARDENED`),
+# which every tombstone owes, because a tombstone appends like a re-seal
+#   re-arms            the method calls `request_rescrub` itself, before it
+#                      supersedes anything
+#   deferred-to-caller the method is a primitive the delete family or an applet
+#                      reaches through; the decision is the `[[site]]` row above
+#
+# `rearms` is DERIVED from the method BODY, the way `answer` is derived from the
+# statement: deleting the call flips the axis and the entry stops agreeing.
 
 # The crates that write an EF_META head, derived by the gate. Every `drops-head`
 # disposition rests on this being one crate; a second minter arriving silently
@@ -542,3 +563,44 @@ class = "bookkeeping"
 metadata = "none"
 disposition = "best-effort"
 why = "the source's certificate. Public, gating nothing, and MOVE's own answer already covers the key and its head."
+
+
+# --- the removals `Fs` performs on its own behalf ------------------------------
+# Derived, held both ways, and separate from the roster above for the reason the
+# header gives: neither of that roster's two scope rules can see them.
+
+[[fs_removal]]
+file = "crates/rsk-fs/src/fs.rs"
+line = 488
+method = "factory_wipe"
+call = "self.storage.remove(fid)?;"
+rearms = true
+scrub = "re-arms"
+why = "the device-wide wipe, and the reason this table exists. Its `compact()` tail reads as an exemption and is not one: the lap sits behind every `?` above it, and neither caller reboots on a failure — `worker.rs` folds the wipe to `.is_ok()` and skips the reboot, `rsk-display`'s `pin.rs` paints \"wipe failed\" and returns — so a medium that dies after the first tombstone leaves the verifier superseded, the marker latched, and no boot ever lapping (measured on a `Cut` medium: `factory_wipe = Err(MemoryFatal)`, the verifier gone, EF_HARDENED live). The success path is the same rule: EF_HARDENED is in neither the preserve set nor `first`/`last`, so the sweep drops it in phase 1 in flash-ring order, after an arbitrary prefix of tombstones. Hence the re-arm at the HEAD, ahead of the first append — and best-effort, unlike the gated re-key sites, because on a wipe \"leave the record in force\" means leave the secrets live. No tail retry: phase 1 removes EF_HARDENED itself, so on the `Ok` path the marker is provably gone, and on the `Err` path the `?` returns before any retry could run."
+
+[[fs_removal]]
+file = "crates/rsk-fs/src/fs.rs"
+line = 569
+method = "delete"
+call = "self.storage.remove(fid)?;"
+rearms = false
+scrub = "deferred-to-caller"
+why = "the family's own conditional removal. It cannot re-arm: `request_rescrub` is written in terms of `delete`, so a re-arm here recurses without bound. The decision is the caller's, and every caller of it is a `[[site]]` row above."
+
+[[fs_removal]]
+file = "crates/rsk-fs/src/fs.rs"
+line = 618
+method = "force_delete_halves"
+call = "if let Err(refused) = self.storage.remove(fid) {"
+rearms = false
+scrub = "deferred-to-caller"
+why = "the unconditional twin, and `force_delete`'s body as well. Same reason: the four applet sweeps and the single-record deletes reach the medium through it, and each of those is a `[[site]]` row that carries its own re-arm."
+
+[[fs_removal]]
+file = "crates/rsk-fs/src/fs.rs"
+line = 793
+method = "meta_delete"
+call = "self.storage.remove(EF_META)?;"
+rearms = false
+scrub = "deferred-to-caller"
+why = "EF_META going away once its last head is dropped. Nothing sealed is superseded here — the blob is a plaintext map of fid to a short head (`[algo, pin_policy, touch]`, plus a cached public point), never `Sealed` payload, so there is no chip-serial-rooted copy for a lap to scrub. The record the head belonged to is the caller's, and the caller is a `[[site]]` row."
