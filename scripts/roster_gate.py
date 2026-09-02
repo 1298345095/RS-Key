@@ -137,6 +137,15 @@ EXCLUDE = re.compile(r"(?<![\w-])--exclude[=\s]+([\w-]+)(?![\w-])")
 EXCLUDE_GENERATED = re.compile(r"""(?<![\w-])--exclude[=\s]+["']?[$@{%]""")
 #: `cargo kani`'s list is `kani_gate.py`'s: it names the crates carrying a
 #: `#[kani::proof]`, which is a claim about the harnesses, not about the tree.
+#: Demanding `--workspace` with the excludes of a Kani row would be the wrong
+#: oracle — that row selects the proof-carrying subset on purpose — so the verb
+#: is handed over rather than judged here. A hand-over is only worth what the
+#: other guard reads, and for the whole life of this line it read the workflows
+#: and docs/testing.md and not this file: a `cargo kani … -p …` row in
+#: `scripts/check.sh` was skipped here, unseen there, and both printed `ok` over
+#: the one thing both of them exist to forbid. `kani_gate.sources` reads
+#: `scripts/check.sh` now, which is what makes this line a hand-over rather than
+#: a hole.
 OTHER_GUARDS = ("kani",)
 #: What a row says when its list is deliberately not the tree. In the comment
 #: half of the line, so it is a shell comment wherever it is written.

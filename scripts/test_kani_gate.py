@@ -96,6 +96,17 @@ cargo install --locked kani-verifier --version 0.67.0 && cargo kani setup
 | `all` | 3 | 3 | 4 | 2 s | `rsk-c::p`, 2 s |
 """
 
+#: The gate script, the third file a `cargo kani … -p …` roster can be written
+#: into. Clean here: no `cargo kani` on it and no tier of its own, which is what
+#: the real one looks like — the hole this fixture half was added for was LATENT,
+#: so a fixture that already carried a Kani row would test the wrong tree.
+CHECK_SH = """#!/usr/bin/env bash
+set -euo pipefail
+run "kani roster"           python scripts/kani_gate.py
+run "crate roster"          python scripts/roster_gate.py
+run "pytest (gate scripts)" python -m pytest scripts -q
+"""
+
 #: crate → (the file in it that carries a harness, how many `kani::cover!` are in
 #: it). `rsk-bench` is here because the guard checks its own exclusion list: one
 #: naming a crate with no proof is stale. The counts are what the floors in
@@ -142,6 +153,7 @@ class Tree:
         self.write(kani_gate.WORKFLOWS / "ci.yml", CI)
         self.write(DEEP_YML, DEEP)
         self.write(kani_gate.DOCS, DOCS)
+        self.write(kani_gate.CHECK, CHECK_SH, executable=True)
         for crate, (rel, covers) in PROVEN.items():
             self.write(f"crates/{crate}/{rel}", fixture_harness(covers))
         self.write(f"crates/{QUIET}/src/lib.rs", "pub fn quiet() {}\n")
@@ -488,6 +500,76 @@ def test_a_per_crate_hint_in_a_source_comment_is_not_a_roster(tree):
         "crates/rsk-a/src/lib.rs",
         "#[kani::proof]",
         "/// Kani proof harnesses (`cargo kani -p rsk-a`).\n#[kani::proof]",
+    )
+    assert tree.problems() == []
+
+
+def test_a_hand_written_roster_in_the_gate_script(tree):
+    """The measured hole, constructed: `check.sh` was read by NEITHER guard.
+
+    `roster_gate.py` reads this file and skips the `kani` verb by name; this one
+    read the workflows and the page. So the row below — the second roster both of
+    them exist to forbid — was green in both, and the only reason nobody had been
+    bitten is that the gate runs no `cargo kani` at all.
+    """
+    tree.edit(
+        kani_gate.CHECK,
+        'run "kani roster"           python scripts/kani_gate.py',
+        'run "kani (fast)"           cargo kani -p rsk-a -p rsk-b\n'
+        'run "kani roster"           python scripts/kani_gate.py',
+    )
+    assert only(tree.problems(), "scripts/check.sh writes its own `cargo kani")
+
+
+def test_a_commented_out_roster_in_the_gate_script_counts_too(tree):
+    """A roster nobody runs today is one somebody uncomments, and it is copied."""
+    tree.edit(
+        kani_gate.CHECK,
+        "set -euo pipefail\n",
+        "set -euo pipefail\n# was: cargo kani -p rsk-a -p rsk-b\n",
+    )
+    assert only(tree.problems(), "scripts/check.sh writes its own `cargo kani")
+
+
+def test_an_honest_kani_row_in_the_gate_script_is_green(tree, monkeypatch):
+    """The direction that says the rule is a rule and not a ban on the word.
+
+    A row that goes through the tier runner names no crate, so there is no second
+    list to keep in step. Asserted on the EXIT CODE as well: a guard that reddens
+    on every Kani row is deleted as fast as one that never reddens at all.
+    """
+    tree.edit(
+        kani_gate.CHECK,
+        "set -euo pipefail\n",
+        'set -euo pipefail\nrun "kani (fast)" ./scripts/kani.sh pr\n',
+    )
+    assert tree.problems() == []
+    assert tree.run(monkeypatch) == 0
+
+
+def test_a_tier_the_gate_script_names_is_checked_too(tree):
+    """Reading the file for a roster reads it for a tier name in the same pass."""
+    tree.edit(
+        kani_gate.CHECK,
+        "set -euo pipefail\n",
+        'set -euo pipefail\nrun "kani (fast)" ./scripts/kani.sh prr\n',
+    )
+    assert only(tree.problems(), "scripts/check.sh runs `scripts/kani.sh prr`")
+
+
+def test_a_tier_moved_into_the_gate_script_still_counts_as_run(tree):
+    """`shell` and not `prose`: every line of the gate runs, and CI runs the gate.
+
+    Moving a tier from the workflow onto the merge gate is a scheduling decision.
+    Read as prose it would be reported as a tier nobody proves, which is the
+    false alarm that gets a guard switched off — so both halves are here.
+    """
+    tree.edit(DEEP_YML, "        run: ./scripts/kani.sh all\n", "")
+    assert only(tree.problems(), "no CI row runs the `all` tier")
+    tree.edit(
+        kani_gate.CHECK,
+        "set -euo pipefail\n",
+        'set -euo pipefail\nrun "kani (all)" ./scripts/kani.sh all\n',
     )
     assert tree.problems() == []
 
