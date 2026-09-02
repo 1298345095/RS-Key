@@ -993,8 +993,20 @@ mask the pair: **GREEN over 11 088 688 states** with the old recorders, RED in
 
 `Shipped.cfg` is **green**. The two findings below were produced by this model
 and closed in `a430f2d` (0x08BF) and `32b9fa3` (0x08C0); each is kept as a
-`Historical_*.cfg` — the tree with exactly that fix taken back out — so the
-counterexample stays reproducible and the fix stays demonstrably load-bearing.
+`Historical_*.cfg` — a configuration running something the tree no longer
+ships, here exactly that fix taken back out — so the counterexample stays
+reproducible and the fix stays demonstrably load-bearing.
+
+The boot pair is in the family on that same rule rather than as a finding of
+this section, and it is a pair because an order needs two arms to be an order:
+`Historical_BootWriteThenRearm.cfg` runs the write-then-re-arm order the tree
+shipped until the re-arm was moved ahead of the write, and is **RED** on
+`MarkerNeverLies`; `Historical_BootRearmThenWrite.cfg` runs the re-arm-first
+order that replaced it, and is **GREEN** over its whole space. What the RED row
+may be quoted for is its verdict, its invariant and the shape of its
+counterexample — the marker standing over a copy the write superseded, after the
+worker that owed the re-arm is gone. Not a size: it halts at the first
+violation, and `floors.txt` records what that costs.
 
 
 `Shipped.cfg` (every switch off) is **RED**, and that is the result, not a
@@ -2426,9 +2438,25 @@ model does not preserve comes back GREEN — driven, with `/\ ~dead`, which
 Three cases in `scripts/test_run_tlc.py`, one of them proving the rule does not
 reach an ordinary `SPECIFICATION` row.
 
-**`RSKeyBootHardening` is inductive as it stands.** `TypeOK /\ MarkerNeverLies
-/\ TheWholeLockRides` admits 48 of the module's 108 type-correct states, and one
-step from any of them lands inside: 180 states generated, 48 distinct, GREEN.
+**`RSKeyBootHardening` is inductive on the arm every tier row runs.** With the
+record write and the re-arm collapsed into one action — `RekeyOrderModelled =
+FALSE`, which is `BootInduction.cfg` and every other `Boot*` — `TypeOK /\
+MarkerNeverLies /\ TheWholeLockRides` admits 48 of the module's 108 type-correct
+states, and one step from any of them lands inside: 180 states generated, 48
+distinct, GREEN.
+
+**It is not inductive under the split, in either order**, and the two failures
+are different things wearing one name (`RED: MarkerNeverLies`, depth 2). Under
+the order the tree shipped, `IndInv` admits the in-flight window itself and one
+`WarmReset` ends it with the marker standing — the same counterexample
+`Historical_BootWriteThenRearm.cfg` reaches from `Init`, one step sooner because
+the probe starts inside the window. Under the re-arm-first order, whose
+reachable space is GREEN, the probe instead admits `marker` still set *with* a
+re-key in flight — a state `RekeyBegin` cannot produce, because it clears the
+marker before it opens the window. So that arm names a missing conjunct of
+`IndInv` and not a defect, which is the answer an induction probe is for.
+`IndInv` was not strengthened to say so: it is the shipped invariant set, and
+the split has no tier row to be inductive for.
 
 **`RSKeyStore` is not, and the counterexample named the missing conjunct.** The
 first run came back RED on `NoRecordLostToMetaWrite` in two states:

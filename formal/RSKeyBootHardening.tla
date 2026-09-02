@@ -19,10 +19,10 @@
 (*    the lap must re-arm it (`request_rescrub`) -- a tombstone appends too  *)
 (*    -- or the superseded copy stays readable forever: run-35 found FOUR OF *)
 (*    FIVE lazy re-keys skipping that, and its sweep landed the CALL at      *)
-(*    crates/rsk-fido/src/clientpin.rs:814-816,                              *)
-(*    crates/rsk-fido/src/clientpin.rs:1218-1220,                            *)
-(*    crates/rsk-piv/src/lib.rs:1330, crates/rsk-oath/src/lib.rs:1195,       *)
-(*    crates/rsk-openpgp/src/pin.rs:342 -- three of those five used to name  *)
+(*    crates/rsk-fido/src/clientpin.rs:809-811,                              *)
+(*    crates/rsk-fido/src/clientpin.rs:1207-1209,                            *)
+(*    crates/rsk-piv/src/lib.rs:1330, crates/rsk-oath/src/lib.rs:1196,       *)
+(*    crates/rsk-openpgp/src/pin.rs:316 -- three of those five used to name  *)
 (*    the comment or the write ABOVE the call, which is what a mechanical    *)
 (*    re-number leaves behind. Run-35's five is a HISTORICAL set, not        *)
 (*    today's: `git grep -n request_rescrub` outside rsk-fs's own            *)
@@ -71,13 +71,14 @@ CONSTANTS
     \* leaves a power cut between them nowhere to sit. TRUE splits the pair
     \* around `rekeying`; the switch below says which half lands first.
     RekeyOrderModelled,
-    \* Under that split, the record first and the re-arm after it. That is the
-    \* order every call site SHIPS -- the `fs.put` and then the
-    \* `rsk_fs::request_rescrub` under it
-    \* (crates/rsk-fido/src/clientpin.rs:814-816) -- and it is the arm a cut can
-    \* catch: between the two the marker stands over a copy the write has
-    \* already superseded, and a reset ends the worker that owed the re-arm.
-    \* FALSE re-arms first, which costs at worst a lap that re-runs over nothing.
+    \* Under that split, the record first and the re-arm after it -- the order
+    \* the tree shipped until the re-arm was hoisted AHEAD of the write. The pair
+    \* this switch orders is crates/rsk-fido/src/clientpin.rs:809-819, and it
+    \* reads the FALSE arm there now: the `rsk_fs::request_rescrub` and then the
+    \* `fs.put` below it. TRUE is the arm a cut could catch -- between the two the
+    \* marker stands over a copy the write has already superseded, and a reset
+    \* ends the worker that owed the re-arm -- while FALSE costs at worst a lap
+    \* that re-runs over nothing, which is why its row is GREEN and TRUE's is RED.
     BugRecordWriteBeforeRearm,
     \* Audit run-35's shape: a lazy re-key that leaves the marker standing, so
     \* the copy it superseded -- sealed under a root the PUBLIC chip serial
@@ -178,10 +179,11 @@ LazyRekey ==
     /\ UNCHANGED << phase, recorded, lock, rekeying >>
 
 \* THE SAME RE-KEY AS TWO STEPS, so a reset can land between them. Which half is
-\* which is the whole question: the tree writes the record and re-arms after it
-\* (d703c15 names that as the less fail-safe order), and `rekeying` is the window
-\* in which the marker may disagree with the medium because the second half is
-\* still owed. A reset ends the worker that owed it.
+\* which is the whole question: the tree wrote the record and re-armed after it
+\* (d703c15 names that as the less fail-safe order) until the re-arm was hoisted
+\* ahead of the write, and `rekeying` is the window in which the marker may
+\* disagree with the medium because the second half is still owed. A reset ends
+\* the worker that owed it.
 RekeyBegin ==
     /\ RekeyOrderModelled
     /\ phase = "serving"
@@ -195,9 +197,16 @@ RekeyBegin ==
               /\ UNCHANGED weak
     /\ UNCHANGED << phase, recorded, lock >>
 
+\* The two guards `RekeyBegin` already carries. Without them the atomic arm is
+\* disabled only by `TypeOK`'s `{FALSE}` pin and the increment is unbounded -- a
+\* type bound doing an action's work: the induction probe drove weak 2 -> 3 past
+\* MaxWeak, RED on TypeOK at depth 2. The saturation bound is the half that
+\* increments; under the other order `RekeyBegin` holds it.
 RekeyFinish ==
+    /\ RekeyOrderModelled
     /\ phase = "serving"
     /\ rekeying
+    /\ (BugRecordWriteBeforeRearm \/ weak < MaxWeak)
     /\ rekeying' = FALSE
     /\ IF BugRecordWriteBeforeRearm
          THEN /\ marker' = Rearmed

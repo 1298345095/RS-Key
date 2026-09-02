@@ -102,11 +102,12 @@ BootCarry.cfg                        GREEN   6
 \* record write and the re-arm into ONE step, so a power cut between them has
 \* nowhere to sit and the order they ship in is unfalsifiable; these two split
 \* the pair around an in-flight flag and differ in nothing else. The RED row is
-\* the order the tree ships -- write, then re-arm -- and its counterexample is a
-\* reset landing in the window: the marker stands over the copy the write just
-\* superseded, and the worker that owed the re-arm is gone, so no later boot
-\* runs the lap. The GREEN row re-arms first and pays at worst a lap that
-\* re-runs over nothing.
+\* the order the tree shipped until the re-arm was moved ahead of the write --
+\* write, then re-arm -- and its counterexample is a reset landing in the
+\* window: the marker stands over the copy the write just superseded, and the
+\* worker that owed the re-arm is gone, so no later boot runs the lap. The GREEN
+\* row re-arms first and pays at worst a lap that re-runs over nothing; it is
+\* the order the tree ships now.
 \* THE PAIR IS THE POINT, and it is why this is an ORDER switch rather than a
 \* free split of the action. A free split has no order to test -- its two halves
 \* fire either way round -- and it reddens Boot, BootCarry and BootInduction at
@@ -116,12 +117,22 @@ BootCarry.cfg                        GREEN   6
 \* runner would derive the same name from its INVARIANTS block; what the column
 \* cannot see either way is DEPTH, so what separates this row from a kill on the
 \* transient is its GREEN twin, which no free split can produce.
-\* They are `Historical_` because the RED one injects no defect -- it is the
-\* tree's own order -- so it is hand-named in the runner's tier list rather than
-\* swept up by a family glob that would hand it a mutant's expectations. They
-\* sit here, beside the module's other arms, because that is what they are arms
-\* of. A third of the GREEN arm's measured distinct count is its floor, the same
-\* rule as its siblings.
+\* AND THE RED ROW HAS NO SIZE TO FLOOR, which is why its floor column is `-`
+\* rather than a third of something. A refuted run halts at the first violation,
+\* so states, distinct AND the depth the runner prints are all how far the
+\* search got before it stopped -- not facts about the model. Twenty runs at the
+\* default two workers: 25/14 eleven times and 31/16 nine, depth 4 throughout;
+\* one worker is deterministic at 13/9, depth 3. The counterexample under all of
+\* them is the same three states, and the GREEN twin's 141/38/7 is stable at
+\* either worker count, because an exhaustive search has nowhere to stop early.
+\* Quote this row for its verdict, its invariant and its trace; never for a
+\* number.
+\* They are `Historical_` because the RED one injects no defect -- it is an
+\* order the tree itself once had -- so it is hand-named in the runner's tier
+\* list rather than swept up by a family glob that would hand it a mutant's
+\* expectations. They sit here, beside the module's other arms, because that is
+\* what they are arms of. A third of the GREEN arm's measured distinct count is
+\* its floor, the same rule as its siblings.
 Historical_BootWriteThenRearm.cfg    RED     -       -       MarkerNeverLies
 Historical_BootRearmThenWrite.cfg    GREEN   12
 \* The CTAPHID reassembler (RSKeyTransport): 13 distinct at depth 4, the

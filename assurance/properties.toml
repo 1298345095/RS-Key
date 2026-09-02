@@ -449,7 +449,7 @@ source = ["docs/threat-model.md#TM-HOST-INTENT"]
 id = "SEC-BOOT-001"
 name = "MarkerNeverLies"
 status = "MODELLED-ONLY"
-statement = "EF_HARDENED present means no superseded weak-sealed copy awaits the scrub: the lap sets the marker only after a completed compaction, and every lazy re-key or delete of a pre-OTP record re-arms it — a delete only appends a tombstone, so it supersedes without erasing. Audit run-35 found four of five re-key sites skipping the re-arm."
+statement = "EF_HARDENED present means no superseded weak-sealed copy awaits the scrub, outside the window of a lazy re-key whose second half is still owed: the lap sets the marker only after a completed compaction, and every lazy re-key or delete of a pre-OTP record re-arms it — a delete only appends a tombstone, so it supersedes without erasing. The window is tolerated only while the worker that owes the re-arm is still there to close it; a reset that ends it with the marker standing is a violation, and `Historical_BootWriteThenRearm.cfg` is RED on exactly that. Audit run-35 found four of five re-key sites skipping the re-arm."
 source = ["docs/threat-model.md#TM-THIEF-REMNANT-SCRUB"]
 
 [[property]]
