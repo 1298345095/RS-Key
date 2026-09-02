@@ -9,7 +9,7 @@ than described. `check.sh` already reads the image five ways — size, stack flo
 a debug-symbol deny-list, the partition table, the sealed IMAGE_DEF — and none of
 them looks at where the sections LAND or at what the image links.
 
-Two facts this measured that the tree's prose does not carry:
+Three facts this measured that the tree's prose does not carry:
 
 * **The image has a heap.** `firmware/src/main.rs` declares
   `#[global_allocator] static HEAP: embedded_alloc::LlffHeap` over 128 KiB, and

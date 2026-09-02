@@ -471,12 +471,12 @@ def floor_for(page):
 #: `SEC-FIDO-003.toml:112` lost their binding to a `.py` citation landing between
 #: them and the file they meant -- they name that file outright now.
 #:
-#: WHAT IS STILL BLIND, over the pages this gate already opens, keyed AS WRITTEN
-#: -- one `file:lines` string, no continuations, once tree-wide: 189 distinct
-#: over 12 pages, in 270 matches (`.toml` 115, `.tla` 78, `.md` 56, `.cfg` 16,
-#: `.yml` 4, `.log` 1); by a citation's FIRST span alone, 187. `.c`, `.h` and
-#: `.S` are ZERO, worth writing down because they are the ones a reader assumes:
-#: this tree's non-Rust source is not cited by line at all.
+#: WHAT IS STILL BLIND, over the pages this gate opens, and the count turns on the
+#: key. As WRITTEN -- one `file:lines` string, no continuations, once tree-wide --
+#: 188 over 12 pages, in 270 matches (`.toml` 115, `.tla` 78, `.md` 56, `.cfg` 16,
+#: `.yml` 4, `.log` 1); a 189th is `refs` eating the `2` of a ratio `2:1`. Keyed as
+#: [`LOCK`] is, per SPAN per page: 233 in 284; by first spans 187, losing 11 line
+#: claims. `.c`/`.h`/`.S` are 0 -- but 107 `.sh`/`.py`/`.txt` citations resolve.
 EXTS = "rs|sh|txt|py"
 DASH = "-\u2010\u2011\u2012\u2013\u2014\u2212"
 

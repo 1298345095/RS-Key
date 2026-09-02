@@ -727,10 +727,13 @@ def test_the_recorded_verdict_of_a_properties_only_row_is_accepted(fake_tlc, cfg
 #: `citation_gate.py` gained `py` in the repair pass, so the span above is locked
 #: by content now — but a lock reports a span that MOVED, and only the name says
 #: what to look for once it has. What the widening still does not reach, measured
-#: over the pages that gate opens: 270 citations across 12 pages into `.toml`
-#: (115), `.tla` (78), `.md` (56), `.cfg` (16), `.yml` (4) and `.log` (1) — one
-#: of them this file's own `.log`. `.c`, `.h` and `.S` are ZERO: no non-Rust
-#: source in this tree is cited by line at all.
+#: over the pages that gate opens: 270 matches across 12 pages into `.toml` (115),
+#: `.tla` (78), `.md` (56), `.cfg` (16), `.yml` (4) and `.log` (1) — one of them
+#: this file's own `.log`. That is 188 citations as written, or 233 by the key its
+#: lock uses, one row per span per page — one blind spot counted two ways, and
+#: `citation_gate.py`'s own comment carries both so the copies cannot drift apart.
+#: `.c`, `.h` and `.S` are ZERO — but 107 `.sh`, `.py` and `.txt` citations on
+#: those pages DO resolve: what is blind here is prose, not this tree's source.
 DELETION_ARMS = [
     (
         "names_a_property",
