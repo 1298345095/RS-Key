@@ -6097,7 +6097,6 @@ fn a_reset_re_arms_the_at_rest_lap_before_the_first_tombstone() {
     );
 }
 
-
 #[test]
 fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_key_slot() {
     // Standing before `run_at_rest_lap` in `firmware/src/main.rs` is not the same as

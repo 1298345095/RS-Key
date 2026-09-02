@@ -997,7 +997,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-openpgp"]
 expect = "killed"
-note = "spend_pin_retry stops charging the attempt: unlimited PW1/PW3/RC guesses at full speed. Deliberately the OpenPGP half of this switch, so the lattice's three entries cover both applets rather than PIV three times; PIV's twin is the `set_retries_left(fs, retry, left - 1)` at crates/rsk-piv/src/lib.rs:1309."
+note = "spend_pin_retry stops charging the attempt: unlimited PW1/PW3/RC guesses at full speed. Deliberately the OpenPGP half of this switch, so the lattice's three entries cover both applets rather than PIV three times; PIV's twin is the `set_retries_left(fs, retry, left - 1)` at crates/rsk-piv/src/lib.rs:1312."
 
 [comutant.BugRecoveryWithoutSecret]
 status = "patch"
@@ -1149,7 +1149,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-otp"]
 expect = "killed"
-note = "E36's shape: NEITHER half of the (use, session) position advances on a press, so two tokens carry the same pair and a validation server cannot tell a replay from a use. The anchor is the whole body, and that is the correction: freezing only the session — the previous patch — is not this defect at all, because the wrap test then reads true on every press and the USE half advances instead, so the position goes on moving. The model switch encodes the frozen PAIR, and the patch has to encode the same arm or the kill is a kill for another reason. Measured rather than argued: the previous patch IS killed too, and its failures read the wrong way round — `the_press_bump_stops_below_the_reserved_high_bit` answers `(6, 0, true)` where `(5, 1, false)` was owed (crates/rsk-otp/src/counter_tests.rs:9), so the USE half advanced AND demanded a flash write, and `a_press_types_nothing_when_it_cannot_persist_the_counter` falls at crates/rsk-otp/src/tests.rs:2055 on `the wrap press did not resume` with the counter run away to 256. Its single repeat is a re-CONFIGURE zeroing a counter that had already reached 3 — a position that had been MOVING. Under THIS patch three tests say `re-typed` instead, and `swap_carries_the_session_counter_with_its_record` goes from green to red."
+note = "E36's shape: NEITHER half of the (use, session) position advances on a press, so two tokens carry the same pair and a validation server cannot tell a replay from a use. The anchor is the whole body, and that is the correction: freezing only the session — the previous patch — is not this defect at all, because the wrap test then reads true on every press and the USE half advances instead, so the position goes on moving. The model switch encodes the frozen PAIR, and the patch has to encode the same arm or the kill is a kill for another reason. Measured rather than argued: the previous patch IS killed too, and its failures read the wrong way round — `the_press_bump_stops_below_the_reserved_high_bit` answers `(6, 0, true)` where `(5, 1, false)` was owed (crates/rsk-otp/src/counter_tests.rs:9), so the USE half advanced AND demanded a flash write, and `a_press_types_nothing_when_it_cannot_persist_the_counter` falls at crates/rsk-otp/src/tests.rs:2176 on `the wrap press did not resume` with the counter run away to 256. Its single repeat is a re-CONFIGURE zeroing a counter that had already reached 3 — a position that had been MOVING. Under THIS patch three tests say `re-typed` instead, and `swap_carries_the_session_counter_with_its_record` goes from green to red."
 
 [comutant.BugOtpPressTypesUnpersisted]
 status = "patch"
@@ -1163,7 +1163,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-otp"]
 expect = "killed"
-note = "a press types its ticket while the persisted half of the position never moves, and the RAM session rolls anyway — so the press after the wrap reads the old counter back and pairs it with session 0, this power cycle's FIRST position. An in-cycle repeat at the very next press, which is the replay a validation server has no way to tell from a use. ONE host test falls and its direction was read rather than counted: `a_press_types_nothing_when_it_cannot_persist_the_counter` (crates/rsk-otp/src/tests.rs:2003) reports `the press after a refused counter write re-typed Some(([112, 117, 98, 108, 105, 99], 1, 0)), already emitted this power cycle` at crates/rsk-otp/src/tests.rs:2040 — a position REPEATED, not a press mis-refused, which is the half of that test the model switch is about."
+note = "a press types its ticket while the persisted half of the position never moves, and the RAM session rolls anyway — so the press after the wrap reads the old counter back and pairs it with session 0, this power cycle's FIRST position. An in-cycle repeat at the very next press, which is the replay a validation server has no way to tell from a use. ONE host test falls and its direction was read rather than counted: `a_press_types_nothing_when_it_cannot_persist_the_counter` (crates/rsk-otp/src/tests.rs:2124) reports `the press after a refused counter write re-typed Some(([112, 117, 98, 108, 105, 99], 1, 0)), already emitted this power cycle` at crates/rsk-otp/src/tests.rs:2161 — a position REPEATED, not a press mis-refused, which is the half of that test the model switch is about."
 
 [comutant.BugOtpBootKeepsPosition]
 status = "patch"
@@ -1188,7 +1188,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-otp"]
 expect = "killed"
-note = "a cold boot leaves the persisted half where the last power cycle left it while the RAM session restarts at 0, so every pair that cycle typed is typeable again: the counter that exists to make a position unique ACROSS reboots stops crossing the reboot. Three host tests fall and all three say that — `boot_bump_retries_a_refused_write_and_pins_what_it_cannot_close` (crates/rsk-otp/src/tests.rs:2063) reports `one refused boot write re-typed the last cycle's position` with both sides `([112, 117, 98, 108, 105, 99], 1, 0)` at crates/rsk-otp/src/tests.rs:2096, and `power_up_bump_retries_a_slot_the_medium_refused` reads the stored counter back at 0 where 1 was owed (crates/rsk-otp/src/tests.rs:1864). The anchor is the whole `if let` and the replacement keeps the `boot_use_counter` call, so the patch is the WRITE and nothing else: dropping the call too left the function dead, and a slice run under -D warnings would then score build-broke instead of a kill."
+note = "a cold boot leaves the persisted half where the last power cycle left it while the RAM session restarts at 0, so every pair that cycle typed is typeable again: the counter that exists to make a position unique ACROSS reboots stops crossing the reboot. Three host tests fall and all three say that — `boot_bump_retries_a_refused_write_and_pins_what_it_cannot_close` (crates/rsk-otp/src/tests.rs:2184) reports `one refused boot write re-typed the last cycle's position` with both sides `([112, 117, 98, 108, 105, 99], 1, 0)` at crates/rsk-otp/src/tests.rs:2217, and `power_up_bump_retries_a_slot_the_medium_refused` reads the stored counter back at 0 where 1 was owed (crates/rsk-otp/src/tests.rs:1985). The anchor is the whole `if let` and the replacement keeps the `boot_use_counter` call, so the patch is the WRITE and nothing else: dropping the call too left the function dead, and a slice run under -D warnings would then score build-broke instead of a kill."
 
 [comutant.BugOtpSwapKeepsSession]
 status = "patch"
@@ -1203,7 +1203,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-otp"]
 expect = "killed"
-note = "SLOT_SWAP moves the record and its persisted use counter and leaves the RAM session counter behind, so the record is re-paired with a session counter used FEWER times: the replay position goes BACKWARDS and the swapped slot re-types a pair already emitted this power cycle. ONE host test falls, `swap_carries_the_session_counter_with_its_record` (crates/rsk-otp/src/tests.rs:1293), through the `press_once` helper at crates/rsk-otp/src/tests.rs:1284: `slot 2 re-typed the replay position ([97, 97, 97, 97, 97, 97], 1, 1), already emitted this power cycle` — a repeat, which is what OtpCounterNeverRepeats is about, and not a swap refused or a record mislaid."
+note = "SLOT_SWAP moves the record and its persisted use counter and leaves the RAM session counter behind, so the record is re-paired with a session counter used FEWER times: the replay position goes BACKWARDS and the swapped slot re-types a pair already emitted this power cycle. ONE host test falls, `swap_carries_the_session_counter_with_its_record` (crates/rsk-otp/src/tests.rs:1414), through the `press_once` helper at crates/rsk-otp/src/tests.rs:1405: `slot 2 re-typed the replay position ([97, 97, 97, 97, 97, 97], 1, 1), already emitted this power cycle` — a repeat, which is what OtpCounterNeverRepeats is about, and not a swap refused or a record mislaid."
 
 # ---- RSKeyAppletSeams: what a status costs, and who may hold it ------------
 # The old exclusion said these are "exercised at the wire, not by a cargo test on
@@ -1248,10 +1248,10 @@ status = "unreachable"
 evidence = """the applets' deselect is redundant with their own fresh SELECT, so
 removing it from the ICC power transition changes nothing observable. Three
 applets carry an access status and implement deselect — crates/rsk-piv/src/lib.rs:390-392
-(sess.reset), crates/rsk-openpgp/src/lib.rs:326-328 (reset_session), crates/rsk-oath/src/lib.rs:1220-1227
+(sess.reset), crates/rsk-openpgp/src/lib.rs:326-328 (reset_session), crates/rsk-oath/src/lib.rs:1222-1229
 (validated + otp_pin_verified) — and all three ALSO re-lock in select: piv and
 openpgp on `if !reselect`, oath by recomputing `validated = !code_set` and clearing
-otp_pin_verified unconditionally (crates/rsk-oath/src/lib.rs:1260-1261). After Dispatcher::reset_card
+otp_pin_verified unconditionally (crates/rsk-oath/src/lib.rs:1262-1263). After Dispatcher::reset_card
 takes `self.current` (crates/rsk-sdk/src/applet.rs:227) every route back to an applet is a
 `select(reselect = false)`, so no reachable command sees an inherited status.
 The first patch here neutered the WHOLE reset_card call and scored a false kill:
@@ -1397,7 +1397,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-openpgp"]
 expect = "killed"
-note = "the converse of BugAdminOpensKeyOps: a USER status opens PUT DATA's administrative surface. PIV states the same rule at seven separate 9B management-key gates (crates/rsk-piv/src/lib.rs:288, 594, 673, 801, 1050, 1110 and crates/rsk-piv/src/keygen.rs:600), none of them patched here."
+note = "the converse of BugAdminOpensKeyOps: a USER status opens PUT DATA's administrative surface. PIV states the same rule at seven separate 9B management-key gates (crates/rsk-piv/src/lib.rs:288, 594, 676, 804, 1053, 1113 and crates/rsk-piv/src/keygen.rs:600), none of them patched here."
 
 [comutant.BugRefusedValidateGrants]
 status = "patch"

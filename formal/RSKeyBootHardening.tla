@@ -21,7 +21,7 @@
 (*    FIVE lazy re-keys skipping that, and its sweep landed the CALL at      *)
 (*    crates/rsk-fido/src/clientpin.rs:811-813,                              *)
 (*    crates/rsk-fido/src/clientpin.rs:1210-1213,                            *)
-(*    crates/rsk-piv/src/lib.rs:1333, crates/rsk-oath/src/lib.rs:1204,       *)
+(*    crates/rsk-piv/src/lib.rs:1336, crates/rsk-oath/src/lib.rs:1206,       *)
 (*    crates/rsk-openpgp/src/pin.rs:316 -- three of those five used to name  *)
 (*    the comment or the write ABOVE the call, which is what a mechanical    *)
 (*    re-number leaves behind. Run-35's five is a HISTORICAL set, not        *)
@@ -89,7 +89,7 @@ CONSTANTS
     \* many there are is not a number this model has to carry.
     BugRekeyKeepsTheMarker,
     \* The marker written on a lap that did NOT complete:
-    \* crates/rsk-fs/src/lib.rs:84 short-circuits `fs.compact().is_ok()`
+    \* crates/rsk-fs/src/lib.rs:88 short-circuits `fs.compact().is_ok()`
     \* BEFORE the `fs.put(EF_HARDENED)`,
     \* so a torn or failed lap leaves the marker absent and the next boot
     \* retries. The switch sets the marker regardless -- the same
@@ -291,7 +291,7 @@ Spec == Init /\ [][Next]_vars
 \* new leftover, and the lap that claims completion it did not earn. While it
 \* holds, "marker absent => a future boot scrubs" is the liveness half, carried
 \* by the boot gate's own retry (a failed compact leaves the marker unset,
-\* crates/rsk-fs/src/lib.rs:84).
+\* crates/rsk-fs/src/lib.rs:88).
 \*
 \* `~rekeying` is the whole of what the split arm costs, and it costs the atomic
 \* one nothing: with the pair collapsed the flag is FALSE in every state, so
