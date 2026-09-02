@@ -649,7 +649,7 @@ PinAttemptPolicy == pin.set /\ pin.retries > 0 /\ lock.policyMism < MismatchLimi
 \* action here at all, so neither the guard nor its switch models it.
 \*
 \* WHO CLEARS IT, read rather than assumed. changePIN does (clientpin.rs:314) and
-\* the PANEL's own set/change does (clientpin.rs:1260, inside store_local_pin --
+\* the PANEL's own set/change does (clientpin.rs:1269, inside store_local_pin --
 \* a flow this module has no action for). The host setPIN does NOT: store_new_pin
 \* touches no EF_MINPINLEN byte, so a PIN established over a standing flag leaves
 \* it standing. A first draft cleared it in SetPinWrite, which was a transition
@@ -662,7 +662,7 @@ PinAttemptPolicy == pin.set /\ pin.retries > 0 /\ lock.policyMism < MismatchLimi
 TokenIssuanceGuard  == IF BugForceChangeIgnored THEN TRUE ELSE ~gate.forceChange
 TokenIssuancePolicy == ~gate.forceChange
 
-\* clientpin.rs:745-811. The lockout ladder: spend, read back, compare.
+\* clientpin.rs:745-821. The lockout ladder: spend, read back, compare.
 \* `policy` is the SECOND refusal, and it belongs to the issuing doors rather
 \* than to the ladder: the forced-change check runs after the verify, costs no
 \* retry, and the change door -- which is how the flag is cleared -- must not
@@ -673,7 +673,7 @@ PinAttempt(correct, policy) ==
     /\ viol' = IF PinAttemptPolicy /\ policy THEN viol
                                    ELSE viol \cup {"NoAuthorizationBypass"}
     /\ IF correct
-         THEN \* clientpin.rs:805-806 reset the budget and the mismatch batch.
+         THEN \* clientpin.rs:817-819 reset the budget and the mismatch batch.
               /\ pin' = [pin EXCEPT !.retries = MaxRetries]
               /\ lock' = [soft |-> FALSE, mism |-> 0, policyMism |-> 0]
          ELSE LET r == pin.retries - 1 IN
@@ -738,9 +738,9 @@ MintPpuat ==
 \* It spends the SAME persistent retry counter the wire path spends -- a correct
 \* PIN refills it, a wrong one costs a try -- because
 \* `spend_and_verify_local_pin` is `spend_and_verify_pin_at(EF_PIN, ..)`
-\* (crates/rsk-fido/src/clientpin.rs:1124-1130). What it deliberately does NOT
+\* (crates/rsk-fido/src/clientpin.rs:1129-1135). What it deliberately does NOT
 \* touch is the CTAP session: no ECDH regeneration, no RAM 3-strikes lock, no
-\* journal (crates/rsk-fido/src/clientpin.rs:1118-1122). So this is not a
+\* journal (crates/rsk-fido/src/clientpin.rs:1123-1127). So this is not a
 \* PinAttempt: the pad neither consults `lock.soft` nor arms it, and the
 \* persistent 8-try counter is the whole gate. A host-soft-locked device still
 \* takes PIN entry at the pad, which is the documented recovery.
@@ -748,7 +748,7 @@ MintPpuat ==
 \* gate" while nothing could see it move: deleting it left the reachable space
 \* BIT-IDENTICAL at 79 985 500 states. `spend_and_verify_pin_at` refuses at zero
 \* before any compare and a correct PIN at zero must not refill
-\* (crates/rsk-fido/src/clientpin.rs:1158-1160), which is the same shape
+\* (crates/rsk-fido/src/clientpin.rs:1163-1165), which is the same shape
 \* PinAttemptEnabled / PinAttemptPolicy carry for the wire path.
 LocalPinGuard  == IF BugLocalPinIgnoresBudget THEN pin.set
                                               ELSE pin.set /\ pin.retries > 0
@@ -786,7 +786,7 @@ LocalPinWrong ==
     /\ UNCHANGED << gate, store, lock, pres, sys, op, snap, upSpent, ram >>
 
 \* A correct PIN at the pad refills the persistent budget
-\* (crates/rsk-fido/src/clientpin.rs:1124-1130) and grants NOTHING host-visible:
+\* (crates/rsk-fido/src/clientpin.rs:1129-1135) and grants NOTHING host-visible:
 \* no token, no `pcmr`, no CCID security status. It also leaves the RAM soft lock
 \* armed, which fails closed -- the host stays blocked until a replug.
 LocalPinOk ==
@@ -847,7 +847,7 @@ SetPinWrite ==
     /\ pin' = [set |-> TRUE, retries |-> MaxRetries, everSet |-> TRUE]
     /\ lock' = [lock EXCEPT !.soft = FALSE, !.mism = 0, !.policyMism = 0]
     \* AND IT DOES NOT CLEAR THE FORCED-CHANGE FLAG. `store_new_pin`
-    \* (clientpin.rs:945-969) touches no EF_MINPINLEN byte and `set_pin` does not
+    \* (clientpin.rs:950-974) touches no EF_MINPINLEN byte and `set_pin` does not
     \* either, so a PIN established over a standing flag leaves it standing --
     \* changePIN is the only host way out. A first draft cleared it here.
     /\ op' = IF BugPinWriteBeforeRevoke THEN [op EXCEPT !.step = 1] ELSE NoOp

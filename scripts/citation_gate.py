@@ -302,8 +302,14 @@ BUNDLE_ROOT = "assurance/bundle/"
 #: The bundle half's own floor, apart from its two siblings for the same reason
 #: they are apart from each other. It is 1, not 11: what a number here can catch
 #: is the derivation finding NOTHING, and the roster ratchet — a bundle leaving —
-#: is `bundle_gate.py`'s `BUNDLE_FLOOR`, which already refuses it. Two guards
+#: is `bundle_gate.py`'s `ROSTER_FLOOR`, which already refuses it. Two guards
 #: holding one number is how the second one comes to disagree with the first.
+#:
+#: It said `BUNDLE_FLOOR` until it was read by hand, and that name EXISTS — it is
+#: `bounds_gate.py`'s, and it is 11 as well — so the sentence named a real
+#: constant of the right value in the wrong guard. Nothing here could see it:
+#: this file resolves `file:line` SPANS, and a symbol named in prose carries no
+#: line to resolve, so a reference to a name is checked by a reader or by no one.
 BUNDLE_PAGES_FLOOR = 1
 
 

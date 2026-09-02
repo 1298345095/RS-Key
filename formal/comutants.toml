@@ -200,7 +200,7 @@ note = "THE VERDICT THIS ROW CARRIED WAS MEASURED IN THE MODEL AND WRITTEN ABOUT
 
 [comutant.BugSetPinKeepsPpuat]
 status = "unreachable"
-evidence = "MEASURED AT THE CODE LEVEL, after its sibling BugBackupSealedNotAGate was found carrying a model measurement written about the code. The model half stands: under eab4b5c the grant is swept in phase 1 and EF_PIN in phase 2, so `~pin.set /\\ gate.ppuat` is unreachable and the mutant explored 40M+ states without a counterexample (E171). The CODE half is different and is why this stays without a patch: there is no site whose removal reproduces `setPIN keeps the grant` ALONE. `set_pin`s own `clear_ppuat` (crates/rsk-fido/src/clientpin.rs:220) is REDUNDANT — deleting it leaves all 668 rsk-fido tests green, three runs — because `write_pin_verifier` (crates/rsk-fido/src/clientpin.rs:840-842) clears the grant before the EF_PIN write, which is where the ordering guarantee actually lives. Deleting THAT one is red at once (`every_ef_pin_verifier_write_revokes_the_persistent_token` and `local_pin_change_revokes_the_persistent_token`), but it is the site changePIN and the panel share, so it is BugChangePinKeepsPpuats twin as much as this ones. A shared chokepoint has no per-caller mutant, and saying so is the measurement."
+evidence = "MEASURED AT THE CODE LEVEL, after its sibling BugBackupSealedNotAGate was found carrying a model measurement written about the code. The model half stands: under eab4b5c the grant is swept in phase 1 and EF_PIN in phase 2, so `~pin.set /\\ gate.ppuat` is unreachable and the mutant explored 40M+ states without a counterexample (E171). The CODE half is different and is why this stays without a patch: there is no site whose removal reproduces `setPIN keeps the grant` ALONE. `set_pin`s own `clear_ppuat` (crates/rsk-fido/src/clientpin.rs:220) is REDUNDANT — deleting it leaves all 668 rsk-fido tests green, three runs — because `write_pin_verifier` (crates/rsk-fido/src/clientpin.rs:845-847) clears the grant before the EF_PIN write, which is where the ordering guarantee actually lives. Deleting THAT one is red at once (`every_ef_pin_verifier_write_revokes_the_persistent_token` and `local_pin_change_revokes_the_persistent_token`), but it is the site changePIN and the panel share, so it is BugChangePinKeepsPpuats twin as much as this ones. A shared chokepoint has no per-caller mutant, and saying so is the measurement."
 
 # ---- batch 2: the rest, floor now 0 ----------------------------------------
 
@@ -997,7 +997,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-openpgp"]
 expect = "killed"
-note = "spend_pin_retry stops charging the attempt: unlimited PW1/PW3/RC guesses at full speed. Deliberately the OpenPGP half of this switch, so the lattice's three entries cover both applets rather than PIV three times; PIV's twin is the `set_retries_left(fs, retry, left - 1)` at crates/rsk-piv/src/lib.rs:1305."
+note = "spend_pin_retry stops charging the attempt: unlimited PW1/PW3/RC guesses at full speed. Deliberately the OpenPGP half of this switch, so the lattice's three entries cover both applets rather than PIV three times; PIV's twin is the `set_retries_left(fs, retry, left - 1)` at crates/rsk-piv/src/lib.rs:1309."
 
 [comutant.BugRecoveryWithoutSecret]
 status = "patch"
@@ -1013,7 +1013,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-piv"]
 expect = "killed"
-note = "RESET RETRY COUNTER refills the PIN budget without proving the PUK — a budget raised out of nothing. OpenPGP's RC twin is crates/rsk-openpgp/src/pin.rs:799."
+note = "RESET RETRY COUNTER refills the PIN budget without proving the PUK — a budget raised out of nothing. OpenPGP's RC twin is crates/rsk-openpgp/src/pin.rs:811."
 
 # ---- RSKeyAppletPolicies: slot policy, attributes, gates, counter ----------
 
@@ -1248,10 +1248,10 @@ status = "unreachable"
 evidence = """the applets' deselect is redundant with their own fresh SELECT, so
 removing it from the ICC power transition changes nothing observable. Three
 applets carry an access status and implement deselect — crates/rsk-piv/src/lib.rs:390-392
-(sess.reset), crates/rsk-openpgp/src/lib.rs:326-328 (reset_session), crates/rsk-oath/src/lib.rs:1207-1214
+(sess.reset), crates/rsk-openpgp/src/lib.rs:326-328 (reset_session), crates/rsk-oath/src/lib.rs:1220-1227
 (validated + otp_pin_verified) — and all three ALSO re-lock in select: piv and
 openpgp on `if !reselect`, oath by recomputing `validated = !code_set` and clearing
-otp_pin_verified unconditionally (crates/rsk-oath/src/lib.rs:1247-1248). After Dispatcher::reset_card
+otp_pin_verified unconditionally (crates/rsk-oath/src/lib.rs:1260-1261). After Dispatcher::reset_card
 takes `self.current` (crates/rsk-sdk/src/applet.rs:227) every route back to an applet is a
 `select(reselect = false)`, so no reachable command sees an inherited status.
 The first patch here neutered the WHOLE reset_card call and scored a false kill:
@@ -1397,7 +1397,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-openpgp"]
 expect = "killed"
-note = "the converse of BugAdminOpensKeyOps: a USER status opens PUT DATA's administrative surface. PIV states the same rule at seven separate 9B management-key gates (crates/rsk-piv/src/lib.rs:288, 594, 669, 797, 1046, 1106 and crates/rsk-piv/src/keygen.rs:600), none of them patched here."
+note = "the converse of BugAdminOpensKeyOps: a USER status opens PUT DATA's administrative surface. PIV states the same rule at seven separate 9B management-key gates (crates/rsk-piv/src/lib.rs:288, 594, 673, 801, 1050, 1110 and crates/rsk-piv/src/keygen.rs:600), none of them patched here."
 
 [comutant.BugRefusedValidateGrants]
 status = "patch"
@@ -1562,7 +1562,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-fido"]
 expect = "killed"
-note = "EF_MINPINLEN[1], and the only mutant here whose MODEL half had to be built before the code half could be compared: `RSKeySecurityState` carried three conjuncts where `clientpin.rs` has four, so until `gate.forceChange` existed there was nothing for this patch to be the twin of (PLAT-MODEL-010). The direction was read at both levels rather than taken from the colour. TLC: setPIN, a token with `acfg`, ConfigOp sets the flag, and GetPinToken fires AGAIN at depth 8 — a token ISSUED over a standing gate, not a refusal wearing another code. The host tests fall the same way and were read rather than counted: FOUR fall, and both named ones report `Ok(52)` — a 52-byte token response SERVED — against `Err(PinInvalid)` (`forced_pin_change_blocks_tokens_until_change_pin`, crates/rsk-fido/src/clientpin_tests.rs:1239) and `Err(PinPolicyViolation)` (`forced_pin_change_0x09_is_policy_violation`, crates/rsk-fido/src/clientpin_tests.rs:1303). The other two are the faulted-probe twins of the same door. The UV door at crates/rsk-fido/src/clientpin.rs:493-495 is a SECOND site this patch leaves standing, so the kill is attributed to the PIN doors alone."
+note = "EF_MINPINLEN[1], and the only mutant here whose MODEL half had to be built before the code half could be compared: `RSKeySecurityState` carried three conjuncts where `clientpin.rs` has four, so until `gate.forceChange` existed there was nothing for this patch to be the twin of (PLAT-MODEL-010). The direction was read at both levels rather than taken from the colour. TLC: setPIN, a token with `acfg`, ConfigOp sets the flag, and GetPinToken fires AGAIN at depth 8 — a token ISSUED over a standing gate, not a refusal wearing another code. The host tests fall the same way and were read rather than counted: FOUR fall, and both named ones report `Ok(52)` — a 52-byte token response SERVED — against `Err(PinInvalid)` (`forced_pin_change_blocks_tokens_until_change_pin`, crates/rsk-fido/src/clientpin_tests.rs:1251) and `Err(PinPolicyViolation)` (`forced_pin_change_0x09_is_policy_violation`, crates/rsk-fido/src/clientpin_tests.rs:1315). The other two are the faulted-probe twins of the same door. The UV door at crates/rsk-fido/src/clientpin.rs:493-495 is a SECOND site this patch leaves standing, so the kill is attributed to the PIN doors alone."
 
 # ---- batch 8: the boot family, and the exclusion that covered it -------------
 #
@@ -1591,7 +1591,7 @@ pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
 """
 slice = ["cargo", "test", "-p", "rsk-fs"]
 expect = "killed"
-note = "audit run-35, shipped at four of five re-key sites: a lazy re-key — or a lazy DELETE, which appends a tombstone rather than erasing — leaves EF_HARDENED standing over the weak copy it just superseded, so no future boot ever scrubs it. The DEFINITION is patched, not the call sites, because it dominates all of them — patching sites would leave the oath and openpgp halves unmeasured and over-anchor the entry to an enumeration that grows. Direction read at both levels: TLC's counterexample is `LazyRekey` at `marker = TRUE` reaching `weak = 1`, a marker standing over a leftover, and the host failure is `requesting_a_rescrub_clears_the_hardened_marker` (crates/rsk-fs/src/fs_tests.rs:384) reporting `a rescrub request must clear the marker, or the lap never runs again` — the marker SURVIVED, not a spurious clear."
+note = "audit run-35, shipped at four of five re-key sites: a lazy re-key — or a lazy DELETE, which appends a tombstone rather than erasing — leaves EF_HARDENED standing over the weak copy it just superseded, so no future boot ever scrubs it. The DEFINITION is patched, not the call sites, because it dominates all of them — patching sites would leave the oath and openpgp halves unmeasured and over-anchor the entry to an enumeration that grows. Direction read at both levels: TLC's counterexample is `LazyRekey` at `marker = TRUE` reaching `weak = 1`, a marker standing over a leftover, and the host failure is `requesting_a_rescrub_clears_the_hardened_marker` (crates/rsk-fs/src/fs_tests.rs:385) reporting `a rescrub request must clear the marker, or the lap never runs again` — the marker SURVIVED, not a spurious clear."
 
 [comutant.BugMarkerBeforeScrub]
 status = "patch"
@@ -1607,7 +1607,7 @@ replace = """
 """
 slice = ["cargo", "test", "-p", "rsk-fs"]
 expect = "killed"
-note = "the `compact().is_ok()` short-circuit dropped: a torn lap claims completion and the weak copies it left ride under a set marker forever. This is the switch the module's exclusion was really about, and it had no code twin until the order left `firmware/src/main.rs` for `rsk_fs::run_at_rest_lap` — a firmware-compiling patch is classified `build-broke`, which is not a kill. Direction: the host failure is `the_at_rest_lap_writes_its_marker_only_after_a_completed_scrub` (crates/rsk-fs/src/fs_tests.rs:445) reporting `a torn lap claimed completion, so no later boot ever scrubs what it left` — read off the MEDIUM past `Fs`'s present cache, and the marker is PRESENT over a failed lap rather than absent after a good one."
+note = "the `compact().is_ok()` short-circuit dropped: a torn lap claims completion and the weak copies it left ride under a set marker forever. This is the switch the module's exclusion was really about, and it had no code twin until the order left `firmware/src/main.rs` for `rsk_fs::run_at_rest_lap` — a firmware-compiling patch is classified `build-broke`, which is not a kill. Direction: the host failure is `the_at_rest_lap_writes_its_marker_only_after_a_completed_scrub` (crates/rsk-fs/src/fs_tests.rs:505) reporting `a torn lap claimed completion, so no later boot ever scrubs what it left` — read off the MEDIUM past `Fs`'s present cache, and the marker is PRESENT over a failed lap rather than absent after a good one."
 
 [comutant.BugPartialLockCarry]
 status = "patch"
