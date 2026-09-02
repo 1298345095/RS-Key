@@ -430,6 +430,29 @@ GATE_RESULTS = ("gate_ghost", "gate_ledger", "gate_assumption", "gate_matrix", "
 #: `name=<number>`, the shape those lines carry their counts in.
 CLAIMED_PAIR = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)=(\d+)\b")
 
+#: The same pairs, each with the word that OWNS it. `gate_assumption` writes ten
+#: pairs under two names — `TRUE=` and `FALSE=`, once per constant — so
+#: `name=value` identifies a pair there the way `rust=1` identified a registry
+#: row before [`registry_line`] narrowed the corpus: it says "some constant has
+#: this" where it means "this constant has this". Measured on the shipped tree,
+#: end to end and no pipe: rewriting `PowerOnClearsScratch2 TRUE=11 FALSE=4` to
+#: `TRUE=2 FALSE=13` — `RekeyOrderModelled`'s arms, four tokens down the same
+#: line — is exit 0 with byte-identical output, and 101 of that line's 129
+#: numbers are held that loosely. `SEC-FIDO-003`'s own prose credits the pair
+#: rule with catching the earlier `FALSE=4` drift; the pair rule cannot see it in
+#: position, and caught it only because those digits stood nowhere in the line.
+#:
+#: Read on BOTH sides, and consulted only where the name REPEATS in the derived
+#: line: the ledger's nine axes and the registry's seven are each written once,
+#: so they stay [`CLAIMED_PAIR`]'s and this clause cannot speak about them.
+#:
+#: Arms: `PowerOnClearsScratch2 TRUE=11 FALSE=4 → TRUE=2 FALSE=13` is exit 1
+#: here naming the constant, and exit 0 with this clause removed.
+OWNED_PAIR = re.compile(
+    r"\b(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>\d+)\b"
+    r"|\b(?P<owner>[A-Za-z_][A-Za-z0-9_]*)\b"
+)
+
 #: `name=<count>/<roster>`, the shape three of the ledger's axes carry. The pair
 #: rule reads `persistent=12/4` as `persistent=12` and stops at the slash, so the
 #: DENOMINATOR fell through to the bare-integer rule, which asks only whether the
@@ -454,6 +477,8 @@ STANDING = "standing assumption(s)"
 #: only — that leaf QUOTES the `4 standing assumption(s)` it once carried, and a
 #: version reading every occurrence called SEC-FIDO-003 red over its own history
 #: (measured; the whole point of the rule is that it does not read the prose).
+#: [`CLAIMED_UNIT`] no longer shares that carve-out: it skips a backticked span
+#: instead, which reaches the same quotation without depending on where it sits.
 #:
 #: Arms: `5 → 3` is exit 1 here and exit 0 without the clause. That arm is now
 #: SHARED — [`CLAIMED_UNIT`] derives `standing` as a unit noun off the same line
@@ -468,7 +493,7 @@ CLAIMED_TOTAL = re.compile(rf"(\d+) {re.escape(STANDING)}")
 #: entirely that way, so the pair rule reads NOTHING in either and every number
 #: fell through to the bare-integer rule, which asks only whether the digits
 #: stand SOMEWHERE in the derived line: 33 + 99 numbers over 11 bundles held
-#: that way, and `(37 covered → (139 covered` and `21 action(s) → 24 action(s)`
+#: that way, and `(37 covered → (37 equivalent` and `21 action(s) → 24 action(s)`
 #: were each exit 0 on the shipped tree, every swap taking its digits off a
 #: sibling count of the very line it falsifies.
 #:
@@ -480,17 +505,70 @@ CLAIMED_TOTAL = re.compile(rf"(\d+) {re.escape(STANDING)}")
 #:
 #: The vocabulary is DERIVED from the gate's own line rather than listed here
 #: ([`derived_units`]), so the rule reaches exactly the counts the gate wrote a
-#: noun for and no prose beyond them — and the FIRST occurrence of each noun
-#: only, for the reason [`CLAIMED_TOTAL`] records: a version reading every
-#: occurrence calls SEC-FIDO-003 red over the `4 standing assumption(s)` its own
-#: prose quotes, measured again over this wider vocabulary and still exactly one
-#: false finding.
+#: noun for and no prose beyond them — matched on a STEM, and at EVERY occurrence
+#: outside a quotation. Both of those replace a first-occurrence carve-out that
+#: was measured to leak two ways. A noun spelled one character differently was
+#: not in the vocabulary at all and so was not read: `31 build configurations →
+#: 37 build-configurations` was exit 0 while the byte-identical `37 build
+#: configurations` was exit 1, and so were `954 gap → 106 gaps`, `1240 cells →
+#: 106 cell`, `21 action(s) → 24 actions` and `11 guard(s) → 24 guards`. And
+#: reading only the first occurrence made the rule depend on LAYOUT: one honest-
+#: looking sentence restating three derived nouns with other numbers is 2
+#: findings placed before the transcription and 0 placed after it, and nothing
+#: required the transcription to come first.
 #:
-#: Arms, over the shipped bundles: `(37 covered → (139 covered`, `21 action(s) →
-#: 24 action(s)`, `139 equivalent → 106 equivalent`, `11 guard(s) → 21 guard(s)`
-#: and `40 P0-family → 31 P0-family` are each exit 1 here, naming the pair; drop
-#: this clause and all five are exit 0 again with the bundle uncorrected.
-CLAIMED_UNIT = re.compile(r"(?<![=\w./,-])(\d+) ([A-Za-z][A-Za-z0-9_-]*(?:\(s\))?)")
+#: What the quotation carve-out replaces it with is a convention rather than an
+#: accident: a `<count> <noun>` the row is CITING goes in backticks, which is
+#: where this tree already puts quoted history — `SEC-FIDO-003` quotes the `4
+#: standing assumption(s)` it once carried, and that is the one honest text a
+#: version reading every occurrence called red. Measured over all 11 bundles:
+#: 2 false findings without the carve-out, 0 with it, and all 55 gate lines
+#: carry balanced backticks. The cost is that an UNquoted `<count> <derived
+#: noun>` anywhere in a `gate_*` line now reads as a transcription of it.
+#:
+#: Arms, over the shipped bundles: `(37 covered → (37 equivalent`, `21 action(s)
+#: → 24 action(s)`, `11 guard(s) → 24 guards`, `31 build configurations → 37
+#: build-configurations` and `40 P0-family → 31 P0-family` are each exit 1 here;
+#: drop this clause and all five are exit 0 again with the bundle uncorrected.
+#: Two arms recorded here for a year could not say that. `139 equivalent → 106
+#: equivalent` cannot be run at all — no bundle has carried `139 equivalent`
+#: since the matrix moved to 143 — and `(37 covered → (139 covered` does not
+#: isolate this clause, because `139` is a number the derived line no longer
+#: carries anywhere and the bare-integer rule answers it. `test_bundle_gate.py`
+#: recorded the second correction and this comment did not.
+UNIT_NOUN = r"[A-Za-z][A-Za-z0-9_-]*(?:\(s\))?"
+CLAIMED_UNIT = re.compile(rf"(?<![=\w./,-])(\d+) ({UNIT_NOUN})(?: ({UNIT_NOUN}))?")
+
+#: A token a derived line writes that is DATA and not the gate's own prose: it
+#: carries a capital or a digit. Only the DIGITS of these lines were ever
+#: compared, so the word carrying the verdict rotted freely — `gate_registry`
+#: transcribed as `MODELLED-ONLY` where the gate derives `BOUNDED` is exit 0 with
+#: byte-identical output, and so is a swapped constant name. The digits inside
+#: such a token are not counts either, and the sweep says so: `P0-family`'s `0`,
+#: `PowerOnClearsScratch2`'s `2` and `SEC-FIDO-001`'s `001` are 38 of the numbers
+#: no rule above holds in position, because each is a NAME rather than a number.
+#:
+#: Lowercase-only tokens are left out: they are the gate's prose (`ok`, `record`,
+#: `over`, `consulting`), and `SEC-FIDO-005` drops the `ok` from two of its lines
+#: — measured, it is the only honest text this rule would have called red. So are
+#: the PAIR names, which two rules already hold in position: requiring the word
+#: `TRUE` would have been satisfied on `SEC-FIDO-003` — the one bundle that
+#: deliberately transcribes no arm counts — only by the phrase "TRUE/FALSE" in a
+#: sentence about not transcribing them, which is a check resting on prose.
+DERIVED_WORD = re.compile(r"(?<![\w-])([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)(?![\w-])")
+
+#: What [`CLAIMED_UNIT`] must read PER BUNDLE. The quotation carve-out above is a
+#: new way to switch the clause off — backtick a whole transcription and every
+#: count in it stops being compared, with the pair and bare-integer rules the
+#: only things left — so the reading is counted and floored. Under the measured
+#: 12, which is the same 12 in every one of the eleven bundles because they all
+#: transcribe the same five lines: 3 of `gate_ghost`, 1 of `gate_assumption`, 8
+#: of `gate_matrix`, and none of the two lines written entirely in pairs. Per
+#: bundle and not over the roster, because a roster total is exactly what one
+#: bundle going quiet does not move: backticking `gate_matrix` alone takes one
+#: bundle to 4 and the roster to 124, and only the first of those is a floor
+#: anything sits under.
+UNIT_FLOOR = 9
 
 #: An assertion that fell describes the modelled defect, or its inverse. Anything
 #: else is a word nobody has to defend.
@@ -1019,37 +1097,121 @@ def registry_line(corpus: str, subject: str) -> str:
     return corpus
 
 
-def derived_units(derived: str) -> dict[str, set[str]]:
-    """The `<count> <unit>` vocabulary of one derived line: unit noun → its counts.
+def owned_pairs(text: str) -> list[tuple[str, str, str]]:
+    """`(owner, name, value)` for every `name=value` in `text`.
+
+    The owner is the last token that is not itself a pair, which on
+    `gate_assumption`'s line is the constant the `TRUE=`/`FALSE=` arms belong to.
+    A pair with no word before it owns the empty string, which compares equal on
+    both sides like any other owner.
+
+    Elsewhere the owner is whatever the line happens to open with — the ledger's
+    `keys=2` owns `GREEN` — and that is why the clause reading these consults
+    them ONLY for a name the derived line writes more than once. A bundle reflows
+    that opening word freely, and holding `keys=2` to it would be a check on
+    prose; `TRUE=` has five owners and no other way to be told apart.
+    """
+    pairs, owner = [], ""
+    for match in OWNED_PAIR.finditer(text):
+        if match.group("name") is not None:
+            pairs.append((owner, match.group("name"), match.group("value")))
+        else:
+            owner = match.group("owner")
+    return pairs
+
+
+def unit_stem(unit: str) -> str:
+    """One spelling for `cells`/`cell`, `guard(s)`/`guards`, `build
+    configurations`/`build-configurations`.
+
+    SPELLING only. A hyphen and an underscore become the space they stand in for,
+    a `(s)` suffix goes from each word, and a plural `s` goes from the last one.
+    Nothing here splits a phrase or drops a word: `out-of-scope` reduced to `out`
+    would be a vocabulary entry the gate never wrote, and the first thing a prose
+    number would collide with. Two letters keep their `s`, so `is` is not `i`.
+    """
+    words = [
+        word.removesuffix("(s)")
+        for word in unit.lower().replace("-", " ").replace("_", " ").split()
+    ]
+    if words and len(words[-1]) > 2 and words[-1].endswith("s"):
+        words[-1] = words[-1][:-1]
+    return " ".join(words)
+
+
+def derived_units(derived: str) -> dict[str, tuple[set[str], str]]:
+    """The `<count> <unit>` vocabulary of one derived line: stem → counts, spelling.
 
     Read off the GATE's line and not off the bundle's, which is what scopes
     [`CLAIMED_UNIT`] to nouns some other program wrote. A vocabulary listed here
     instead would be a second copy of five gates' output, and the number it
     would go stale on is the one this whole function exists to compare.
 
-    A noun the gate stops writing therefore stops being checked rather than
-    going red — the bare-integer rule is what remains under it, and a rename is
-    the one edit this clause cannot tell from a correction.
+    Keyed on [`unit_stem`] and carrying the noun's ONE-word and TWO-word
+    readings, because a noun the claim spells differently was the whole leak:
+    `build-configurations` is not `build`, and it is `build configurations`.
+    The spelling is kept beside the counts so a finding can quote the gate.
+
+    A noun the gate stops writing still stops being checked rather than going
+    red — the bare-integer rule is what remains under it, and a rename is the one
+    edit this clause cannot tell from a correction.
     """
-    units: dict[str, set[str]] = {}
-    for value, unit in CLAIMED_UNIT.findall(derived):
-        units.setdefault(unit, set()).add(value)
+    units: dict[str, tuple[set[str], str]] = {}
+    for match in CLAIMED_UNIT.finditer(derived):
+        count, first, second = match.groups()
+        for unit in (first, f"{first} {second}" if second else None):
+            if unit:
+                units.setdefault(unit_stem(unit), (set(), unit))[0].add(count)
     return units
+
+
+def claimed_units(claim: str) -> list[tuple[str, tuple[str, ...]]]:
+    """`(count, readings)` for every `<count> <noun>` the claim states.
+
+    EVERY occurrence — minus the ones inside a backticked span, which is the row
+    citing rather than transcribing. The parity test is what makes the rule
+    independent of where the transcription sits in the field; all 55 shipped gate
+    lines carry balanced backticks.
+
+    `readings` is the two- then the one-word spelling of the same position, so a
+    caller takes the LONGEST the gate wrote a count for and reports that position
+    once. Both would be true and both would be findings — `40 P0-family
+    properties → 31` falsifies `P0-family` and `P0-family properties` alike — and
+    one drift printing two findings reads as two drifts.
+    """
+    stated = []
+    for match in CLAIMED_UNIT.finditer(claim):
+        if claim.count("`", 0, match.start()) % 2:
+            continue
+        count, first, second = match.groups()
+        pair = (f"{first} {second}",) if second else ()
+        stated.append((count, pair + (first,)))
+    return stated
 
 
 def gate_transcriptions(bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """Every number in a transcribed `[result]` gate line is that gate's own.
 
-    A `name=<number>` pair is compared as a pair, a `name=<count>/<roster>` axis
-    as the whole token, the [`STANDING`] total with the words it is counted in,
-    and a bare `<count> <unit>` against the count the gate wrote that same unit
-    for — which is what holds `21 action(s) … over 24 route(s)` and the whole of
-    `gate_matrix`, where the line carries no pairs at all; everything still left
-    is compared as an integer. None of them reads the PROSE — `gate_matrix` ends
-    in a sentence about the slice, and that sentence is the row's to write.
+    A `name=<number>` pair is compared as a pair — and, where that NAME stands
+    more than once in the derived line, with the token that owns it, because
+    `gate_assumption` writes ten pairs under two names and `TRUE=` alone
+    identifies nothing. A `name=<count>/<roster>` axis is compared as the whole
+    token, the [`STANDING`] total with the words it is counted in, and a bare
+    `<count> <unit>` against the count the gate wrote that same unit for, on a
+    stem and wherever it stands — which is what holds `21 action(s) … over 24
+    route(s)` and the whole of `gate_matrix`, where the line carries no pairs at
+    all. [`gate_words`] then holds the words, and everything still left is
+    compared as an integer.
+
+    None of them reads the PROSE — `gate_matrix` ends in a sentence about the
+    slice, and that sentence is the row's to write. What the row may not do in it
+    is restate one of the gate's own `<count> <noun>` phrases with another
+    number: that reads as a second transcription unless it is backticked, which
+    is where a quotation belongs anyway.
     """
     corpus = gate_corpus()
     result = doc.get("result", {})
+    read = 0
     if not isinstance(result, dict):
         return  # `is not a table` is the roster rule's, reported once
     for key in GATE_RESULTS:
@@ -1102,23 +1264,106 @@ def gate_transcriptions(bundle: pathlib.Path, doc: dict, findings: list[str]) ->
                 f" derives `{derived[:120]}…` — the total is the line's own number"
                 " and not whichever arm count happens to carry those digits"
             )
-        known, read = derived_units(derived), set()
-        for value, unit in CLAIMED_UNIT.findall(claim):
-            if unit not in known or unit in read:
-                continue  # a noun this gate never counted, or its prose again
-            read.add(unit)
-            if value not in known[unit]:
+        truth = owned_pairs(derived)
+        names = [name for _, name, _ in truth]
+        for owner, name, value in owned_pairs(claim):
+            if names.count(name) < 2 or (owner, name, value) in truth:
+                continue  # a name written once is held by the pair rule above
+            derives = "/".join(sorted(v for o, n, v in truth if (o, n) == (owner, name)))
+            findings.append(
+                f"{bundle}: `result.{key}` says `{owner} {name}={value}` and the"
+                f" gate derives `{name}={derives or 'nothing'}` for {owner} —"
+                f" `{name}=` stands {names.count(name)} times in that line, so the"
+                " pair belongs to the token in front of it or to nobody"
+            )
+        known = derived_units(derived)
+        for value, readings in claimed_units(claim):
+            unit = next((u for u in readings if unit_stem(u) in known), None)
+            if unit is None:
+                continue  # a noun this gate never counted: the row's own prose
+            read += 1
+            counts, spelling = known[unit_stem(unit)]
+            if value not in counts:
                 findings.append(
                     f"{bundle}: `result.{key}` says `{value} {unit}` and the gate"
-                    f" derives `{'/'.join(sorted(known[unit]))} {unit}` — the noun"
-                    " is that gate's and so is the count standing in front of it"
+                    f" derives `{'/'.join(sorted(counts))} {spelling}` — the noun"
+                    " is that gate's and so is the count standing in front of it,"
+                    " however either is spelled; a count the row is QUOTING rather"
+                    " than transcribing goes in backticks"
                 )
+        gate_words(bundle, key, claim, derived, corpus, findings)
         for number in re.findall(r"\d+", CLAIMED_PAIR.sub("", claim)):
             if not re.search(rf"(?<!\d){re.escape(number)}(?!\d)", derived):
                 findings.append(
                     f"{bundle}: `result.{key}` says {number} and the gate derives no"
                     f" such number — `{derived[:120]}…`"
                 )
+    if read < UNIT_FLOOR:
+        findings.append(
+            f"{bundle}: {read} `<count> <noun>` reading(s) over its gate lines,"
+            f" under the floor of {UNIT_FLOOR} — a transcription every count of"
+            " which sits inside backticks is quoted rather than transcribed, and"
+            " the clause that compares them goes silent instead of red"
+        )
+
+
+def gate_words(
+    bundle: pathlib.Path,
+    key: str,
+    claim: str,
+    derived: str,
+    corpus: dict[str, str],
+    findings: list[str],
+) -> None:
+    """A transcription copies the gate's WORDS too, not only its digits.
+
+    Every rule above reads digits, so the word carrying the verdict rotted
+    freely: `gate_registry` retyped as `MODELLED-ONLY` where the gate derives
+    `BOUNDED` is exit 0 with byte-identical output, and so is a swapped invariant
+    name or a `P1-family`. It is also where 38 of the numbers no rule holds in
+    position live, because they are not counts — the `0` of `P0-family`, the `2`
+    of `PowerOnClearsScratch2`, the `001` of `SEC-FIDO-001`.
+
+    Two shapes, because the two corpora are two shapes. Four gates derive ONE
+    line, so every [`DERIVED_WORD`] of it must stand in the claim. `gate_registry`
+    derives a ROSTER and the claim transcribes one row of it, abbreviated: two of
+    the eleven bundles write the id and the verdict without the invariant name,
+    so requiring every word there is the rule firing on honest text — measured.
+    What that row is held to instead is its own id, its own verdict, and no
+    sibling's verdict, each of which every one of the eleven carries today.
+    """
+    if key != "gate_registry":
+        named = {name for name, _ in CLAIMED_PAIR.findall(derived)}
+        for word in dict.fromkeys(DERIVED_WORD.findall(derived)):
+            if not any(c.isupper() or c.isdigit() for c in word) or word in named:
+                continue  # `ok`, `record`, `over`: the gate's prose, not its data
+            if not re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", claim):
+                findings.append(
+                    f"{bundle}: `result.{key}` drops the gate's own `{word}` —"
+                    " the name a count is written under is that gate's as much as"
+                    " the count, and only the digits were ever compared"
+                )
+        return
+    row = derived.split()
+    if len(row) < 3 or "\n" in derived:
+        return  # no row of the roster carries this property: `registry_line` said so
+    verdicts = {
+        line.split()[2] for line in corpus[key].splitlines() if len(line.split()) > 2
+    }
+    for word in sorted(verdicts | {row[0]}):
+        stands = re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", claim)
+        if word in (row[0], row[2]) and not stands:
+            findings.append(
+                f"{bundle}: `result.gate_registry` drops `{word}` — the row it"
+                " transcribes is named by its property id and answered by its"
+                " verdict, and a line missing either transcribes some other row"
+            )
+        elif word not in (row[0], row[2]) and stands:
+            findings.append(
+                f"{bundle}: `result.gate_registry` carries the verdict `{word}`"
+                f" and the gate derives `{row[2]}` for {row[0]} — the word is the"
+                " result; the counts beside it are what it was reached from"
+            )
 
 
 def corrected_by(rows: dict, start: str) -> str | None:

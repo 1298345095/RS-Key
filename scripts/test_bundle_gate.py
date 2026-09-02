@@ -1072,7 +1072,7 @@ def test_a_transcribed_assumption_total_is_the_line_s_own(tmp_path):
     rewrite(root, retype)
     problems = findings(root)
     assert [p for p in problems if f"`3 {bundle_gate.STANDING}`" in p], problems
-    assert [p for p in problems if "says `3 standing` and" in p], problems
+    assert [p for p in problems if "says `3 standing assumption(s)` and" in p], problems
     assert len(problems) == 2, problems
 
 
@@ -1089,15 +1089,17 @@ def test_the_assumption_total_read_is_the_line_s_first():
 
 
 @pytest.mark.parametrize(
-    "key,old,new",
-    [("gate_matrix", "(37 covered", "(106 covered"),
-     ("gate_ghost", "21 action(s)", "24 action(s)"),
-     ("gate_matrix", "954 gap", "106 gap"),
-     ("gate_ghost", "11 guard(s)", "21 guard(s)"),
-     ("gate_matrix", "0 conditional", "37 conditional"),
-     ("gate_matrix", "40 P0-family", "31 P0-family")],
+    "key,old,new,says",
+    [("gate_matrix", "(37 covered", "(106 covered", "106 covered"),
+     ("gate_ghost", "21 action(s)", "24 action(s)", "24 action(s) record"),
+     ("gate_matrix", "954 gap", "106 gap", "106 gap"),
+     ("gate_ghost", "11 guard(s)", "21 guard(s)", "21 guard(s)"),
+     ("gate_matrix", "0 conditional", "37 conditional", "37 conditional"),
+     ("gate_matrix", "40 P0-family", "31 P0-family", "31 P0-family properties")],
 )
-def test_a_transcribed_unit_count_is_the_one_that_noun_was_written_for(tmp_path, key, old, new):
+def test_a_transcribed_unit_count_is_the_one_that_noun_was_written_for(
+    tmp_path, key, old, new, says
+):
     """`gate_ghost` and `gate_matrix` carry no `name=value` pair anywhere, so the
     pair rule reads NOTHING in them and all 33 + 99 of their numbers fell to the
     bare-integer rule — "do these digits stand somewhere in the derived line".
@@ -1115,6 +1117,13 @@ def test_a_transcribed_unit_count_is_the_one_that_noun_was_written_for(tmp_path,
     goes red because a sibling rule fired somewhere else is a case that proves
     nothing about this one.
 
+    The READING is asserted too, and two of them are two words long. Each claim
+    position is reported once, on the LONGEST spelling the gate wrote a count
+    for, so `40 P0-family properties → 31` is one finding about `P0-family
+    properties` rather than two about the same drift. Typed out rather than
+    derived for the reason every count here is: it is the third copy that fails
+    loudly instead of the one that agrees with itself.
+
     `gap` has already moved once under these arms — four cells went from `gap` to
     `equivalent` while this case was being written, so `958 gap` is `954 gap` and
     this parameter went red for the right reason: the bundles had been re-derived
@@ -1129,18 +1138,22 @@ def test_a_transcribed_unit_count_is_the_one_that_noun_was_written_for(tmp_path,
 
     rewrite(root, retype)
     problems = findings(root)
-    assert [p for p in problems if f"says `{new.lstrip('(')}`" in p], problems
+    assert [p for p in problems if f"says `{says}`" in p], problems
     assert len(problems) == 1, problems
 
 
 def test_a_unit_count_the_gate_line_quotes_again_is_prose(tmp_path):
-    """The first occurrence of each noun and no other, for the reason the
-    assumption total records one rule up: SEC-FIDO-003's leaf QUOTES the `4
-    standing assumption(s)` it once carried, and a version reading every
-    occurrence called it red over its own history. This is that trap on a much
-    wider vocabulary — every noun of two derived lines rather than one phrase —
-    and it was measured the same way round: reading every occurrence produces
-    exactly one false finding on the unedited tree, on that leaf.
+    """A count the row CITES rather than transcribes, which is what the carve-out
+    has to let through: SEC-FIDO-003's leaf quotes the `4 standing assumption(s)`
+    it once carried, and a version reading every occurrence called it red over its
+    own history — measured, and on this wider vocabulary still exactly one false
+    finding.
+
+    What marks the citation is BACKTICKS and no longer position. The
+    first-occurrence version it replaces was a rule about LAYOUT: nothing required
+    the transcription to come first, and the same sentence is 2 findings written
+    before it and 0 written after — measured end to end, both ways. Both halves
+    are here, because a carve-out with no negative arm is a rule switched off.
 
     `106` is a number the derived line HAS — off `106 out-of-scope` — so the
     bare-integer rule stays quiet and this case is about the carve-out and nothing
@@ -1148,10 +1161,93 @@ def test_a_unit_count_the_gate_line_quotes_again_is_prose(tmp_path):
     root = tree(tmp_path)
 
     def quote(doc):
-        doc["result"]["gate_matrix"] += " The tier this replaced read 106 covered."
+        doc["result"]["gate_matrix"] += " The tier this replaced read `106 covered`."
 
     rewrite(root, quote)
     assert findings(root) == [], findings(root)
+
+
+def test_a_unit_count_the_gate_line_restates_unquoted_is_a_transcription(tmp_path):
+    """The other half of the carve-out above, and the hole it closes. The same
+    sentence unquoted is read as a second transcription wherever it stands —
+    AFTER the transcription, which is the placement the first-occurrence version
+    let through at exit 0."""
+    root = tree(tmp_path)
+
+    def restate(doc):
+        doc["result"]["gate_matrix"] += " The tier this replaced read 106 covered."
+
+    rewrite(root, restate)
+    problems = findings(root)
+    assert [p for p in problems if "says `106 covered`" in p], problems
+    assert len(problems) == 1, problems
+
+
+@pytest.mark.parametrize(
+    "key,old,new,says",
+    [("gate_matrix", "31 build configurations", "37 build-configurations",
+      "37 build-configurations"),
+     ("gate_matrix", "954 gap)", "106 gaps)", "106 gaps"),
+     ("gate_matrix", "1240 cells", "106 cell", "106 cell"),
+     ("gate_ghost", "11 guard(s)", "24 guards", "24 guards"),
+     ("gate_ghost", "21 action(s) record", "24 actions record", "24 actions")],
+)
+def test_a_transcribed_unit_count_is_read_however_its_noun_is_spelt(
+    tmp_path, key, old, new, says
+):
+    """One character of noun drift used to skip the comparison entirely.
+
+    The vocabulary is the gate's own words, and a claim noun that was not one of
+    them literally was not read at all — so `31 build configurations → 37
+    build-configurations` was exit 0 while the byte-identical `37 build
+    configurations` was exit 1, naming the drift it was supposed to catch. Every
+    swap here is that shape: a plural, a singular, a `(s)` spelled out, a space
+    turned into a hyphen, each carrying a count off a SIBLING of the same line so
+    no older rule can speak.
+
+    Held on a stem now ([`bundle_gate.unit_stem`]), and on the two-word reading of
+    the position as well, which is the only thing that reaches
+    `build-configurations` — the gate writes `build` and `configurations` as two
+    words and the claim fuses them into one."""
+    root = tree(tmp_path)
+
+    def retype(doc):
+        assert old in doc["result"][key], doc["result"][key]
+        doc["result"][key] = doc["result"][key].replace(old, new, 1)
+
+    rewrite(root, retype)
+    problems = findings(root)
+    assert [p for p in problems if f"says `{says}`" in p], problems
+    assert len(problems) == 1, problems
+
+
+def test_the_unit_stem_is_a_spelling_and_not_a_split():
+    """What the stem may and may not collapse.
+
+    A plural, a `(s)` and a hyphen are spellings of one noun. A hyphen SPLIT is
+    not: `out-of-scope` reduced to `out` would be a vocabulary entry the gate
+    never wrote, and the first thing a prose number collides with — which is the
+    failure mode this rule has already had twice."""
+    assert bundle_gate.unit_stem("gaps") == bundle_gate.unit_stem("gap")
+    assert bundle_gate.unit_stem("guard(s)") == bundle_gate.unit_stem("guards")
+    assert bundle_gate.unit_stem("build-configurations") == bundle_gate.unit_stem(
+        "build configurations"
+    )
+    assert bundle_gate.unit_stem("out-of-scope") == "out of scope"
+    assert bundle_gate.unit_stem("is") == "is"
+
+
+def test_a_gate_line_whose_every_count_is_quoted_is_not_a_transcription(tmp_path):
+    """The carve-out's own degeneracy arm, and the reason [`bundle_gate.UNIT_FLOOR`]
+    exists. Opening `gate_matrix` with one backtick puts the whole transcription
+    inside a quotation, and every count in it stops being compared with nothing
+    said — the failure this tree keeps finding in its own new guards. The bundle
+    reads 4 of its 12 then, under the floor of 9."""
+    root = tree(tmp_path)
+    edit(root, 'gate_matrix = "matrix-gate', 'gate_matrix = "`matrix-gate')
+    problems = findings(root)
+    assert [p for p in problems if "reading(s) over its gate lines" in p], problems
+    assert len(problems) == 1, problems
 
 
 def test_a_count_whose_noun_the_gate_never_wrote_is_the_row_s_own(tmp_path):
@@ -1169,6 +1265,155 @@ def test_a_count_whose_noun_the_gate_never_wrote_is_the_row_s_own(tmp_path):
     assert findings(root) == [], findings(root)
 
 
+@pytest.mark.parametrize(
+    "old,new,says",
+    [("PowerOnClearsScratch2 TRUE=11 FALSE=4", "PowerOnClearsScratch2 TRUE=2 FALSE=13",
+      "`PowerOnClearsScratch2 TRUE=2` and the gate derives `TRUE=11`"),
+     ("AlwaysUvShipped TRUE=5 FALSE=91", "AlwaysUvShipped TRUE=5 FALSE=93",
+      "`AlwaysUvShipped FALSE=93` and the gate derives `FALSE=91`"),
+     ("WidePerms TRUE=3 FALSE=93", "WidePerms TRUE=11 FALSE=93",
+      "`WidePerms TRUE=11` and the gate derives `TRUE=3`")],
+)
+def test_a_transcribed_pair_whose_name_repeats_belongs_to_its_own_constant(
+    tmp_path, old, new, says
+):
+    """`gate_assumption` writes ten pairs under two names, and `name=value` alone
+    identified none of them.
+
+    It is [`bundle_gate.registry_line`]'s lesson one field over: the pair rule
+    asked "does SOME constant have this" where it meant "does THIS constant have
+    this". Every swap here takes its values off another constant's arms four
+    tokens down the same line, so the pair rule, the fraction rule and the
+    bare-integer rule are all satisfied and only the owner clause can speak:
+    measured end to end, `PowerOnClearsScratch2 TRUE=11 FALSE=4 → TRUE=2
+    FALSE=13` is exit 0 with byte-identical output before it, and 101 of that
+    line's 129 numbers were held that loosely.
+
+    The leaf this bite is recorded in credits the pair rule with catching the
+    earlier drift. It could not have: it caught it because those digits stood
+    nowhere in the line at all, which is the bare-integer rule."""
+    root = tree(tmp_path)
+
+    def retype(doc):
+        assert old in doc["result"]["gate_assumption"], doc["result"]["gate_assumption"]
+        doc["result"]["gate_assumption"] = doc["result"]["gate_assumption"].replace(
+            old, new, 1
+        )
+
+    rewrite(root, retype)
+    problems = findings(root)
+    assert [p for p in problems if says in p], problems
+
+
+def test_a_pair_name_written_once_stays_the_pair_rule_s(tmp_path):
+    """The clause above is scoped to names that REPEAT, so the ledger's nine axes
+    and the registry's seven are untouched by it — a widening that reached them
+    would make every pair depend on the word a bundle happens to put in front of
+    it, and the eleven bundles reflow that word freely.
+
+    Driven rather than argued: `keys=2` moved off its own line is still ONE
+    finding, and it is the pair rule's."""
+    root = tree(tmp_path)
+
+    def retype(doc):
+        doc["result"]["gate_ledger"] = doc["result"]["gate_ledger"].replace(
+            "GREEN keys=2", "GREEN, the ledger says: keys=2", 1
+        )
+
+    rewrite(root, retype)
+    assert findings(root) == [], findings(root)
+
+
+def test_the_owner_of_a_pair_is_the_last_word_that_is_not_one():
+    """What `owner` means, on the line the clause exists for."""
+    line = "5 x AlwaysUvShipped TRUE=5 FALSE=91 ForceChangeModelled TRUE=3 FALSE=93"
+    assert bundle_gate.owned_pairs(line) == [
+        ("AlwaysUvShipped", "TRUE", "5"),
+        ("AlwaysUvShipped", "FALSE", "91"),
+        ("ForceChangeModelled", "TRUE", "3"),
+        ("ForceChangeModelled", "FALSE", "93"),
+    ]
+    assert bundle_gate.owned_pairs("keys=2 api=11") == [("", "keys", "2"), ("", "api", "11")]
+
+
+@pytest.mark.parametrize(
+    "key,old,new,says",
+    [("gate_matrix", "40 P0-family", "40 P37-family", "`P0-family`"),
+     ("gate_ghost", "record NoAuthorizationBypass over", "record NoAuthorizationBypasx over",
+      "`NoAuthorizationBypass`"),
+     ("gate_ledger", "token-refinement-gate: GREEN", "token-refinement-gate: RED",
+      "`GREEN`")],
+)
+def test_a_transcription_copies_the_gate_s_words_and_not_only_its_digits(
+    tmp_path, key, old, new, says
+):
+    """Every rule above reads DIGITS, so the word carrying the verdict rotted
+    freely and the digits inside a NAME were never numbers to begin with.
+
+    `GREEN → RED` is the shape at its plainest: a green ledger transcribed as a
+    red one, with every count still correct, was exit 0. `P0-family → P37-family`
+    and a misspelt invariant are the same edit on a name, and they are also where
+    38 of the numbers no rule holds in position live — `P0-family`'s `0`,
+    `PowerOnClearsScratch2`'s `2`, `SEC-FIDO-001`'s `001` — because a digit
+    inside a name is not a count of anything and no count rule can reach it.
+
+    `37` is a number the matrix line carries, off `37 covered`, so the
+    bare-integer rule stays quiet and only [`bundle_gate.gate_words`] speaks."""
+    root = tree(tmp_path)
+
+    def retype(doc):
+        assert old in doc["result"][key], doc["result"][key]
+        doc["result"][key] = doc["result"][key].replace(old, new, 1)
+
+    rewrite(root, retype)
+    problems = findings(root)
+    assert [p for p in problems if says in p and "drops the gate's own" in p], problems
+    assert len(problems) == 1, problems
+
+
+def test_a_lowercase_word_of_a_derived_line_is_the_gate_s_prose(tmp_path):
+    """Where that rule stops. `ok`, `record`, `over` and `consulting` are the
+    gate's sentence and not its data — SEC-FIDO-005 drops the `ok` from two of its
+    lines, and requiring it would be the rule firing on honest text. Measured over
+    all eleven: it is the only word a capital-or-digit filter has to spare.
+
+    So are the PAIR names, which two rules already hold in position: requiring the
+    word `TRUE` is satisfied on SEC-FIDO-003 — the one bundle that transcribes no
+    arm counts at all — only by the phrase "TRUE/FALSE" in a sentence about not
+    transcribing them, and a check resting on prose is the thing this file is
+    about."""
+    root = tree(tmp_path)
+    edit(root, "matrix-gate: ok — 40 P0-family", "matrix-gate: 40 P0-family")
+    assert findings(root) == [], findings(root)
+
+
+@pytest.mark.parametrize(
+    "old,new,says",
+    [("NoAuthorizationBypass                    BOUNDED",
+      "NoAuthorizationBypass                    MODELLED-ONLY", "carries the verdict"),
+     ('gate_registry = "SEC-FIDO-001   ', 'gate_registry = "SEC-FIDO-50   ', "drops `SEC-FIDO-001`")],
+)
+def test_the_registry_row_transcribed_is_named_and_answered_by_this_property_s(
+    tmp_path, old, new, says
+):
+    """The roster gate's half of the same rule, and it cannot be the other half.
+
+    Its corpus is a roster, so the claim transcribes ONE row of it and abbreviates:
+    two of the eleven bundles write the id and the verdict without the invariant
+    name, and requiring every derived word there is the rule firing on honest text
+    — measured, 2 of 11. What the row is held to instead is its own id, its own
+    verdict, and no sibling's verdict; every one of the eleven carries all three
+    today, and the roster is where the alternatives come from rather than a list
+    here.
+
+    `50` is `cfgs=50` off the row's own line, so the id swap is answered by this
+    clause and not by the bare-integer rule."""
+    root = tree(tmp_path)
+    edit(root, old, new)
+    problems = findings(root)
+    assert [p for p in problems if says in p], problems
+
+
 def test_the_unit_vocabulary_stops_where_another_rule_already_reads():
     """The lookbehind, which is what keeps this clause off numbers already
     compared IN POSITION by the pair and fraction rules. Without the `=`, the
@@ -1176,7 +1421,10 @@ def test_the_unit_vocabulary_stops_where_another_rule_already_reads():
     name; without the `/`, `persistent=12/4 outcomes=7/6` offers `4 outcomes`,
     which is a roster size read as a count of the axis after it."""
     arms = f"5 {bundle_gate.STANDING} AlwaysUvShipped TRUE=5 FALSE=91 ForceChangeModelled"
-    assert bundle_gate.derived_units(arms) == {"standing": {"5"}}
+    assert bundle_gate.derived_units(arms) == {
+        "standing": ({"5"}, "standing"),
+        "standing assumption": ({"5"}, "standing assumption(s)"),
+    }
     ledger = "GREEN keys=2 api=11 volatile=11/10 persistent=12/4 outcomes=7/6 walk=4"
     assert bundle_gate.derived_units(ledger) == {}
 
