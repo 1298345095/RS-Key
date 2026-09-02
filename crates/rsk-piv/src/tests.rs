@@ -5955,6 +5955,148 @@ fn set_retries_re_arms_the_at_rest_lap() {
     );
 }
 
+/// The other half of [`set_retries_re_arms_the_at_rest_lap`], and the one nothing
+/// exercised: what a medium that REFUSES the re-arm leaves behind. The `EF_RETRIES`
+/// write ahead of that gate is four plaintext counter bytes, so what stands after a
+/// refusal is a retriable command — new totals, both references in force — and never
+/// a chip-serial-rooted verifier superseded under a marker nothing clears.
+#[test]
+fn a_set_retries_whose_re_arm_the_medium_refuses_resets_neither_reference() {
+    const OTP: [u8; 32] = [0x66; 32];
+    fn otp_source() -> Option<[u8; 32]> {
+        Some(OTP)
+    }
+    let dev_pre = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let rng = RefCell::new(TestRng(5));
+    let pres = RefCell::new(AlwaysConfirm);
+    let (stuck, medium) = rsk_fs::storage::faults::RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+
+    // The happy path's fixture: the PIN migrates on its own verify, the PUK is
+    // untouched by that path, and a boot latches the marker over it.
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    migrate_kbase(
+        &Device {
+            otp_key: Some(&OTP),
+            ..dev_pre
+        },
+        &mut fs,
+        &mut TestRng(13),
+    );
+    let mut app2 = PivApplet::new(SERIAL, HASH, Some(otp_source as FusedKey), &rng, &pres);
+    select(&mut app2, &mut fs);
+    auth_mgm(&mut app2, &mut fs);
+    verify_pin(&mut app2, &mut fs);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    let mut before = [0u8; PIN_REC_LEN];
+    assert_eq!(fs.read(EF_PUK, &mut before), Some(PIN_REC_LEN));
+    assert_eq!(
+        &before[2..],
+        &dev_pre.pin_derive_verifier(&DEFAULT_PUK)[..],
+        "fixture: EF_PUK is still rooted in the public chip serial"
+    );
+
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    let (sw, _) = run(&mut app2, &mut fs, INS_SET_RETRIES, 5, 5, &[]);
+    let mut after = [0u8; PIN_REC_LEN];
+    assert_eq!(fs.read(EF_PUK, &mut after), Some(PIN_REC_LEN));
+    assert_eq!(
+        after, before,
+        "the re-arm never landed, so the chip-serial-rooted PUK must stay in force \
+         instead of being superseded under a marker nothing will clear"
+    );
+    assert_eq!(sw, Sw::MEMORY_FAILURE, "and the host must be told so");
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+    // What DID land ahead of the gate: the counter record, and nothing keyed. The
+    // command is retriable rather than half-applied over a remnant.
+    let mut r = [0u8; 4];
+    assert_eq!(fs.read(EF_RETRIES, &mut r), Some(4));
+    assert_eq!(r, [5, 5, 5, 5]);
+
+    // The control, same medium, fault cleared: the same call DOES reset both
+    // references, so the assertion above is about the gate and not about a path
+    // that never fires.
+    medium.refuse(None);
+    assert_eq!(
+        run(&mut app2, &mut fs, INS_SET_RETRIES, 5, 5, &[]).0,
+        Sw::OK
+    );
+    assert_eq!(fs.read(EF_PUK, &mut after), Some(PIN_REC_LEN));
+    assert_ne!(after, before, "the control re-keyed EF_PUK");
+    assert!(!medium.live(rsk_fs::EF_HARDENED));
+}
+
+/// The reset path's own re-arm, which no applet wipe in the tree had: measured at
+/// five wipe-sweep delete sites across four applets, none re-armed. A tombstone
+/// appends like a re-seal, and EF_PIN / EF_PUK migrate only on their own verify —
+/// so a RESET can leave a chip-serial-rooted verifier dumpable under a marker the
+/// lap gates on. Best-effort, and that is the whole difference from the gated
+/// sites: refusing here would leave the key material live rather than in force.
+#[test]
+fn a_reset_re_arms_the_at_rest_lap_before_the_first_tombstone() {
+    const OTP: [u8; 32] = [0x66; 32];
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: Some(&OTP),
+    };
+    let rng = RefCell::new(TestRng(5));
+    let pres = RefCell::new(AlwaysConfirm);
+
+    let (mut fs, medium) = new_cut_fs();
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+
+    medium.clear_ops();
+    assert_eq!(
+        crate::files::reset_files(&dev, &mut fs, &mut TestRng(9)),
+        Ok(())
+    );
+    medium.assert_re_armed_before(EF_PUK, |_| false, "PIV RESET");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the reset tombstoned a possibly chip-serial-rooted verifier, so the lap \
+         must run again"
+    );
+
+    // The best-effort half, and the direction that separates a wipe from every
+    // gated site: a medium refusing only `remove(EF_HARDENED)` must still WIPE.
+    let (stuck, medium) = rsk_fs::storage::faults::RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    let slot = crate::files::key_fid(SLOT_AUTHENTICATION);
+    seal::seal_put(&dev, &mut fs, &mut TestRng(3), slot, &[0x5A; 33]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    let swept = crate::files::reset_files(&dev, &mut fs, &mut TestRng(9));
+    assert!(
+        !medium.live(slot.get()),
+        "the refused re-arm stopped the wipe, which leaves the key material LIVE — \
+         the one direction a reset must never fail in"
+    );
+    assert_eq!(swept, Ok(()));
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+}
+
 
 #[test]
 fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_key_slot() {

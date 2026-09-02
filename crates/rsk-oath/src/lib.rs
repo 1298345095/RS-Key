@@ -1537,6 +1537,13 @@ const SWEEP_BATCH: usize = 32;
 /// cannot delete mid-iteration, de-duped because it yields one entry per stored
 /// *version*, and `force_delete` so a present-cache false-absent cannot loop.
 fn wipe_oath<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
+    // A tombstone appends like a re-seal, and `EF_OTP_PIN` migrates only on a
+    // successful verify — so this can supersede a chip-serial-rooted verifier and
+    // owes the at-rest lap (rsk-fs `EF_HARDENED`) a re-arm, ahead of the sweeps.
+    //
+    // The failure does NOT stop the write, unlike the gated sites: "leave the
+    // record in force" means, on a wipe, leave the secrets live.
+    let _ = rsk_fs::request_rescrub(fs);
     // Two phases, and the order carries the security property. `for_each_key`
     // yields in flash-ring (write) order, not FID order, so one combined sweep can
     // reach the access code before the credentials — and a power cut there leaves

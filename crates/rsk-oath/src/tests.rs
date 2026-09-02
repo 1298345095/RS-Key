@@ -2186,6 +2186,59 @@ fn a_refused_removal_stops_the_sweep_instead_of_spinning_into_the_valve() {
     );
 }
 
+/// The reset path's own re-arm, which no applet wipe in the tree had: measured at
+/// five wipe-sweep delete sites across four applets, none re-armed. A tombstone
+/// appends like a re-seal, and `EF_OTP_PIN` migrates only on a successful verify —
+/// so a RESET can leave a chip-serial-rooted verifier dumpable under a marker the
+/// lap gates on. Best-effort, and that is the whole difference from the gated
+/// sites: refusing here would leave the secrets live rather than in force.
+#[test]
+fn a_reset_re_arms_the_at_rest_lap_before_the_first_tombstone() {
+    let (mut fs, medium) = new_cut_fs();
+    let rng = RefCell::new(CountRng(7));
+    let touch = RefCell::new(AlwaysConfirm);
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    select(&mut app, &mut fs);
+    fs.put(EF_OTP_PIN, &[MAX_OTP_COUNTER; 33]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+
+    medium.clear_ops();
+    let (sw, _) = run(&mut app, &mut fs, &apdu(INS_RESET, 0xDE, 0xAD, &[]));
+    assert_eq!(sw, Sw::OK);
+    medium.assert_re_armed_before(EF_OTP_PIN, |_| false, "OATH RESET");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the reset tombstoned a possibly chip-serial-rooted verifier, so the lap \
+         must run again"
+    );
+
+    // The best-effort half, and the direction that separates a wipe from every
+    // gated site: a medium refusing only `remove(EF_HARDENED)` must still WIPE.
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    select(&mut app, &mut fs);
+    fs.put(EF_OTP_PIN, &[MAX_OTP_COUNTER; 33]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    let (sw, _) = run(&mut app, &mut fs, &apdu(INS_RESET, 0xDE, 0xAD, &[]));
+    assert!(
+        !medium.live(EF_OTP_PIN),
+        "the refused re-arm stopped the wipe, which leaves the secrets LIVE — the \
+         one direction a reset must never fail in"
+    );
+    assert_eq!(sw, Sw::OK);
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+}
+
 /// The wrap to a second batch, which nothing in this crate crossed: every fixture
 /// above puts FIVE records live against a [`SWEEP_BATCH`] of 32, so the bound that
 /// keeps `fids[n]` in range was untested — and what breaks it is an out-of-bounds

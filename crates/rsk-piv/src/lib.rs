@@ -602,6 +602,9 @@ impl PivApplet<'_> {
         if apdu.p1 == 0 || apdu.p2 == 0 {
             return Sw::WRONG_DATA;
         }
+        // This one write leads the re-arm below and stays there: four plaintext
+        // counter bytes supersede no chip-serial-rooted copy, so a refused re-arm
+        // leaves a retriable command — new totals, both references in force.
         if fs
             .put(EF_RETRIES, &[apdu.p1, apdu.p1, apdu.p2, apdu.p2])
             .is_err()

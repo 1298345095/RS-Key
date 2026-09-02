@@ -2740,6 +2740,50 @@ and to the statuses it quotes.
 
 ### Security
 
+- **No applet reset path in the tree re-armed the at-rest scrub — measured at
+  five wipe-sweep sites across four applets, zero of them — and OATH RESET and
+  PIV RESET do now.** A tombstone appends like a re-seal, which `rsk-fs`'s
+  `EF_HARDENED` doc has always said ("and from any that deletes one"). `EF_OTP_PIN`
+  and PIV's `EF_PIN` / `EF_PUK` have no eager boot migration — they migrate on
+  their own verify — so a factory reset can tombstone a verifier still rooted in
+  the public chip serial, brute-forceable offline from a flash dump, while
+  `EF_HARDENED` stays latched and no later boot ever laps. Derived from
+  `assurance/deleters.toml`'s 43 dispositions, not from memory: 5 `wipe-sweep`
+  sites (`rsk-fido/src/reset.rs` ×2, `rsk-oath`, `rsk-openpgp/src/terminate.rs`,
+  `rsk-piv/src/files.rs`), and no `request_rescrub` in any of their functions.
+  None of the four applet predicates covers `0xCE14`, so the marker survives every
+  one of them; `Fs::factory_wipe` is the exception and needs no re-arm, because it
+  ends with `self.storage.compact()` and scrubs directly.
+
+  `wipe_oath` and `wipe_piv` re-arm at the head of the sweep, ahead of every
+  tombstone and of `scan_files`' re-provisioning. **Best-effort, and that is the
+  whole difference from the gated sites**: "leave the record in force" means, on a
+  wipe, leave the secrets live, so a refused re-arm must not stop the reset — the
+  shape `neutralize_default_reset_code` already used. Both directions pinned by
+  one case per applet: the re-arm moved to the end of the sweep says "superseded
+  BEFORE the lap was re-armed" over `[Remove(0x10a0), Remove(0xce14)]` (OATH) and
+  over the full PIV wipe log; the re-arm made *gating* instead says the refusal
+  stopped the wipe and left the key material live. The remaining three sites —
+  FIDO `authenticatorReset` ×2 and OpenPGP TERMINATE DF — are the same shape and
+  are not closed here.
+
+  **A claim about `rsk_piv::set_retries` was checked rather than inherited, and it
+  holds.** Its `EF_RETRIES` write stands ahead of the re-arm gate; the reason it
+  stays there is that four plaintext counter bytes supersede no chip-serial-rooted
+  copy, so a refused re-arm leaves a *retriable command* — new totals, both
+  references in force — and not a remnant. Measured on a medium refusing only
+  `remove(EF_HARDENED)`: `6581`, `EF_RETRIES` `3,3,3,3` → `5,5,5,5`, `EF_PIN` and
+  `EF_PUK` byte-identical, `EF_PUK` still chip-serial-rooted. The reason is
+  recorded at the site, and the gate it never had is now a case that reddens when
+  the answer is swallowed. `crates/rsk-piv` 157 → 159 tests.
+
+  Not verified, and the same limit the class has carried since 0x09BD: no board
+  was touched, and `RamStorage` overwrites in place, so no host test can read a
+  recovered pre-OTP copy. The fixtures witness the ORDER of the appends and the
+  marker.
+
+  **bcdDevice → «bumped by the manager».**
+
 - **OATH `SET CODE` installed the access code and then refused, leaving the
   OTP-PIN it exists to revoke alive underneath it.** Making every superseding
   write conditional on the at-rest re-arm (`3d016ef`, 0x09BD) put the

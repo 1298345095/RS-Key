@@ -442,6 +442,13 @@ pub fn reset_files<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng) 
 /// the keys — and a power cut there lets `scan_files` re-seed the factory PIN over
 /// slot keys that are still live and, unlike OpenPGP's, not PIN-bound at rest.
 fn wipe_piv<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
+    // A tombstone appends like a re-seal, and EF_PIN / EF_PUK migrate only on their
+    // own verify — so this can supersede a chip-serial-rooted verifier and owes the
+    // at-rest lap (rsk-fs `EF_HARDENED`) a re-arm, ahead of the sweeps.
+    //
+    // The failure does NOT stop the write, unlike the gated sites: "leave the
+    // record in force" means, on a wipe, leave the secrets live.
+    let _ = rsk_fs::request_rescrub(fs);
     let secrets = sweep(fs, is_piv_secret_fid)?;
     let gates = sweep(fs, is_piv_gate_fid)?;
     if secrets || gates {
