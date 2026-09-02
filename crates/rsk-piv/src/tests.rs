@@ -6149,6 +6149,131 @@ fn a_reset_retries_the_re_arm_after_the_sweep() {
     );
 }
 
+/// Both faults of the residual in one medium, because neither alone reaches it: a
+/// SINGLE-SHOT refusal of `refuse_once`'s removal — the only kind a retry recovers
+/// — and a walk that truncates for good once `truncate_after` has been tombstoned.
+/// `RemoveStuck` and `TruncatedWalk` carry one each and cannot be composed.
+struct RefusedThenTruncated {
+    inner: RamStorage,
+    refuse_once: Option<u16>,
+    truncate_after: Option<u16>,
+    truncated: bool,
+}
+
+impl Storage for RefusedThenTruncated {
+    fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+        self.inner.read(fid, buf)
+    }
+    fn write(&mut self, fid: u16, data: &[u8]) -> rsk_sdk::error::Result<()> {
+        self.inner.write(fid, data)
+    }
+    fn remove(&mut self, fid: u16) -> rsk_sdk::error::Result<()> {
+        if self.refuse_once == Some(fid) {
+            self.refuse_once = None;
+            return Err(rsk_sdk::error::Error::MemoryFatal);
+        }
+        self.inner.remove(fid)?;
+        self.truncated |= self.truncate_after == Some(fid);
+        Ok(())
+    }
+    fn size(&mut self, fid: u16) -> Option<usize> {
+        self.inner.size(fid)
+    }
+    fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+        if self.truncated {
+            return false;
+        }
+        self.inner.for_each_key(f)
+    }
+}
+
+/// What one arm of [`a_reset_that_faults_mid_sweep_still_re_arms_the_lap`] left
+/// behind: the host's answer, and what the MEDIUM kept — never `Fs::has_data`,
+/// since a refused removal is exactly where the present cache and the medium part.
+/// `EF_PIN` is read off the walk's own trigger rather than the medium, because
+/// `reset_files` runs `scan_files` whatever the wipe answered and re-seeds a
+/// published default over it.
+struct Residue {
+    answered: Result<(), Sw>,
+    marker: bool,
+    slot: bool,
+    verifier_tombstoned: bool,
+}
+
+fn reset_under(refuse_once: Option<u16>, truncate_after: Option<u16>) -> Residue {
+    const OTP: [u8; 32] = [0x66; 32];
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: Some(&OTP),
+    };
+    let mut fs = Fs::new(RefusedThenTruncated {
+        inner: RamStorage::new(),
+        refuse_once,
+        truncate_after,
+        truncated: false,
+    });
+    fs.scan();
+    scan_files(&dev, &mut fs, &mut TestRng(3)).unwrap();
+    let slot = key_fid(SLOT_AUTHENTICATION);
+    seal::seal_put(&dev, &mut fs, &mut TestRng(3), slot, &[0x5A; 33]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    // Neither fault fires during setup — it writes and never removes these — so
+    // the arms differ only in what the RESET meets.
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED) && fs.has_data(EF_PIN),
+        "fixture"
+    );
+    let answered = crate::files::reset_files(&dev, &mut fs, &mut TestRng(9));
+    let mut medium = fs.into_storage();
+    Residue {
+        answered,
+        marker: medium.inner.exists(rsk_fs::EF_HARDENED),
+        slot: medium.inner.exists(slot.get()),
+        verifier_tombstoned: medium.truncated,
+    }
+}
+
+/// The refusal the retry exists for, met by the wipe fault the retry stands below:
+/// the sweeps carry `?`, so an early return skips the retry, and the conjunction is
+/// exactly the case it was written for. Both controls run in this case rather than
+/// their own, so the claim is about the CONJUNCTION and not about either fault.
+#[test]
+fn a_reset_that_faults_mid_sweep_still_re_arms_the_lap() {
+    let subject = reset_under(Some(rsk_fs::EF_HARDENED), Some(EF_PIN));
+    assert!(
+        !subject.marker,
+        "the head re-arm was refused and the sweep then faulted, so the only retry \
+         left is one the fault returns past — the marker stands over a possibly \
+         chip-serial-rooted verifier this reset tombstoned and no boot ever laps"
+    );
+    assert!(
+        subject.verifier_tombstoned && !subject.slot,
+        "fixture: the verifier really was tombstoned under that marker, over key \
+         material the wipe had already taken"
+    );
+    assert_eq!(
+        subject.answered,
+        Err(Sw::MEMORY_FAILURE),
+        "the faulted sweep is still reported, so the re-arm changed no answer"
+    );
+
+    // CONTROL A: the head refusal alone. The sweeps complete, so the retry is
+    // reached — the refusal is not by itself what leaves the marker.
+    let head_only = reset_under(Some(rsk_fs::EF_HARDENED), None);
+    assert!(!head_only.marker, "control: a refusal the retry recovers");
+    assert_eq!(head_only.answered, Ok(()));
+
+    // CONTROL B: the sweep fault alone. The head re-arm lands, so the fault has no
+    // latched marker to leave behind.
+    let sweep_only = reset_under(None, Some(EF_PIN));
+    assert!(
+        !sweep_only.marker,
+        "control: the head re-arm already landed"
+    );
+    assert_eq!(sweep_only.answered, Err(Sw::MEMORY_FAILURE));
+}
+
 #[test]
 fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_key_slot() {
     // Standing before `run_at_rest_lap` in `firmware/src/main.rs` is not the same as

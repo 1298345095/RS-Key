@@ -2740,6 +2740,72 @@ and to the statuses it quotes.
 
 ### Security
 
+- **PIV RESET and OATH RESET re-arm the at-rest scrub unskippably too — the
+  four-member class is closed.** The two applets closed at 0x09C0 got the pair
+  the other two did: `request_rescrub` at the head, ahead of every tombstone, and
+  again after the sweeps. The retry stood BELOW the sweeps' `?`, so the one
+  conjunction it exists for returned straight past it. **Driven, not read off the
+  source** — the sibling entry left this pair claimed-but-undriven, and this
+  programme finds such claims wrong about two thirds of the time. Both reproduced,
+  each against two controls on one medium:
+
+  | applet | head refusal | sweep fault | answer | secret | `EF_HARDENED` |
+  |---|---|---|---|---|---|
+  | PIV | single-shot | walk truncated after `EF_PIN`'s tombstone | `6581` | tombstoned | **LIVE** |
+  | PIV control A | single-shot | none | `9000` | tombstoned | cleared |
+  | PIV control B | none | truncated | `6581` | tombstoned | cleared |
+  | OATH | single-shot | walk truncated after `EF_OTP_PIN`'s tombstone | `6581` | gone | **LIVE** |
+  | OATH control A | single-shot | none | `9000` | gone | cleared |
+  | OATH control B | none | truncated | `6581` | gone | cleared |
+
+  `EF_PIN` / `EF_PUK` and `EF_OTP_PIN` are the records the fault is chosen at
+  because they are the ones with no eager boot migration — they re-key on their
+  own successful verify — so a reset before that verify leaves a verifier rooted
+  in `HKDF("NO-OTP", serial_hash)`, which the public chip serial alone derives,
+  under a marker no later boot laps.
+
+  So the flash half of each wipe is its own function now — `sweep_phases`, in
+  both — with the retry standing between it and the `?` that propagates its
+  answer, the shape `reset`'s `wipe` and `wipe_openpgp`'s `sweep` already took.
+  Control flow is otherwise byte-for-byte identical and **nothing host-visible
+  moved**: every arm above answers after exactly what it answered before, and only
+  the marker cell changes.
+
+  Neither wipe's phase order moved with the extraction: PIV still sweeps
+  `is_piv_secret_fid` then `is_piv_gate_fid`, OATH `is_oath_cred_fid` then
+  `is_oath_lock_fid`, and the paragraph stating why each order carries the
+  security property moved down onto the function that implements it rather than
+  being rewritten. PIV's re-provisioning stays outside the wipe, in `reset_files`,
+  where it already was.
+
+  One new case per applet, three mutants each, every failure read for its
+  DIRECTION and not its colour. The retry put back BELOW the `?`: "the head re-arm
+  was refused and the sweep then faulted, so the only retry left is one the fault
+  returns past" — and **only the new case falls**, 159/1 and 133/1 against
+  unmutated 160/0 and 134/0, which is what makes that case load-bearing. The head
+  re-arm dropped: `PIV RESET: 0xd181 was superseded BEFORE the lap was re-armed …`
+  over `[…, Remove(0xd181), Remove(0xe010), Remove(0xd19b), Remove(0xd180), …,
+  Remove(0xce14), …]`, and `OATH RESET: 0x10a0 was superseded BEFORE …` over
+  `[Remove(0x10a0), Remove(0xce14)]`. The retry dropped: "the head re-arm was
+  refused and nothing retried it". A deletion mutant is the wrong model for the
+  first of those three — the property is an order and a placement, so it is the
+  `?` that moves, not the call.
+
+  PIV's case reads the tombstone off the truncating walk's own trigger rather
+  than off the medium, because `reset_files` runs `scan_files` whatever the wipe
+  answered and re-seeds a published default over `EF_PIN`; OATH re-provisions
+  nothing after its wipe, so its case reads `EF_OTP_PIN` straight off the medium.
+  Neither asserts an absolute position in the op log — `RamStorage` is a
+  `HashMap`, so only the relative order of the two ops is stable.
+
+  **What this does not close.** A medium that refuses `remove(EF_HARDENED)`
+  PERSISTENTLY still leaves the marker standing over the verifier the wipe
+  tombstoned, and the wipe still answers `9000`: control A of the pre-existing
+  retry case asserts exactly that, because gating the re-arm would leave the
+  secrets live, which is the one direction a reset must never fail in.
+
+  **bcdDevice → 0x09C4.**
+
 - **`Fs::factory_wipe` was the sixth `wipe-sweep` site all along, and its
   `compact()` was not the exemption two commits took it for.** `88bbcdc` and
   `14224cc` closed five reset paths against the at-rest scrub class — a tombstone
@@ -2784,21 +2850,21 @@ and to the statuses it quotes.
 
   **bcdDevice → 0x09C3.**
 
-- **The last three applet wipes re-arm the at-rest scrub too, so no reset path in
-  the tree still tombstones a chip-serial-rooted verifier under a latched
-  marker.** `wipe_oath` and `wipe_piv` were closed at 0x09C0; the three
-  `wipe-sweep` rows of `assurance/deleters.toml` left un-re-armed there were FIDO
-  `authenticatorReset` (two rows, one function) and OpenPGP TERMINATE DF. A
-  tombstone appends like a re-seal — `rsk-fs`'s `EF_HARDENED` doc has always said
-  "and from any that deletes one" — and neither `is_fido_fid` nor
-  `is_openpgp_fid` covers `0xCE14`, so the marker outlived every one of these
-  wipes. FIDO's `EF_PIN` and OpenPGP's PW1 / PW3 / RC have no eager boot
-  migration: they re-key on their own successful verify
-  (`clientpin.rs`'s `verify_pin`, `pin.rs`'s `migrate_pin_kbase`), so a card
-  reset before that verify left the pre-OTP verifier — rooted in
-  `HKDF("NO-OTP", serial_hash)`, which the public chip serial alone derives —
-  readable in a flash dump and brute-forceable offline, with no later boot ever
-  lapping over it.
+- **The last three applet wipes re-arm the at-rest scrub too, and the re-arm now
+  survives a wipe that faults on the way.** `wipe_oath` and `wipe_piv` were
+  closed at 0x09C0; the three `wipe-sweep` rows of `assurance/deleters.toml` left
+  un-re-armed there were FIDO `authenticatorReset` (two rows, one function) and
+  OpenPGP TERMINATE DF. A tombstone appends like a re-seal — `rsk-fs`'s
+  `EF_HARDENED` doc has always said "and from any that deletes one" — and neither
+  `is_fido_fid` nor `is_openpgp_fid` covers `0xCE14`, so the marker outlived every
+  one of these wipes. FIDO's `EF_PIN` and OpenPGP's PW1 / PW3 / RC have no eager
+  boot migration: they re-key on their own successful verify
+  (`clientpin.rs`'s `spend_and_verify_pin_hash` and `spend_and_verify_pin_at`,
+  `pin.rs`'s `migrate_pin_kbase` — there is no `verify_pin` in `clientpin.rs`, as
+  the first draft of this entry said), so a card reset before that verify left the
+  pre-OTP verifier — rooted in `HKDF("NO-OTP", serial_hash)`, which the public
+  chip serial alone derives — readable in a flash dump and brute-forceable
+  offline, with no later boot ever lapping over it.
 
   Each site takes the pair the two closed ones carry: `request_rescrub` at the
   head, ahead of every tombstone, and again after the sweeps. **Best-effort, not
@@ -2807,12 +2873,31 @@ and to the statuses it quotes.
   must not stop the reset — the shape `neutralize_default_reset_code` set. The
   second call recovers a single-shot refusal of the first and costs no append
   where the first landed, because `Fs::delete` skips a backend it already marked
-  absent. FIDO's retry stands ahead of `ensure_seed` rather than after it, for
-  two measured reasons: the sweeps' `?` can skip everything below them, and
-  nothing after the sweeps supersedes a weak-sealed copy — `ensure_seed` writes
-  to fids the sweep has just tombstoned, and `journal::fold_and_scrub`'s
-  `EF_AUDIT_META` and ring slots are written with plain `fs.put` / `fs.delete`
-  and are not sealed at all.
+  absent.
+
+  **And it is unskippable, which a retry written after the sweeps was not.** The
+  sweeps carry `?`, so the one conjunction the retry exists for — the head refused
+  ONCE *and* a wipe that then faults — returned straight past it. Measured on both
+  applets with a control beside the subject: head refused once and the walk
+  truncated after the verifier's tombstone, FIDO answered `Err(Other)` with
+  `EF_PIN` gone and `EF_HARDENED` **live**, OpenPGP `6581` with the private keys
+  gone and the marker **live**; either fault on its own cleared it. So the flash
+  half of each wipe is its own function now — `reset`'s `wipe`, `wipe_openpgp`'s
+  `sweep` — with the retry standing between it and the `?` that propagates its
+  answer. Nothing host-visible moved: every arm answers exactly what it answered
+  before. Surfacing the refusal in the answer instead was measured and NOT taken —
+  it is behaviourally safe (its four failures are all status-word, every wipe
+  oracle stays green), but it changes what `authenticatorReset` and TERMINATE DF
+  tell a host on a fault they report as success today, which is a protocol
+  decision rather than a repair.
+
+  FIDO's retry stands ahead of `ensure_seed` because `ensure_seed`'s OWN `?` would
+  skip it. The two reasons the first draft of this entry gave are both withdrawn:
+  the sweeps' `?` skips either position identically, so it cannot pick between
+  them; and `ensure_seed` *does* supersede — its attestation-leaf rewrite is a
+  measured `Write(0xce00, 490B)`, which `seed.rs` has recorded since `ec83f7a`,
+  and the reason it owes the lap no re-arm is that `EF_EE_DEV` is a public X.509
+  leaf rather than a chip-serial-sealed secret.
 
   `reset.rs`'s two registry rows are one function: `sweep` is called from `reset`
   and nowhere else in the crate but its own tests, so one re-arm at the head of
@@ -2821,15 +2906,31 @@ and to the statuses it quotes.
   re-provisioning stays outside it — the arrangement `reset_files`/`wipe_piv`
   already had.
 
-  Two cases per applet, and both mutants read in the right direction. The re-arm
-  moved to the END of the wipe: `FIDO RESET: 0x1080 was superseded BEFORE the lap
-  was re-armed …` over `[… Remove(0xcf00), Remove(0x1080), Remove(0xce14), …]`,
-  and `OpenPGP TERMINATE DF: 0x1081 was superseded BEFORE the lap was re-armed …`
-  over a log with `Remove(0x1081)` three places ahead of `Remove(0xce14)`. The
-  re-arm made *gating* instead: "the refused re-arm stopped the wipe, which leaves
-  the passkeys LIVE — the one direction a reset must never fail in", and the
-  OpenPGP twin naming the private keys. That oracle stands FIRST in each case,
-  ahead of any status word, so a mutant falls on the wipe and not on a binding.
+  Three cases per applet, four mutants each, each read in the direction it fell —
+  and three of the four are positional where the fourth is a semantics change, not
+  four reorders. The head re-arm dropped, leaving only the end-of-wipe one:
+  `FIDO RESET: 0x1080 was superseded BEFORE the lap was re-armed …`, and the
+  OpenPGP twin at `0x1081`. The head re-arm made *gating* — the semantics one:
+  "the refused re-arm stopped the wipe, which leaves the passkeys LIVE — the one
+  direction a reset must never fail in", and the OpenPGP twin naming the private
+  keys. The retry dropped: "the head re-arm was refused and nothing retried it".
+  The retry put back BELOW the wipe's `?`: "the head re-arm was refused and the
+  sweep then faulted, so the only retry left is one the fault returns past" — and
+  only the new case falls on that one, which is what makes it the case that buys
+  the placement. The order oracle prints an op LOG, and only the RELATIVE order in
+  it is stable: `RamStorage` is a `HashMap`, so across five runs of the same mutant
+  `Remove(0x1081)` stood 1, 6, 7, 8 and 10 places ahead of `Remove(0xce14)`. The
+  gating oracle does stand FIRST in its arm, ahead of any status word, so a mutant
+  falls on the wipe and not on a binding; the ORDER oracle does not —
+  `assert_eq!(…, Ok(0))` precedes it.
+
+  **What this does not close.** A medium that refuses `remove(EF_HARDENED)`
+  PERSISTENTLY still leaves the marker standing over the verifier the wipe
+  tombstoned, and the wipe still answers `Ok(0)` / `9000`: the cases assert exactly
+  that, because gating the re-arm is the wrong direction on a wipe. `wipe_piv` and
+  `wipe_oath` carry the same skippable-retry shape this entry fixes for FIDO and
+  OpenPGP, read from their source and not yet driven. And `Fs::factory_wipe` is a
+  wipe path of its own with no `request_rescrub` in it.
 
   **bcdDevice → 0x09C2.**
 

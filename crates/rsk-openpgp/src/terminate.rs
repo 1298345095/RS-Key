@@ -142,11 +142,7 @@ const WIPE_MAX_DELETES: u32 = 512;
 /// its fixture off this rather than off a copy of the number.
 const SWEEP_BATCH: usize = 64;
 
-/// Delete every live OpenPGP file. Batched because `for_each_key` cannot delete
-/// mid-iteration; each round deletes ≥1 key, so it converges (mirrors the FIDO and
-/// PIV resets — including their two hardening rules, which this sweep predates:
-/// `force_delete` rather than `delete`, and an incomplete enumeration must fail
-/// rather than read as "the range is clear").
+/// Delete every live OpenPGP file, with the at-rest lap re-armed around the sweep.
 fn wipe_openpgp<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // A tombstone appends like a re-seal, and PW1 / PW3 / RC migrate only on their
     // own verify — so this can supersede a chip-serial-rooted verifier and owes the
@@ -155,6 +151,28 @@ fn wipe_openpgp<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // The failure does NOT stop the write, unlike the gated sites: "leave the
     // record in force" means, on a wipe, leave the secrets live.
     let _ = rsk_fs::request_rescrub(fs);
+    let swept = sweep(fs);
+    // Retry, BETWEEN the sweep and its `?` rather than after its last one: a refused
+    // head leaves the marker latched over every tombstone [`sweep`] appended, and a
+    // sweep that faults on the way is exactly when that is true and unrecoverable.
+    //
+    // A single-shot refusal is the only kind either call recovers from (`rsk_otp`'s
+    // BUMP_TRIES states the same), and where the head landed this costs no append at
+    // all — `Fs::delete` skips a backend it already marked absent.
+    let _ = rsk_fs::request_rescrub(fs);
+    swept
+}
+
+/// The delete half of [`wipe_openpgp`]. Batched because `for_each_key` cannot delete
+/// mid-iteration; each round deletes ≥1 key, so it converges (mirrors the FIDO and
+/// PIV resets — including their two hardening rules, which this sweep predates:
+/// `force_delete` rather than `delete`, and an incomplete enumeration must fail
+/// rather than read as "the range is clear").
+///
+/// Its own function so the at-rest re-arm can stand between it and its caller's
+/// answer: every early return in here is one a re-arm written BELOW them would be
+/// skipped by, which is the case that re-arm exists for.
+fn sweep<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // Two phases, the rule the three sibling sweeps carry: `for_each_key` yields in
     // flash-ring order, not FID order, so one combined sweep can reach a deferred
     // record before the secrets it sits beside. The PW verifiers do not need it —
@@ -203,12 +221,6 @@ fn wipe_openpgp<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
             }
         }
     }
-    // Best-effort leaves the marker latched over every tombstone above when the
-    // head re-arm was refused, so retry it once the sweep is done: a single-shot
-    // refusal is the only kind either call recovers from (`rsk_otp`'s BUMP_TRIES
-    // states the same), and where the head landed this costs no append at all —
-    // `Fs::delete` skips a backend it already marked absent.
-    let _ = rsk_fs::request_rescrub(fs);
     if orphaned {
         return Err(Sw::MEMORY_FAILURE);
     }

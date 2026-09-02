@@ -434,13 +434,8 @@ pub fn reset_files<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng) 
     wiped.and(ensured)
 }
 
-/// Delete every live PIV file and meta record.
-///
-/// Two phases, and the order carries the security property (the rule `wipe_oath`
-/// states, which this function is the sibling of): `for_each_key` yields in
-/// flash-ring order, not FID order, so one combined sweep can reach the PIN before
-/// the keys — and a power cut there lets `scan_files` re-seed the factory PIN over
-/// slot keys that are still live and, unlike OpenPGP's, not PIN-bound at rest.
+/// Delete every live PIV file and meta record, with the at-rest lap re-armed
+/// around the sweeps.
 fn wipe_piv<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // A tombstone appends like a re-seal, and EF_PIN / EF_PUK migrate only on their
     // own verify — so this can supersede a chip-serial-rooted verifier and owes the
@@ -449,14 +444,33 @@ fn wipe_piv<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // The failure does NOT stop the write, unlike the gated sites: "leave the
     // record in force" means, on a wipe, leave the secrets live.
     let _ = rsk_fs::request_rescrub(fs);
+    let swept = sweep_phases(fs);
+    // Retry, BETWEEN the sweeps and their `?` rather than after their last one: a
+    // refused head leaves the marker latched over every tombstone [`sweep_phases`]
+    // appended, and a sweep that faults on the way is exactly when that is true and
+    // unrecoverable.
+    //
+    // A single-shot refusal is the only kind either call recovers from (`rsk_otp`'s
+    // BUMP_TRIES states the same), and where the head landed this costs no append at
+    // all — `Fs::delete` skips a backend it already marked absent.
+    let _ = rsk_fs::request_rescrub(fs);
+    swept
+}
+
+/// The delete half of [`wipe_piv`].
+///
+/// Two phases, and the order carries the security property (the rule `wipe_oath`
+/// states, which this function is the sibling of): `for_each_key` yields in
+/// flash-ring order, not FID order, so one combined sweep can reach the PIN before
+/// the keys — and a power cut there lets `scan_files` re-seed the factory PIN over
+/// slot keys that are still live and, unlike OpenPGP's, not PIN-bound at rest.
+///
+/// Its own function so the at-rest re-arm can stand between it and its caller's
+/// answer: every early return in here is one a re-arm written BELOW them would be
+/// skipped by, which is the case that re-arm exists for.
+fn sweep_phases<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     let secrets = sweep(fs, is_piv_secret_fid)?;
     let gates = sweep(fs, is_piv_gate_fid)?;
-    // Best-effort leaves the marker latched over every tombstone above when the
-    // head re-arm was refused, so retry it once the sweep is done: a single-shot
-    // refusal is the only kind either call recovers from (`rsk_otp`'s BUMP_TRIES
-    // states the same), and where the head landed this costs no append at all —
-    // `Fs::delete` skips a backend it already marked absent.
-    let _ = rsk_fs::request_rescrub(fs);
     if secrets || gates {
         return Err(Sw::MEMORY_FAILURE);
     }

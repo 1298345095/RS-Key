@@ -1533,9 +1533,7 @@ const RESET_MAX_DELETES: u32 = 257;
 const SWEEP_BATCH: usize = 32;
 
 /// Delete every live OATH record, and say so only when the sweep provably
-/// completed. Mirrors `rsk_piv::files::wipe_piv`: batched because `for_each_key`
-/// cannot delete mid-iteration, de-duped because it yields one entry per stored
-/// *version*, and `force_delete` so a present-cache false-absent cannot loop.
+/// completed, with the at-rest lap re-armed around the sweeps.
 fn wipe_oath<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // A tombstone appends like a re-seal, and `EF_OTP_PIN` migrates only on a
     // successful verify — so this can supersede a chip-serial-rooted verifier and
@@ -1544,6 +1542,28 @@ fn wipe_oath<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // The failure does NOT stop the write, unlike the gated sites: "leave the
     // record in force" means, on a wipe, leave the secrets live.
     let _ = rsk_fs::request_rescrub(fs);
+    let swept = sweep_phases(fs);
+    // Retry, BETWEEN the sweeps and their `?` rather than after their last one: a
+    // refused head leaves the marker latched over every tombstone [`sweep_phases`]
+    // appended, and a sweep that faults on the way is exactly when that is true and
+    // unrecoverable.
+    //
+    // A single-shot refusal is the only kind either call recovers from (`rsk_otp`'s
+    // BUMP_TRIES states the same), and where the head landed this costs no append at
+    // all — `Fs::delete` skips a backend it already marked absent.
+    let _ = rsk_fs::request_rescrub(fs);
+    swept
+}
+
+/// The delete half of [`wipe_oath`]. Mirrors `rsk_piv::files::sweep_phases`:
+/// batched because `for_each_key` cannot delete mid-iteration, de-duped because it
+/// yields one entry per stored *version*, and `force_delete` so a present-cache
+/// false-absent cannot loop.
+///
+/// Its own function so the at-rest re-arm can stand between it and its caller's
+/// answer: every early return in here is one a re-arm written BELOW them would be
+/// skipped by, which is the case that re-arm exists for.
+fn sweep_phases<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // Two phases, and the order carries the security property. `for_each_key`
     // yields in flash-ring (write) order, not FID order, so one combined sweep can
     // reach the access code before the credentials — and a power cut there leaves
@@ -1552,12 +1572,6 @@ fn wipe_oath<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // unlock records.
     let creds = sweep(fs, is_oath_cred_fid)?;
     let locks = sweep(fs, is_oath_lock_fid)?;
-    // Best-effort leaves the marker latched over every tombstone above when the
-    // head re-arm was refused, so retry it once the sweep is done: a single-shot
-    // refusal is the only kind either call recovers from (`rsk_otp`'s BUMP_TRIES
-    // states the same), and where the head landed this costs no append at all —
-    // `Fs::delete` skips a backend it already marked absent.
-    let _ = rsk_fs::request_rescrub(fs);
     if creds || locks {
         return Err(Sw::MEMORY_FAILURE);
     }

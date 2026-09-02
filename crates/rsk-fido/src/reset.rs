@@ -56,6 +56,37 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
     // The failure does NOT stop the write, unlike the gated sites: "leave the
     // record in force" means, on a wipe, leave the secrets live.
     let _ = rsk_fs::request_rescrub(ctx.fs);
+    let wiped = wipe(ctx);
+    // Retry, BETWEEN the wipe and its `?` rather than after its last one: a refused
+    // head leaves the marker latched over every tombstone [`wipe`] appended, and a
+    // wipe that faults on the way is exactly when that is true and unrecoverable.
+    //
+    // A single-shot refusal is the only kind either call recovers from (`rsk_otp`'s
+    // BUMP_TRIES states the same), and where the head landed this costs no append at
+    // all — `Fs::delete` skips a backend it already marked absent.
+    let _ = rsk_fs::request_rescrub(ctx.fs);
+    // Ahead of `ensure_seed` because `ensure_seed`'s OWN `?` would skip it — not
+    // because the sweeps' does, which skips either position identically, and not
+    // because it supersedes nothing: its cert rewrite does, and `seed.rs` says why.
+    let unproven = wiped?;
+    ensure_seed(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?;
+    // Privacy: fold the journal window into the epoch (per-event details are
+    // scrubbed, aggregate history stays attested), then record the reset.
+    journal::fold_and_scrub(ctx);
+    journal::append(ctx, journal::EV_RESET, 0, &[]);
+    // The erase ran to the end of every range and a removal still could not be
+    // proven: the wipe is done, and the answer must not say it is clean.
+    if unproven {
+        return Err(CtapError::Other);
+    }
+    Ok(0)
+}
+
+/// The flash half of [`reset`], `Ok(true)` being "the range is clear and a removal
+/// could not be PROVEN". Its own function so the at-rest re-arm can stand between
+/// it and the `?` that propagates it: every early return in here is one a re-arm
+/// written BELOW them would be skipped by, which is the case the re-arm exists for.
+fn wipe<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> Result<bool, CtapError> {
     // Drop every FIDO file, then regenerate the seed. The flash `Fs` is shared
     // with the OpenPGP applet, so delete only live, FIDO-owned keys
     // ([`is_fido_fid`]) — a blind 0..256 EF_CRED/EF_RP sweep would write a
@@ -88,25 +119,7 @@ pub fn reset<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>) -> CtapResult {
     // before the gate phase could drop `EF_BACKUP_SEALED` over a seed still live.
     orphaned |= sweep(ctx, |fid| is_fido_fid(fid) && !is_fido_gate_fid(fid))?;
     orphaned |= sweep(ctx, is_fido_gate_fid)?;
-    // Best-effort leaves the marker latched over every tombstone above when the
-    // head re-arm was refused, so retry it once the sweep is done: a single-shot
-    // refusal is the only kind either call recovers from (`rsk_otp`'s BUMP_TRIES
-    // states the same), and where the head landed this costs no append at all —
-    // `Fs::delete` skips a backend it already marked absent. Ahead of `ensure_seed`,
-    // which the `?` above can skip and which supersedes nothing: it writes to fids
-    // this sweep has just tombstoned.
-    let _ = rsk_fs::request_rescrub(ctx.fs);
-    ensure_seed(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?;
-    // Privacy: fold the journal window into the epoch (per-event details are
-    // scrubbed, aggregate history stays attested), then record the reset.
-    journal::fold_and_scrub(ctx);
-    journal::append(ctx, journal::EV_RESET, 0, &[]);
-    // The erase ran to the end of every range and a removal still could not be
-    // proven: the wipe is done, and the answer must not say it is clean.
-    if orphaned || refused {
-        return Err(CtapError::Other);
-    }
-    Ok(0)
+    Ok(orphaned || refused)
 }
 
 /// One phase of the reset sweep: delete every live FIDO-owned fid matching `pred`,
