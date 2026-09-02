@@ -632,6 +632,12 @@ run "flake.lock in sync"       lock_in_sync
 # one. This holds every tool's recorded pin against the file that pins it and
 # prints the TCB into docs/supply-chain.md.
 run "toolchain TCB registry"   python scripts/toolchain_gate.py
+# The same question one register out. docs/verified-compilation.md DECIDES about
+# that TCB — whether a kernel of this firmware should move to a language with a
+# verified compiler — and every reason it gives is a number about this tree. A
+# decision record whose numbers nothing re-derives is a decision that was true
+# the day it was typed, which is what the registry above exists to prevent.
+run "11C decision measurements" python scripts/level11c_gate.py
 run "one embassy for all"      embassy_revs_match
 # No `--ignore`: the tree carries no vulnerability advisory. RUSTSEC-2023-0071
 # (the `rsa` crate, no fixed release) was the last one and left with the crate.
