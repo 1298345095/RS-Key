@@ -700,6 +700,15 @@ run "IBM Plex font data"       python scripts/generate_ui_fonts.py --check
 # pointing at a line that has moved reads as authoritative while being wrong.
 run "bcd bump + CHANGELOG"     python scripts/bcd_gate.py
 run "SPDX headers"             python scripts/spdx_gate.py
+# The same shape one sentence in: a docstring that spells how many bullets are
+# under it, over a list that has since grown or shrunk. Three shipped that way --
+# platform_gate said Seven over six, threat_gate Three over four, elf_gate Two
+# over three -- each found by hand, each on a different day, and nothing held
+# them. The count is the cheapest number in this tree to derive; the expensive
+# part is not calling a correct docstring wrong, so the rule reads what the
+# bullets SAY (comutate's Three families really do live on two bullets) and stays
+# silent where no cardinal survives its clauses.
+run "docstring list counts"    python scripts/docstring_count_gate.py
 # 219 of the 220 configurations say "do not edit by hand" in their first line,
 # and nothing made that true: deleting a whole mutant family left every row
 # green, because run-tlc.sh lists families with `ls` so the tiers shrank with

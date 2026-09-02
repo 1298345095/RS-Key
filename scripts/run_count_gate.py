@@ -16,7 +16,7 @@ introduces as the paragraph to quote, where the model's state space stood at
 `48,679,968` — 63% of the measured count. None is a typo. They are one defect: a
 number whose only copy of the truth is the moment somebody typed it.
 
-Two halves, because either alone leaves the class open.
+Three rules in two halves, because either half alone leaves the class open.
 
 * **Emitted.** The published sentences live in named regions this script writes
   from [`RECORD`] and the tree, and the gate diffs them — the shape
