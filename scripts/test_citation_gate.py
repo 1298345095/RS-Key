@@ -139,6 +139,18 @@ scripts/check.sh:\\"comutants lint\\" runs on every gate, and the same row writt
 as a line is scripts/check.sh:5"
 """
 
+#: An assurance REGISTRY, and the fourth derived half. It makes a bundle's kind
+#: of claim one directory up, which is the whole of the roster rule: the bundles
+#: are read by a half of their own, so a page read twice would report every rot
+#: in them twice and orphan nothing when one half stopped finding it.
+REGISTRY = """\
+[[record]]
+id = "PLAT-T-001"
+statement = "the platform half the model leans on"
+discharge = "the gate this row stands on (`clientpin.rs:4-6`), and the retry \
+budget it is priced against at clientpin.rs:2"
+"""
+
 #: The derived page every code-half case drives.
 PROOF_PAGE = "crates/rsk-fido/src/probe_kani.rs"
 
@@ -150,6 +162,11 @@ EXEMPT_PAGE = "scripts/citation_gate.py"
 BUNDLE_PAGE = "assurance/bundle/SEC-T-001.toml"
 FLOORS_PAGE = "formal/floors.txt"
 CHECK_PAGE = "scripts/check.sh"
+
+#: The derived page every registry-half case drives, and the registry that cites
+#: NOTHING — the control that separates this half's rule from the bundles'.
+REGISTRY_PAGE = "assurance/platform.toml"
+SILENT_REGISTRY = "assurance/properties.toml"
 
 MODEL_PAGE = _page("RSKeySecurityState.tla")
 PROSE_PAGE = _page("README.md")
@@ -169,6 +186,7 @@ class Tree:
         self.write(FLOORS_PAGE, FLOORS)
         self.write(CHECK_PAGE, CHECK)
         self.write(BUNDLE_PAGE, BUNDLE)
+        self.write(REGISTRY_PAGE, REGISTRY)
         self.write("crates/rsk-device/src/ctap.rs", UNTAGGED_CODE)
         self.write("crates/rsk-usb/src/ctaphid.rs", UNTAGGED_CODE)
         self.write("crates/rsk-fs/src/lib.rs", UNTAGGED_CODE)
@@ -750,6 +768,102 @@ def test_the_bundle_half_is_what_reads_a_bundles_citations(tree, monkeypatch):
     monkeypatch.setattr(citation_gate, "bundle_pages", lambda root: ())
     monkeypatch.setattr(citation_gate, "BUNDLE_PAGES_FLOOR", 0)
     assert tree.problems() == []
+
+
+# --- the assurance registries: the fourth derived half ------------------------
+
+
+def registry_pages_of(tree):
+    return [str(page) for page in citation_gate.assurance_pages(tree.root)]
+
+
+def test_the_registry_roster_is_the_directory_less_the_bundles(tree):
+    """A registry is a page because it CITES and the directory holds it, and the
+    bundles are excluded because a half of their own already reads them."""
+    tree.write("assurance/board/PLAT-T-002.toml", REGISTRY)
+    found = registry_pages_of(tree)
+    assert REGISTRY_PAGE in found, found
+    assert "assurance/board/PLAT-T-002.toml" in found, found
+    assert BUNDLE_PAGE not in found, found
+
+
+def test_a_registry_that_cites_nothing_is_not_a_page(tree):
+    """The rule the bundles one directory over do NOT have, and the reason the two
+    halves are separate. `bundle_gate.py` holds every bundle to a per-row evidence
+    contract, so a bundle citing nothing is a finding; a registry of property tags
+    names no line of Rust at all, and a floor over it would demand one."""
+    assert (tree.root / SILENT_REGISTRY).is_file()
+    assert SILENT_REGISTRY not in registry_pages_of(tree)
+
+
+def test_a_rotted_registry_citation_past_the_end_of_the_file(tree):
+    """The DEFECT arm, in the shape the widening actually found: three of the four
+    live findings were a span running off the end of the file it named."""
+    tree.edit(REGISTRY_PAGE, "clientpin.rs:4-6", "clientpin.rs:4-600")
+    assert only(tree.problems(), "which has 8 lines")
+
+
+def test_a_registry_citation_landing_on_a_blank_line(tree):
+    """The fourth live finding: `scripts/kani_gate.py:524-553` for a reader that
+    had moved, whose span now opens on a blank line. It is the drift signal that
+    costs nothing, and it is what a bounds check alone cannot see."""
+    tree.edit("crates/rsk-fido/src/clientpin.rs", "pub const RETRIES", "\npub const RETRIES")
+    assert only(tree.problems(), "whose cited line is blank")
+
+
+def test_a_bare_continuation_in_a_registry_binds_within_its_paragraph(tree):
+    """The rot this half found three times over, and the reason it is worth
+    gating: a bare `:824` written for a `.tla` module resolves against the last
+    `.rs` file its paragraph named, because the reader cannot see a `.tla` at all.
+    Nothing distinguishes a mis-bound continuation from a correct one except the
+    line it lands on, so the bound is the whole check."""
+    tree.edit(REGISTRY_PAGE, "at clientpin.rs:2", "at clientpin.rs:2 and `:900`")
+    assert only(tree.problems(), "which has 8 lines")
+
+
+def test_deleting_the_registry_half_is_caught_by_its_own_floor(tree, monkeypatch):
+    """The derivation pointed somewhere the tree has nothing: a loop over an empty
+    set exits 0, which is the shape four guards in this tree shipped with."""
+    monkeypatch.setattr(citation_gate, "ASSURANCE_ROOT", "assurance-no-registries/")
+    assert only(tree.problems(), "under the floor of 1")
+
+
+def test_the_registry_half_is_what_reads_a_registrys_citations(tree, monkeypatch):
+    """The REMOVAL arm: take the pages out AND the floor that notices, the way a
+    deletion actually happens, and the bad citation above is green again. That is
+    what says the widening is load-bearing rather than decorative."""
+    tree.edit(REGISTRY_PAGE, "clientpin.rs:4-6", "clientpin.rs:4-600")
+    assert only(tree.problems(), "which has 8 lines")
+    monkeypatch.setattr(citation_gate, "assurance_pages", lambda root: ())
+    monkeypatch.setattr(citation_gate, "ASSURANCE_PAGES_FLOOR", 0)
+    assert tree.problems() == []
+
+
+def test_the_registry_half_reaches_the_rows_exit_code(tree, monkeypatch):
+    """A guard is falsified through the row that runs it. `main()` is what
+    `python scripts/citation_gate.py` calls, and a half whose findings never reach
+    an exit code is one the gate cannot go red on."""
+    assert tree.run(monkeypatch) == 0
+    tree.edit(REGISTRY_PAGE, "clientpin.rs:4-6", "clientpin.rs:4-600")
+    assert tree.run(monkeypatch) == 1
+
+
+def test_a_drifted_registry_citation_is_named_at_its_new_line(tree):
+    """The failure the bounds rules cannot see, on the new half: a cited line that
+    MOVED is still in the file, in range and not blank, so every other rule passes
+    it. Only [`LOCK`] finds it, and 75 citations rotted exactly this way across
+    three commits while the row printed `ok`."""
+    tree.lock()
+    tree.edit("crates/rsk-fido/src/clientpin.rs", "pub fn judge", "// one line above\npub fn judge")
+    drifted = only(tree.problems(), "the citation has drifted")
+    assert [p for p in drifted if p.startswith(REGISTRY_PAGE)], drifted
+
+
+def test_the_summary_counts_the_registries_apart_from_the_bundles(tree):
+    """Two halves reported as one number cannot say which stopped finding — the
+    argument each derived floor is kept separate for, one line up."""
+    summary = citation_gate.audit(tree.root)[1]
+    assert "1 evidence bundles and 1 assurance registries resolve" in summary, summary
 
 
 # --- the control: the exact motion that rotted the six ------------------------

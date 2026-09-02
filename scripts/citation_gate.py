@@ -97,21 +97,37 @@ page is ever padded with citations it does not mean just to clear one number.
 [`PENDING`] is the debt this row landed with, not a permanent carve-out: three
 citations another agent's in-flight commits rotted while this guard was being
 written. Each names the commit that broke it and fails once it stops rotting.
+It is NOT the tool for a widening's own findings, and the registry half was where
+that was decided: an entry there silences a live rot on the next run and is
+buried outright by the [`LOCK`] rewrite the widening needs anyway, so the debt
+would end up neither reported nor fixed. A widening that reddens the row leaves
+it red until the pages are repaired.
 
 It resolves `.rs`, `.sh`, `.txt` and `.py` citations, and only on `.rs` pages,
-`.py` pages under `scripts/`, the evidence bundles and the named `formal/` ones. The
-`scripts/` half was the last substantive citing surface no gate read, and the
-round that swept the reset class found **2 of 2** of `security_trace.py`'s reset
-citations pointing at the wrong line — the same rot rate every surface has had
-the day it was first read (`RSKeyAppletPolicies.tla` 1 of 4, `comutants.toml` 15
-of 16, the code half 19 of 42, the bundles 31 of 517 — and eight more that
-RESOLVE and are wrong, which is what [`KEYED`] below is about). Nine other files cite and
-are not read; the largest are this
-guard and its own table, which quote the rotted examples they are about, and
-`CHANGELOG.md`, whose entries cite the tree as it stood and must be allowed to
-rot. Three prose files (`assurance/*.toml` outside `bundle/`,
-`docs/guides/fips.md`, `docs/token-refinement.md`) carry live model→code claims
-that only a person reads.
+`.py` pages under `scripts/`, the evidence bundles, the assurance registries and
+the named `formal/` ones. The registries were the last substantive citing surface
+no gate read, and opening them went the way opening every surface has gone: 122
+citations over 9 pages, **4 of them already wrong** — one span whose first line is
+now blank, and three bare continuations resolved against the last `.rs` file their
+paragraph named when all three mean `RSKeySecurityState.tla`. Same the round
+before, which swept the reset class and found **2 of 2** of `security_trace.py`'s
+reset citations pointing at the wrong line, and the same every time before that
+(`RSKeyAppletPolicies.tla` 1 of 4, `comutants.toml` 15 of 16, the code half 19 of
+42, the bundles 31 of 517 — and eight more that RESOLVE and are wrong, which is
+what [`KEYED`] below is about).
+
+What cites and is still read by nobody, by family. `CHANGELOG.md` and the
+`assurance/bundle/logs/` transcripts cite the tree as it stood and MUST be allowed
+to rot; this guard, its own table, `test_impact.py` and `test_kani_sh.py` quote
+rot or cite into a `tmp_path`; the `tests/*.py` device scripts and the `docs/`
+prose pages carry live model→code claims that only a person reads. `docs/` is by
+far the largest and is the next widening rather than an oversight — measured over
+this guard's own reader on the day the registries were taken: 229 citations over
+6 pages, of which 6 are already wrong, and 4 of those 6 are the SAME four the
+registries just surfaced, because `docs/platform-assumptions.md` restates
+`assurance/platform.toml`. The other 2 are bare names that resolve in none of
+[`SEARCH`]'s five directories, so taking `docs/` needs a repair pass of its own
+before the flag flips — the argument [`EXTS`] makes one axis over.
 Named here so each stays a decision. A citation *edited in place* still passes, and one that was
 wrong the day it was written locks wrong — so the lock diff is a thing to read,
 not a proof it hands you. And [`SEARCH`] is
@@ -219,14 +235,13 @@ PAGES = (
 #: not Rust and each has its own reason. `CHANGELOG.md` cites the tree as it
 #: stood at each entry, so its citations MUST be allowed to rot; this guard's own
 #: fixtures, and `scripts/citation_gate.py` itself, quote the rotted examples they
-#: exist to describe; the `assurance/` registries and two `docs/` pages cite in
-#: prose and are read by nobody but a person. Named limits, not oversights — see
-#: "Limits" above. That last one has GROWN and the sentence used to say "the two
-#: `assurance/*.toml` files": the tree now has the two registries, the evidence
-#: bundles and twelve board records, and a rough count over them is 62 distinct
-#: `file:line` citations that nothing resolves. Many are bare names, which this
-#: gate refuses on a page that must write a repo path, so widening to the
-#: directory is a repair of those first and not a flag flip.
+#: exist to describe; the `docs/` pages cite in prose and are read by nobody but a
+#: person. Named limits, not oversights — see "Limits" above. The `assurance/`
+#: registries were the fourth name in that sentence and are no longer: they are
+#: [`assurance_pages`] now, counted by the success line, which is the repair for
+#: what the sentence used to end on. It carried a "rough count over them" of 62
+#: distinct citations "that nothing resolves" — a number typed once, held by
+#: nothing, and stale by more than double when it was finally read.
 CODE_ROOTS = ("crates/", "firmware/", "fuzz/", "tools/", "rsk-wipe/")
 
 #: Below this the derivation found nothing and every code page silently went
@@ -359,6 +374,48 @@ def bundle_pages(root):
     )
 
 
+#: The assurance registries, and the fourth derived half. The `.toml` under here
+#: that [`BUNDLE_ROOT`] does not hold — the property, platform, toolchain and
+#: abstraction registries, and the board records — make the same model→code claim
+#: a proof header does and were the largest citing surface nothing opened: the
+#: comment this replaced said "a rough count over them is 62 distinct", which was
+#: stale by more than double, and nothing could hold it because no page set had
+#: them. Measured the day they were added, over this guard's own reader: 9 files
+#: cite, 122 citations, of which FOUR were already wrong by this row's own
+#: rules — one blank-line span and three bare continuations bound to the wrong
+#: file entirely. No number is written down here; the success line counts them.
+#:
+#: Citing is the filter, unlike [`BUNDLE_ROOT`] one directory over, and the
+#: difference is which guard owns the contract. `bundle_gate.py` holds every
+#: bundle to a per-row evidence contract, so a bundle citing nothing is a
+#: finding; a registry citing nothing is ordinary — `assurance/properties.toml`
+#: is a table of property tags and names no line of Rust at all — so the `.rs`
+#: and `.py` halves' rule applies and a page is here BECAUSE it cites.
+ASSURANCE_ROOT = "assurance/"
+
+
+def assurance_pages(root):
+    """`.toml` under [`ASSURANCE_ROOT`] outside [`BUNDLE_ROOT`] that cite by line."""
+    bundle = pathlib.Path(BUNDLE_ROOT.rstrip("/"))
+    return tuple(
+        rel
+        for rel in sorted(gate_lines.tree_files(root))
+        if rel.suffix == ".toml"
+        and str(rel).startswith(ASSURANCE_ROOT)
+        and rel.parent != bundle
+        and _cites(root, rel)
+    )
+
+
+#: The registry half's own floor, apart from its three siblings for the reason
+#: they are apart from each other: one number over the union cannot say WHICH
+#: finder stopped finding. It is 1 for [`CODE_PAGES_FLOOR`]'s reason — what a
+#: number here catches is the derivation finding nothing, and what ratchets the
+#: set is [`LOCK`], which turns a page that stops being read into one orphan per
+#: citation it had.
+ASSURANCE_PAGES_FLOOR = 1
+
+
 #: Pages that must write a repo path, never a bare basename. `comutants.toml`
 #: reasons about five applets at once, so `lib.rs:1020` names nothing decidable —
 #: for a reader either. SEARCH cannot fix that; only the page can.
@@ -479,10 +536,23 @@ def floor_for(page):
 #:
 #: WHAT IS STILL BLIND, over the pages this gate opens, and the count turns on the
 #: key. As WRITTEN -- one `file:lines` string, no continuations, once tree-wide --
-#: 188 over 12 pages, in 270 matches (`.toml` 115, `.tla` 78, `.md` 56, `.cfg` 16,
-#: `.yml` 4, `.log` 1); a 189th is `refs` eating the `2` of a ratio `2:1`. Keyed as
-#: [`LOCK`] is, per SPAN per page: 233 in 284; by first spans 187, losing 11 line
-#: claims. `.c`/`.h`/`.S` are 0 -- but 107 `.sh`/`.py`/`.txt` citations resolve.
+#: 199 over 12 pages, in 284 matches (`.toml` 115, `.tla` 84, `.md` 63, `.cfg` 17,
+#: `.yml` 4, `.log` 1); one more is `refs` eating the `2` of a ratio `2:1`.
+#: `.c`/`.h`/`.S` are 0 -- but 107 `.sh`/`.py`/`.txt` citations resolve.
+#:
+#: RE-PRICED when the registries were taken, because a refusal recorded once is
+#: the shape this file exists to catch. Adding `.toml|.tla|.md|.cfg|.yml|.log`
+#: costs 449 findings at 1734 citations, and the split is what decides it: 19
+#: BLANK-LINE rots and 2 past-end, every one of them real and every one in a file
+#: the widening does not own, against **75 unresolvable names, 73 of them BARE**.
+#: Those 73 are not rot; they are [`SEARCH`] holding five `.rs` directories while
+#: a bare `RSKeySecurityState.tla` lives in `formal/` and a bare `ci.yml` in
+#: `.github/workflows/` -- 49 of the 75 are that one module. Two `scripts/`
+#: fixtures would need [`SCRIPT_EXEMPT`] entries as well, both of them writing
+#: synthetic `docs/` pages into a `tmp_path`. So the widening is a corpus repair
+#: pass with a resolver change under it, and it stays a decision rather than a
+#: character class -- the same verdict as before, now with the numbers that
+#: support it rather than the ones that had gone stale.
 EXTS = "rs|sh|txt|py"
 DASH = "-\u2010\u2011\u2012\u2013\u2014\u2212"
 
@@ -722,18 +792,19 @@ def audit(root, relock=False):
                     " that key names no one row, so rename one or cite by line"
                 )
     derived, scripted = code_pages(root, tracked), script_pages(root)
-    bundled = bundle_pages(root)
+    bundled, registries = bundle_pages(root), assurance_pages(root)
     for found, floor, where in (
         (derived, CODE_PAGES_FLOOR, "/, ".join(CODE_ROOTS)),
         (scripted, SCRIPT_PAGES_FLOOR, SCRIPT_ROOT),
         (bundled, BUNDLE_PAGES_FLOOR, BUNDLE_ROOT),
+        (registries, ASSURANCE_PAGES_FLOOR, ASSURANCE_ROOT),
     ):
         if len(found) < floor:
             problems.append(
                 f"{len(found)} code page(s) under {where} cite by line,"
                 f" under the floor of {floor}: the derivation stopped finding them"
             )
-    derived += scripted + bundled
+    derived += scripted + bundled + registries
     for page in PAGES + derived:
         if not (root / page).is_file():
             problems.append(f"{page} is gone; the model's citations are unchecked")
@@ -862,8 +933,9 @@ def audit(root, relock=False):
     debt = f", {len(carried)} carried" if carried else ""
     return problems, (
         f"citation-gate: ok — {total} citations across {len(PAGES)} model pages, "
-        f"{len(derived) - len(scripted) - len(bundled)} code pages, {len(scripted)} script pages "
-        f"and {len(bundled)} evidence bundles resolve; "
+        f"{len(derived) - len(scripted) - len(bundled) - len(registries)} code pages, "
+        f"{len(scripted)} script pages, {len(bundled)} evidence bundles "
+        f"and {len(registries)} assurance registries resolve; "
         f"phase-1 property tags close both ways{debt}"
     )
 
