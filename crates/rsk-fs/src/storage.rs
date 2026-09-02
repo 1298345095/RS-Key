@@ -414,7 +414,7 @@ pub mod faults {
             self.once.set(false);
         }
         /// Refuse the NEXT `remove` of `fid` and then recover — the remove twin of
-        /// [`ProbeStuck::stick_once`]. A persistent refusal is caught by whichever
+        /// [`ProbeMedium::stick_once`]. A persistent refusal is caught by whichever
         /// caller asks first, so it cannot tell a RETRY further down the same
         /// command from a caller that never retried: both leave the record live.
         /// The single-shot one can.
