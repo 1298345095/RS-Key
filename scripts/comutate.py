@@ -67,6 +67,14 @@ by nothing is the same shape as a guard whose wiring nothing exercises. The
 unsupported construct) end in the same `VERIFICATION:- FAILED` a real refutation
 does, so both are refused by name rather than counted as kills.
 
+Which is only half of it, because for its first life nothing compared that name
+to the tree. `--harness` took any string, `-p` took any package, and the patch
+could land in a crate that package never compiles — three ways to record a RED
+that cannot happen, all of which come back `proof-survived` once a quarter and
+none of which a gate row could see. [`proof_problems`] is the three rules, and
+a name search is not one of them: `--harness` must resolve to a real
+`#[kani::proof]` DECLARED BY the package `-p` names.
+
 Three modes:
 
 * `--lint` — the cheap closed-world half, a `check.sh` row. Every `Mut_*.cfg`
@@ -537,6 +545,209 @@ def check_readme(root: pathlib.Path, entries: dict, problems: list[str]) -> None
         )
 
 
+def flag_value(argv, flag: str) -> str | None:
+    """The token after `flag` in a command line, or None when it is absent or last.
+
+    Token form only. `--harness=x` is deliberately unread: [`lint`] refuses an
+    entry whose `proof` does not carry `--harness` as its own token, so a reader
+    for the other spelling is a branch nothing here can take — the rule
+    `bundle_gate` states as covering spellings this tree does not use.
+    """
+    for i, token in enumerate(argv):
+        if token == flag and i + 1 < len(argv):
+            return argv[i + 1]
+    return None
+
+
+def workspace_packages(root: pathlib.Path) -> dict[str, str]:
+    """package name -> its member directory, out of `[workspace] members`.
+
+    `-p` takes the PACKAGE and the directory need not spell it, so both halves
+    are read off the manifests rather than one inferred from the other.
+    """
+    manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+    out: dict[str, str] = {}
+    for rel in manifest["workspace"]["members"]:
+        member = tomllib.loads((root / rel / "Cargo.toml").read_text(encoding="utf-8"))
+        out[member["package"]["name"]] = rel
+    return out
+
+
+def crate_sources(root: pathlib.Path, rel: str) -> list[pathlib.Path]:
+    """One member's `.rs` files. `target/` under a member is output, not source."""
+    base = root / rel
+    return sorted(
+        p for p in base.rglob("*.rs") if "target" not in p.relative_to(base).parts
+    )
+
+
+def crate_of(packages: dict[str, str], path: str) -> str | None:
+    """The workspace package whose directory holds `path`, longest member first."""
+    best = None
+    for crate, rel in packages.items():
+        if path == rel or path.startswith(rel.rstrip("/") + "/"):
+            if best is None or len(packages[best]) < len(rel):
+                best = crate
+    return best
+
+
+#: The manifest tables a dependency can be written in. Dev and build count, and
+#: so does `optional = true`: the question [`workspace_edges`] answers is whether
+#: `cargo kani -p <crate>` COULD compile a patch over there, and a refusal is
+#: only honest when the answer is no under every feature selection.
+DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+
+
+def workspace_edges(root: pathlib.Path, packages: dict[str, str]) -> dict[str, set[str]]:
+    """crate -> the workspace crates its manifest names, in any dependency table."""
+    out: dict[str, set[str]] = {}
+    for crate, rel in packages.items():
+        manifest = tomllib.loads((root / rel / "Cargo.toml").read_text(encoding="utf-8"))
+        holders = [manifest, *manifest.get("target", {}).values()]
+        out[crate] = {
+            dep
+            for holder in holders
+            for table in DEP_TABLES
+            for dep in holder.get(table, {})
+            if dep in packages
+        }
+    return out
+
+
+def visible_from(root: pathlib.Path, packages: dict[str, str], crate: str) -> set[str]:
+    """`crate` and every workspace crate reachable from it — what `-p` compiles."""
+    edges = workspace_edges(root, packages)
+    seen, todo = {crate}, [crate]
+    while todo:
+        for dep in edges.get(todo.pop(), set()) - seen:
+            seen.add(dep)
+            todo.append(dep)
+    return seen
+
+
+def kani_harnesses(root: pathlib.Path, packages: dict[str, str]) -> dict[str, set[str]]:
+    """crate -> the `#[kani::proof]` harnesses its own sources declare.
+
+    `bundle_gate.declarations` does the reading rather than a second Rust parser
+    here, and the defect it was written against is exactly the one a substring
+    match would leave open: `credmgmt_kani.rs` NAMES a harness of another file
+    in a doc comment, and what a file mentions is not what it declares.
+
+    Only the files carrying the attribute at all are parsed — 29 of the tree's
+    399 `.rs` today; the rest cannot declare a harness.
+    """
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import bundle_gate
+
+    out: dict[str, set[str]] = {}
+    for crate, rel in packages.items():
+        found: set[str] = set()
+        for path in crate_sources(root, rel):
+            if "kani::proof" in path.read_text(encoding="utf-8", errors="replace"):
+                found |= bundle_gate.declarations(path)[1]
+        out[crate] = found
+    return out
+
+
+def declaring_file(root: pathlib.Path, rel: str, name: str) -> str | None:
+    """The member's file declaring `name` as an item, or None.
+
+    Reached only once the harness did not resolve, and only to tell the two ways
+    that happens apart: a name nobody wrote, and a name that IS an item of the
+    crate carrying no `#[kani::proof]`. `cargo kani --harness` matches neither,
+    and the second is the one that reads like evidence — `::STEPS` and
+    `::StepRng` are both live items of the file this entry's harness lives in.
+    """
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import bundle_gate
+
+    for path in crate_sources(root, rel):
+        if name in path.read_text(encoding="utf-8", errors="replace"):
+            if name in bundle_gate.declarations(path)[0]:
+                return str(path.relative_to(root))
+    return None
+
+
+def proof_world(root: pathlib.Path) -> tuple[dict[str, str], dict[str, set[str]]]:
+    """(packages, harnesses) — the closed world a `proof` half is resolved in.
+
+    An unreadable workspace manifest yields empty rosters on purpose: `-p` then
+    names no member and [`proof_problems`] says so in a line a reader can act
+    on, where `KeyError: 'package'` names a line of this file instead. The
+    fallback is not silent — it cannot make the row green.
+    """
+    try:
+        packages = workspace_packages(root)
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return {}, {}
+    return packages, kani_harnesses(root, packages)
+
+
+def proof_problems(
+    root: pathlib.Path,
+    bug: str,
+    entry: dict,
+    packages: dict[str, str],
+    harnesses: dict[str, set[str]],
+) -> list[str]:
+    """The ways a `proof` half records a RED that cannot happen.
+
+    The field exists so a kill is credited to a Kani harness, and until this ran
+    nothing compared what it holds to the tree: `--harness` took any string, `-p`
+    took any package, and the patch could land in a crate that package never
+    compiles. Every one of the three ends the same way at run time — the harness
+    is not built or not reached, `proof_verdict` reads `proof-survived`, and the
+    entry's `expect = "killed"` fails for a reason that is about the RECORD and
+    not about the code. That verdict is a weekly row; this is the gate row.
+
+    What it still does not say: that the harness's property is the mutant's. That
+    is `proof_names`' job at run time, and inventing a static answer here would be
+    the false ladder the module docstring refuses.
+    """
+    where = f"comutants.toml [{bug}]"
+    proof = entry["proof"]
+    crate = flag_value(proof, "-p")
+    harness = flag_value(proof, "--harness")
+    known = crate in packages
+    out: list[str] = []
+    if not known:
+        out.append(
+            f"{where}: the proof runs `-p {crate}`, which is no workspace member"
+            " — cargo answers a package-spec error, and a run that never built a"
+            " harness reads proof-survived"
+        )
+    if known and harness not in harnesses[crate]:
+        elsewhere = sorted(c for c, names in harnesses.items() if harness in names)
+        if harness is None:
+            why = "--harness carries no value — it is absent, or the proof's last token"
+        elif elsewhere:
+            why = (
+                f"--harness {harness} is declared in {', '.join(elsewhere)} and not"
+                f" in {crate}"
+            )
+        elif declared := declaring_file(root, packages[crate], harness):
+            why = f"--harness {harness} is {declared}, which carries no #[kani::proof]"
+        else:
+            why = f"--harness {harness} names no #[kani::proof] in the workspace"
+        out.append(
+            f"{where}: {why} — `cargo kani -p {crate}` matches no harness, so the"
+            " RED this entry records cannot happen"
+        )
+    if known and not anchor_shape_problems(bug, entry):
+        reach = visible_from(root, packages, crate)
+        touched = sorted(
+            {crate_of(packages, p) or p for p, _find, _replace in patch_sites(entry)}
+        )
+        if touched and not any(t in reach for t in touched):
+            out.append(
+                f"{where}: the patch lands in {', '.join(touched)}, which"
+                f" `cargo kani -p {crate}` never compiles — the harness would prove"
+                " the UNPATCHED code and its colour would say nothing about this"
+                " mutant"
+            )
+    return out
+
+
 def lint(root: pathlib.Path, check_generated_readme: bool = True) -> list[str]:
     problems: list[str] = []
     floor, phase2_count, entries = load(root)
@@ -554,6 +765,10 @@ def lint(root: pathlib.Path, check_generated_readme: bool = True) -> list[str]:
         problems.append(f"comutant {bug} has no mutant configuration — stale entry")
 
     pending = 0
+    # Built on the first proof half and not before: it reads every member
+    # manifest and every `.rs` that names the attribute, which is a whole tree
+    # walk this row need not pay for while no entry carries one.
+    world: tuple[dict[str, str], dict[str, set[str]]] | None = None
     for bug, entry in sorted(entries.items()):
         status = entry.get("status")
         where = f"comutants.toml [{bug}]"
@@ -585,6 +800,9 @@ def lint(root: pathlib.Path, check_generated_readme: bool = True) -> list[str]:
                     f"{where}: the proof must name --harness — an unrelated harness "
                     "failing in the same run would be credited to this patch"
                 )
+            if world is None:
+                world = proof_world(root)
+            problems.extend(proof_problems(root, bug, entry, *world))
         shape = anchor_shape_problems(bug, entry)
         problems.extend(shape)
         if shape:

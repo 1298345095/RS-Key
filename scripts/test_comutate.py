@@ -10,7 +10,9 @@ repo with `/usr/bin/false` and `/usr/bin/true` as the slice, so no cargo is
 paid for what a process exit code proves.
 """
 
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
 
@@ -659,6 +661,188 @@ def test_the_shipped_proof_half_names_a_harness_that_exists():
         harness = entry["proof"][entry["proof"].index("--harness") + 1]
         assert f"fn {harness}(" in names, (bug, harness)
         assert entry["proof_names"] in names, (bug, entry["proof_names"])
+
+
+# ---- the proof half's closed world, driven through the row -------------------
+
+
+#: A two-crate workspace for the proof half, because `-p` names a PACKAGE and
+#: `--harness` a harness of that package: neither question can be asked of the
+#: flat fixture above, which has no manifest at all. `beta` is not a dependency
+#: of `alpha` unless an arm makes it one — that separation is what the patch
+#: visibility clause is read against.
+ALPHA_LIB = """\
+GUARD_LINE
+fn helper() {}
+
+#[kani::proof]
+fn alpha_holds() {}
+"""
+BETA_LIB = """\
+/// Mentions `#[kani::proof]` and `fn ghost_holds()` in prose, which is what a
+/// substring match reads as a harness and `bundle_gate.declarations` does not.
+#[kani::proof]
+fn beta_holds() {}
+
+fn beta_guard() {}
+"""
+
+
+def build_proof_tree(tmp_path) -> pathlib.Path:
+    root = build(tmp_path)
+    (root / "Cargo.toml").write_text('[workspace]\nmembers = ["alpha", "beta"]\n')
+    for name, body in (("alpha", ALPHA_LIB), ("beta", BETA_LIB)):
+        src = root / name / "src"
+        src.mkdir(parents=True)
+        (root / name / "Cargo.toml").write_text(f'[package]\nname = "crate-{name}"\n')
+        (src / "lib.rs").write_text(body)
+    edit(
+        root / "formal" / "comutants.toml",
+        'file = "src/lib.rs"',
+        'file = "alpha/src/lib.rs"',
+    )
+    edit(
+        root / "formal" / "comutants.toml",
+        'expect = "gap"',
+        'expect = "killed"\nproof = ["cargo", "kani", "-p", "crate-alpha",'
+        ' "--harness", "alpha_holds"]\nproof_names = "AlphaHolds"',
+    )
+    # After the spec, never before: the table is generated FROM it, and BugAlpha
+    # moving gap -> killed moves the row it publishes.
+    _, _, entries = comutate.load(root)
+    (root / "formal" / "README.md").write_text(
+        "# Fixture\n\n" + comutate.phase2_block(root, entries) + "\n"
+    )
+    return root
+
+
+@pytest.fixture
+def proof_tree(tmp_path):
+    return build_proof_tree(tmp_path)
+
+
+def row(root: pathlib.Path) -> subprocess.CompletedProcess:
+    """`python scripts/comutate.py --lint` over `root` — the `check.sh` row itself.
+
+    The row keys on the PROCESS exit code of the entry point, and every other arm
+    in this file drives `lint()`, one function below it. Fourteen of thirty gates
+    in this tree could not go red because their tables stopped at that function.
+
+    `comutate.py` is copied in because `ROOT` is `__file__`'s grandparent; what it
+    imports lazily is reached over `PYTHONPATH` and answers about a path it is
+    handed, so those modules are the shipped ones either way.
+    """
+    scripts = root / "scripts"
+    scripts.mkdir(exist_ok=True)
+    shutil.copy(comutate.__file__, scripts / "comutate.py")
+    return subprocess.run(
+        [sys.executable, str(scripts / "comutate.py"), "--lint"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(pathlib.Path(comutate.__file__).parent)},
+    )
+
+
+def red_row(root: pathlib.Path, needle: str) -> None:
+    done = row(root)
+    assert done.returncode == 1, (done.returncode, done.stdout, done.stderr)
+    assert needle in done.stderr, done.stderr
+
+
+def test_the_proof_fixture_is_green_through_the_row(proof_tree):
+    """The control the arms below are read against — and not a vacuous one.
+
+    A rule that resolved nothing would pass this too, so the roster it resolves
+    against is asserted here: `crate-alpha` really does declare `alpha_holds` and
+    really does not declare `beta_holds`, and `beta_guard`/`ghost_holds` are the
+    two ways a name in that file is not a harness.
+    """
+    done = row(proof_tree)
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    packages = comutate.workspace_packages(proof_tree)
+    assert packages == {"crate-alpha": "alpha", "crate-beta": "beta"}
+    harnesses = comutate.kani_harnesses(proof_tree, packages)
+    assert harnesses == {"crate-alpha": {"alpha_holds"}, "crate-beta": {"beta_holds"}}
+
+
+def test_a_harness_that_is_only_an_item_reddens_the_row(proof_tree):
+    # The shape `bundle_gate` paid for one field over: `::STEPS` and `::StepRng`
+    # are live items of the file the shipped harness lives in, and a name-exists
+    # rule reads either as a discharged proof.
+    edit(proof_tree / "formal" / "comutants.toml", '"alpha_holds"', '"helper"')
+    red_row(proof_tree, "helper is alpha/src/lib.rs, which carries no #[kani::proof]")
+
+
+def test_a_harness_named_only_in_prose_reddens_the_row(proof_tree):
+    edit(proof_tree / "formal" / "comutants.toml", '"alpha_holds"', '"ghost_holds"')
+    red_row(proof_tree, "ghost_holds names no #[kani::proof] in the workspace")
+
+
+def test_a_harness_of_another_crate_reddens_the_row(proof_tree):
+    # `cargo kani -p crate-alpha` does not run crate-beta's harnesses, so this
+    # entry's RED cannot happen — and a tree-wide name search says it can.
+    edit(proof_tree / "formal" / "comutants.toml", '"alpha_holds"', '"beta_holds"')
+    red_row(proof_tree, "beta_holds is declared in crate-beta and not in crate-alpha")
+
+
+def test_a_harness_flag_with_nothing_after_it_reddens_the_row(proof_tree):
+    edit(proof_tree / "formal" / "comutants.toml", ', "--harness", "alpha_holds"]', ', "--harness"]')
+    red_row(proof_tree, "--harness carries no value")
+
+
+def test_a_package_that_is_no_workspace_member_reddens_the_row(proof_tree):
+    edit(proof_tree / "formal" / "comutants.toml", '"crate-alpha"', '"crate-gamma"')
+    red_row(proof_tree, "`-p crate-gamma`, which is no workspace member")
+
+
+def test_a_patch_the_proofs_package_never_compiles_reddens_the_row(proof_tree):
+    """The third way a recorded RED cannot happen, and the one no name resolves.
+
+    Both halves are real — a live harness of `crate-alpha`, an anchor that
+    resolves once in `crate-beta` — and `cargo kani -p crate-alpha` never
+    compiles the patched crate, so the harness proves the code as shipped.
+    """
+    edit(proof_tree / "beta" / "src" / "lib.rs", "fn beta_guard", "GUARD_LINE\nfn beta_guard")
+    edit(proof_tree / "formal" / "comutants.toml", '"alpha/src/lib.rs"', '"beta/src/lib.rs"')
+    red_row(
+        proof_tree,
+        "the patch lands in crate-beta, which `cargo kani -p crate-alpha` never"
+        " compiles",
+    )
+
+
+def test_a_patch_in_a_dependency_is_not_a_finding(proof_tree):
+    """The same edit with the edge present. `-p` compiles the crate AND its
+    workspace dependencies, so refusing every patch outside the package's own
+    directory would refuse honest entries — the direction that makes a rule get
+    switched off within a week."""
+    edit(proof_tree / "beta" / "src" / "lib.rs", "fn beta_guard", "GUARD_LINE\nfn beta_guard")
+    edit(proof_tree / "formal" / "comutants.toml", '"alpha/src/lib.rs"', '"beta/src/lib.rs"')
+    (proof_tree / "alpha" / "Cargo.toml").write_text(
+        '[package]\nname = "crate-alpha"\n\n[dependencies]\ncrate-beta = { path = "../beta" }\n'
+    )
+    done = row(proof_tree)
+    assert done.returncode == 0, (done.stdout, done.stderr)
+
+
+def test_the_shipped_proof_half_resolves_in_the_package_it_runs():
+    """The registry as it stands, through the rule rather than a name search.
+
+    `test_the_shipped_proof_half_names_a_harness_that_exists` above concatenates
+    every `*kani*.rs` in `crates/` and asks whether the text holds `fn <name>(`.
+    Measured against the four ways this half goes wrong, that catches two: a name
+    nobody wrote and a `--harness` with nothing after it. It passes over a name
+    that is an item but no harness, over a harness of ANOTHER crate, over a `-p`
+    naming no member, and over a patch that package never compiles.
+    """
+    entries = comutate.load(comutate.ROOT)[2]
+    carried = {b: e for b, e in entries.items() if "proof" in e}
+    assert carried, "no comutant reddens a proof — the finding this half closed is back"
+    packages, harnesses = comutate.proof_world(comutate.ROOT)
+    for bug, entry in carried.items():
+        assert comutate.proof_problems(comutate.ROOT, bug, entry, packages, harnesses) == []
+        crate = comutate.flag_value(entry["proof"], "-p")
+        assert comutate.flag_value(entry["proof"], "--harness") in harnesses[crate]
 
 
 def test_a_companion_pair_credits_the_subject_and_not_the_companion(tree):
