@@ -388,6 +388,27 @@ where = "## Seed backup (the deliberate exception)"
 id = "TM-ZEROIZATION"
 kind = "defence"
 where = "## Zeroization"
+# The three sentences `assurance/secrets.toml` argues from, pinned because that
+# register is the only reader this clause has ever had and every one of them is
+# BELOW the locked first line. The first is the claim the register answers per
+# source and per exit; the second names three residuals it re-registers against
+# rows rather than re-litigating; the third is a measurement with a stated
+# revalidation trigger, and 47 rows' reboot answer is that measurement. What is
+# NOT pinned, deliberately: the panic exit, because the clause does not mention
+# it. That silence is the register's own finding and `RES-PANIC-HALT` is where
+# it is written down; a sentence added here would be the thing to pin next.
+rests_on = ["""
+Key-grade material in RAM is wiped (`zeroize`, volatile writes) when its use
+ends: session state and PIN/UV tokens on drop, transient key copies at end of
+scope including error paths, and the transport/exchange buffers as soon as a
+message completes (requests carry PINs and imported keys).""", """
+Accepted residuals: `Copy` temporaries inside RustCrypto curve arithmetic, digest
+internals, and heap limbs inside `num-bigint-dig` (which has no zeroizing `Drop`
+of its own — every value `rsk-rsa` owns rides in a `Zeroizing`, but a temporary
+the library allocates internally does not).""", """
+This is a property of the silicon revision and boot
+configuration, so it is re-measured when either moves; the explicit wipes stay as
+depth in case a future one keeps SRAM."""]
 
 [[clause]]
 id = "TM-SUPPLY-CHAIN"
