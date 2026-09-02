@@ -452,8 +452,89 @@ fn set_code_dropping_a_pre_otp_pin_re_arms_the_at_rest_lap() {
     // The drop is a tombstone, an append like any re-seal, so any touch is the
     // supersession here.
     medium.assert_re_armed_before(EF_OTP_PIN, |_| false, "SET CODE");
+    // The seal is an append ahead of that drop, and the gate leads it too: a
+    // refused re-arm must not have already installed the lock the PIN it never
+    // reached would open (`a_set_code_whose_re_arm_the_medium_refuses_...`).
+    medium.assert_re_armed_before(EF_OATH_CODE.get(), |_| false, "SET CODE (the seal)");
     assert!(
         !fs.has_data(rsk_fs::EF_HARDENED),
         "SET CODE superseded a chip-serial-rooted verifier and must re-arm the at-rest lap",
+    );
+}
+
+/// The re-arm's own refusal, on the one OATH command that INSTALLS an
+/// authorization. A medium that refuses `remove(EF_HARDENED)` and serves every
+/// other mutation reached `6581` with the access code already sealed and the
+/// `EF_OTP_PIN` the command exists to revoke still standing — a second unlock
+/// path for the lock the owner just raised, with no reset anywhere in it, and
+/// the host told the command failed. The gate leads the seal now, so a refused
+/// re-arm writes nothing and the card is the one the caller started with.
+#[test]
+fn a_set_code_whose_re_arm_the_medium_refuses_installs_no_code() {
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    let rng = RefCell::new(CountRng(7));
+    let touch = RefCell::new(AlwaysConfirm);
+
+    // Pre-burn: SET PIN stores v1 under the NO-OTP (chip-serial) kbase — the copy
+    // SET CODE's tombstone would supersede, which is why it owes the re-arm.
+    {
+        let mut app = OathApplet::new(SERIAL, [0x22; 32], None, &rng, &touch);
+        assert_eq!(
+            run(
+                &mut app,
+                &mut fs,
+                &apdu(INS_SET_PIN, 0, 0, &tlv(TAG_PASSWORD, b"1234"))
+            )
+            .0,
+            Sw::OK
+        );
+    }
+    assert!(fs.has_data(EF_OTP_PIN), "fixture: the OTP PIN is set");
+
+    // The OTP build, unlocked (no code yet), and the lap has already run.
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    select(&mut app, &mut fs);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+
+    let sw = set_code(&mut app, &mut fs, &[0xABu8; 20]);
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the medium really refused, so the marker is still on it"
+    );
+    let pin_alive = fs.has_data(EF_OTP_PIN);
+    assert!(
+        !fs.has_key(EF_OATH_CODE),
+        "the re-arm was refused, so nothing may be written — the access code is \
+         installed and the OTP PIN it exists to revoke is still live \
+         (has_data(EF_OTP_PIN) = {pin_alive}): a lock the owner now has to open \
+         and a second, invisible unlock path standing beside it",
+    );
+    assert_eq!(
+        sw,
+        Sw::MEMORY_FAILURE,
+        "the lap will not run, so the drop must not happen and the command must say so",
+    );
+    assert!(
+        pin_alive,
+        "the refusal leaves the standing PIN in force, not superseded under a \
+         marker nothing clears",
+    );
+
+    // The control, and not a no-op: clear the fault and the same SET CODE seals
+    // the code, drops the PIN and clears the marker.
+    medium.refuse(None);
+    assert_eq!(set_code(&mut app, &mut fs, &[0xABu8; 20]), Sw::OK);
+    assert!(fs.has_key(EF_OATH_CODE), "the control installed the code");
+    assert!(!fs.has_data(EF_OTP_PIN), "the control dropped the OTP PIN");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the control re-armed the lap"
     );
 }

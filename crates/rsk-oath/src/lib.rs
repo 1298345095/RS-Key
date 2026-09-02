@@ -376,6 +376,18 @@ impl<'a> OathApplet<'a> {
         if !ct_eq(resp, &mac[..size]) {
             return Sw::DATA_INVALID;
         }
+        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_OTP_PIN is the
+        // only OATH record with no eager boot migration, so the copy the tombstone
+        // below supersedes can still be keyed under the pre-OTP arm the public chip
+        // serial derives. BEFORE the delete, and only if it LANDED: the two are
+        // separate appends, so a reset between them keeps whichever one did.
+        //
+        // Ahead of the SEAL as well, because this returns: a code sealed first is a
+        // lock the caller was told had failed, with the PIN it never reached still
+        // opening it — `validated` is per-session, and the next SELECT is not.
+        if rsk_fs::request_rescrub(fs).is_err() {
+            return Sw::MEMORY_FAILURE;
+        }
         self.rng.borrow_mut().fill(&mut self.challenge);
         let mkek = read_fused(self.mkek_source);
         let dev = self.device(&mkek);
@@ -387,18 +399,8 @@ impl<'a> OathApplet<'a> {
         // would survive as a second, invisible unlock path for the store the owner
         // is protecting right now. Re-mint it from a session that knows this code.
         // Answered rather than discarded: a surviving PIN is that second path, and
-        // the lock-down below happens either way.
-        // The lock-down leads, because it happens on every exit below — the refused
-        // re-arm's included, which is the one that leaves the PIN it could not drop.
+        // the lock-down covers both arms below, the refused drop's included.
         self.validated = false;
-        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_OTP_PIN is the
-        // only OATH record with no eager boot migration, so the copy the tombstone
-        // below supersedes can still be keyed under the pre-OTP arm the public chip
-        // serial derives. BEFORE the delete, and only if it LANDED: the two are
-        // separate appends, so a reset between them keeps whichever one did.
-        if rsk_fs::request_rescrub(fs).is_err() {
-            return Sw::MEMORY_FAILURE;
-        }
         match fs.delete(EF_OTP_PIN) {
             Ok(()) => Sw::OK,
             Err(_) => Sw::MEMORY_FAILURE,

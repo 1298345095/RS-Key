@@ -2740,6 +2740,50 @@ and to the statuses it quotes.
 
 ### Security
 
+- **OATH `SET CODE` installed the access code and then refused, leaving the
+  OTP-PIN it exists to revoke alive underneath it.** Making every superseding
+  write conditional on the at-rest re-arm (`3d016ef`, 0x09BD) put the
+  `request_rescrub` gate between the two flash writes this command makes: the seal of
+  `EF_OATH_CODE` landed first, and the gate's `6581` returned before the
+  `EF_OTP_PIN` drop. Walked on a `RemoveStuck` medium refusing
+  `remove(EF_HARDENED)` and nothing else, so no reset is in it: `SET CODE`
+  answered `6581`, `has_key(EF_OATH_CODE)` was **true** and `has_data(EF_OTP_PIN)`
+  **true**, and the surviving PIN is not merely a leftover — a *fresh* SELECT
+  offered a challenge, `LIST` behind it answered `6982`, and `VERIFY PIN` with
+  the old PIN answered `9000` and opened the store. A lock the owner was told had
+  failed, with a second unlock path standing beside it.
+
+  The site's own mitigation was already applied and does not close it. `SET
+  CODE` hoists `self.validated = false` above the gate precisely so a refused
+  re-arm locks down — but that flag is per-session, `select` recomputes it, and
+  `VERIFY PIN` sets the same flag `VALIDATE` does. The measurement above is a new
+  session. **The gate moved ahead of the seal instead**, which is the rule the
+  command already states for its own grammar refusals: judged before a byte is
+  written, so the standing state survives the refusal. A refused re-arm now
+  writes nothing at all. `EF_OTP_PIN` is still the only OATH record with no eager
+  boot migration, so the ordering the re-arm exists for is unchanged — the gate
+  simply leads both appends now instead of one.
+
+  Two oracles, both driven red before the fix and both killed by the ordering
+  reversion alone, each failure read for its DIRECTION rather than its colour.
+  The refusal end state (`a_set_code_whose_re_arm_the_medium_refuses_installs_no_code`)
+  says *a write happened that must not have*, never the inverse; and the `Cut`
+  medium's append log says `[Write(0xbaff, 49B), Remove(0xce14), Remove(0x10a0)]`
+  — the seal ahead of the re-arm — where the fixed order puts `Remove(0xce14)`
+  first. Tests 126 → 127.
+
+  Swept by shape, not by name. `rsk-oath` has three `request_rescrub` sites and
+  this was the only one with a write ahead of its gate: OTP-PIN `CHANGE` and
+  `VERIFY` are preceded only by `spend_otp_retry`'s counter rewrite, which stores
+  the same verifier bytes (the fixture's `still_weak` arm) and narrows the retry
+  budget rather than granting anything, so their refusal paths leave no
+  authorization live. One other site in the family has the ordering shape and is
+  NOT this hazard, named here rather than changed: `rsk_piv`'s `SET RETRIES`
+  writes `EF_RETRIES` before its gate, so a refused re-arm leaves the new totals
+  with PIN and PUK un-reset — a partial application of a command that already
+  required both the management key and the PIN, with the old references still in
+  force.
+
 - **The boot pass re-keys pre-OTP records too, and standing before the at-rest lap
   is not the same as standing before the lap that latched.** 0x09BD swept thirteen
   lazy re-keys onto "re-arm first, and write only if the re-arm landed"; the eight
