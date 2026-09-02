@@ -128,6 +128,38 @@ BUNDLE = BUNDLE_DIR / "SEC-FIDO-001.toml"
 #: the direction above.
 ROSTER_FLOOR = 11
 
+#: The evidence store. Held BOTH ways, like [`BUNDLE_DIR`] one layer in: the
+#: `[[artifact]]` rule below reads a bundle's path and asks whether the tree has
+#: the file, and [`orphan_evidence`] walks the directory and asks whether any
+#: bundle has the path. Only the first direction existed, so a log that stopped
+#: being evidence stopped being read and nothing said so.
+STORE = BUNDLE_DIR / "logs"
+
+#: Files the store must carry, and the second of the two floor conventions in
+#: this file. AT the measurement, [`ROSTER_FLOOR`]'s convention and not
+#: [`VERDICT_FLOOR`]'s: a floor UNDER the count is for a population that is
+#: incidental — how many bounds a method row happens to spell, how many numbers a
+#: leaf happens to quote — where the floor only has to refuse degeneracy. Every
+#: file here is a COMMITMENT instead: it carries a digest, a byte count and a
+#: `[[cost]]` row, and one leaving is evidence leaving. A floor below the count
+#: is exactly a log that can go with the row green.
+#:
+#: It is what makes the rule above non-degenerate rather than decoration. Delete
+#: a log AND the `[[artifact]]` and `[[cost]]` rows that cite it and no clause in
+#: this file objects: the orphan set is empty because the file is gone, the
+#: forward rule is silent because the row is gone, and the `artifact`/`cost` leaf
+#: floors are nowhere near — the group carries 40 leaves against a floor of 8.
+#: Measured that way and not argued — deleting this clause alone leaves that
+#: construction reporting NOTHING, which is
+#: `test_evidence_can_leave_with_every_other_clause_green`.
+#:
+#: 100 the day it was written: ten directories of 5 to 13 logs each, plus the ten
+#: at the root that are `SEC-FIDO-001`'s — the one bundle with no directory of its
+#: own, which is why this walks the store rather than the ten names. Like
+#: `ROSTER_FLOOR` it moves UP when a slice lands, and a diff someone has to write
+#: is the point.
+STORE_FLOOR = 100
+
 REGISTRY = pathlib.Path("assurance/properties.toml")
 #: Where a bare `Name.cfg` lives. The bundle names TLC configurations without a
 #: directory throughout — four of the eight method rows do — and `formal/` is the
@@ -1233,7 +1265,74 @@ def bundles(root: pathlib.Path) -> list[pathlib.Path]:
     )
 
 
-def audit(root: pathlib.Path, roster_floor: int = ROSTER_FLOOR) -> tuple[list[str], str]:
+def orphan_evidence(
+    root: pathlib.Path, findings: list[str], store_floor: int = STORE_FLOOR
+) -> int:
+    """Every file under [`STORE`] is the `path` of some `[[artifact]]` row.
+
+    The other direction of the rule `audit_one` already runs. Forwards, a path a
+    bundle names must be a file in the tree; backwards, a file in the tree must
+    be a path some bundle names. Only forwards existed, and it cannot see the
+    half that matters here — a log nothing cites is evidence the roster no longer
+    claims, sitting where a reader takes the directory for the exhibit list.
+
+    Cited means an `[[artifact]].path` and not a mention. A `[[method]] artifact`
+    naming a log, or a `result` leaf quoting one, would be a weaker join and a
+    worse one: it would make a log with no digest, no byte count and no
+    `[[cost]]` row legal here, which is every rule beside this one walked past.
+    Three method rows name a log, and all three are `[[artifact]]` rows too, so
+    the narrow reading loses nothing the tree has.
+
+    Compared as the bundle writes it. All 100 paths are `root`-relative POSIX and
+    the `[[artifact]]` rule beside this one already refuses an absolute one, so a
+    `./` or `../` spelling would surface HERE, as a loud finding naming the file,
+    rather than as a normalisation quietly agreeing with whatever was written.
+
+    By full path and never by name: 15 basenames are carried by more than one
+    directory — `tlc-Shipped.log` by all eleven, `tlc-AlwaysUv.log` by nine — and
+    they are different runs of the same configuration. A name-keyed reading lets
+    one bundle's copy discharge every other bundle's, which is the join
+    [`quoted_join`] already had to un-widen for its own reason.
+    """
+    store = root / STORE
+    cited = {
+        str(row.get("path", ""))
+        for bundle in bundles(root)
+        for row in (parsed(root, bundle) or {}).get("artifact", [])
+        if isinstance(row, dict)
+    }
+    # Directories are not walked as evidence and are not exempted either: the
+    # store carries ten of them and no file that is not a log, so there is no
+    # `README`/`.gitkeep` case to write a carve-out for. Anything that arrives is
+    # a finding naming it, which is a decision someone makes rather than a
+    # category that arrives already excused.
+    stored = sorted(
+        found.relative_to(root).as_posix()
+        for found in store.rglob("*")
+        if found.is_file()
+    )
+    for target in stored:
+        if target not in cited:
+            findings.append(
+                f"{STORE}: `{target}` is the `path` of no `[[artifact]]` row — a"
+                " file in the evidence store that no bundle cites is evidence the"
+                " roster does not claim, and the directory is the exhibit list"
+            )
+    if len(stored) < store_floor:
+        findings.append(
+            f"{STORE}: {len(stored)} evidence file(s), under the floor of"
+            f" {store_floor} — the rule above goes quiet when the store empties,"
+            " and a log deleted with its `[[artifact]]` and `[[cost]]` rows is a"
+            " run this slice can no longer show"
+        )
+    return len(stored)
+
+
+def audit(
+    root: pathlib.Path,
+    roster_floor: int = ROSTER_FLOOR,
+    store_floor: int = STORE_FLOOR,
+) -> tuple[list[str], str]:
     root = pathlib.Path(root)
     findings: list[str] = []
     page = root / SLICE
@@ -1255,6 +1354,7 @@ def audit(root: pathlib.Path, roster_floor: int = ROSTER_FLOOR) -> tuple[list[st
         findings.extend(one)
         if summary:
             summaries.append(summary)
+    stored = orphan_evidence(root, findings, store_floor)
     quoted, joins = quoted_numbers(root, findings)
     # The floor is the rule's own non-degeneracy row. Every clause of
     # [`quoted_join`] can stop matching without a single finding being lost —
@@ -1268,6 +1368,7 @@ def audit(root: pathlib.Path, roster_floor: int = ROSTER_FLOOR) -> tuple[list[st
             " number in the tree"
         )
     summaries.append(f"{quoted} quoted number(s) held to {joins} log(s)")
+    summaries.append(f"{stored} evidence file(s), every one cited")
     return findings, "bundle-gate: ok — " + "; ".join(summaries)
 
 

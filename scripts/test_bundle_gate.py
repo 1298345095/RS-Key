@@ -14,6 +14,7 @@ import os
 import pathlib
 import re
 import shutil
+import subprocess
 import sys
 import tomllib
 
@@ -1381,3 +1382,250 @@ def test_the_gzipped_log_is_never_decompressed_for_a_join(tmp_path):
     bundle_gate.quoted_numbers(root, [])
     assert not any(name.endswith(".gz") for name in bundle_gate.log_corpus(root)[0] & set(cache))
     assert bundle_gate.log_integers(root, "assurance/bundle/logs/kani-state-tier.log.gz", cache)
+
+
+# ---- the evidence store, held the other way -------------------------------
+#
+# The forward half — a `[[artifact]].path` names a file the tree has — was the
+# only one that existed, and it cannot see a log that stopped being cited. The
+# arms below are one per clause of `orphan_evidence` plus the floor, and each is
+# read against the finding SET the tree already produces rather than against an
+# empty one, so a rule elsewhere going red for its own reasons cannot make an arm
+# here pass or fail. Measured population the day they were written: 100 files in
+# the store, 100 distinct `[[artifact]].path`, no orphan and nothing dangling.
+
+ORPHAN = "no bundle cites"
+STORE_UNDER = "evidence file(s), under the floor of"
+#: The one artifact of the store no leaf quotes a number out of, so removing it
+#: moves no `quoted_numbers` join. `SEC-FIDO-001` carries it, which is
+#: [`bundle_gate.BUNDLE`], so [`rewrite`] reaches its rows.
+UNJOINED = "assurance/bundle/logs/kani-state-tier.log.gz"
+
+
+def orphans(root, store_floor=bundle_gate.STORE_FLOOR):
+    """THIS rule's findings, and the store population it walked.
+
+    Scoped to the rule, for [`quoted`]'s reason: a green arm here has to assert
+    that the store rule says nothing, not that every other rule in the file is
+    also green — which is `test_the_real_bundle_is_green`'s claim and not this
+    table's.
+    """
+    reported = []
+    return reported, bundle_gate.orphan_evidence(root, reported, store_floor)
+
+
+def drop(root, relative, body=b"a log nobody claims\n"):
+    """Put a file in the store that no bundle's `[[artifact]]` row names."""
+    target = root / bundle_gate.STORE / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(body)
+    return f"{bundle_gate.STORE}/{relative}"
+
+
+def test_the_shipped_store_is_orphan_free_and_over_its_floor():
+    """The measurement the floor stands on, read off the REAL tree.
+
+    Off `ROOT` and not off the fixture, because the fixture copies what the
+    bundles cite and would therefore be orphan-free by construction — a fixture
+    agreeing with itself says nothing about the store. `>=` and not `==` for
+    [`bundle_gate.ROSTER_FLOOR`]'s reason: a file arriving comes WITH its
+    `[[artifact]]` row or the rule above names it, and it is a file LEAVING that
+    the floor is set at the measurement to catch.
+    """
+    reported, stored = orphans(bundle_gate.ROOT)
+    assert reported == [], reported
+    assert stored >= bundle_gate.STORE_FLOOR, stored
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        # At the root of the store, where three logs already live.
+        "orphan-run.log",
+        # And nested, which is where 97 of the 100 are: a `glob` in place of
+        # `rglob` reads three files and reports nothing about the other 97.
+        "SEC-FIDO-004/orphan-run.log",
+        # A directory of its own, which is how a new slice's evidence arrives.
+        "SEC-FIDO-009/tlc-Shipped.log",
+    ],
+)
+def test_a_file_in_the_store_that_no_bundle_cites(tmp_path, relative):
+    root = tree(tmp_path)
+    target = drop(root, relative)
+    reported, _ = orphans(root)
+    assert any(ORPHAN in p and target in p for p in reported), reported
+
+
+def test_an_orphan_wearing_a_cited_basename(tmp_path):
+    """The hole a name-keyed reading ships with, and it is not hypothetical here:
+    15 basenames are carried by more than one directory, `tlc-Shipped.log` by all
+    eleven. Against a set of NAMES this file is cited eleven times over and the
+    rule says nothing, while the run it holds is in no bundle at all."""
+    root = tree(tmp_path)
+    cited = {
+        str(row["path"])
+        for bundle in bundle_gate.bundles(root)
+        for row in bundle_gate.parsed(root, bundle).get("artifact", [])
+    }
+    name = "tlc-Shipped.log"
+    assert sum(1 for p in cited if p.endswith("/" + name)) == 11, cited
+    target = drop(root, f"SEC-FIDO-004/copies/{name}")
+    assert target not in cited
+    reported, _ = orphans(root)
+    assert any(ORPHAN in p and target in p for p in reported), reported
+
+
+@pytest.mark.parametrize("relative", ["README.md", "SEC-FIDO-004/.gitkeep"])
+def test_the_store_carries_no_exemption_because_it_needs_none(tmp_path, relative):
+    """Decided by measurement, not by anticipation. The store holds 100 files and
+    every one is a `.log` or a `.log.gz`; there is no `README`, no `.gitkeep` and
+    no hidden entry, so a carve-out for them would be a rule for a case the tree
+    does not have — and a category that arrives already excused is where the next
+    uncited log goes. Anything that is not cited is named, whatever it is called;
+    admitting one is then a diff someone writes."""
+    on_disk = sorted(
+        p.suffix for p in (bundle_gate.ROOT / bundle_gate.STORE).rglob("*") if p.is_file()
+    )
+    assert set(on_disk) == {".log", ".gz"}, set(on_disk)
+    target = drop(root := tree(tmp_path), relative)
+    assert any(ORPHAN in p and target in p for p in orphans(root)[0])
+
+
+def test_a_directory_in_the_store_is_not_an_orphan(tmp_path):
+    """The control, and not a no-op. The store is ten directories deep already,
+    so a rule reading entries rather than FILES reports ten orphans on a tree
+    nobody touched. The twin below is the same construction with one file in it,
+    and it is red — which is what says this control is about `is_file()` and not
+    about the rule having gone quiet."""
+    root = tree(tmp_path)
+    (root / bundle_gate.STORE / "SEC-FIDO-009").mkdir()
+    reported, stored = orphans(root)
+    assert reported == [], reported
+    assert stored == bundle_gate.STORE_FLOOR, stored
+    (root / bundle_gate.STORE / "SEC-FIDO-009/tlc-Shipped.log").write_bytes(b"x")
+    assert [p for p in orphans(root)[0] if ORPHAN in p], "the twin must be red"
+
+
+def test_a_log_named_by_a_method_row_and_by_no_artifact_row(tmp_path):
+    """Cited means an `[[artifact]].path`, and the widening is not free. Three
+    method rows name a log — accepting that as a citation would make a file with
+    no digest, no byte count and no `[[cost]]` row legal in the store, which is
+    every rule beside this one walked past for the file it is walked past on."""
+    root = tree(tmp_path)
+    named = "assurance/bundle/logs/SEC-FIDO-004/tlc-Historical_E77.log"
+    text = (root / "assurance/bundle/SEC-FIDO-004.toml").read_text()
+    assert named in text, named
+    path = root / bundle_gate.BUNDLE_DIR / "SEC-FIDO-004.toml"
+    doc = tomllib.loads(path.read_text())
+    del doc["artifact"][
+        next(i for i, row in enumerate(doc["artifact"]) if row["path"] == named)
+    ]
+    path.write_text(dump(doc))
+    # Still named by a `[[method]]` row, and still not cited.
+    assert named in path.read_text()
+    assert any(ORPHAN in p and named in p for p in orphans(root)[0]), orphans(root)[0]
+
+
+def test_evidence_can_leave_with_every_other_clause_green(tmp_path):
+    """The floor's own non-degeneracy row, and the reason it is not decoration.
+
+    A log deleted TOGETHER WITH the `[[artifact]]` and `[[cost]]` rows that cite
+    it is invisible to every other rule in this file: the orphan clause above is
+    silent because the file is gone, the forward rule is silent because the row
+    is gone, the cost join is silent because both ends went, and the `artifact`
+    and `cost` leaf floors are 8 and 12 against 40 and 55. Asserted as a DELTA on
+    the finding set, so the arm says "this and nothing else appeared" rather than
+    "the tree is green", which is not this table's claim.
+    """
+    root = tree(tmp_path)
+    before = set(findings(root))
+    rewrite(root, lambda doc: (
+        doc["artifact"].__delitem__(
+            next(i for i, row in enumerate(doc["artifact"]) if row["path"] == UNJOINED)
+        ),
+        doc["cost"].__delitem__(
+            next(i for i, row in enumerate(doc["cost"]) if row["artifact"] == UNJOINED)
+        ),
+    ))
+    (root / UNJOINED).unlink()
+    appeared = set(findings(root)) - before
+    assert len(appeared) == 1, appeared
+    assert STORE_UNDER in appeared.pop()
+
+
+def test_the_store_cannot_be_emptied_into_silence(tmp_path):
+    """The other end of the same clause, stated directly. With every file gone
+    the rule above has nothing to walk and would print the same summary line as a
+    full store; the floor is what makes zero a finding rather than a quiet run.
+
+    Scoped, because emptying the store also fires the forward rule a hundred
+    times, and this arm is about the clause that is left when those go too."""
+    root = tree(tmp_path)
+    for target in (root / bundle_gate.STORE).rglob("*"):
+        if target.is_file():
+            target.unlink()
+    reported, stored = orphans(root)
+    assert stored == 0
+    assert [p for p in reported if STORE_UNDER in p] == [
+        f"{bundle_gate.STORE}: 0 evidence file(s), under the floor of"
+        f" {bundle_gate.STORE_FLOOR} — the rule above goes quiet when the store"
+        " empties, and a log deleted with its `[[artifact]]` and `[[cost]]` rows"
+        " is a run this slice can no longer show"
+    ], reported
+
+
+def test_a_cited_log_that_is_not_in_the_tree(tmp_path):
+    """The forward half, which had no arm of its own. Measured before this was
+    written: nothing dangles — all 100 cited paths are files — so the direction
+    was held by a rule nothing had ever driven."""
+    root = tree(tmp_path)
+    (root / UNJOINED).unlink()
+    reported = findings(root)
+    assert any("a path is not a log" in p and UNJOINED in p for p in reported), reported
+
+
+def gate_process(root):
+    """`python scripts/bundle_gate.py`'s exit code and stderr, from its own
+    process, over `root`.
+
+    `check.sh`'s `slice evidence bundle` row reads that exit code and nothing
+    else, and a table driving `audit` proves nothing about it — the family this
+    tree has measured fourteen times over. `main()` is reached through `-c`
+    rather than by running the file, because the row's own `ROOT` is the
+    checkout the script lives in and the fixture is elsewhere; [`gate_corpus`] is
+    primed BEFORE the swap so the five derivations it caches are the real tree's,
+    which is what `main()` compares against when the row runs for real.
+    """
+    program = "\n".join((
+        "import pathlib, sys",
+        f"sys.path.insert(0, {str(ROOT / 'scripts')!r})",
+        "import bundle_gate",
+        "bundle_gate.gate_corpus()",
+        f"bundle_gate.ROOT = pathlib.Path({str(root)!r})",
+        "raise SystemExit(bundle_gate.main())",
+    ))
+    done = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, text=True, check=False
+    )
+    return done.returncode, done.stderr
+
+
+def test_the_row_and_not_the_helper(tmp_path):
+    """The PROCESS goes red over an uncited file, and over that alone.
+
+    Read as a delta between two real runs rather than as `0` against `1`: the
+    tree this ships into can be red for a rule this table does not own, and an
+    arm asserting the control's exit code would then be measuring that instead.
+    What is drift-proof is that the defect run's own exit code is a failing one
+    and that the ONE line it prints which the control does not is this rule's.
+    """
+    root = tree(tmp_path)
+    control_code, control_err = gate_process(root)
+    assert "Traceback" not in control_err, control_err
+    target = drop(root, "SEC-FIDO-004/orphan-run.log")
+    defect_code, defect_err = gate_process(root)
+    assert defect_code == 1, (defect_code, defect_err)
+    appeared = set(defect_err.splitlines()) - set(control_err.splitlines())
+    assert len(appeared) == 1, appeared
+    line = appeared.pop()
+    assert ORPHAN in line and target in line, line
