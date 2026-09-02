@@ -222,14 +222,39 @@ def grep_word(files: list[pathlib.Path], word: str) -> list[str]:
     return [f.name for f in files if pat.search(f.read_text(errors="ignore"))]
 
 
-#: A `mod x;` declaration and the attributes above it. Files are reached through
-#: their DECLARATION, so what gates a file is written in its parent, not in it.
+#: The structure a `mod` declaration is read out of. Files are reached through
+#: their DECLARATION, so what gates a file is written in its parent, not in it —
+#: and the declaration is found by scanning, not by a line regex, because the
+#: line regex this replaced answered "production" to ELEVEN legal spellings
+#: rustc withholds, measured by running the fourteen `SPELLINGS` of the mutation
+#: table beside this file against that regex; the other three are clauses of the
+#: scanner rather than holes it inherited. Measured on the shipped tree: collapsing all
+#: 187 cfg-carrying declarations onto one line each — the shape
+#: `#[cfg(test)] mod tests;`, which only `cargo fmt` objects to and this gate
+#: never runs — took `production_rust` from 182 to 394, every `.rs` in the tree,
+#: with no finding printed. [`_scan`] carries the rest of the table.
 MOD_DECL = re.compile(
-    r"(?m)^(?P<attrs>(?:[ \t]*\#!?\[[^\n]*\]\n)*)[ \t]*"
-    r"(?:pub(?:\([^)]*\))?[ \t]+)?mod[ \t]+(?P<name>[A-Za-z_][A-Za-z0-9_]*)[ \t]*;"
+    r"(?:pub(?:[ \t\r\n]*\([^)]*\))?[ \t\r\n]+)?(?:unsafe[ \t\r\n]+)?"
+    r"mod[ \t\r\n]+(?P<name>[A-Za-z_][A-Za-z0-9_]*)[ \t\r\n]*(?P<end>[;{])"
 )
-CFG_ATTR = re.compile(r"\#\[cfg\((?P<expr>.*)\)\][ \t]*$")
-PATH_ATTR = re.compile(r'\#\[path[ \t]*=[ \t]*"(?P<rel>[^"]+)"\]')
+#: What a scan stops on: an attribute, the `mod` keyword, and the braces that say
+#: which inline block a declaration sits in.
+STRUCTURE = re.compile(r"\#!?\[|\bmod\b|[{}]")
+ATTR_OPEN = re.compile(r"\#(?P<inner>!?)\[")
+SPACE = re.compile(r"[ \t\r\n]*")
+CFG_ATTR = re.compile(r"(?s)\Acfg\((?P<expr>.*)\)\Z")
+#: `#[cfg_attr(P, cfg(E))]` gates on E only when P holds, which is the
+#: implication `any(not(P), E)` and needs no second evaluator.
+CFG_ATTR_ATTR = re.compile(r"(?s)\Acfg_attr\((?P<body>.*)\)\Z")
+PATH_ATTR = re.compile(r'(?s)\Apath[ \t\r\n]*=[ \t\r\n]*"(?P<rel>[^"]+)"\Z')
+
+#: Where a comment or a literal starts. A structural scan that reads inside
+#: either is how `#[cfg(test)] // why` parsed as an ungated declaration and a
+#: `/* */` above a prologue `#![cfg(test)]` parsed as a production file; a string
+#: holding `/*` would be worse still, eating the rest of the file as a comment.
+LITERAL = re.compile("//|/\\*|(?<![A-Za-z0-9_])(?:b?r\\#*|b)?\"|\"|'")
+#: A `'` opens a char literal only if it closes; otherwise it is a lifetime.
+CHAR_LIT = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F_]{1,6}\}|.)|[^\\'\n])'")
 
 #: The file names whose plain `mod x;` resolves BESIDE them. Everywhere else the
 #: children of `foo.rs` live in `foo/`, and a resolver that forgets it looks for
@@ -247,14 +272,6 @@ PATH_ATTR = re.compile(r'\#\[path[ \t]*=[ \t]*"(?P<rel>[^"]+)"\]')
 #: hide, and the reason the filter was not merely inert but load-BLIND: it was
 #: standing in front of this rule, catching its failures by their spelling.
 ROOT_MODULES = ("mod.rs", "lib.rs", "main.rs")
-
-#: The cfg a file applies to ITSELF. An inner `#![cfg(test)]` withholds the whole
-#: module whatever its declaration says, so it is the one way a file is test-only
-#: while every `mod` naming it is plain — the case the deleted `"tests" not in
-#: name` filter was the accidental backstop for, and the one it would have missed
-#: anyway the day the file was called `helper.rs`. Zero instances in the tree
-#: today; that is the class being closed, not a count being defended.
-INNER_CFG = re.compile(r"^\#!\[cfg\((?P<expr>.*)\)\]$")
 
 #: The two cfg atoms no shipped image sets. `kani` is a `--cfg` the proof runner
 #: passes and `test` is cargo's; a module reachable only through them is in no
@@ -279,6 +296,20 @@ def _cfg_atom(atom: str, shippable: frozenset[str]) -> bool | None:
     return None
 
 
+def _split_top(expr: str) -> list[str]:
+    """`expr` cut at its top-level commas — a cfg combinator's operands, and the
+    predicate/attribute split a `cfg_attr` needs, which is why it is one function
+    and not the loop `_cfg_holds` used to carry inline."""
+    parts, depth, start = [], 0, 0
+    for index, char in enumerate(expr):
+        depth += (char == "(") - (char == ")")
+        if char == "," and depth == 0:
+            parts.append(expr[start:index])
+            start = index + 1
+    parts.append(expr[start:])
+    return parts
+
+
 def _cfg_holds(expr: str, shippable: frozenset[str]) -> bool | None:
     """`expr` under `test = kani = FALSE`, three-valued. None is satisfiable.
 
@@ -292,13 +323,7 @@ def _cfg_holds(expr: str, shippable: frozenset[str]) -> bool | None:
     for combinator in ("all", "any", "not"):
         if not expr.startswith(f"{combinator}("):
             continue
-        inner, depth, parts, start = expr[len(combinator) + 1 : -1], 0, [], 0
-        for index, char in enumerate(inner):
-            depth += (char == "(") - (char == ")")
-            if char == "," and depth == 0:
-                parts.append(inner[start:index])
-                start = index + 1
-        parts.append(inner[start:])
+        parts = _split_top(expr[len(combinator) + 1 : -1])
         held = [_cfg_holds(part, shippable) for part in parts if part.strip()]
         if combinator == "not":
             return None if held[0] is None else not held[0]
@@ -313,26 +338,202 @@ def _child_home(source: pathlib.Path) -> pathlib.Path:
     return source.parent if source.name in ROOT_MODULES else source.parent / source.stem
 
 
-def _self_withheld(text: str) -> str | None:
-    """The `#![cfg(...)]` expression a file's own prologue applies to it.
+def _gate(cfgs) -> str:
+    """The one cfg expression a list of them AND to. rustc ANDs stacked
+    attributes; a loop keeping the LAST read `#[cfg(test)] #[cfg(feature =
+    "display")] mod helper;` as `display` alone and called the leaf production.
+    `all(…)` and not a boolean because the same string is the reason printed."""
+    return cfgs[0] if len(cfgs) == 1 else f"all({', '.join(cfgs)})"
 
-    The PROLOGUE only — up to the first line that is not blank, a `//` comment or
-    an inner attribute. The same spelling inside `mod inner { #![cfg(test)] … }`
-    withholds that block and not the file, and a scan of the whole text could not
-    tell the two apart. Anything unrecognised answers None, which KEEPS the file:
-    the same failure direction [`_cfg_atom`] argues for, because over-counting an
-    owner is a column one too high and under-counting one hides an owner.
+
+def _blanked(text: str) -> tuple[str, str]:
+    """`text` with comments gone, and again with literal INTERIORS gone too.
+
+    Offsets are preserved in both, so a span found in one reads out of the
+    other: the structure scan needs `{`, `#[` and `//` inside a literal to be
+    invisible, and `#[path = "…"]` needs the literal back.
     """
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("//"):
+    plain, deep, pos = list(text), list(text), 0
+    while (found := LITERAL.search(text, pos)) is not None:
+        start, token = found.start(), found.group(0)
+        if token in ("//", "/*"):
+            if token == "//":
+                stop = text.find("\n", start)
+                stop = len(text) if stop < 0 else stop
+            else:
+                depth, stop = 1, start + 2  # rustc nests block comments
+                while stop < len(text) and depth:
+                    step = 2 if text[stop : stop + 2] in ("/*", "*/") else 1
+                    depth += (text[stop : stop + 2] == "/*") - (
+                        text[stop : stop + 2] == "*/"
+                    )
+                    stop += step
+            for index in range(start, stop):
+                if text[index] != "\n":
+                    plain[index] = deep[index] = " "
+        elif token == "'":
+            literal = CHAR_LIT.match(text, start)
+            if literal is None:  # a lifetime, and it holds no syntax
+                pos = start + 1
+                continue
+            stop, interior = literal.end(), range(start + 1, literal.end() - 1)
+            for index in interior:
+                deep[index] = " "
+        else:
+            hashes = token.count("#")
+            closer = '"' + "#" * hashes if "r" in token else '"'
+            stop = _string_end(text, found.end(), closer, raw="r" in token)
+            for index in range(found.end(), stop - len(closer)):
+                if text[index] != "\n":
+                    deep[index] = " "
+        pos = stop
+    return "".join(plain), "".join(deep)
+
+
+def _string_end(text: str, body: int, closer: str, raw: bool) -> int:
+    """One past a string literal whose body starts at `body`."""
+    if raw:
+        stop = text.find(closer, body)
+        return len(text) if stop < 0 else stop + len(closer)
+    index = body
+    while index < len(text):
+        if text[index] == "\\":
+            index += 2
             continue
-        if not line.startswith("#!["):
-            return None
-        found = INNER_CFG.match(line)
-        if found:
-            return found.group("expr")
-    return None
+        if text[index] == '"':
+            return index + 1
+        index += 1
+    return len(text)
+
+
+def _attr_cfgs(body: str) -> list[str]:
+    """The cfg expressions one attribute imposes, `cfg_attr` included."""
+    found = CFG_ATTR.match(body)
+    if found:
+        return [found.group("expr")]
+    found = CFG_ATTR_ATTR.match(body)
+    if not found:
+        return []
+    parts = _split_top(found.group("body"))
+    predicate = parts[0].strip()
+    return [
+        f"any(not({predicate}), {expr})"
+        for part in parts[1:]
+        for expr in _attr_cfgs(part.strip())
+    ]
+
+
+#: Keyed on the TEXT and not on a path, so a file edited between two calls in
+#: one process is re-scanned and only an identical file is reused. `derive` asks
+#: `production_rust` once per property, which is 58 passes over the same 394
+#: files; without this the scan costs 22 s of a 29 s row.
+@functools.cache
+def _scan(text: str) -> tuple[tuple[str, ...], tuple[dict, ...]]:
+    """(the cfgs the FILE applies to itself, one record per `mod NAME;`).
+
+    A scanner and not a line regex, because every spelling below is legal Rust
+    that rustc withholds and the regex called production — measured one at a
+    time by moving `SEC-ADM-001`'s only tag into the leaf and reading the row:
+
+    * two `#[cfg]` attributes stacked. rustc ANDs them; the old loop kept the
+      LAST, so `#[cfg(test)] #[cfg(feature = "display")]` read as `display`.
+    * the attribute on the `mod` line, an attribute broken over three lines, and
+      a `// why` after `)]` — three ways for a run of attributes to stop being a
+      run of whole lines. Only the first two are spellings `cargo fmt` rejoins.
+    * a doc comment, a `pub(crate)`, or a bracket-carrying sibling attribute
+      (`#[cfg_attr(test, deny[warnings])]`, which rustc accepts) standing
+      between the cfg and the `mod` it gates.
+    * `#[cfg_attr(P, cfg(E))]` in place of the cfg, which is the implication
+      [`CFG_ATTR_ATTR`] turns it into rather than a second evaluator.
+    * an enclosing `mod inner { … }` carrying the cfg, and a `#[path]` inside
+      one, which also moves where the leaf resolves: rustc puts the children of
+      an inline block under a directory named for it, in BOTH the `mod.rs` and
+      the non-`mod.rs` shape (checked against rustc 1.96, not reasoned about).
+    * a `/* */` or a trailing `// …` around a prologue `#![cfg(test)]`, and a
+      second `#![cfg]` stacked either side of it — both orders, because the rule
+      taking the LAST attribute and the rule taking the FIRST are wrong in
+      opposite ones and either pair alone leaves half the AND unfalsified.
+
+    Eleven of the fourteen survive `cargo fmt --all --check` unchanged, measured
+    by writing each into `crates/rsk-device/` and running the row: the same-line
+    attribute, the three-line one and the `/* */` prologue are the three a
+    formatter would have caught, and no other row in the gate reads any of them.
+
+    Inner attributes belong to the block they open, which is what keeps
+    `mod inner { #![cfg(test)] … }` from withholding the whole file: only depth
+    zero answers for the file.
+    """
+    plain, deep = _blanked(text)
+    own: list[str] = []
+    blocks: list[dict] = []
+    records: list[dict] = []
+    depth, pos = 0, 0
+    while (found := STRUCTURE.search(deep, pos)) is not None:
+        start, token = found.start(), found.group(0)
+        if token in ("{", "}"):
+            depth, pos = depth + (1 if token == "{" else -1), start + 1
+            while blocks and blocks[-1]["depth"] > depth:
+                blocks.pop()
+            continue
+        if token == "#![":
+            pos = stop = _attr_end(deep, found.end() - 1)
+            inside = blocks[-1] if blocks and blocks[-1]["depth"] == depth else None
+            if inside is not None:
+                inside["cfgs"] += _attr_cfgs(_attr_body(plain[start:stop]))
+            elif not blocks and depth == 0:
+                own += _attr_cfgs(_attr_body(plain[start:stop]))
+            continue
+        cfgs, rel, cursor = [], None, start
+        while (opened := ATTR_OPEN.match(deep, cursor)) and not opened.group("inner"):
+            stop = _attr_end(deep, opened.end() - 1)
+            body = _attr_body(plain[cursor:stop])
+            cfgs += _attr_cfgs(body)
+            named = PATH_ATTR.match(body)
+            rel = named.group("rel") if named else rel
+            cursor = SPACE.match(deep, stop).end()
+        declaration = MOD_DECL.match(deep, cursor)
+        if declaration is None:
+            # Not a module. Step past the FIRST attribute only, so the braces of
+            # whatever it does gate still move `depth`.
+            pos = start + 1 if start == cursor else _attr_end(deep, found.end() - 1)
+            continue
+        pos, name = declaration.end(), declaration.group("name")
+        if declaration.group("end") == "{":
+            blocks.append({"depth": depth + 1, "cfgs": cfgs, "dir": rel or name})
+            depth += 1
+            continue
+        # The enclosing BLOCKS' cfgs and not the file's own: a declaration is
+        # withheld outright, and a file its own prologue withholds still keeps a
+        # `#[path]` leaf that a shipped module also names. That second rule is
+        # `cfg_excluded`'s fixed point, and folding the prologue in here would
+        # overrule it.
+        records.append(
+            {
+                "name": name,
+                "cfgs": tuple([c for b in blocks for c in b["cfgs"]] + cfgs),
+                "rel": rel,
+                "dirs": tuple(b["dir"] for b in blocks),
+            }
+        )
+    # Tuples because the answer is CACHED: a caller that appended to the list it
+    # was handed would gate every later file on the last one's cfg.
+    return tuple(own), tuple(records)
+
+
+def _attr_body(source: str) -> str:
+    """The inside of one `#[…]` or `#![…]`."""
+    return source[source.index("[") + 1 : source.rindex("]")].strip()
+
+
+def _attr_end(deep: str, bracket: int) -> int:
+    """One past the `]` closing the attribute whose `[` is at `bracket`."""
+    depth, index = 0, bracket
+    while index < len(deep):
+        depth += (deep[index] == "[") - (deep[index] == "]")
+        index += 1
+        if not depth:
+            break
+    return index
 
 
 @functools.cache
@@ -395,6 +596,42 @@ def shippable_features(root: pathlib.Path) -> frozenset[str]:
     return frozenset(features)
 
 
+def rust_sources(root: pathlib.Path) -> list[pathlib.Path]:
+    """Every `.rs` of the firmware and its crates, before any cfg is read."""
+    return list((root / "crates").glob("*/src/**/*.rs")) + list(
+        (root / "firmware" / "src").glob("**/*.rs")
+    )
+
+
+def declared_targets(root: pathlib.Path):
+    """(declaring file, the file it names, the record) for every `mod NAME;`.
+
+    Separate from [`cfg_excluded`] because the ORPHAN census reads it too, and a
+    census that re-derived the resolution rule would be asserting its own copy.
+    """
+    for parent in rust_sources(root):
+        for record in _scan(parent.read_text(errors="ignore"))[1]:
+            name, dirs = record["name"], record["dirs"]
+            # A `#[path]` is relative to the declaring FILE's directory; a plain
+            # `mod` resolves under [`_child_home`]. Two rules and not one,
+            # because Rust has two — `crates/rsk-ui/src/render.rs` names both
+            # shapes and the single-rule version resolved neither `render/`.
+            # An enclosing `mod inner { … }` adds a directory to BOTH.
+            home = _child_home(parent).joinpath(*dirs)
+            if record["rel"]:
+                # One candidate and no fallback, because rustc has none:
+                # `#[path = "gone.rs"]` is `couldn't read src/gone.rs` even with
+                # `gone/mod.rs` sitting there, measured on rustc 1.96. The
+                # fallback that stood here answered a second file for a
+                # declaration rustc refuses to resolve at all.
+                candidates = [(home if dirs else parent.parent) / record["rel"]]
+            else:
+                candidates = [home / f"{name}.rs", home / name / "mod.rs"]
+            target = next((c for c in candidates if c.is_file()), None)
+            if target is not None:
+                yield parent, target, record
+
+
 def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
     """Files no buildable image compiles: a withheld `mod`, and what it reaches.
 
@@ -420,11 +657,13 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
     filter was deleted: the filter decided ZERO files, `production_rust` being
     182 with it and 182 without.
 
-    The last way in is the file's OWN prologue. An inner `#![cfg(test)]` shuts a
-    module whatever its declaration says, and no spelling of a declaration can
-    see it; that is [`_self_withheld`], and it is the direction the name filter
-    was standing in for without ever being able to reach — a `helper.rs` is
-    spelled like production and a `manifests.rs` like a test.
+    The last way in is what the file says about ITSELF. An inner `#![cfg(test)]`
+    at depth zero shuts a module whatever its declaration says, and no spelling
+    of a declaration can see it; that is [`_scan`]'s `own`, and it is the
+    direction the name filter was standing in for without ever being able to
+    reach — a `helper.rs` is spelled like production and a `manifests.rs` like a
+    test. It shuts the module's DIRECTORY too, which is the only clause that
+    reaches an orphan sitting under one.
 
     One live declarer keeps a file: the same source can be `#[path]`-included
     from a shipped module and from a test. Only the directory half can still
@@ -438,49 +677,32 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
     own copy now filters an already-closed set rather than answering second.
     """
     shippable = shippable_features(root)
-    sources = list((root / "crates").glob("*/src/**/*.rs")) + list(
-        (root / "firmware" / "src").glob("**/*.rs")
-    )
     out: dict[pathlib.Path, str] = {}
     shut: dict[pathlib.Path, str] = {}
     declarers: dict[pathlib.Path, set[pathlib.Path]] = {}
-    for parent in sources:
-        text = parent.read_text(errors="ignore")
-        own = _self_withheld(text)
-        if own is not None and _cfg_holds(own, shippable) is False:
-            why = f"{parent.name} applies `#![cfg({own})]` to itself"
+    for parent in rust_sources(root):
+        own, _ = _scan(parent.read_text(errors="ignore"))
+        if own and _cfg_holds(_gate(own), shippable) is False:
+            why = f"{parent.name} applies `#![cfg({_gate(own)})]` to itself"
             out.setdefault(parent.resolve(), why)
+            # The one clause the declaration half cannot reach: a file under this
+            # module's directory that NO `mod` names. It is compiled by nothing
+            # either way, and without this it comes back as an ORPHAN, which
+            # [`production_rust`] keeps.
             shut.setdefault(_child_home(parent).resolve(), why)
-        for match in MOD_DECL.finditer(text):
-            expr = None
-            for line in match.group("attrs").splitlines():
-                found = CFG_ATTR.search(line.strip())
-                if found:
-                    expr = found.group("expr")
-            relative = PATH_ATTR.search(match.group("attrs"))
-            name = match.group("name")
-            # A `#[path]` is relative to the declaring FILE's directory; a plain
-            # `mod` resolves under [`_child_home`]. Two rules and not one,
-            # because Rust has two — `crates/rsk-ui/src/render.rs` names both
-            # shapes and the single-rule version resolved neither `render/`.
-            if relative:
-                candidates = [parent.parent / relative.group("rel")]
-            else:
-                home = _child_home(parent)
-                candidates = [home / f"{name}.rs", home / name / "mod.rs"]
-            target = next((c for c in candidates if c.is_file()), None)
-            if target is None:
-                continue
-            # Every declaration, not only the withheld ones: what decides the
-            # second closure below is whether a file has a live declarer LEFT.
-            declarers.setdefault(target.resolve(), set()).add(parent.resolve())
-            if expr is None or _cfg_holds(expr, shippable) is not False:
-                continue
-            why = f"{parent.name} declares `mod {name}` under cfg({expr})"
-            out[target.resolve()] = why
-            # Where the refused module's own children sit. Taken off the RESOLVED
-            # target so a `#[path]` re-point carries its sub-tree with it.
-            shut[_child_home(target).resolve()] = why
+    for parent, target, record in declared_targets(root):
+        # Every declaration, not only the withheld ones: what decides the second
+        # closure below is whether a file has a live declarer LEFT.
+        declarers.setdefault(target.resolve(), set()).add(parent.resolve())
+        expr = _gate(record["cfgs"])
+        if not record["cfgs"] or _cfg_holds(expr, shippable) is not False:
+            continue
+        why = f"{parent.name} declares `mod {record['name']}` under cfg({expr})"
+        out[target.resolve()] = why
+        # Where the refused module's own children sit. Taken off the RESOLVED
+        # target so a `#[path]` re-point carries its sub-tree with it.
+        shut[_child_home(target).resolve()] = why
+    sources = rust_sources(root)
     # `setdefault` and the `break` pick the NEAREST reason and decide nothing
     # else: every caller reads the KEYS, so the value is a message to whoever
     # reads this mapping and never a membership test. Untested on purpose.
@@ -532,13 +754,20 @@ def production_rust(root: pathlib.Path) -> list[pathlib.Path]:
 
     One thing the filter did that this does NOT: an ORPHAN — a file no `mod`
     declaration reaches and no manifest names as a root — is compiled by nothing
-    and is counted production here anyway. Deliberate, and it is the direction
-    [`_cfg_atom`] argues for: withholding an orphan means trusting the resolver's
-    completeness, and a resolver gap would then hide a real owner silently
-    instead of over-counting one. The shipped tree has none — every `.rs` under
-    `crates/*/src` and `firmware/src` is reached by a declaration or is a crate
-    root, measured, which is what makes the closure a closure. `test_matrix_gate`
-    has one, and it is a `screen_kani.rs` that nothing declares.
+    and is counted production here anyway. Deliberate, but NOT because
+    over-counting is cheap, which is what the reason here used to say: 34 of the
+    59 rows sit at `rust = 1`, so on most of the table one over-counted owner is
+    exactly the difference between EXIT 1 naming the missing owner and EXIT 0
+    saying nothing. Both directions are silent, and what settles it is the
+    asymmetry in SCALE — withholding orphans buys a resolver gap the power to
+    drop owners across the whole table at once, where keeping them costs one row
+    per orphan — together with the census: the shipped tree has none, every `.rs`
+    under `crates/*/src` and `firmware/src` is reached by a declaration or is a
+    crate root, so the rule decides zero files today. Asserted, not remembered:
+    `test_an_orphan_owns_its_tag_and_the_shipped_tree_has_none` runs
+    [`declared_targets`] over the real tree, and it is the same function
+    `cfg_excluded` resolves with. `test_matrix_gate` has one orphan, and it is a
+    `screen_kani.rs` that nothing declares.
 
     Mutation table for the classifier, driven through `check_property_tags` on a
     fixture and re-driven on a copy of the shipped tree:
@@ -549,16 +778,26 @@ def production_rust(root: pathlib.Path) -> list[pathlib.Path]:
       leaf was a production owner at EXIT=0.
     * the same file with the `#[cfg(test)]` removed → green. Depth and the
       parent's shape are not what withholds it; the cfg is.
-    * `crates/rsk-device/src/attests.rs`, plainly declared, carrying that tag →
-      green here, red under the re-inserted name filter with the same `no
-      Refines tag` message. The message is the tell: it is the finding for a
-      MISSING owner, printed over a file every image compiles.
-    * a prologue `#![cfg(test)]` over a plainly-declared file → red. Without
-      [`_self_withheld`] a proof-only mirror stands in as the owner, which is the
-      `*_assurance.rs` defect with the gate on the other side of the file.
-    * `mod inner { #![cfg(test)] }` inside a shipped file → green. A scan that
-      reads the whole text instead of the prologue takes that file's tag with it
-      and the row reports an owner that is sitting right there.
+    * a plainly-declared `attests.rs` carrying that tag → green here, red under
+      the re-inserted name filter with the same `no Refines tag` message. The
+      message is the tell: it is the finding for a MISSING owner, printed over a
+      file every image compiles. CORRECTION, and it belongs at the clause
+      because a commit message cannot be rewritten: `bb324bf` reported this as
+      an observation about `crates/rsk-device/src/attests.rs`. That file does
+      not exist and `git log --all` over it is empty; `SEC-ADM-001`'s only tag
+      is in `ccid.rs`. The arm is real — it was built by MOVING that tag onto a
+      new `attests.rs` — but it is a construction, and on the shipped tree ZERO
+      production files carry `tests` or `kani` in the name, which is the census
+      `test_the_shipped_tree_holds_no_file_the_name_filter_would_have_decided`
+      asserts. The filter was inert in both directions.
+    * a prologue `#![cfg(test)]` over a plainly-declared file → red. Without the
+      inner-attribute half of [`_scan`] a proof-only mirror stands in as the
+      owner, which is the `*_assurance.rs` defect with the gate on the other
+      side of the file.
+    * `mod inner { #![cfg(test)] }` inside a shipped file → green. An inner
+      attribute answers for the block it OPENS, and a rule handing every one of
+      them to the file takes that file's tag with it — the row then reports a
+      missing owner that is sitting right there.
     * a prologue `#![cfg(target_os = "none")]` → green. `is False` and not `is
       not True`: a satisfiable expression keeps the file, and the mutant reading
       the three-valued answer as two drops a shipped owner.

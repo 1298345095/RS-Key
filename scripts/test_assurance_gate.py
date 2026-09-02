@@ -1195,3 +1195,274 @@ def test_the_shipped_tree_holds_no_file_the_name_filter_would_have_decided():
     production = assurance_gate.production_rust(repo)
     assert production, "the classifier returned nothing at all"
     assert not [f for f in production if "kani" in f.name or "tests" in f.name]
+
+
+# ---- the declaration is read by a scanner, so a spelling cannot hide it ------
+
+
+#: Every spelling of "this module is test-only" that the line-oriented regex
+#: standing here answered "production" to. Each is legal Rust `rustc 1.96` does
+#: not compile into a non-test build, checked by putting a `compile_error!` in
+#: the leaf rather than by reasoning about the grammar; and each pairs with a
+#: twin below whose ONLY difference is one cfg ATOM, so the last attribute, the
+#: comment, the block and the `pub(crate)` are identical across the pair and a
+#: resolver that reads any of them instead of the cfg cannot tell them apart.
+#: `target_os = "none"` and `some_future_atom` are the free atoms — satisfiable,
+#: so they keep a file — and `test` is the one that withholds it.
+WITHHELD, KEPT = "test", "some_future_atom"
+SPELLINGS = {
+    "a second cfg attribute stacked under the first": (
+        '#[cfg({cfg})]\n#[cfg(target_os = "none")]\nmod helper;\n',
+        "helper.rs",
+    ),
+    "the attribute on the mod line": ("#[cfg({cfg})] mod helper;\n", "helper.rs"),
+    "an attribute broken over three lines": (
+        "#[cfg(\n    {cfg}\n)]\nmod helper;\n",
+        "helper.rs",
+    ),
+    "a comment after the closing bracket": (
+        "#[cfg({cfg})] // why it is gated\nmod helper;\n",
+        "helper.rs",
+    ),
+    "a doc comment between the attribute and the mod": (
+        "#[cfg({cfg})]\n/// the helper\nmod helper;\n",
+        "helper.rs",
+    ),
+    "a bracket inside the attribute beside it": (
+        "#[cfg({cfg})]\n#[cfg_attr(test, deny[warnings])]\nmod helper;\n",
+        "helper.rs",
+    ),
+    "a pub(crate) between the attribute and the mod": (
+        "#[cfg({cfg})]\npub(crate) mod helper;\n",
+        "helper.rs",
+    ),
+    "a cfg_attr that sets the cfg": (
+        "#[cfg_attr(all(), cfg({cfg}))]\nmod helper;\n",
+        "helper.rs",
+    ),
+    "an enclosing inline block": (
+        "#[cfg({cfg})]\nmod inner {{\n    mod helper;\n}}\n",
+        "inner/helper.rs",
+    ),
+    "a path attribute inside an inline block": (
+        '#[cfg({cfg})]\nmod inner {{\n    #[path = "helper.rs"]\n    mod helper;\n}}\n',
+        "inner/helper.rs",
+    ),
+    "a block comment above the prologue": (
+        "mod helper;\n",
+        "helper.rs//* the mirror */\n#![cfg({cfg})]\n",
+    ),
+    "a comment after the prologue": (
+        "mod helper;\n",
+        "helper.rs//#![cfg({cfg})] // mirror only\n",
+    ),
+    "a second prologue attribute stacked under the first": (
+        "mod helper;\n",
+        'helper.rs//#![cfg({cfg})]\n#![cfg(target_os = "none")]\n',
+    ),
+    # Both orders, because the two readings fail in opposite ones: a rule taking
+    # the LAST attribute is wrong above, a rule taking the FIRST is wrong here,
+    # and either pair alone leaves half the AND unfalsified.
+    "a prologue attribute stacked above the cfg": (
+        "mod helper;\n",
+        'helper.rs//#![cfg(target_os = "none")]\n#![cfg({cfg})]\n',
+    ),
+}
+
+
+def _spelled_leaf(tree, spelling: str, cfg: str) -> pathlib.Path:
+    """Move `BarNeverOpens`'s only tag into a leaf declared as `spelling` says.
+
+    `where` doubles as the prologue carrier: everything after the `//` is what
+    the leaf says about ITSELF, which is the half no declaration can express.
+    """
+    declaration, where = SPELLINGS[spelling]
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(
+        src / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        declaration.format(cfg=cfg),
+    )
+    leaf, _, prologue = where.partition("//")
+    path = src / leaf
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        prologue.format(cfg=cfg) + "// Refines `Mini!BarNeverOpens` — SEC-T-002.\n"
+    )
+    return path
+
+
+@pytest.mark.parametrize("spelling", SPELLINGS)
+def test_a_legal_spelling_of_cfg_test_still_withholds_the_leaf(tree, spelling):
+    """A test file classified as production, once per spelling.
+
+    Measured on the shipped tree before this scanner: writing all 187
+    cfg-carrying declarations on one line each — the shape a formatter rejoins
+    and nothing else objects to — took `production_rust` from 182 to 394, every
+    `.rs` in the tree, and the row printed no finding at all.
+    """
+    leaf = _spelled_leaf(tree, spelling, WITHHELD)
+    assert leaf.resolve() in assurance_gate.cfg_excluded(tree), spelling
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+@pytest.mark.parametrize("spelling", SPELLINGS)
+def test_the_same_spelling_over_a_satisfiable_cfg_keeps_the_leaf(tree, capsys, spelling):
+    """Its twin. What moved is one cfg atom and nothing else, so a green here
+    with a red above says the scanner read the CFG — not the punctuation."""
+    leaf = _spelled_leaf(tree, spelling, KEPT)
+    assert leaf.resolve() not in assurance_gate.cfg_excluded(tree), spelling
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+TAG_LINE = "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n"
+TAGGED = "// Refines `Mini!BarNeverOpens` — SEC-T-002.\n"
+
+
+def _rewrite(tree, declaration: str) -> pathlib.Path:
+    """Spend `BarNeverOpens`'s only tag on `declaration` and hand back `src`."""
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(src / "lib.rs", TAG_LINE, declaration)
+    return src
+
+
+def test_a_string_holding_a_comment_opener_does_not_swallow_what_follows(tree):
+    """The scan skips literals, and this is what it costs not to.
+
+    A `"/*"` in a shipped constant opens a block comment that never closes, and
+    everything after it — the `#[cfg(test)]`, the `mod`, the tag — is read as
+    prose. The leaf then has no declarer at all and stands as the owner, which
+    is the silent direction: no finding, and a mirror in the `rust` column.
+    """
+    src = _rewrite(tree, 'const PROBE: &str = "/*";\n#[cfg(test)]\nmod helper;\n')
+    (src / "helper.rs").write_text(TAGGED)
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+def test_a_brace_inside_a_string_does_not_extend_the_block_around_it(tree):
+    """The structural half of the same clause: braces inside a literal.
+
+    An unbalanced `{` in a shipped constant leaves the inline block above it
+    open for the rest of the file, so the NEXT declaration is resolved under a
+    directory that does not exist, resolves to nothing, and its leaf comes back
+    an orphan — which [`production_rust`] keeps. A withheld file counted
+    production, and the only tell is a declaration that quietly went missing.
+    """
+    src = _rewrite(
+        tree,
+        '#[cfg(test)]\nmod inner {\n    const BRACE: &str = "{";\n}\n'
+        "#[cfg(test)]\nmod helper;\n",
+    )
+    (src / "helper.rs").write_text(TAGGED)
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+def test_a_mod_declaration_under_a_root_directory_leaf_is_found(tree):
+    """`mod screen;` resolves to `screen.rs` OR to `screen/mod.rs`, and the tree
+    rests on the second: `crates/rsk-fido/src/lib.rs` withholds eighteen
+    conformance files through a `conformance/mod.rs` that declares them."""
+    src = _rewrite(tree, "#[cfg(test)]\nmod screen;\n")
+    (src / "screen").mkdir()
+    (src / "screen" / "mod.rs").write_text(TAGGED)
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+def test_a_lifetime_between_two_declarations_is_not_a_char_literal(tree):
+    """`'a` is one apostrophe, and a scanner pairing them off blanks the code in
+    between. Two lifetimes around a `#[cfg(test)] mod` hide the whole
+    declaration, and the leaf comes back as an owner nothing compiles."""
+    src = _rewrite(
+        tree,
+        "fn head<'a>(x: &'a [u8]) -> &'a [u8] { x }\n"
+        "#[cfg(test)]\nmod helper;\n"
+        "fn tail<'b>(x: &'b [u8]) -> &'b [u8] { x }\n",
+    )
+    (src / "helper.rs").write_text(TAGGED)
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+def test_a_path_leaf_a_shipped_module_also_names_survives_a_withheld_includer(
+    tree, capsys
+):
+    """One live declarer keeps a file, and a PROLOGUE cannot overrule that.
+
+    `mirror.rs` withholds itself and `#[path]`-includes `shared.rs`; `lib.rs`
+    names the same file plainly, so an image compiles it. Folding a file's own
+    `#![cfg]` into the declarations it writes withholds `shared.rs` outright and
+    the fixed point never gets to say otherwise — a red over a compiled file.
+    """
+    src = _rewrite(tree, "mod shared;\nmod mirror;\n")
+    (src / "shared.rs").write_text(TAGGED)
+    (src / "mirror.rs").write_text(
+        '#![cfg(test)]\n#[path = "shared.rs"]\nmod shared;\n'
+    )
+    assert (src / "shared.rs").resolve() not in assurance_gate.cfg_excluded(tree)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_an_orphan_under_a_self_withheld_module_is_shut_with_it(tree):
+    """The one thing `shut` does that no declaration reaches.
+
+    A declared child of a `#![cfg(test)]` file is already withheld twice over —
+    by the directory and by the fixed point over its declarers — so the shape
+    that isolates this clause is a file under `mirror/` that NO `mod` names.
+    Compiled by nothing, and [`production_rust`] keeps orphans, so without the
+    directory half it stands as `BarNeverOpens`'s owner at EXIT=0.
+    """
+    src = _rewrite(tree, "mod mirror;\n")
+    (src / "mirror.rs").write_text("#![cfg(test)]\nfn m() {}\n")
+    (src / "mirror").mkdir()
+    (src / "mirror" / "stray.rs").write_text(TAGGED)
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+def test_a_path_attribute_that_names_nothing_resolves_to_nothing(tree, capsys):
+    """rustc has no fallback for a `#[path]`, so neither has this.
+
+    Measured on rustc 1.96: `#[path = "gone.rs"] mod shared;` is `couldn't read
+    src/gone.rs` with `shared/mod.rs` sitting right there, and `#[path = "y"]`
+    over a directory is `Is a directory`. The `parent.parent / name / "mod.rs"`
+    fallback that stood here answered a SECOND file for a declaration rustc
+    resolves to none — and here that second file is `shared/mod.rs`, plainly
+    declared, carrying the only tag: the fallback reddens the row over it.
+    """
+    src = _rewrite(tree, "mod screen;\nmod shared;\n")
+    (src / "shared").mkdir()
+    (src / "shared" / "mod.rs").write_text(TAGGED)
+    (src / "screen.rs").write_text('#[cfg(test)]\n#[path = "gone.rs"]\nmod shared;\n')
+    assert (src / "shared" / "mod.rs").resolve() not in assurance_gate.cfg_excluded(tree)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_an_orphan_owns_its_tag_and_the_shipped_tree_has_none(tree, capsys):
+    """What keeping orphans costs, and the census that is the reason it is safe.
+
+    The cost is not "a column one too high": 34 of the 59 rows sit at `rust = 1`,
+    so for most of the table an over-counted owner is the whole difference
+    between EXIT 1 naming the missing owner and EXIT 0 saying nothing — which is
+    the first half here, asserted rather than argued. What makes the rule safe is
+    the second half: the shipped tree has NO orphan, so the rule decides zero
+    files today, and withholding one would instead buy a resolver gap the power
+    to delete owners across the table in silence.
+    """
+    src = _rewrite(tree, "fn bar() {}\n")
+    (src / "stray.rs").write_text(TAGGED)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    reached = {target.resolve() for _, target, _ in assurance_gate.declared_targets(repo)}
+    roots = {
+        f.resolve()
+        for f in assurance_gate.rust_sources(repo)
+        if f.name in ("lib.rs", "main.rs")
+    }
+    orphans = [
+        f
+        for f in assurance_gate.rust_sources(repo)
+        if f.resolve() not in reached and f.resolve() not in roots
+    ]
+    assert not orphans, [str(f) for f in orphans]

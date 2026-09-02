@@ -133,7 +133,7 @@ assurance/bundle/SEC-FIDO-004.toml	formal/gen-configs.sh	305-307	# family nothin
 assurance/bundle/SEC-FIDO-004.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
 assurance/bundle/SEC-FIDO-004.toml	formal/run-tlc.sh	236-237	"$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \	-nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
 assurance/bundle/SEC-FIDO-004.toml	scripts/assurance_gate.py	220-222	def grep_word(files: list[pathlib.Path], word: str) -> list[str]:	return [f.name for f in files if pat.search(f.read_text(errors="ignore"))]
-assurance/bundle/SEC-FIDO-004.toml	scripts/assurance_gate.py	814-823	for cfg_name in OWNER_CFGS:	)
+assurance/bundle/SEC-FIDO-004.toml	scripts/assurance_gate.py	1053-1062	for cfg_name in OWNER_CFGS:	)
 assurance/bundle/SEC-FIDO-004.toml	scripts/citation_gate.py	368-374	def bundle_pages(root):	)
 assurance/bundle/SEC-FIDO-004.toml	scripts/comutate.py	898-902	"RUSTFLAGS": (	).strip(),
 assurance/bundle/SEC-FIDO-004.toml	scripts/evidence_gate.py	459-490	def freshness(root, commit, inputs):	return ("fresh" if not behind else "stale"), behind
