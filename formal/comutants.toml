@@ -1580,18 +1580,26 @@ note = "EF_MINPINLEN[1], and the only mutant here whose MODEL half had to be bui
 status = "patch"
 file = "crates/rsk-fs/src/lib.rs"
 find = """
-pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
+pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
     let _ = fs.delete(EF_HARDENED);
+    // Not `delete`'s own answer: it reports the METADATA drop (EF_HARDENED, a one-byte
+    // flag, keeps none) and answers `Ok` where the present bit is clear over a live
+    // marker — what a read-fault-truncated `Fs::scan` leaves. Ask the lap's own gate.
+    if fs.try_has_data(EF_HARDENED)? {
+        return Err(Error::MemoryFatal);
+    }
+    Ok(())
 }
 """
 replace = """
-pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
+pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
     let _ = fs;
+    Ok(())
 }
 """
 slice = ["cargo", "test", "-p", "rsk-fs"]
 expect = "killed"
-note = "audit run-35, shipped at four of five re-key sites: a lazy re-key — or a lazy DELETE, which appends a tombstone rather than erasing — leaves EF_HARDENED standing over the weak copy it just superseded, so no future boot ever scrubs it. The DEFINITION is patched, not the call sites, because it dominates all of them — patching sites would leave the oath and openpgp halves unmeasured and over-anchor the entry to an enumeration that grows. Direction read at both levels: TLC's counterexample is `LazyRekey` at `marker = TRUE` reaching `weak = 1`, a marker standing over a leftover, and the host failure is `requesting_a_rescrub_clears_the_hardened_marker` (crates/rsk-fs/src/fs_tests.rs:385) reporting `a rescrub request must clear the marker, or the lap never runs again` — the marker SURVIVED, not a spurious clear."
+note = "audit run-35, shipped at four of five re-key sites: a lazy re-key — or a lazy DELETE, which appends a tombstone rather than erasing — leaves EF_HARDENED standing over the weak copy it just superseded, so no future boot ever scrubs it. The DEFINITION is patched, not the call sites, because it dominates all of them — patching sites would leave the oath and openpgp halves unmeasured and over-anchor the entry to an enumeration that grows. The anchor is the WHOLE body because the re-arm became two statements: the read-back has to go with the delete, since the defect is a re-arm that keeps the marker AND still answers `Ok` — leave `try_has_data` standing and the patch models the REFUSAL instead, which kills through `expect(\"a healthy medium re-arms and says so\")` and says the wrong half. Direction read at both levels: TLC's counterexample is `LazyRekey` at `marker = TRUE` reaching `weak = 1`, a marker standing over a leftover, and the host failure is `requesting_a_rescrub_clears_the_hardened_marker` (crates/rsk-fs/src/fs_tests.rs:385) reporting `a rescrub request must clear the marker, or the lap never runs again` — the marker SURVIVED, not a spurious clear."
 
 [comutant.BugMarkerBeforeScrub]
 status = "patch"
