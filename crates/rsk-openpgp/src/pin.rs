@@ -306,6 +306,14 @@ fn migrate_pin_kbase<S: Storage>(
         EF_RC => EF_DEK_RC,
         _ => return Err(Sw::EXEC_ERROR),
     };
+    // This migration is lazy — it runs on the first VERIFY, long after the boot-time
+    // at-rest scrub latched. Both writes below are appends, so the pre-OTP DEK copy
+    // and the pre-OTP verifier end up superseded but still readable in a flash dump,
+    // and both are rooted in the *public* chip serial (so the verifier is
+    // brute-forceable offline). Re-arm the scrub AHEAD of them and gate them on it:
+    // the re-arm is its own append, so a reset between the two keeps whichever landed,
+    // and a medium that refuses it reaches the losing state with no reset at all.
+    rsk_fs::request_rescrub(fs).map_err(|_| Sw::MEMORY_FAILURE)?;
     let mut blob = [0u8; DEK_FILE_SIZE];
     if let Some(n) = fs.read_key(dek_fid, &mut blob).map(|n| n.min(blob.len())) {
         if n < 1 || blob[0] != DEK_FORMAT_V3 {
@@ -334,12 +342,6 @@ fn migrate_pin_kbase<S: Storage>(
         }
     }
     store_verifier(dev, fs, fid, pin)?;
-    // This migration is lazy — it runs on the first VERIFY, long after the boot-time
-    // at-rest scrub latched. Both writes above are appends, so the pre-OTP DEK copy and
-    // the pre-OTP verifier are now superseded but still readable in a flash dump, and
-    // both are rooted in the *public* chip serial (so the verifier is brute-forceable
-    // offline). Re-arm the scrub so the next boot reclaims their pages.
-    rsk_fs::request_rescrub(fs);
     Ok(())
 }
 
@@ -390,8 +392,12 @@ pub fn load_dek<S: Storage>(
         if let Some(stage) = stage_fid(fid)
             && fs.has_key(stage)
         {
-            let _ = fs.delete_key(stage);
-            rsk_fs::request_rescrub(fs);
+            // The re-arm leads, as at every lazy re-key: a tombstone is an append
+            // like any other. A refused one skips this retirement rather than failing
+            // the load — it is already best-effort, and a later load retries it.
+            if rsk_fs::request_rescrub(fs).is_ok() {
+                let _ = fs.delete_key(stage);
+            }
         }
         return Ok(());
     }
@@ -442,7 +448,13 @@ fn recover_staged_dek<S: Storage>(
     let opened = dev
         .decrypt_with_aad(key, &staged[2..n], PinKdf::V2, out)
         .is_ok();
-    let commit = if opened {
+    // The copy the commit below supersedes is rooted in a PIN the owner has
+    // replaced; the same reasoning as `migrate_pin_kbase`'s re-arm applies, and so
+    // do its order and its gate — ahead of the write, and the write only if it landed.
+    let re_armed = rsk_fs::request_rescrub(fs).is_ok();
+    let commit = if !re_armed {
+        Err(Sw::MEMORY_FAILURE)
+    } else if opened {
         fs.put_key(fid, Sealed::wrap(&staged[1..n]))
             .map_err(|_| Sw::MEMORY_FAILURE)
     } else {
@@ -458,9 +470,6 @@ fn recover_staged_dek<S: Storage>(
         return Err(sw);
     }
     let _ = fs.delete_key(stage);
-    // The copy just superseded is rooted in a PIN the owner has replaced; the
-    // same reasoning as `migrate_pin_kbase`'s re-arm applies.
-    rsk_fs::request_rescrub(fs);
     Ok(())
 }
 
@@ -479,6 +488,13 @@ fn stage_dek<S: Storage>(
     dek: &[u8; DEK_SIZE],
 ) -> Result<[u8; 32], Sw> {
     let stage = stage_fid(dek_fid).ok_or(Sw::EXEC_ERROR)?;
+    // The ONLY re-arm on `change_pin`, both `reset_retry` arms and `put_reset_code`'s
+    // set arm: each verifies one reference and re-keys ANOTHER its `check_pin` never
+    // migrated. It sits here, at the FIRST append of the stage/verifier/commit
+    // sequence, rather than at the commit that ends it — every one of those three is
+    // its own append, so a re-arm at the end is one a reset can take while the
+    // superseded copies stand. Make it conditional and all four open silently.
+    rsk_fs::request_rescrub(fs).map_err(|_| Sw::MEMORY_FAILURE)?;
     let session = dev.pin_derive_session(pin);
     let mut rec = [0u8; 1 + DEK_FILE_SIZE];
     rec[0] = dek_fid.get() as u8;
@@ -514,10 +530,6 @@ fn commit_staged_dek<S: Storage>(fs: &mut Fs<S>, dek_fid: KeyFid) -> Result<(), 
     staged.zeroize();
     r?;
     let _ = fs.delete_key(stage);
-    // The ONLY re-arm on both `reset_retry` arms and `put_reset_code`'s set arm: each
-    // verifies one reference and re-keys ANOTHER its `check_pin` never migrated. Make
-    // it conditional and all three open silently — `reset_retry_via_pw3…` goes red.
-    rsk_fs::request_rescrub(fs);
     Ok(())
 }
 
@@ -879,14 +891,21 @@ pub fn put_reset_code<S: Storage>(
         // Neither is reachable anyway — every writer puts back `&pw[..n]` or the
         // whole default, so the record cannot shorten past the RC index. The half
         // of that a test can hold is in `pin_tests.rs`.
+        // Ahead of everything below because it holds on every exit, the refused
+        // re-arm included: the session must not keep a reset code answered for here.
+        sess.has_rc = false;
+        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_RC migrates only
+        // through its own verify, so both records tombstoned below can still be keyed
+        // under the pre-OTP arm — and clearing the code does not rotate the DEK.
+        // Ahead of the tombstones, which are appends of their own, and gating them:
+        // a reset between them and a trailing re-arm would leave the marker standing
+        // over both, and a refused re-arm does it without the reset.
+        if rsk_fs::request_rescrub(fs).is_err() {
+            return Sw::MEMORY_FAILURE;
+        }
         let verifier = fs.delete(EF_RC).is_ok();
         let dek = fs.delete_key(EF_DEK_RC).is_ok();
         let counter = set_pin_retry_counter(fs, EF_RC, 0).is_ok();
-        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_RC migrates only
-        // through its own verify, so both records this tombstones can still be keyed
-        // under the pre-OTP arm — and clearing the code does not rotate the DEK.
-        rsk_fs::request_rescrub(fs);
-        sess.has_rc = false;
         return if verifier && dek && counter {
             Sw::OK
         } else {

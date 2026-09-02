@@ -2,7 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
-use rsk_fs::storage::faults::{RemoveStuck, TruncatedWalk, Undead};
+use rsk_fs::storage::faults::{Cut, CutMedium, RemoveStuck, TruncatedWalk, Undead};
 use rsk_fs::storage::ram::RamStorage;
 
 /// PUT's body grammar — a rule per field, a measured card cell per rule. Hung
@@ -81,6 +81,16 @@ fn new_fs() -> Fs<RamStorage> {
     let mut fs = Fs::new(RamStorage::new());
     fs.scan();
     fs
+}
+
+/// [`new_fs`] on a medium that logs the order of the appends it serves — the only
+/// place the re-arm of the at-rest lap can be seen to land BEFORE the re-key it
+/// covers rather than after it.
+fn new_cut_fs() -> (Fs<Cut>, CutMedium) {
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    (fs, medium)
 }
 
 fn select<S: Storage>(app: &mut OathApplet, fs: &mut Fs<S>) -> (Sw, Vec<u8>) {
@@ -1099,7 +1109,7 @@ fn otp_pin_set_before_burn_still_verifies_after_burn() {
     // back to the pre-OTP arm (and the success re-stores under the OTP arm),
     // so the PIN is not permanently locked out. The legacy double_hash_pin
     // survived a burn; v1 must not regress that.
-    let mut fs = new_fs();
+    let (mut fs, medium) = new_cut_fs();
     let rng = RefCell::new(CountRng(7));
     let touch = RefCell::new(AlwaysConfirm);
 
@@ -1124,6 +1134,12 @@ fn otp_pin_set_before_burn_still_verifies_after_burn() {
     );
 
     // Post-burn: the same PIN must still verify, via the without_otp fallback.
+    // The verify's own retry spend rewrites the record with the SAME verifier, so
+    // "still weak" is every write that leaves the verifier bytes alone.
+    let before = medium
+        .value(EF_OTP_PIN)
+        .expect("fixture: EF_OTP_PIN is on the medium");
+    medium.clear_ops();
     let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
     let (sw, _) = run(
         &mut app,
@@ -1131,6 +1147,11 @@ fn otp_pin_set_before_burn_still_verifies_after_burn() {
         &apdu(INS_VERIFY_PIN, 0, 0, &tlv(TAG_PASSWORD, b"1234")),
     );
     assert_eq!(sw, Sw::OK);
+    medium.assert_re_armed_before(
+        EF_OTP_PIN,
+        |v| v.len() == before.len() && v[2..] == before[2..],
+        "VERIFY OTP PIN's kbase fallback",
+    );
 
     // The success re-stored the verifier under the OTP arm (self-heal).
     let otp_dev = Device {

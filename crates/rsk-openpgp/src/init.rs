@@ -175,6 +175,14 @@ fn neutralize_default_reset_code<S: Storage>(dev: &Device, fs: &mut Fs<S>) -> Re
     if !is_default {
         return Ok(());
     }
+    // Both tombstones supersede chip-serial-rooted records when `is_default` matched
+    // the pre-OTP arm, and TERMINATE DF re-runs `scan_files` mid-session — after the
+    // lap, unlike boot — so the at-rest lap (rsk-fs `EF_HARDENED`) owes a re-arm here.
+    //
+    // The one re-arm whose failure does NOT stop the write: "leave the record in
+    // force" means, here, a live unauthenticated `RESET RETRY P1=0` path, and
+    // refusing would abort `scan_files` before `settle_rc_retry_counter` too.
+    let _ = rsk_fs::request_rescrub(fs);
     let _ = fs.delete(EF_RC);
     let _ = fs.delete_key(EF_DEK_RC);
     Ok(())

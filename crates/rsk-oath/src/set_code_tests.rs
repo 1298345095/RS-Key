@@ -17,7 +17,12 @@ const PROOF_CHAL: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /// SET CODE with `secret` as the key material, proving knowledge of it over
 /// `chal` the way ykman does: `75` = `HMAC(secret, 74)`.
-fn set_code_over(app: &mut OathApplet, fs: &mut Fs<RamStorage>, secret: &[u8], chal: &[u8]) -> Sw {
+fn set_code_over<S: Storage>(
+    app: &mut OathApplet,
+    fs: &mut Fs<S>,
+    secret: &[u8],
+    chal: &[u8],
+) -> Sw {
     let mut key = vec![ALG_HMAC_SHA1];
     key.extend_from_slice(secret);
     let mut d = tlv(TAG_KEY, &key);
@@ -27,7 +32,7 @@ fn set_code_over(app: &mut OathApplet, fs: &mut Fs<RamStorage>, secret: &[u8], c
 }
 
 /// SET CODE over the 8-byte challenge every host sends.
-fn set_code(app: &mut OathApplet, fs: &mut Fs<RamStorage>, secret: &[u8]) -> Sw {
+fn set_code<S: Storage>(app: &mut OathApplet, fs: &mut Fs<S>, secret: &[u8]) -> Sw {
     set_code_over(app, fs, secret, &PROOF_CHAL)
 }
 
@@ -399,7 +404,8 @@ fn a_refused_validate_neither_grants_nor_drops_the_unlock() {
 /// applet's own comment expects the owner to re-mint that PIN.
 #[test]
 fn set_code_dropping_a_pre_otp_pin_re_arms_the_at_rest_lap() {
-    let (mut fs, rng) = fixture();
+    let (mut fs, medium) = new_cut_fs();
+    let rng = RefCell::new(CountRng(7));
     let touch = RefCell::new(AlwaysConfirm);
 
     // Pre-burn: SET PIN stores v1 under the NO-OTP (chip-serial) kbase.
@@ -437,11 +443,15 @@ fn set_code_dropping_a_pre_otp_pin_re_arms_the_at_rest_lap() {
         "fixture: the lap has latched"
     );
 
+    medium.clear_ops();
     assert_eq!(set_code(&mut app, &mut fs, &[0xABu8; 20]), Sw::OK);
     assert!(
         !fs.has_data(EF_OTP_PIN),
         "fixture: SET CODE drops the OTP PIN"
     );
+    // The drop is a tombstone, an append like any re-seal, so any touch is the
+    // supersession here.
+    medium.assert_re_armed_before(EF_OTP_PIN, |_| false, "SET CODE");
     assert!(
         !fs.has_data(rsk_fs::EF_HARDENED),
         "SET CODE superseded a chip-serial-rooted verifier and must re-arm the at-rest lap",

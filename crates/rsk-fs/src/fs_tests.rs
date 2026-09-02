@@ -2,6 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
+use crate::storage::faults::{Cut, RemoveStuck, TruncatedWalk};
 use crate::storage::ram::RamStorage;
 
 // A stand-in working-EF fid used by the plain put/read tests.
@@ -380,10 +381,69 @@ fn requesting_a_rescrub_clears_the_hardened_marker() {
     let mut fs = fs();
     fs.put(crate::EF_HARDENED, b"\x01").unwrap();
     assert!(fs.has_data(crate::EF_HARDENED));
-    crate::request_rescrub(&mut fs);
+    crate::request_rescrub(&mut fs).expect("a healthy medium re-arms and says so");
     assert!(
         !fs.has_data(crate::EF_HARDENED),
         "a rescrub request must clear the marker, or the lap never runs again"
+    );
+}
+
+#[test]
+fn a_reset_between_a_re_key_and_its_rescrub_leaves_the_marker_lying() {
+    // Why every lazy re-key re-arms BEFORE it writes, and not after. The re-key and
+    // the `request_rescrub` under it are two separate appends with nothing between
+    // them, so a reset in that window keeps whichever one already landed. Only a
+    // medium that stops serving mid-command shows it: one that refuses a chosen fid
+    // refuses it under either order.
+    const REKEYED: u16 = 0xB100;
+
+    // Write first. The write lands, the reset eats the re-arm, and the marker now
+    // stands over the copy that write superseded — which is still sealed under the
+    // pre-OTP root the public chip serial derives. `run_at_rest_lap` gates on the
+    // marker alone, so no later boot ever scrubs it (that early return is
+    // `the_at_rest_lap_writes_its_marker_only_after_a_completed_scrub`).
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.put(REKEYED, b"pre-otp").unwrap();
+    fs.put(crate::EF_HARDENED, b"\x01").unwrap();
+    assert!(
+        fs.has_data(crate::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+    medium.arm(1);
+    let _ = fs.put(REKEYED, b"otp");
+    assert!(
+        crate::request_rescrub(&mut fs).is_err(),
+        "the cut ate the re-arm, and this order is the one that cannot be told"
+    );
+    assert_eq!(
+        medium.value(REKEYED).as_deref(),
+        Some(&b"otp"[..]),
+        "fixture: the re-key never landed, so the reset fell outside the window"
+    );
+    assert!(
+        medium.value(crate::EF_HARDENED).is_some(),
+        "fixture: the marker was cleared, so this is not the state under test"
+    );
+
+    // Re-arm first. The same reset eats the WRITE instead: the marker is gone, the
+    // next boot laps, and what it laps over is the record still in force. That is
+    // the whole cost of the order — one idempotent lap over nothing.
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.put(REKEYED, b"pre-otp").unwrap();
+    fs.put(crate::EF_HARDENED, b"\x01").unwrap();
+    medium.arm(1);
+    crate::request_rescrub(&mut fs).expect("the re-arm is what the cut let through");
+    let _ = fs.put(REKEYED, b"otp");
+    assert_eq!(
+        medium.value(REKEYED).as_deref(),
+        Some(&b"pre-otp"[..]),
+        "fixture: the write landed too, so the reset fell outside the window"
+    );
+    assert!(
+        medium.value(crate::EF_HARDENED).is_none(),
+        "the re-arm must land before the write, or the marker outlives what it promises"
     );
 }
 
@@ -1438,4 +1498,77 @@ fn a_key_past_the_dynamic_cap_reads_refuses_writes_and_still_wipes() {
         !fs.has_data(OVER),
         "an unregistered key survived the factory wipe"
     );
+}
+
+#[test]
+fn a_refused_re_arm_is_reported_and_not_swallowed() {
+    // F1: the write order alone covers a power cut and nothing else. A medium that
+    // refuses `remove(EF_HARDENED)` and serves everything around it reaches the SAME
+    // end state — the marker latched over a copy the caller is about to supersede —
+    // with no reset in it, so `request_rescrub` must answer instead of `let _ =`.
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.put(crate::EF_HARDENED, b"\x01").unwrap();
+    assert!(
+        fs.has_data(crate::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+    medium.refuse(Some(crate::EF_HARDENED));
+
+    assert!(
+        crate::request_rescrub(&mut fs).is_err(),
+        "the medium refused the re-arm, so the lap will NOT run and the caller must \
+         not go on to supersede a pre-OTP copy"
+    );
+    assert!(
+        medium.live(crate::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium",
+    );
+    assert!(
+        fs.has_data(crate::EF_HARDENED),
+        "fixture: and the lap's own gate still reads it as done",
+    );
+
+    // The control, and not a no-op: the same medium with the fault cleared re-arms,
+    // says so, and the marker leaves the medium.
+    medium.refuse(None);
+    assert!(
+        crate::request_rescrub(&mut fs).is_ok(),
+        "a healthy medium must still report the re-arm as landed"
+    );
+    assert!(!medium.live(crate::EF_HARDENED));
+}
+
+#[test]
+fn a_re_arm_the_present_cache_skipped_is_not_reported_as_landed() {
+    // `Fs::delete` skips the backend `remove` when the present bit is clear and then
+    // answers `Ok` — and a read-fault-truncated `scan` leaves that bit clear over a
+    // live marker (the `if complete` guard on the decided-fill). So `delete`'s own
+    // result is not sufficient either: the re-arm is judged by reading the marker
+    // back through the gate `run_at_rest_lap` uses.
+    let mut walk = TruncatedWalk::new();
+    walk.write(crate::EF_HARDENED, b"\x01").unwrap();
+    let mut fs = Fs::new(walk);
+    fs.scan();
+    assert!(
+        fs.delete(crate::EF_HARDENED).is_ok(),
+        "fixture: this is the swallow's input — the delete answers Ok here"
+    );
+
+    assert!(
+        crate::request_rescrub(&mut fs).is_err(),
+        "the backend removal never ran, so the marker is still there and the lap \
+         will not run — reporting that re-arm as landed is the swallow one layer down"
+    );
+    assert!(
+        fs.has_data(crate::EF_HARDENED),
+        "fixture: the marker really was live — the probe that refused read it off \
+         the medium, past the cleared present bit"
+    );
+    // That probe settled the bit, so the retry reaches the backend the first skipped.
+    assert!(
+        crate::request_rescrub(&mut fs).is_ok(),
+        "the failed re-arm settled the cache, so a retry must actually re-arm"
+    );
+    assert!(!fs.has_data(crate::EF_HARDENED));
 }

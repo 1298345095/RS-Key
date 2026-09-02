@@ -3,7 +3,7 @@
 
 use super::*;
 use rsk_ec::{Curve, PrivKey};
-use rsk_fs::storage::faults::ProbeStuck;
+use rsk_fs::storage::faults::{Cut, CutMedium, ProbeStuck};
 use rsk_fs::storage::ram::RamStorage;
 
 use std::cell::Cell;
@@ -34,6 +34,16 @@ fn new_fs() -> Fs<RamStorage> {
     let mut fs = Fs::new(RamStorage::new());
     fs.scan();
     fs
+}
+
+/// [`new_fs`] on a medium that logs the order of the appends it serves — the only
+/// place the re-arm of the at-rest lap can be seen to land BEFORE the re-key it
+/// covers rather than after it.
+fn new_cut_fs() -> (Fs<Cut>, CutMedium) {
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    (fs, medium)
 }
 
 fn select<S: Storage>(app: &mut PivApplet, fs: &mut Fs<S>) -> Vec<u8> {
@@ -5815,7 +5825,7 @@ fn unblock_with_the_puk_re_arms_the_at_rest_lap() {
     let rng = RefCell::new(TestRng(3));
     let pres = RefCell::new(AlwaysConfirm);
     let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
-    let mut fs = new_fs();
+    let (mut fs, medium) = new_cut_fs();
     select(&mut app, &mut fs);
     let mut rec = [0u8; PIN_REC_LEN];
     assert_eq!(fs.read(EF_PIN, &mut rec), Some(PIN_REC_LEN));
@@ -5836,12 +5846,14 @@ fn unblock_with_the_puk_re_arms_the_at_rest_lap() {
     );
     let mut body = DEFAULT_PUK.to_vec();
     body.extend_from_slice(&DEFAULT_PUK);
+    medium.clear_ops();
     let (sw, _) = run(&mut app2, &mut fs, INS_CHANGE_PIN, 0, REF_PUK, &body);
     assert_eq!(sw, Sw::OK);
     assert!(
         !fs.has_data(rsk_fs::EF_HARDENED),
         "fixture: the PUK's own migrating verify re-arms the lap"
     );
+    medium.assert_re_armed_before(EF_PUK, |_| false, "check_ref's kbase fallback");
     fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
     assert!(
         fs.has_data(rsk_fs::EF_HARDENED),
@@ -5864,8 +5876,10 @@ fn unblock_with_the_puk_re_arms_the_at_rest_lap() {
 
     let mut body = DEFAULT_PUK.to_vec();
     body.extend_from_slice(&NEW_PIN);
+    medium.clear_ops();
     let (sw, _) = run(&mut app2, &mut fs, INS_RESET_RETRY, 0, REF_PIN, &body);
     assert_eq!(sw, Sw::OK);
+    medium.assert_re_armed_before(EF_PIN, |_| false, "unblock_pin_with_puk");
     assert_eq!(fs.read(EF_PIN, &mut rec), Some(PIN_REC_LEN));
     assert_eq!(
         &rec[2..],
@@ -5902,7 +5916,7 @@ fn set_retries_re_arms_the_at_rest_lap() {
     let rng = RefCell::new(TestRng(5));
     let pres = RefCell::new(AlwaysConfirm);
     let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
-    let mut fs = new_fs();
+    let (mut fs, medium) = new_cut_fs();
     select(&mut app, &mut fs);
     migrate_kbase(&dev_otp, &mut fs, &mut TestRng(13));
 
@@ -5925,8 +5939,10 @@ fn set_retries_re_arms_the_at_rest_lap() {
         "fixture: EF_PUK is still rooted in the public chip serial"
     );
 
+    medium.clear_ops();
     let (sw, _) = run(&mut app2, &mut fs, INS_SET_RETRIES, 5, 5, &[]);
     assert_eq!(sw, Sw::OK);
+    medium.assert_re_armed_before(EF_PUK, |_| false, "SET RETRIES");
     assert_eq!(fs.read(EF_PUK, &mut rec), Some(PIN_REC_LEN));
     assert_eq!(
         &rec[2..],

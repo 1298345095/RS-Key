@@ -18,6 +18,8 @@ pub mod powercut;
 pub mod sealed;
 pub mod storage;
 
+use rsk_sdk::error::{Error, Result};
+
 pub use fs::{Fs, Removal};
 pub use sealed::{KeyFid, Sealed};
 pub use storage::Storage;
@@ -41,9 +43,27 @@ pub const EF_HARDENED: u16 = 0xCE14;
 /// dump until a lap reclaims its page, and without this the lap never runs again.
 /// Deferring to the next boot is deliberate: the lap is a multi-second stall that must
 /// not land inside a host command, and it is idempotent, so an interrupted one re-runs.
+///
+/// **Call it BEFORE the write, and make that write conditional on `Ok`.** Order is
+/// half the rule and covers exactly one fault: this is a second append, so a reset
+/// between the two keeps whichever landed — re-arm first and a cut costs the re-key,
+/// which leaves the record still in force and the next boot lapping over it; write
+/// first and a cut costs the re-arm, and the marker stands over the superseded copy
+/// for the life of the key, because [`run_at_rest_lap`] gates on it and nothing else.
+/// Order does NOT cover a medium that refuses the re-arm and serves the write: that
+/// reaches the same end state with no reset in it at all. So this answers rather than
+/// swallowing, and `Ok` means what the caller needs — the lap WILL run.
+/// Every caller shipped the second order until 0x09BD and the swallow until 0x09BE.
 /// Refines `RSKeyBootHardening!MarkerNeverLies` — SEC-BOOT-001.
-pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) {
+pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
     let _ = fs.delete(EF_HARDENED);
+    // Not `delete`'s own answer: it reports the METADATA drop (EF_HARDENED, a one-byte
+    // flag, keeps none) and answers `Ok` where the present bit is clear over a live
+    // marker — what a read-fault-truncated `Fs::scan` leaves. Ask the lap's own gate.
+    if fs.try_has_data(EF_HARDENED)? {
+        return Err(Error::MemoryFatal);
+    }
+    Ok(())
 }
 
 /// Run the one-shot at-rest scrub lap: iff [`EF_HARDENED`] is absent, drive a full

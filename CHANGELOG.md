@@ -2734,6 +2734,123 @@ and to the statuses it quotes.
 
 ### Security
 
+- **Every lazy re-key re-arms the at-rest scrub before it writes, *and does not
+  write when the re-arm did not land*.** The re-key and the
+  `rsk_fs::request_rescrub` under it are two separate flash appends with no
+  atomicity between them, and all thirteen call sites shipped them in the order
+  that loses the wrong one: `fs.put` first, `fs.delete(EF_HARDENED)` second. A
+  reset landing between the two left `EF_HARDENED` **set** over a copy the write
+  had just superseded — still sealed under the pre-OTP root
+  `HKDF("NO-OTP", serial_hash)`, which the public chip serial alone derives, with
+  no secret and no stretching. `run_at_rest_lap` gates on `has_data(EF_HARDENED)`
+  and nothing else, so that copy is not merely missed once: **no later boot ever
+  runs the lap again**, and it stays in the ring for the life of the key.
+
+  **Order is only half of it, and the half that covers a power cut.**
+  `request_rescrub` swallowed its own medium's refusal (`let _ = fs.delete(…)`),
+  so a backend that refuses `remove(EF_HARDENED)` and serves everything around it
+  reached that same end state with **no reset in it at all** — measured: OATH
+  CHANGE OTP PIN answered `9000`, re-keyed the verifier and left the marker
+  latched over the superseded chip-serial copy. It answers now, `Ok` meaning "the
+  lap WILL run": the marker is read back through `Fs::has_data`, the same gate
+  `run_at_rest_lap` itself reads, because `Fs::delete`'s own result is neither
+  necessary (it reports the EF_META drop, and `EF_HARDENED` keeps no metadata) nor
+  sufficient (it skips the backend when the present bit is clear, which is exactly
+  what a read-fault-truncated `Fs::scan` leaves over a live marker — and then
+  answers `Ok`). Every superseding write is conditional on that answer. `Result` is
+  `#[must_use]`, so the compiler, not a `git grep`, enumerated the callers.
+
+  Two of the fourteen do not refuse the command when the re-arm fails, because at
+  those two the write is already best-effort and skipping it is the safe half:
+  OATH VERIFY's legacy-record upgrade (`let _ = fs.put`) and `load_dek`'s
+  stale-stage retirement. The record stays in force and a later command retries.
+  The refusal this repo already weighed for `Fs::delete` — "one flash fault would
+  stop every delete on the device, including the wipe" — does not transfer to the
+  other eleven: there the dangerous act is *proceeding*, refusing leaves the
+  pre-existing record in force, and none of the thirteen is on a wipe path.
+
+  Found by an adversarial review of `RSKeyBootHardening`'s marker rows, then
+  measured in code. The sweep is the class, not the report: it named five sites,
+  `git grep request_rescrub` has **thirteen** — the two FIDO PIN verifies, OATH
+  SET CODE / CHANGE / VERIFY OTP PIN, OpenPGP `migrate_pin_kbase`, `load_dek`'s
+  stale-stage retirement, `recover_staged_dek`, the stage/verifier/commit
+  sequence and PUT DATA `0xD3`'s clear arm, and PIV's SET RETRIES, `check_ref`
+  fallback and `unblock_pin_with_puk`.
+
+  **A fourteenth calls it never**, and no grep finds it: `init.rs`'s
+  `neutralize_default_reset_code` tombstones `EF_RC` and `EF_DEK_RC` — the same
+  two records as PUT DATA `0xD3`'s clear arm — on a card from firmware <= 0x07F6
+  still carrying the public admin default as its reset code. It runs from
+  `scan_files`, which boot runs *before* the lap but TERMINATE DF re-runs
+  mid-session, so a sweep that failed to clear `EF_RC` reaches it with the marker
+  already latched. It is also **the one site whose write is not gated on the
+  re-arm**: "leave the pre-existing record in force" means, here, leaving a live
+  unauthenticated `RESET RETRY P1=0` path, and an online key-recovery route beats a
+  superseded copy in the ring. Both directions are pinned by tests.
+
+  **And one guard was narrower than the writes behind it.** Both FIDO re-arms sat
+  under `if migrated` — EF_PIN's verifier matched pre-OTP — while
+  `migrate_keydev_pin` re-keys `EF_KEY_DEV` off the pre-OTP arm on the success path
+  regardless. The two records part company for real: `migrate_keydev_pin` opens
+  with `fs.read_key(EF_KEY_DEV, …)`, and `read_key` collapses a flash READ FAULT
+  into the same `None` an absent slot gives, so one faulted probe makes the seed
+  migration a silent no-op for a verify that goes on to persist an OTP-rooted
+  `EF_PIN`. Every later verify then re-keys a 0x03 seed with `migrated` false and
+  nothing re-arming. The re-arm moved to `migrate_keydev_pin`, where the record's
+  own format byte says whether the copy being superseded is chip-serial-rooted —
+  it must stay that narrow, or every correct PIN verify would force a multi-second
+  compaction lap at the next boot.
+
+  **One of the thirteen could not be fixed by a swap.** `commit_staged_dek` held
+  "the ONLY re-arm" for `change_pin`, both `reset_retry` arms and
+  `put_reset_code`'s set arm — but it is the *last* of three appends
+  (`stage_dek`, `put_verifier`, then the commit), so moving it to the head of its
+  own function still left `put_verifier`'s re-key of a chip-serial-rooted `EF_PW1`
+  in front of it. It moves to the head of `stage_dek`, the first append of all
+  four sequences, which keeps the single chokepoint and puts it ahead of every
+  write it covers. That claim rested on one of the four sequences; all four carry
+  an ordering assertion now, and removing the chokepoint reddens five rows.
+
+  The order is host-testable and now tested: `rsk_fs::storage::faults::Cut` is a
+  medium that serves a budget of mutations and then refuses every one after,
+  keeping the ordered log of those that landed — the shape of a reset between two
+  appends. `CutMedium::assert_re_armed_before` is the oracle, with both halves
+  required to appear in the log, because an order nothing performed is held
+  vacuously and an absent marker is the store's default state. Each site was
+  proved falsifiable by reverting its own swap alone; every failure reads
+  "superseded BEFORE the lap was re-armed" — the marker SURVIVED — and never the
+  inverse. The control that stays green hoists OATH CHANGE's re-arm one append
+  *earlier* still, which changes the medium's order
+  (`[W(0x10a0), R(0xce14), W(0x10a0)]` → `[R(0xce14), W(0x10a0), W(0x10a0)]`) and
+  is not a no-op.
+
+  `Cut` is **not** the only fault that tells the two orders apart, as this entry
+  first claimed. Six of the thirteen return from a refused write *before* their
+  trailing re-arm — both FIDO verifies, `migrate_pin_kbase`, `recover_staged_dek`,
+  `commit_staged_dek` and PIV's `check_ref` — so a backend refusing one chosen
+  `write` separates them there on `has_data(EF_HARDENED)` alone. Measured at
+  `check_ref` with `write(EF_PUK)` refused: `6581` either way, marker cleared under
+  the fix and latched reverted. `Cut` still earns its place for the other seven,
+  whose re-arm runs whatever the write returned.
+
+  **`spend_and_verify_pin_at`'s fallback — the trusted display's own PIN verify —
+  was reached by no host test**, shadowed by the host path in every sweep;
+  `a_local_pin_verify_re_arms_the_lap_before_it_re_keys` covers it now, and is the
+  single row a `panic!` at that site reddens. The *function* was never unreached:
+  a `panic!` at its first statement takes nine rows down (ten now). What a host
+  fixture cannot reach is the real power cut between two flash appends: `Cut`
+  models it, and only the flash ring keeps the superseded copy a dump would read.
+
+  The cost of the safe order is one extra lap, and that lap is not nothing:
+  `SeqStorage::compact` writes `(MAIN_LEN + SECTOR) / 1024` throwaway 1 KiB records
+  unconditionally, forcing the ring head a full turn so every sector of the main KV
+  partition is swept and erased — a multi-second stall at boot, before USB attach.
+  It stays the right direction: it is bounded at one per boot, idempotent, and
+  every trigger is an authenticated command.
+  **bcdDevice → 0x09BD.** The write order, the swallowed refusal, the fourteenth
+  site and the guard that was narrower than its writes ship as one change,
+  because the last three are what an adversarial review of the first found.
+
 - **Two commands revoke a pre-OTP credential by tombstoning it, and a tombstone
   is not an erase.** The run-35 class was written as "lazily *re-keys*", and both
   of these DELETE instead — but `EF_HARDENED`'s promise is the broader one

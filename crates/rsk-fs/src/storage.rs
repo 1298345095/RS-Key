@@ -541,4 +541,165 @@ pub mod faults {
             self.inner.for_each_key(f)
         }
     }
+    /// One mutation a [`Cut`] medium served, in the order it served it.
+    #[derive(Clone, PartialEq, Eq)]
+    pub enum Op {
+        Write(u16, Vec<u8>),
+        Remove(u16),
+    }
+
+    impl core::fmt::Debug for Op {
+        // Values run to hundreds of bytes; a failing order is read off the fids.
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                Op::Write(fid, v) => write!(f, "Write({fid:#06x}, {}B)", v.len()),
+                Op::Remove(fid) => write!(f, "Remove({fid:#06x})"),
+            }
+        }
+    }
+
+    /// A RAM medium that serves a budget of mutations and then refuses every one
+    /// after it, keeping the ordered log of those that landed.
+    ///
+    /// This is the shape of a reset landing between two flash appends: the first
+    /// lands, nothing after it ever does. It is the only fault here that can tell
+    /// the two orderings of a lazy re-key and its `crate::request_rescrub` apart —
+    /// a backend that refuses one chosen fid refuses it under either order, so the
+    /// end state it produces is the same one twice.
+    pub struct Cut {
+        inner: Rc<RefCell<RamStorage>>,
+        budget: Rc<Cell<u32>>,
+        log: Rc<RefCell<Vec<Op>>>,
+    }
+
+    /// The other end of a [`Cut`]: arms the cut, and reads the log and the medium
+    /// past `crate::Fs`'s present cache — the only place a write that really landed
+    /// can be told from one the cache merely reports.
+    pub struct CutMedium {
+        inner: Rc<RefCell<RamStorage>>,
+        budget: Rc<Cell<u32>>,
+        log: Rc<RefCell<Vec<Op>>>,
+    }
+
+    impl Cut {
+        /// A healthy medium: unlimited budget, empty log. [`CutMedium::arm`] cuts it.
+        pub fn new() -> (Self, CutMedium) {
+            let inner = Rc::new(RefCell::new(RamStorage::new()));
+            let budget = Rc::new(Cell::new(u32::MAX));
+            let log = Rc::new(RefCell::new(Vec::new()));
+            (
+                Self {
+                    inner: inner.clone(),
+                    budget: budget.clone(),
+                    log: log.clone(),
+                },
+                CutMedium { inner, budget, log },
+            )
+        }
+
+        /// Spend a mutation from the budget; `false` once the reset has landed.
+        fn serve(&self) -> bool {
+            let left = self.budget.get();
+            if left == 0 {
+                return false;
+            }
+            self.budget.set(left - 1);
+            true
+        }
+    }
+
+    impl CutMedium {
+        /// Serve `budget` more mutations and refuse every one after — the reset.
+        /// `u32::MAX` restores a healthy medium.
+        pub fn arm(&self, budget: u32) {
+            self.budget.set(budget);
+        }
+        /// The mutations that LANDED, in order.
+        pub fn ops(&self) -> Vec<Op> {
+            self.log.borrow().clone()
+        }
+        /// Drop the log, so a fixture's own writes do not sit in front of the ones
+        /// the command under test makes.
+        pub fn clear_ops(&self) {
+            self.log.borrow_mut().clear();
+        }
+        /// The bytes stored for `fid` ON THE MEDIUM, cut or no cut.
+        pub fn value(&self, fid: u16) -> Option<Vec<u8>> {
+            let mut buf = [0u8; crate::MAX_VALUE_BYTES];
+            let n = self.inner.borrow_mut().read(fid, &mut buf)?;
+            Some(buf[..n.min(buf.len())].to_vec())
+        }
+        /// The whole of a lazy re-key's ordering, read off the log: the
+        /// `crate::request_rescrub` reached the medium BEFORE the append that
+        /// superseded `fid`. A reset in that window can then only take the write —
+        /// an idempotent lap over a record still in force — and never leave
+        /// [`crate::EF_HARDENED`] standing over the copy the write displaced.
+        ///
+        /// `still_weak` names the writes of `fid` that are NOT that supersession: a
+        /// verify spends its retry counter by rewriting the record, and that append
+        /// re-keys nothing. Pass `|_| false` where the window writes `fid` once.
+        ///
+        /// Both halves must be in the log. An order nothing performed is held
+        /// vacuously, and an absent marker is this store's DEFAULT state, so the two
+        /// panics are the assertion and not decoration. Call
+        /// [`clear_ops`](Self::clear_ops) first when an earlier command in the same
+        /// fixture already re-armed.
+        #[track_caller]
+        pub fn assert_re_armed_before(
+            &self,
+            fid: u16,
+            still_weak: impl Fn(&[u8]) -> bool,
+            what: &str,
+        ) {
+            let ops = self.ops();
+            let rekey = ops
+                .iter()
+                .position(|op| match op {
+                    Op::Write(f, v) => *f == fid && !still_weak(v),
+                    // A tombstone appends like a re-seal, so a delete supersedes too.
+                    Op::Remove(f) => *f == fid,
+                })
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{what}: nothing superseded {fid:#06x}, so the order is unobserved rather than held — {ops:?}"
+                    )
+                });
+            let rearm = ops
+                .iter()
+                .position(|op| matches!(op, Op::Remove(f) if *f == crate::EF_HARDENED))
+                .unwrap_or_else(|| {
+                    panic!("{what}: nothing re-armed the at-rest lap at all — {ops:?}")
+                });
+            assert!(
+                rearm < rekey,
+                "{what}: {fid:#06x} was superseded BEFORE the lap was re-armed, so a reset between the two appends leaves the marker standing over the copy it superseded and no later boot ever scrubs it — {ops:?}"
+            );
+        }
+    }
+
+    impl Storage for Cut {
+        fn read(&mut self, fid: u16, buf: &mut [u8]) -> Option<usize> {
+            self.inner.borrow_mut().read(fid, buf)
+        }
+        fn write(&mut self, fid: u16, data: &[u8]) -> Result<()> {
+            if !self.serve() {
+                return Err(Error::MemoryFatal);
+            }
+            self.log.borrow_mut().push(Op::Write(fid, data.to_vec()));
+            self.inner.borrow_mut().write(fid, data)
+        }
+        fn remove(&mut self, fid: u16) -> Result<()> {
+            if !self.serve() {
+                return Err(Error::MemoryFatal);
+            }
+            self.log.borrow_mut().push(Op::Remove(fid));
+            self.inner.borrow_mut().remove(fid)
+        }
+        fn size(&mut self, fid: u16) -> Option<usize> {
+            self.inner.borrow_mut().size(fid)
+        }
+        fn for_each_key(&mut self, f: &mut dyn FnMut(u16)) -> bool {
+            self.inner.borrow_mut().for_each_key(f)
+        }
+    }
 }

@@ -388,13 +388,18 @@ impl<'a> OathApplet<'a> {
         // is protecting right now. Re-mint it from a session that knows this code.
         // Answered rather than discarded: a surviving PIN is that second path, and
         // the lock-down below happens either way.
-        let dropped = fs.delete(EF_OTP_PIN);
-        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_OTP_PIN is the
-        // only OATH record with no eager boot migration, so the copy this tombstones
-        // can still be keyed under the pre-OTP arm the public chip serial derives.
-        rsk_fs::request_rescrub(fs);
+        // The lock-down leads, because it happens on every exit below — the refused
+        // re-arm's included, which is the one that leaves the PIN it could not drop.
         self.validated = false;
-        match dropped {
+        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_OTP_PIN is the
+        // only OATH record with no eager boot migration, so the copy the tombstone
+        // below supersedes can still be keyed under the pre-OTP arm the public chip
+        // serial derives. BEFORE the delete, and only if it LANDED: the two are
+        // separate appends, so a reset between them keeps whichever one did.
+        if rsk_fs::request_rescrub(fs).is_err() {
+            return Sw::MEMORY_FAILURE;
+        }
+        match fs.delete(EF_OTP_PIN) {
             Ok(()) => Sw::OK,
             Err(_) => Sw::MEMORY_FAILURE,
         }
@@ -1158,12 +1163,14 @@ impl<'a> OathApplet<'a> {
         if let Err(sw) = self.spend_and_match_otp_pin(fs, &mut rec, size, pw) {
             return sw;
         }
-        let stored = fs.put(EF_OTP_PIN, &self.otp_pin_record_v1(new_pw));
         // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`; audit run-35): the
-        // record just superseded may be keyed under the pre-OTP arm the public chip
-        // serial derives. After the write, like VERIFY — a refusal can still land.
-        rsk_fs::request_rescrub(fs);
-        match stored {
+        // record the write below supersedes may be keyed under the pre-OTP arm the
+        // public chip serial derives. Before the write and gating it, like VERIFY —
+        // a marker this command cannot clear is one the next boot obeys.
+        if rsk_fs::request_rescrub(fs).is_err() {
+            return Sw::MEMORY_FAILURE;
+        }
+        match fs.put(EF_OTP_PIN, &self.otp_pin_record_v1(new_pw)) {
             Ok(()) => Sw::OK,
             Err(_) => Sw::MEMORY_FAILURE,
         }
@@ -1186,13 +1193,19 @@ impl<'a> OathApplet<'a> {
         if let Err(sw) = self.spend_and_match_otp_pin(fs, &mut rec, size, pw) {
             return sw;
         }
-        // Success: reset the counter and (lazily) upgrade a legacy record to the
-        // OTP-rooted v1 verifier. The OTP PIN doubles as VALIDATE (nitropy flow).
-        let _ = fs.put(EF_OTP_PIN, &self.otp_pin_record_v1(pw));
-        // The record just superseded may have been keyed under the pre-OTP arm,
-        // which the public chip serial derives. Re-arm the one-shot at-rest lap
-        // (rsk-fs `EF_HARDENED` invariant; audit run-35).
-        rsk_fs::request_rescrub(fs);
+        // The record the upgrade below supersedes may be keyed under the pre-OTP
+        // arm, which the public chip serial derives. Re-arm the one-shot at-rest lap
+        // (rsk-fs `EF_HARDENED` invariant; audit run-35) BEFORE that write, so a
+        // reset between the two appends costs the re-key and never the re-arm.
+        //
+        // A re-arm the medium REFUSED skips the write instead of failing the verify:
+        // this upgrade is already best-effort here (`let _`), and skipping it leaves
+        // the record in force rather than superseded under a marker nothing clears.
+        if rsk_fs::request_rescrub(fs).is_ok() {
+            // Success: reset the counter and (lazily) upgrade a legacy record to the
+            // OTP-rooted v1 verifier. The OTP PIN doubles as VALIDATE (nitropy flow).
+            let _ = fs.put(EF_OTP_PIN, &self.otp_pin_record_v1(pw));
+        }
         self.validated = true;
         self.otp_pin_verified = true;
         Sw::OK

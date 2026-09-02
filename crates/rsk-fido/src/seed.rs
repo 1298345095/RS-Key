@@ -529,9 +529,12 @@ pub fn migrate_keydev_pin<S: Storage>(dev: &Device, fs: &mut Fs<S>, pin_hash: &[
     let Some(KEYDEV_F3_LEN) = fs.read_key(EF_KEY_DEV, &mut buf) else {
         return Ok(());
     };
-    let (seal_dev, cbc_tag) = match buf[0] {
-        FORMAT_F3 => (dev.without_otp(), FORMAT_F1),
-        FORMAT_F3_OTP if dev.otp_key.is_some() => (*dev, FORMAT_F1_OTP),
+    // `weak`: a 0x03 record on an OTP card is sealed under the chip-serial arm, so
+    // the re-seal below supersedes a copy the public serial alone derives. 0x13 is
+    // already OTP-rooted, and a card with no OTP key has no lap to re-arm.
+    let (seal_dev, cbc_tag, weak) = match buf[0] {
+        FORMAT_F3 => (dev.without_otp(), FORMAT_F1, dev.otp_key.is_some()),
+        FORMAT_F3_OTP if dev.otp_key.is_some() => (*dev, FORMAT_F1_OTP, false),
         _ => return Ok(()),
     };
     // Strip the outer PIN AEAD, leaving the inner CBC record the seed was sealed
@@ -552,7 +555,14 @@ pub fn migrate_keydev_pin<S: Storage>(dev: &Device, fs: &mut Fs<S>, pin_hash: &[
     cbc.zeroize();
     match recovered {
         Some(mut seed) => {
-            let r = put_sealed32(dev, fs, EF_KEY_DEV, &seed);
+            // The re-arm belongs here, not at the two callers: theirs is gated on
+            // EF_PIN's verifier having been pre-OTP, and one faulted `read_key` here
+            // is enough to leave that verifier migrated and this record at 0x03.
+            let r = if weak && rsk_fs::request_rescrub(fs).is_err() {
+                Err(Error::MemoryFatal)
+            } else {
+                put_sealed32(dev, fs, EF_KEY_DEV, &seed)
+            };
             seed.zeroize();
             r
         }

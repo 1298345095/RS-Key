@@ -10,6 +10,7 @@ use minicbor::encode::Write as _;
 use rsk_crypto::Device;
 use rsk_crypto::pinproto::public_xy;
 use rsk_fs::Fs;
+use rsk_fs::storage::faults::{Cut, CutMedium, ProbeStuck};
 use rsk_fs::storage::ram::RamStorage;
 
 struct SeqRng(u64);
@@ -35,6 +36,17 @@ fn setup() -> (Fs<RamStorage>, SeqRng) {
     let mut rng = SeqRng(1);
     ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
     (fs, rng)
+}
+
+/// [`setup`] on a medium that logs the order of the appends it serves — the only
+/// place the re-arm of the at-rest lap can be seen to land BEFORE the re-key it
+/// covers rather than after it.
+fn setup_cut() -> (Fs<Cut>, CutMedium, SeqRng) {
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    (fs, medium, rng)
 }
 
 fn run<S: rsk_fs::Storage>(
@@ -1619,7 +1631,7 @@ fn pin_verifier_and_pinwrapped_seed_migrate_at_verify() {
 
     // Legacy pre-OTP state: seed exists, a PIN is set, and the seed was
     // left PIN-wrapped (0x03).
-    let (mut fs, mut rng) = setup();
+    let (mut fs, medium, mut rng) = setup_cut();
     let seed0 = load_keydev(&dev(), &mut fs).unwrap();
     let mut padded = [0u8; PADDED_PIN_LEN];
     padded[..PIN.len()].copy_from_slice(PIN);
@@ -1663,7 +1675,18 @@ fn pin_verifier_and_pinwrapped_seed_migrate_at_verify() {
         state: &mut state2,
         now_ms: 0,
     };
+    // The verify's own retry spend rewrites EF_PIN with the SAME verifier, so
+    // "still weak" is every write that leaves the verifier bytes alone.
+    let before = medium
+        .value(EF_PIN)
+        .expect("fixture: EF_PIN is on the medium");
+    medium.clear_ops();
     spend_and_verify_pin_hash(&mut ctx, &pin_hash[..16]).unwrap();
+    medium.assert_re_armed_before(
+        EF_PIN,
+        |v| v.len() == before.len() && v[1..] == before[1..],
+        "spend_and_verify_pin_hash's kbase fallback",
+    );
     let mut pin_rec = [0u8; PIN_FILE_LEN];
     ctx.fs.read(EF_PIN, &mut pin_rec).unwrap();
     assert_eq!(pin_rec[0], MAX_PIN_RETRIES);
@@ -1691,6 +1714,240 @@ fn pin_verifier_and_pinwrapped_seed_migrate_at_verify() {
         now_ms: 0,
     };
     spend_and_verify_pin_hash(&mut ctx3, &pin_hash[..16]).unwrap();
+}
+
+/// F6: the `if migrated` guard is narrower than the writes it was placed in front of.
+/// `migrate_keydev_pin` re-keys `EF_KEY_DEV` off the pre-OTP arm on the SUCCESS path,
+/// whatever `EF_PIN`'s verifier says — and the two records part company the moment a
+/// faulted `read_key` makes that migration a no-op for one verify: `EF_PIN` lands
+/// OTP-rooted, the seed stays 0x03, and every later verify re-keys it with `migrated`
+/// false and no re-arm anywhere. So the re-arm belongs where the knowledge is.
+#[test]
+fn a_seed_migration_with_an_already_migrated_verifier_re_arms_the_lap() {
+    const OTP_KEY: [u8; 32] = [0x79; 32];
+    fn otp_dev() -> Device<'static> {
+        Device {
+            otp_key: Some(&OTP_KEY),
+            ..dev()
+        }
+    }
+
+    let (mut fs, medium, mut rng) = setup_cut();
+    let seed0 = load_keydev(&dev(), &mut fs).unwrap();
+    let mut padded = [0u8; PADDED_PIN_LEN];
+    padded[..PIN.len()].copy_from_slice(PIN);
+    let mut state = FidoState::new();
+    // EF_PIN is written by the OTP build, so its verifier is ALREADY OTP-rooted and
+    // the fallback that sets `migrated` never fires.
+    {
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: otp_dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: 0,
+        };
+        store_new_pin(&mut ctx, &padded).unwrap();
+    }
+    // The seed is the straggler: a pre-OTP PIN-wrapped 0x03 under the same PIN.
+    let pin_hash = sha256(PIN);
+    crate::seed::wrap_keydev_legacy(&dev(), &mut fs, &seed0, &pin_hash[..16]);
+    let mut raw = [0u8; 61];
+    assert_eq!(fs.read(EF_KEY_DEV.get(), &mut raw), Some(61));
+    assert_eq!(raw[0], 0x03, "fixture: the seed is pre-OTP PIN-wrapped");
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+
+    medium.clear_ops();
+    let mut state2 = FidoState::new();
+    let mut presence = crate::AlwaysConfirm;
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev: otp_dev(),
+        fs: &mut fs,
+        rng: &mut rng,
+        state: &mut state2,
+        now_ms: 0,
+    };
+    spend_and_verify_pin_hash(&mut ctx, &pin_hash[..16]).unwrap();
+    assert_eq!(ctx.fs.read(EF_KEY_DEV.get(), &mut raw), Some(61));
+    assert_eq!(
+        raw[0], 0x12,
+        "fixture: the verify really did re-key the seed off the pre-OTP arm"
+    );
+    assert_eq!(load_keydev(&otp_dev(), ctx.fs), Some(seed0));
+    assert!(
+        !ctx.fs.has_data(rsk_fs::EF_HARDENED),
+        "the seed was re-keyed off the chip-serial arm with `migrated` false, so \
+         nothing re-armed the lap and that 0x03 copy stays in the ring for good"
+    );
+    // EF_PIN is rewritten here too (the retry spend and its reset), but it re-keys
+    // nothing — the append the order is about is the seed's.
+    medium.assert_re_armed_before(EF_KEY_DEV.get(), |_| false, "migrate_keydev_pin");
+}
+
+/// How the two records part company on a real card, so F6's state is not a fixture.
+/// `migrate_keydev_pin` opens with `fs.read_key(EF_KEY_DEV, …)`, and `read_key`
+/// collapses a flash READ FAULT into the same `None` an absent slot gives — so one
+/// faulted probe makes the seed migration a silent no-op for that verify, while the
+/// SAME verify goes on to persist an OTP-rooted `EF_PIN`. From then on `migrated` is
+/// false for a seed still sitting at 0x03.
+#[test]
+fn a_faulted_seed_probe_leaves_the_verifier_migrated_and_the_seed_behind() {
+    const OTP_KEY: [u8; 32] = [0x7A; 32];
+    fn otp_dev() -> Device<'static> {
+        Device {
+            otp_key: Some(&OTP_KEY),
+            ..dev()
+        }
+    }
+
+    let (stuck, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(stuck);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    let seed0 = load_keydev(&dev(), &mut fs).unwrap();
+    let mut padded = [0u8; PADDED_PIN_LEN];
+    padded[..PIN.len()].copy_from_slice(PIN);
+    let mut state = FidoState::new();
+    {
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: 0,
+        };
+        store_new_pin(&mut ctx, &padded).unwrap();
+    }
+    let pin_hash = sha256(PIN);
+    crate::seed::wrap_keydev_legacy(&dev(), &mut fs, &seed0, &pin_hash[..16]);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+
+    // Verify #1 on the OTP build: `migrated` is true, so the verifier is re-keyed and
+    // the lap re-armed — but the seed probe faults, and the migration answers Ok over
+    // a record it never read.
+    medium.stick_once(EF_KEY_DEV.get());
+    {
+        let mut state2 = FidoState::new();
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: otp_dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state2,
+            now_ms: 0,
+        };
+        spend_and_verify_pin_hash(&mut ctx, &pin_hash[..16]).unwrap();
+    }
+    let mut raw = [0u8; 61];
+    assert_eq!(fs.read(EF_KEY_DEV.get(), &mut raw), Some(61));
+    assert_eq!(raw[0], 0x03, "the faulted probe left the seed pre-OTP");
+    let mut pin_rec = [0u8; PIN_FILE_LEN];
+    assert_eq!(fs.read(EF_PIN, &mut pin_rec), Some(PIN_FILE_LEN));
+    assert_eq!(
+        &pin_rec[3..PIN_FILE_LEN],
+        &otp_dev().pin_derive_verifier(&pin_hash[..16])[..PIN_FILE_LEN - 3],
+        "…while the same verify persisted an OTP-rooted verifier, so no later \
+         verify will set `migrated` again",
+    );
+
+    // The next boot laps and latches the marker again.
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    let mut state3 = FidoState::new();
+    let mut presence = crate::AlwaysConfirm;
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev: otp_dev(),
+        fs: &mut fs,
+        rng: &mut rng,
+        state: &mut state3,
+        now_ms: 0,
+    };
+    spend_and_verify_pin_hash(&mut ctx, &pin_hash[..16]).unwrap();
+    assert_eq!(ctx.fs.read(EF_KEY_DEV.get(), &mut raw), Some(61));
+    assert_eq!(
+        raw[0], 0x12,
+        "verify #2 re-keyed the seed off the chip-serial arm"
+    );
+    assert!(
+        !ctx.fs.has_data(rsk_fs::EF_HARDENED),
+        "…with `migrated` false, so on the old guard nothing re-armed the lap and \
+         the 0x03 copy stays in the ring for the life of the key"
+    );
+}
+
+/// The trusted display's PIN verify carries its own copy of the kbase fallback, so
+/// nothing `spend_and_verify_pin_hash` does holds it: it re-keys the same pre-OTP
+/// verifier and owes the same re-arm, in the same order. No test reached this site
+/// at all before — the host path shadowed it in every reachability sweep.
+#[test]
+fn a_local_pin_verify_re_arms_the_lap_before_it_re_keys() {
+    const OTP_KEY: [u8; 32] = [0x78; 32];
+    fn otp_dev() -> Device<'static> {
+        Device {
+            otp_key: Some(&OTP_KEY),
+            ..dev()
+        }
+    }
+
+    // Pre-OTP: the verifier `store_new_pin` lands is rooted in the public chip serial.
+    let (mut fs, medium, mut rng) = setup_cut();
+    let mut padded = [0u8; PADDED_PIN_LEN];
+    padded[..PIN.len()].copy_from_slice(PIN);
+    let mut state = FidoState::new();
+    {
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: 0,
+        };
+        store_new_pin(&mut ctx, &padded).unwrap();
+    }
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the lap has latched"
+    );
+
+    // The OTP build. The pad's verify takes the fallback and re-stores the verifier
+    // under the OTP arm; its own retry spend rewrites EF_PIN without re-keying it,
+    // so "still weak" is every write that leaves the verifier bytes alone.
+    let before = medium
+        .value(EF_PIN)
+        .expect("fixture: EF_PIN is on the medium");
+    medium.clear_ops();
+    assert!(matches!(
+        spend_and_verify_local_pin(&otp_dev(), &mut fs, PIN),
+        LocalPin::Ok
+    ));
+    assert_ne!(
+        medium.value(EF_PIN).as_deref().map(|v| &v[1..]),
+        Some(&before[1..]),
+        "fixture: the verify never re-keyed the verifier, so there is no order to hold"
+    );
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "a lazy re-key must re-arm the at-rest lap: the marker is still latched, \
+         so no rescrub was requested"
+    );
+    medium.assert_re_armed_before(
+        EF_PIN,
+        |v| v.len() == before.len() && v[1..] == before[1..],
+        "spend_and_verify_pin_at's kbase fallback",
+    );
 }
 
 #[test]
