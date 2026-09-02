@@ -1016,3 +1016,182 @@ def test_a_leaf_one_shipped_module_still_declares_keeps_its_tag(tree, capsys):
     )
     assert assurance_gate.run(tree) == 0
     assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+# ---- what decides production is a cfg, never a spelling ---------------------
+
+
+def only_owner_finding(tree, name: str) -> None:
+    """The findings LIST, not a needle in stderr and not a line count.
+
+    `red` above is satisfied by a run carrying any number of other findings, and
+    every case below turns exactly one thing off. What the list has to tolerate
+    is measured rather than guessed: an owner that loses its last production file
+    takes the `rust` column from 1 to 0, so the generated table goes stale in the
+    same breath and the honest count for these cases is TWO. An oracle demanding
+    one finding would fail on the defect it is written for; an oracle reading
+    only the needle would pass on a tree that was already red for other reasons.
+    """
+    findings, _, _ = assurance_gate.audit(tree)
+    owner = f"{name}: checked by Seams.cfg but has no Refines tag in production Rust"
+    stale = "formal/README.md traceability table is stale"
+    assert owner in findings, findings
+    assert [f for f in findings if not f.startswith(stale)] == [owner], findings
+
+
+def _sub_directory_leaf(tree, gate: str) -> pathlib.Path:
+    """Move the tag into `screen/helper.rs`, declared from `screen.rs`.
+
+    The shape `crates/rsk-ui/src/render.rs` has and nothing else in the tree
+    does: a declaring file that is neither a crate root nor a `mod.rs`, so a
+    plain `mod helper;` inside it resolves under `screen/` and NOT beside it. A
+    resolver missing that looks for `src/helper.rs`, finds nothing, and drops the
+    declaration unrecorded — which leaves the leaf production whatever `gate`
+    says, and left eleven real `crates/rsk-ui/src/render/` files with no recorded
+    declarer at all.
+    """
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(
+        src / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        "mod screen;\n",
+    )
+    (src / "screen.rs").write_text(f"{gate}mod helper;\n")
+    (src / "screen").mkdir()
+    (src / "screen" / "helper.rs").write_text(
+        "// Refines `Mini!BarNeverOpens` — SEC-T-002.\n"
+    )
+    return src / "screen" / "helper.rs"
+
+
+def test_a_tag_under_a_withheld_mod_of_a_sub_directory_module_is_not_an_owner(tree):
+    """A test file classified as production, in the one shape the tree has.
+
+    `helper.rs` is compiled by no image — `screen.rs` names it under
+    `#[cfg(test)]` — and before [`_child_home`] the gate could not resolve the
+    declaration at all, so the leaf stood as `BarNeverOpens`'s production owner
+    at EXIT=0. Neither half of the deleted name filter reaches it: it is spelled
+    `helper.rs`.
+    """
+    leaf = _sub_directory_leaf(tree, "#[cfg(test)]\n")
+    assert leaf.resolve() in assurance_gate.cfg_excluded(tree)
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+def test_the_same_sub_directory_leaf_under_a_shipped_mod_owns(tree, capsys):
+    """Its twin, and the one variable is the attribute. A sub-directory module
+    no cfg withholds is production, so the rule is not a refusal of `foo/`."""
+    leaf = _sub_directory_leaf(tree, "")
+    assert leaf.resolve() not in assurance_gate.cfg_excluded(tree)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def _self_gated_leaf(tree, prologue: str) -> pathlib.Path:
+    """The same move onto a plainly-declared file that withholds ITSELF.
+
+    Nothing about the declaration says `mirror.rs` is a mirror — `lib.rs` names
+    it the way it names any module. The `#![cfg(test)]` in its own prologue is
+    the whole difference, and it is the `*_assurance.rs` defect with the gate
+    written on the other side of the file.
+    """
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(
+        src / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        "mod mirror;\n",
+    )
+    (src / "mirror.rs").write_text(
+        f"{prologue}// Refines `Mini!BarNeverOpens` — SEC-T-002.\n"
+    )
+    return src / "mirror.rs"
+
+
+def test_a_tag_in_a_file_its_own_prologue_withholds_is_not_an_owner(tree):
+    """The last way in, and the only one no declaration can express."""
+    leaf = _self_gated_leaf(tree, "#![cfg(test)]\n")
+    assert leaf.resolve() in assurance_gate.cfg_excluded(tree)
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+def test_a_prologue_cfg_a_shipped_image_can_set_keeps_the_file(tree, capsys):
+    """Its twin, and it is deliberately not the empty one: an inner attribute of
+    exactly the same shape over an expression that is satisfiable. A rule reading
+    `#![cfg` and not the expression drops this file too."""
+    leaf = _self_gated_leaf(tree, '#![cfg(target_os = "none")]\n')
+    assert leaf.resolve() not in assurance_gate.cfg_excluded(tree)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+def test_a_cfg_attribute_inside_the_file_body_does_not_withhold_it(tree, capsys):
+    """The over-shut direction of the prologue rule. `mod inner { #![cfg(test)]
+    … }` withholds that block and not the file, so the scan stops at the first
+    item; a whole-text search reads this as a mirror and drops a shipped owner.
+    """
+    leaf = _self_gated_leaf(tree, "")
+    leaf.write_text(
+        "// Refines `Mini!BarNeverOpens` — SEC-T-002.\n"
+        "fn bar() {}\n"
+        "mod inner {\n    #![cfg(test)]\n}\n"
+    )
+    assert leaf.resolve() not in assurance_gate.cfg_excluded(tree)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+#: Two production spellings the deleted `"kani" not in name and "tests" not in
+#: name` filter withheld, and one is not hypothetical: `attests.rs` carries the
+#: letters `tests` and is what an attestation module would plausibly be called.
+SPELLED_LIKE_TESTS = ("attests", "kani_stubs")
+
+
+@pytest.mark.parametrize("stem", SPELLED_LIKE_TESTS)
+def test_a_production_file_spelled_like_a_test_still_owns_its_tag(tree, capsys, stem):
+    """A production file classified as test, which is the direction a name
+    filter fails in and the reason it is gone.
+
+    Under the filter this was red — and red with the finding for a MISSING
+    owner, printed over a file every image compiles, which is the worst message
+    the gate has: it sends the reader to look for code that is already there.
+    """
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(
+        src / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        f"mod {stem};\n",
+    )
+    (src / f"{stem}.rs").write_text("// Refines `Mini!BarNeverOpens` — SEC-T-002.\n")
+    assert (src / f"{stem}.rs").resolve() not in assurance_gate.cfg_excluded(tree)
+    assert assurance_gate.run(tree) == 0
+    assert "assurance-gate: ok" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("stem", SPELLED_LIKE_TESTS)
+def test_the_same_spelling_under_a_withheld_mod_is_not_an_owner(tree, stem):
+    """Its twin, and the pair is what makes the green above an assertion rather
+    than the absence of one: the SAME name goes both colours, so what moved is
+    the attribute and nothing else."""
+    src = tree / "crates" / "rsk-a" / "src"
+    edit(
+        src / "lib.rs",
+        "/// Refines `Mini!BarNeverOpens` — SEC-T-002.\n",
+        f"#[cfg(test)]\nmod {stem};\n",
+    )
+    (src / f"{stem}.rs").write_text("// Refines `Mini!BarNeverOpens` — SEC-T-002.\n")
+    only_owner_finding(tree, "BarNeverOpens")
+
+
+def test_the_shipped_tree_holds_no_file_the_name_filter_would_have_decided():
+    """The census the deletion rests on, asserted rather than remembered.
+
+    Every `.rs` whose name carries `kani` or `tests` is withheld by a cfg on the
+    real tree, so the filter decided zero files: `production_rust` was 182 with
+    it and 182 without, the same list both ways. Asserted as the PROPERTY and not
+    as the count — a hard 182 goes red on the next file anyone adds, which is a
+    reminder to edit a number rather than a statement about the classifier.
+    """
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    production = assurance_gate.production_rust(repo)
+    assert production, "the classifier returned nothing at all"
+    assert not [f for f in production if "kani" in f.name or "tests" in f.name]

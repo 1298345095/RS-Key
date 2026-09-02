@@ -1392,21 +1392,25 @@ def test_a_cfg_site_no_buildable_image_compiles_is_not_a_gate(tree, capsys):
     closure INTO `cfg_excluded`, so the case runs there now and this row pins
     the shape from the matrix end.
     """
-    tree.write("firmware/src/conformance/mod.rs", "mod wire;\n")
+    # Under `presence/`, because `presence.rs` is neither a crate root nor a
+    # `mod.rs`: rustc 1.96 answers E0583 for `firmware/src/conformance/mod.rs`
+    # and names these two paths itself. The fixture wrote a tree rustc rejects,
+    # and the resolver agreed with it until `assurance_gate._child_home`.
+    tree.write("firmware/src/presence/conformance/mod.rs", "mod wire;\n")
     tree.write(
-        "firmware/src/conformance/wire.rs",
+        "firmware/src/presence/conformance/wire.rs",
         '#[cfg(feature = "no-touch")]\nfn only_here() {}\n',
     )
     tree.edit("firmware/src/presence.rs", "pub fn press()", "#[cfg(test)]\nmod conformance;\npub fn press()")
     tree.edit(
         "assurance/configurations.toml",
         'cfg = ["firmware/src/presence.rs"]',
-        'cfg = ["firmware/src/conformance/wire.rs"]',
+        'cfg = ["firmware/src/presence/conformance/wire.rs"]',
     )
     matrix_gate.cfg_sites.cache_clear()
     matrix_gate.production_rust.cache_clear()
     said = red(tree, capsys)
-    assert "names `firmware/src/conformance/wire.rs`" in said
+    assert "names `firmware/src/presence/conformance/wire.rs`" in said
     assert "which does not gate on `no-touch`" in said
 
 
@@ -1414,16 +1418,16 @@ def test_a_cfg_site_a_buildable_image_does_compile_is_still_a_gate(tree):
     """The green direction, and the one that keeps the fix from being a blanket
     refusal on directories: the same two files under a `mod` no cfg withholds
     stay a gate site, and the cell citing one of them passes."""
-    tree.write("firmware/src/conformance/mod.rs", "mod wire;\n")
+    tree.write("firmware/src/presence/conformance/mod.rs", "mod wire;\n")
     tree.write(
-        "firmware/src/conformance/wire.rs",
+        "firmware/src/presence/conformance/wire.rs",
         '#[cfg(feature = "no-touch")]\nfn only_here() {}\n',
     )
     tree.edit("firmware/src/presence.rs", "pub fn press()", "mod conformance;\npub fn press()")
     tree.edit(
         "assurance/configurations.toml",
         'cfg = ["firmware/src/presence.rs"]',
-        'cfg = ["firmware/src/conformance/wire.rs"]',
+        'cfg = ["firmware/src/presence/conformance/wire.rs"]',
     )
     matrix_gate.cfg_sites.cache_clear()
     matrix_gate.production_rust.cache_clear()

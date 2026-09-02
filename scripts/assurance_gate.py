@@ -231,6 +231,31 @@ MOD_DECL = re.compile(
 CFG_ATTR = re.compile(r"\#\[cfg\((?P<expr>.*)\)\][ \t]*$")
 PATH_ATTR = re.compile(r'\#\[path[ \t]*=[ \t]*"(?P<rel>[^"]+)"\]')
 
+#: The file names whose plain `mod x;` resolves BESIDE them. Everywhere else the
+#: children of `foo.rs` live in `foo/`, and a resolver that forgets it looks for
+#: `render/applets.rs` at `src/applets.rs`, finds nothing, and drops the whole
+#: declaration unrecorded. Measured: eleven files under
+#: `crates/rsk-ui/src/render/` had no declarer at all, so a `#[cfg(test)] mod
+#: helper;` written in `render.rs` withheld nothing and its leaf was production.
+#: A `#[path]` is deliberately NOT this rule — the reference makes it relative to
+#: the declaring file's own directory in both shapes, which is what
+#: `crates/rsk-oath/src/tests.rs` naming `code_tests.rs` BESIDE it rests on.
+#: Two rules because Rust has two, and it is the one clause here whose loss the
+#: SHIPPED tree notices: resolving `#[path]` under the child home as well takes
+#: `production_rust` from 182 to 327 and reddens the row. 138 of those 145 are
+#: `*_tests.rs` or `*kani*.rs` — which is what the deleted name filter used to
+#: hide, and the reason the filter was not merely inert but load-BLIND: it was
+#: standing in front of this rule, catching its failures by their spelling.
+ROOT_MODULES = ("mod.rs", "lib.rs", "main.rs")
+
+#: The cfg a file applies to ITSELF. An inner `#![cfg(test)]` withholds the whole
+#: module whatever its declaration says, so it is the one way a file is test-only
+#: while every `mod` naming it is plain — the case the deleted `"tests" not in
+#: name` filter was the accidental backstop for, and the one it would have missed
+#: anyway the day the file was called `helper.rs`. Zero instances in the tree
+#: today; that is the class being closed, not a count being defended.
+INNER_CFG = re.compile(r"^\#!\[cfg\((?P<expr>.*)\)\]$")
+
 #: The two cfg atoms no shipped image sets. `kani` is a `--cfg` the proof runner
 #: passes and `test` is cargo's; a module reachable only through them is in no
 #: firmware anybody can build, so a `Refines` tag inside it is a tag on a mirror.
@@ -281,6 +306,33 @@ def _cfg_holds(expr: str, shippable: frozenset[str]) -> bool | None:
             return True if True in held else (None if None in held else False)
         return False if False in held else (None if None in held else True)
     return _cfg_atom(expr, shippable)
+
+
+def _child_home(source: pathlib.Path) -> pathlib.Path:
+    """The directory `source`'s own child modules live in."""
+    return source.parent if source.name in ROOT_MODULES else source.parent / source.stem
+
+
+def _self_withheld(text: str) -> str | None:
+    """The `#![cfg(...)]` expression a file's own prologue applies to it.
+
+    The PROLOGUE only — up to the first line that is not blank, a `//` comment or
+    an inner attribute. The same spelling inside `mod inner { #![cfg(test)] … }`
+    withholds that block and not the file, and a scan of the whole text could not
+    tell the two apart. Anything unrecognised answers None, which KEEPS the file:
+    the same failure direction [`_cfg_atom`] argues for, because over-counting an
+    owner is a column one too high and under-counting one hides an owner.
+    """
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("//"):
+            continue
+        if not line.startswith("#!["):
+            return None
+        found = INNER_CFG.match(line)
+        if found:
+            return found.group("expr")
+    return None
 
 
 @functools.cache
@@ -353,16 +405,26 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
     `SEC-TRANS-003` — §2 principle 7 in the one direction it forbids, a
     proof-only mirror standing in for the code it mirrors.
 
-    A file is reached two ways, so the closure is two. The DIRECTORY under a
-    withheld declaration is shut — `crates/rsk-fido/src/lib.rs` says
-    `#[cfg(test)] mod conformance;` and `conformance/mod.rs` then declares its
-    eighteen siblings plainly, every one a production owner-in-waiting. And a
-    file whose `mod` declarations ALL sit in withheld files is shut with them,
-    because a `#[path]` leaf need not live under the directory that named it:
-    `crates/rsk-oath/src/tests.rs` is withheld and names `code_tests.rs`, which
-    sits BESIDE it and not under the `tests/` that shuts. Measured,
-    eleven such files, held out today only by the legacy name filter — driven,
-    one named without `tests` or `kani` walks back into the production set.
+    A file is reached through a declaration, through the directory a declaration
+    shuts, or through a chain of both, so the closure is a fixed point over all
+    three. The DIRECTORY under a withheld declaration is shut —
+    `crates/rsk-fido/src/lib.rs` says `#[cfg(test)] mod conformance;` and
+    `conformance/mod.rs` then declares its eighteen siblings plainly, every one a
+    production owner-in-waiting. And a file whose `mod` declarations ALL sit in
+    withheld files is shut with them, because a `#[path]` leaf need not live
+    under the directory that named it: `crates/rsk-oath/src/tests.rs` is withheld
+    and names `code_tests.rs`, which sits BESIDE it and not under the `tests/`
+    that shuts. Measured, eleven such files — and the sentence that stood here
+    said they were "held out today only by the legacy name filter", which the
+    same commit's own fixed point had already made false. Re-measured before the
+    filter was deleted: the filter decided ZERO files, `production_rust` being
+    182 with it and 182 without.
+
+    The last way in is the file's OWN prologue. An inner `#![cfg(test)]` shuts a
+    module whatever its declaration says, and no spelling of a declaration can
+    see it; that is [`_self_withheld`], and it is the direction the name filter
+    was standing in for without ever being able to reach — a `helper.rs` is
+    spelled like production and a `manifests.rs` like a test.
 
     One live declarer keeps a file: the same source can be `#[path]`-included
     from a shipped module and from a test. Only the directory half can still
@@ -383,7 +445,13 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
     shut: dict[pathlib.Path, str] = {}
     declarers: dict[pathlib.Path, set[pathlib.Path]] = {}
     for parent in sources:
-        for match in MOD_DECL.finditer(parent.read_text(errors="ignore")):
+        text = parent.read_text(errors="ignore")
+        own = _self_withheld(text)
+        if own is not None and _cfg_holds(own, shippable) is False:
+            why = f"{parent.name} applies `#![cfg({own})]` to itself"
+            out.setdefault(parent.resolve(), why)
+            shut.setdefault(_child_home(parent).resolve(), why)
+        for match in MOD_DECL.finditer(text):
             expr = None
             for line in match.group("attrs").splitlines():
                 found = CFG_ATTR.search(line.strip())
@@ -391,10 +459,17 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
                     expr = found.group("expr")
             relative = PATH_ATTR.search(match.group("attrs"))
             name = match.group("name")
-            target = parent.parent / (relative.group("rel") if relative else f"{name}.rs")
-            if not target.is_file():
-                target = parent.parent / name / "mod.rs"
-            if not target.is_file():
+            # A `#[path]` is relative to the declaring FILE's directory; a plain
+            # `mod` resolves under [`_child_home`]. Two rules and not one,
+            # because Rust has two — `crates/rsk-ui/src/render.rs` names both
+            # shapes and the single-rule version resolved neither `render/`.
+            if relative:
+                candidates = [parent.parent / relative.group("rel")]
+            else:
+                home = _child_home(parent)
+                candidates = [home / f"{name}.rs", home / name / "mod.rs"]
+            target = next((c for c in candidates if c.is_file()), None)
+            if target is None:
                 continue
             # Every declaration, not only the withheld ones: what decides the
             # second closure below is whether a file has a live declarer LEFT.
@@ -403,11 +478,9 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
                 continue
             why = f"{parent.name} declares `mod {name}` under cfg({expr})"
             out[target.resolve()] = why
-            # Where the refused module's own children sit: beside a `mod.rs`,
-            # in a same-stem directory otherwise. Taken off the RESOLVED
+            # Where the refused module's own children sit. Taken off the RESOLVED
             # target so a `#[path]` re-point carries its sub-tree with it.
-            home = target.parent if target.name == "mod.rs" else target.parent / target.stem
-            shut[home.resolve()] = why
+            shut[_child_home(target).resolve()] = why
     # `setdefault` and the `break` pick the NEAREST reason and decide nothing
     # else: every caller reads the KEYS, so the value is a message to whoever
     # reads this mapping and never a membership test. Untested on purpose.
@@ -432,16 +505,68 @@ def cfg_excluded(root: pathlib.Path) -> dict[pathlib.Path, str]:
 
 
 def production_rust(root: pathlib.Path) -> list[pathlib.Path]:
+    """Every `.rs` some buildable image compiles, and nothing else.
+
+    What decides it is [`cfg_excluded`] alone — the cfg on the declarations that
+    reach a file, plus the cfg it applies to itself. A `"kani" not in f.name and
+    "tests" not in f.name` filter stood here as well until this commit, and it
+    read a SPELLING: an `attests.rs` would have been withheld for holding the
+    letters `tests`, and a `helper.rs` under a `#[cfg(test)] mod` kept for not.
+    Deleting it moved nothing — 182 files before and after, the same list both
+    ways and no printed column — because every file it decided is decided by a
+    cfg too. What it cost while it stood is at [`ROOT_MODULES`]: it was hiding
+    the resolution rule's failures behind their file names.
+
+    Not cargo's own answer, which was the third candidate. A dep-info file is the
+    list for ONE feature combination, so a single unit under-counts production
+    for everything behind a feature that build did not set: measured against the
+    `firmware.d` `check.sh` leaves in `target/`, 38 of these 182 are absent —
+    every `rsk-ui` render screen, `rsk-display` and `rsk-slip39` among them, and
+    each one is code some image ships. Unioning the combinations means building
+    them all, inside a registry gate whose own docstring says it is deliberately
+    syntactic, and the verdict would then depend on a toolchain and a build
+    cache. Nor "the file's items are all cfg-gated", which needs an item parser
+    to answer and gets a file of test helpers around one shipped `pub fn` wrong
+    in the direction that hides an owner. The declaration and the prologue are
+    read off the tree and cost a regex.
+
+    One thing the filter did that this does NOT: an ORPHAN — a file no `mod`
+    declaration reaches and no manifest names as a root — is compiled by nothing
+    and is counted production here anyway. Deliberate, and it is the direction
+    [`_cfg_atom`] argues for: withholding an orphan means trusting the resolver's
+    completeness, and a resolver gap would then hide a real owner silently
+    instead of over-counting one. The shipped tree has none — every `.rs` under
+    `crates/*/src` and `firmware/src` is reached by a declaration or is a crate
+    root, measured, which is what makes the closure a closure. `test_matrix_gate`
+    has one, and it is a `screen_kani.rs` that nothing declares.
+
+    Mutation table for the classifier, driven through `check_property_tags` on a
+    fixture and re-driven on a copy of the shipped tree:
+
+    * `helper.rs` under `#[cfg(test)] mod helper;` in a NON-`mod.rs` parent,
+      carrying an invariant's only tag → red, `no Refines tag in production
+      Rust`. Before [`_child_home`] the declaration resolved to nothing and the
+      leaf was a production owner at EXIT=0.
+    * the same file with the `#[cfg(test)]` removed → green. Depth and the
+      parent's shape are not what withholds it; the cfg is.
+    * `crates/rsk-device/src/attests.rs`, plainly declared, carrying that tag →
+      green here, red under the re-inserted name filter with the same `no
+      Refines tag` message. The message is the tell: it is the finding for a
+      MISSING owner, printed over a file every image compiles.
+    * a prologue `#![cfg(test)]` over a plainly-declared file → red. Without
+      [`_self_withheld`] a proof-only mirror stands in as the owner, which is the
+      `*_assurance.rs` defect with the gate on the other side of the file.
+    * `mod inner { #![cfg(test)] }` inside a shipped file → green. A scan that
+      reads the whole text instead of the prologue takes that file's tag with it
+      and the row reports an owner that is sitting right there.
+    * a prologue `#![cfg(target_os = "none")]` → green. `is False` and not `is
+      not True`: a satisfiable expression keeps the file, and the mutant reading
+      the three-valued answer as two drops a shipped owner.
+    """
     excluded = cfg_excluded(root)
     files = list((root / "crates").glob("*/src/**/*.rs"))
     files.extend((root / "firmware" / "src").glob("**/*.rs"))
-    return [
-        f
-        for f in sorted(files)
-        if "kani" not in f.name
-        and "tests" not in f.name
-        and f.resolve() not in excluded
-    ]
+    return [f for f in sorted(files) if f.resolve() not in excluded]
 
 
 #: What a `[[property]]` may say, and the only table this file may have. Neither

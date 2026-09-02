@@ -308,6 +308,13 @@ def test_an_artifact_a_row_merely_spells_is_not_one_it_ran(tree, capsys):
     (tree.root / "crates/rsk-screen/src/screen_kani.rs").unlink()
     tree.write("fuzz/fuzz_targets/creen.rs", "// names Shown, and nothing runs it\n")
     matrix_gate.registry_evidence.cache_clear()
+    # `Tree.__init__` primes the cached list, and this row DELETES a file after
+    # it: the stale entry is then read and the run dies on ENOENT before it can
+    # reach the finding. Sibling rows in test_matrix_gate.py clear it for the
+    # same reason. Only visible since `production_rust` stopped dropping the file
+    # for having `kani` in its name — nothing declares it, so it is now a
+    # production orphan.
+    matrix_gate.production_rust.cache_clear()
     assert matrix_gate.registry_evidence(tree.root, "Shown") == ("creen",)
     said = red(tree, capsys)
     assert "no row named here runs any of SEC-B-001's registered evidence" in said
@@ -320,6 +327,7 @@ def test_the_message_says_so_when_the_registry_derives_nothing_runnable(tree, ca
     out is the model run at this column that `settled_by = "evidence"` asks for.
     """
     (tree.root / "crates/rsk-screen/src/screen_kani.rs").unlink()
+    matrix_gate.production_rust.cache_clear()
     said = red(tree, capsys)
     assert "the registry derives none that a row can run" in said
 
