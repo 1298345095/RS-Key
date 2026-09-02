@@ -64,11 +64,11 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-FIDO-002` | `NoCrossTransportTouchConsumption` | 5 of 42 | 5 | 0 of 0 | 2 | 0 | 3 | 4 | `31c21a7` stale (3 input(s) newer) | BOUNDED |
 | `SEC-FIDO-003` | `NoTokenAfterInvalidation` | 5 of 45 | 6 | 0 of 0 | 2 | 0 | 4 | 0 | `31c21a7` stale (6 input(s) newer) | BOUNDED |
 | `SEC-FIDO-004` | `NoAccessibleSecretWithoutGate` | 5 of 39 | 2 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | MODELLED-ONLY |
-| `SEC-FIDO-005` | `NoUnmanageableCredential` | 5 of 40 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | MODELLED-ONLY |
-| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 5 of 40 | 3 | 0 of 0 | 1 | 0 | 3 | 0 | `31c21a7` stale (3 input(s) newer) | BOUNDED |
-| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
-| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
-| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 3 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
+| `SEC-FIDO-005` | `NoUnmanageableCredential` | 5 of 40 | 3 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (4 input(s) newer) | MODELLED-ONLY |
+| `SEC-FIDO-006` | `ResetNeverWeakensSurvivingState` | 5 of 40 | 3 | 0 of 0 | 1 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | BOUNDED |
+| `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 4 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
+| `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 4 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
+| `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 4 | 0 | `b185fc3` stale (1 input(s) newer) | BOUNDED |
 | `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (9 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (3 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
@@ -150,7 +150,7 @@ The same 40 P0-family rows, counted the other way round: per column rather than 
 | `ea-conformance-rpid` | feature | no | 3 | 37 |
 | `largeblob-ext` | feature | no | 3 | 37 |
 | `abrobot-16m` | board | no | 9 | 31 |
-| `abrobot-4m` | board | no | 32 | 8 |
+| `abrobot-4m` | board | no | 36 | 4 |
 | `seeed-xiao` | board | no | 9 | 31 |
 | `tenstar-usb` | board | no | 9 | 31 |
 | `waveshare-one` | board | no | 40 | 0 |
@@ -168,7 +168,7 @@ Three spellings of "not current", which used to sit on two different pages and i
 | bundle | `SEC-FIDO-002` | 3 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-003` | 6 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-004` | 3 input(s) newer than `31c21a7` |
-| bundle | `SEC-FIDO-005` | 3 input(s) newer than `31c21a7` |
+| bundle | `SEC-FIDO-005` | 4 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-006` | 3 input(s) newer than `31c21a7` |
 | bundle | `SEC-FIDO-006A` | 1 input(s) newer than `b185fc3` |
 | bundle | `SEC-FIDO-006B` | 1 input(s) newer than `b185fc3` |
