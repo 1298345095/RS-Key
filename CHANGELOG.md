@@ -2913,7 +2913,7 @@ and to the statuses it quotes.
   recovered pre-OTP copy. The fixtures witness the ORDER of the appends and the
   marker.
 
-  **bcdDevice → «bumped by the manager».**
+  **bcdDevice → 0x09C0.**
 
 - **OATH `SET CODE` installed the access code and then refused, leaving the
   OTP-PIN it exists to revoke alive underneath it.** Making every superseding
@@ -2958,6 +2958,8 @@ and to the statuses it quotes.
   with PIN and PUK un-reset — a partial application of a command that already
   required both the management key and the PIN, with the old references still in
   force.
+
+  **bcdDevice → 0x09BF.**
 
 - **The boot pass re-keys pre-OTP records too, and standing before the at-rest lap
   is not the same as standing before the lap that latched.** 0x09BD swept thirteen
@@ -3029,7 +3031,7 @@ and to the statuses it quotes.
   guarded on `phase = "serving"` — so a boot-phase re-key, and a migration that
   fails on one boot and succeeds on the next, are states that module cannot enter.
   The rule it asserts is the right one; what it cannot express is where this change
-  applies it.
+  applies it. **bcdDevice → 0x09BE.**
 
 - **OATH's boot pass was the sixth member of the boot-migration class, and it
   carries the two arms the other five did.** `rsk_oath::migrate_seal` runs at
@@ -3059,7 +3061,8 @@ and to the statuses it quotes.
   each re-arm's answer swallowed says the copy was superseded with the marker
   still on the medium. Each case carries a control on the same medium with the
   fault cleared, so the refusal assertion is about the gate and not about a pass
-  that never fires. `crates/rsk-oath` 127 → 130 tests.
+  that never fires. `crates/rsk-oath` 127 → 130 tests. **bcdDevice → 0x09BE**, the same
+  bump as the entry above — one commit carried both arms of this class.
 
 - **Every lazy re-key re-arms the at-rest scrub before it writes, *and does not
   write when the re-arm did not land*.** The re-key and the
