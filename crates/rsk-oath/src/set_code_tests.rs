@@ -538,3 +538,125 @@ fn a_set_code_whose_re_arm_the_medium_refuses_installs_no_code() {
         "the control re-armed the lap"
     );
 }
+
+/// The undeclared half of moving the gate above the seal: the early return also
+/// stands above `self.validated = false`, so a refused re-arm no longer locks the
+/// session down. That is the right half to keep — the command wrote NOTHING, so it
+/// must leave the card as it found it, and the lock-down exists to revoke the
+/// second unlock path SET CODE creates, which a refused re-arm never created. The
+/// status word is unchanged either way, so only this pins it.
+#[test]
+fn a_refused_re_arm_leaves_the_session_exactly_as_it_found_it() {
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    let rng = RefCell::new(CountRng(7));
+    let touch = RefCell::new(AlwaysConfirm);
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    assert_eq!(set_code(&mut app, &mut fs, &[0xCDu8; 20]), Sw::OK);
+    let (_, sel) = select(&mut app, &mut fs);
+    let chal = find_tag(&sel, TAG_CHALLENGE as u16).unwrap().to_vec();
+    let mut d = tlv(TAG_RESPONSE, &hmac_sha1(&[0xCDu8; 20], &chal));
+    d.extend(tlv(TAG_CHALLENGE, &[9u8; 8]));
+    assert_eq!(
+        run(&mut app, &mut fs, &apdu(INS_VALIDATE, 0, 0, &d)).0,
+        Sw::OK
+    );
+    assert_eq!(
+        run(&mut app, &mut fs, &apdu(INS_LIST, 0, 0, &[])).0,
+        Sw::OK,
+        "fixture: the standing code was presented, so the session is open"
+    );
+
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    let sw = set_code(&mut app, &mut fs, &[0xABu8; 20]);
+    assert_eq!(
+        run(&mut app, &mut fs, &apdu(INS_LIST, 0, 0, &[])).0,
+        Sw::OK,
+        "the refused SET CODE wrote nothing, so it must not revoke an unlock the \
+         caller had already earned with the code that is still the standing one",
+    );
+    assert_eq!(sw, Sw::MEMORY_FAILURE);
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: the marker stands"
+    );
+
+    // The control on the same medium, fault cleared: the command lands and the
+    // lock-down DOES happen, so the assertion above is about the refused arm and
+    // not about a session this applet never locks.
+    medium.refuse(None);
+    assert_eq!(set_code(&mut app, &mut fs, &[0xABu8; 20]), Sw::OK);
+    assert_eq!(
+        run(&mut app, &mut fs, &apdu(INS_LIST, 0, 0, &[])).0,
+        Sw::SECURITY_STATUS_NOT_SATISFIED,
+        "a SET CODE that landed must lock the session it just re-keyed",
+    );
+}
+
+/// The RESIDUAL the gate hoist does not close, pinned rather than described. The
+/// hoist covers the re-arm's refusal; the `EF_OTP_PIN` DROP is a separate append
+/// after the seal, and a medium refusing only that reaches the same end state the
+/// entry opens with — the code installed, the PIN it exists to revoke alive. No
+/// ordering fixes it: dropping the PIN first would trade a false lock for a silent
+/// loss of protection. What the command does buy is the lock-down, which this arm
+/// keeps because `self.validated = false` stands ahead of the drop.
+#[test]
+fn a_set_code_whose_pin_drop_the_medium_refuses_installs_the_code_and_locks_down() {
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    let rng = RefCell::new(CountRng(7));
+    let touch = RefCell::new(AlwaysConfirm);
+    {
+        let mut app = OathApplet::new(SERIAL, [0x22; 32], None, &rng, &touch);
+        assert_eq!(
+            run(
+                &mut app,
+                &mut fs,
+                &apdu(INS_SET_PIN, 0, 0, &tlv(TAG_PASSWORD, b"1234"))
+            )
+            .0,
+            Sw::OK
+        );
+    }
+    assert!(fs.has_data(EF_OTP_PIN), "fixture: the OTP PIN is set");
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    select(&mut app, &mut fs);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(EF_OTP_PIN));
+
+    let sw = set_code(&mut app, &mut fs, &[0xABu8; 20]);
+    assert!(
+        fs.has_key(EF_OATH_CODE) && fs.has_data(EF_OTP_PIN),
+        "RESIDUAL CLOSED: the seal and the drop are atomic now — say so in the \
+         CHANGELOG entry, which states this as the residual the hoist leaves",
+    );
+    assert_eq!(sw, Sw::MEMORY_FAILURE);
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the re-arm led both appends, so it landed before either",
+    );
+    // What the command still buys on this arm: the session is shut, so the
+    // surviving PIN cannot be spent without a fresh SELECT.
+    assert_eq!(
+        run(&mut app, &mut fs, &apdu(INS_LIST, 0, 0, &[])).0,
+        Sw::SECURITY_STATUS_NOT_SATISFIED,
+        "the code was installed, so this session must be locked down",
+    );
+
+    // The control on the same medium, fault cleared: the drop DOES happen.
+    medium.refuse(None);
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    let (_, sel) = select(&mut app, &mut fs);
+    let chal = find_tag(&sel, TAG_CHALLENGE as u16).unwrap().to_vec();
+    let mut d = tlv(TAG_RESPONSE, &hmac_sha1(&[0xABu8; 20], &chal));
+    d.extend(tlv(TAG_CHALLENGE, &[9u8; 8]));
+    assert_eq!(
+        run(&mut app, &mut fs, &apdu(INS_VALIDATE, 0, 0, &d)).0,
+        Sw::OK
+    );
+    assert_eq!(set_code(&mut app, &mut fs, &[0xEFu8; 20]), Sw::OK);
+    assert!(!fs.has_data(EF_OTP_PIN), "the control dropped the OTP PIN");
+}

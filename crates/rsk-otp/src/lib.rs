@@ -990,10 +990,10 @@ fn slot_still_live<S: Storage>(fs: &mut Fs<S>, fid: u16) -> bool {
     fs.try_has_key(KeyFid::new(fid)) != Ok(false)
 }
 
-/// Read+unseal a slot file; `Ok(Some(len))` only when it holds at least a full
-/// config. Legacy plaintext (pre-seal) fails GCM authentication and reads as
-/// `Ok(None)` until [`migrate_seal`] re-seals it at boot; `Err` is a medium that
-/// could not answer, which is not the same claim as a slot nobody programmed.
+/// Read+unseal a slot file, CURRENT arm only; `Ok(Some(len))` at full config
+/// length. Legacy plaintext and a pre-OTP seal both read `Ok(None)` until
+/// [`migrate_seal`] re-seals them — a boot whose re-arm it refused leaves a slot
+/// that types nothing. `Err` is a medium that could not answer, not an empty slot.
 pub(crate) fn try_read_slot<S: Storage>(
     dev: &Device,
     fs: &mut Fs<S>,

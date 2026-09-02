@@ -1082,8 +1082,10 @@ fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_cred() {
     migrate_seal(&otp, &mut fs, &mut rng);
     assert!(
         seal::seal_read(&otp, &mut fs, fid, &mut buf).is_none(),
-        "the re-arm never landed, so the pre-OTP copy must stay in force instead of \
-         being superseded under a marker nothing will clear"
+        "the re-arm never landed, so the pre-OTP copy must stay UNSUPERSEDED rather \
+         than be displaced under a marker nothing will clear. The cost is stated \
+         at the site: this is the reader every command uses, so LIST answers \
+         `9000` over an empty body until a later boot migrates it"
     );
     assert!(
         medium.live(rsk_fs::EF_HARDENED),
@@ -1143,8 +1145,10 @@ fn the_boot_pass_re_arms_the_lap_before_it_seals_a_cleartext_cred() {
         stored[..n]
             .windows(SECRET_SHA1.len())
             .any(|w| w == SECRET_SHA1),
-        "the re-arm never landed, so the cleartext credential must stay in force \
-         rather than be superseded under a marker nothing will clear"
+        "the re-arm never landed, so the cleartext credential must stay UNSUPERSEDED \
+         rather than be displaced under a marker nothing will clear. The cost is \
+         the pre-OTP arm's, stated at the site: plaintext fails the AEAD trial \
+         decrypt every command reads through, so LIST does not show it either"
     );
     medium.refuse(None);
     migrate_seal(&otp, &mut fs, &mut rng);
@@ -2236,6 +2240,51 @@ fn a_reset_re_arms_the_at_rest_lap_before_the_first_tombstone() {
     assert!(
         medium.live(rsk_fs::EF_HARDENED),
         "fixture: the refusal really left the marker on the medium"
+    );
+}
+
+/// The head re-arm is BEST-EFFORT, so its refusal leaves the marker latched over
+/// every tombstone the sweep then appends — the residual the gated sites do not
+/// carry. A single-shot refusal is the only kind the pass recovers from, and the
+/// retry after the sweep is what recovers it; a persistent one is still a residual.
+#[test]
+fn a_reset_retries_the_re_arm_after_the_sweep() {
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    let rng = RefCell::new(CountRng(7));
+    let touch = RefCell::new(AlwaysConfirm);
+    let mut app = OathApplet::new(SERIAL, [0x22; 32], Some(test_mkek), &rng, &touch);
+    select(&mut app, &mut fs);
+    fs.put(EF_OTP_PIN, &[MAX_OTP_COUNTER; 33]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+    // Only the HEAD re-arm is refused; the medium serves every mutation after it.
+    medium.refuse_once(rsk_fs::EF_HARDENED);
+
+    let (sw, _) = run(&mut app, &mut fs, &apdu(INS_RESET, 0xDE, 0xAD, &[]));
+    assert!(
+        !medium.live(rsk_fs::EF_HARDENED),
+        "the head re-arm was refused and nothing retried it, so the marker stands \
+         over the verifier this reset just tombstoned and no later boot ever laps"
+    );
+    assert_eq!(sw, Sw::OK);
+    assert!(!medium.live(EF_OTP_PIN), "the wipe still ran");
+
+    // The control on the same medium, with the refusal made PERSISTENT instead:
+    // the marker survives, so the assertion above is about the retry landing and
+    // not about a marker the fixture never latched.
+    fs.put(EF_OTP_PIN, &[MAX_OTP_COUNTER; 33]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    let (sw, _) = run(&mut app, &mut fs, &apdu(INS_RESET, 0xDE, 0xAD, &[]));
+    assert_eq!(sw, Sw::OK);
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: a persistent refusal really does leave the marker standing"
     );
 }
 

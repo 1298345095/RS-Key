@@ -451,6 +451,12 @@ fn wipe_piv<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     let _ = rsk_fs::request_rescrub(fs);
     let secrets = sweep(fs, is_piv_secret_fid)?;
     let gates = sweep(fs, is_piv_gate_fid)?;
+    // Best-effort leaves the marker latched over every tombstone above when the
+    // head re-arm was refused, so retry it once the sweep is done: a single-shot
+    // refusal is the only kind either call recovers from (`rsk_otp`'s BUMP_TRIES
+    // states the same), and where the head landed this costs no append at all —
+    // `Fs::delete` skips a backend it already marked absent.
+    let _ = rsk_fs::request_rescrub(fs);
     if secrets || gates {
         return Err(Sw::MEMORY_FAILURE);
     }

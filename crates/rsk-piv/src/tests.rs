@@ -6097,6 +6097,58 @@ fn a_reset_re_arms_the_at_rest_lap_before_the_first_tombstone() {
     );
 }
 
+/// The head re-arm is BEST-EFFORT, so its refusal leaves the marker latched over
+/// every tombstone the sweep then appends — the residual the gated sites do not
+/// carry. A single-shot refusal is the only kind the pass recovers from, and the
+/// retry after the sweep is what recovers it; a persistent one is still a residual.
+#[test]
+fn a_reset_retries_the_re_arm_after_the_sweep() {
+    const OTP: [u8; 32] = [0x66; 32];
+    let dev = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: Some(&OTP),
+    };
+    let rng = RefCell::new(TestRng(5));
+    let pres = RefCell::new(AlwaysConfirm);
+    let (stuck, medium) = rsk_fs::storage::faults::RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    let mut app = PivApplet::new(SERIAL, HASH, None, &rng, &pres);
+    select(&mut app, &mut fs);
+    let slot = crate::files::key_fid(SLOT_AUTHENTICATION);
+    seal::seal_put(&dev, &mut fs, &mut TestRng(3), slot, &[0x5A; 33]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+    // Only the HEAD re-arm is refused; the medium serves every mutation after it.
+    medium.refuse_once(rsk_fs::EF_HARDENED);
+
+    let swept = crate::files::reset_files(&dev, &mut fs, &mut TestRng(9));
+    assert!(
+        !medium.live(rsk_fs::EF_HARDENED),
+        "the head re-arm was refused and nothing retried it, so the marker stands \
+         over the verifier this reset just tombstoned and no later boot ever laps"
+    );
+    assert_eq!(swept, Ok(()));
+    assert!(!medium.live(slot.get()), "the wipe still ran");
+
+    // The control on the same medium, with the refusal made PERSISTENT instead:
+    // the marker survives, so the assertion above is about the retry landing and
+    // not about a marker the fixture never latched.
+    seal::seal_put(&dev, &mut fs, &mut TestRng(3), slot, &[0x5A; 33]).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    let swept = crate::files::reset_files(&dev, &mut fs, &mut TestRng(9));
+    assert_eq!(swept, Ok(()));
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: a persistent refusal really does leave the marker standing"
+    );
+}
+
 #[test]
 fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_key_slot() {
     // Standing before `run_at_rest_lap` in `firmware/src/main.rs` is not the same as
@@ -6147,8 +6199,10 @@ fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_key_slot() {
     assert_eq!(
         seal::seal_read(&dev_pre, &mut fs, fid, &mut out),
         Ok(33),
-        "the re-arm never landed, so the pre-OTP copy must stay in force instead of \
-         being superseded under a marker nothing will clear"
+        "the re-arm never landed, so the pre-OTP copy must stay UNSUPERSEDED rather \
+         than be displaced under a marker nothing will clear. The cost is stated \
+         at the site: `seal_read` under the CURRENT arm answers `6581` until a \
+         later boot migrates it"
     );
     assert!(
         medium.live(rsk_fs::EF_HARDENED),

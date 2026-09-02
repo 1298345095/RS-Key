@@ -204,8 +204,8 @@ fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_slot() {
         try_read_slot(&otp, &mut fs, EF_OTP_SLOT1, &mut buf)
             .unwrap()
             .is_none(),
-        "the re-arm never landed, so the pre-OTP copy must stay in force instead of \
-         being superseded under a marker nothing will clear"
+        "the re-arm never landed, so the pre-OTP copy must stay UNSUPERSEDED — at \
+         the cost the site states: no command opens this slot until a later boot"
     );
     assert!(
         medium.live(rsk_fs::EF_HARDENED),
@@ -260,8 +260,8 @@ fn the_boot_pass_re_arms_the_lap_before_it_seals_a_cleartext_slot() {
     assert_eq!(
         fs.read_key(KeyFid::new(EF_OTP_SLOT1), &mut stored),
         Some(CONFIG_SIZE),
-        "the re-arm never landed, so the cleartext config must stay in force rather \
-         than be superseded under a marker nothing will clear"
+        "the re-arm never landed, so the cleartext config must stay UNSUPERSEDED — \
+         at the same cost: plaintext fails the GCM auth `try_read_slot` performs"
     );
     medium.refuse(None);
     migrate_seal(&otp, &mut fs, &mut rng);

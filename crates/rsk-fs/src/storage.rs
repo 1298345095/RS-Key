@@ -370,6 +370,7 @@ pub mod faults {
     pub struct RemoveStuck {
         inner: Rc<RefCell<RamStorage>>,
         refused: Rc<Cell<Option<u16>>>,
+        once: Rc<Cell<bool>>,
         attempts: Rc<Cell<u32>>,
     }
 
@@ -379,6 +380,7 @@ pub mod faults {
     pub struct RemoveMedium {
         inner: Rc<RefCell<RamStorage>>,
         refused: Rc<Cell<Option<u16>>>,
+        once: Rc<Cell<bool>>,
         attempts: Rc<Cell<u32>>,
     }
 
@@ -386,16 +388,19 @@ pub mod faults {
         pub fn new() -> (Self, RemoveMedium) {
             let inner = Rc::new(RefCell::new(RamStorage::new()));
             let refused = Rc::new(Cell::new(None));
+            let once = Rc::new(Cell::new(false));
             let attempts = Rc::new(Cell::new(0));
             (
                 Self {
                     inner: inner.clone(),
                     refused: refused.clone(),
+                    once: once.clone(),
                     attempts: attempts.clone(),
                 },
                 RemoveMedium {
                     inner,
                     refused,
+                    once,
                     attempts,
                 },
             )
@@ -406,6 +411,16 @@ pub mod faults {
         /// Refuse `remove` for `fid` (`None` clears the fault).
         pub fn refuse(&self, fid: Option<u16>) {
             self.refused.set(fid);
+            self.once.set(false);
+        }
+        /// Refuse the NEXT `remove` of `fid` and then recover — the remove twin of
+        /// [`ProbeStuck::stick_once`]. A persistent refusal is caught by whichever
+        /// caller asks first, so it cannot tell a RETRY further down the same
+        /// command from a caller that never retried: both leave the record live.
+        /// The single-shot one can.
+        pub fn refuse_once(&self, fid: u16) {
+            self.refused.set(Some(fid));
+            self.once.set(true);
         }
         /// Whether `fid` still has a value ON THE MEDIUM.
         pub fn live(&self, fid: u16) -> bool {
@@ -430,6 +445,9 @@ pub mod faults {
         fn remove(&mut self, fid: u16) -> Result<()> {
             self.attempts.set(self.attempts.get() + 1);
             if self.refused.get() == Some(fid) {
+                if self.once.get() {
+                    self.refused.set(None);
+                }
                 return Err(Error::MemoryFatal);
             }
             self.inner.borrow_mut().remove(fid)

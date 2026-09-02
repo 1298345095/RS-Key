@@ -2740,6 +2740,137 @@ and to the statuses it quotes.
 
 ### Security
 
+- **A refused re-arm at the head of an applet wipe left the marker latched over
+  every tombstone the sweep then appended, and nothing retried it.** Best-effort
+  (0x09C0) buys the ORDER and closes "nothing re-armed at all"; it does not buy
+  the gate, and the residual was real rather than theoretical — on a medium
+  refusing `remove(EF_HARDENED)`, OATH RESET tombstones a possibly
+  chip-serial-rooted verifier under a standing marker and answers `9000`. Gating
+  it is still the wrong direction (a refused wipe leaves the secrets LIVE), so
+  `wipe_oath` and `wipe_piv` **retry the re-arm once the sweep is done**. Where
+  the head landed it costs no append at all — `Fs::delete` skips a backend it
+  already marked absent — and a single-shot refusal is the only kind either call
+  recovers from, which is the same bound `rsk_otp`'s `BUMP_TRIES` states. Pinned
+  by a case per applet on a medium refusing only the FIRST `remove(EF_HARDENED)`,
+  each with the persistent refusal as its control so the assertion is about the
+  retry landing and not about a marker the fixture never latched. Two mutants per
+  applet, each read for direction: deleting the retry says `the head re-arm was
+  refused and nothing retried it`, and deleting the HEAD one instead — a reorder,
+  since the property is an order — says `0x10a0 was superseded BEFORE the lap was
+  re-armed` over `[Remove(0x10a0), Remove(0xce14)]` (OATH) and `0xd181` over the
+  full PIV log. **RESIDUAL, unchanged and now stated: a PERSISTENT refusal still
+  latches.** `crates/rsk-oath` 130 → 133, `crates/rsk-piv` 159 → 160.
+  **bcdDevice → 0x09C1** — the only line in this batch that reaches the image;
+  every entry below it is a comment, a test or a host script.
+
+- **The boot migrations' refused-re-arm arm ORPHANS the record at three of six
+  sites, and 0x09BE's "does not create a new failure" was wrong about it.**
+  Skipping the write leaves the pre-OTP copy unsuperseded, which is the safe
+  direction at rest — but at `rsk-piv`, `rsk-oath` and `rsk-otp` the command
+  paths open the CURRENT arm only, so the record is unreadable until a later boot
+  migrates it. Measured end to end, each with the fault cleared as its control: a
+  Yubico-OTP slot programmed before the burn **types nothing** (`button_ticket`
+  answers `None`, the slot still on the medium); a PIV key slot answers `6581`;
+  and OATH is the quiet one — `LIST` answers **`9000` over an empty body**, so
+  the credential simply disappears. The other three degrade instead and are named
+  so the next sweep starts from a list: the FIDO seed reads both arms through
+  `open_any`, the rescue devcert key through `unseal_scalar`, and
+  `migrate_rp_seal` displaces a CLEARTEXT rpId that stays readable either way.
+  **A read-both fallback in those command paths was measured and REFUSED**, not
+  argued: with one added to `rsk_otp::try_read_slot`, `power_up_bump` — which
+  runs AFTER the lap — read the pre-OTP copy and re-sealed it under the current
+  arm with `EF_HARDENED` still latched, on a healthy medium with no fault in it
+  at all. That is the defect 0x09BD and 0x09BE closed at nineteen sites, rebuilt
+  at one that has no re-arm and cannot cheaply get one, and it re-admits the
+  chip-serial arm at every command rather than once at boot. So the code stands
+  and **the cost is written at each of the three sites**: a transient fault costs
+  one boot (the pass is unconditional and reruns), a persistent one costs the
+  slot until the medium recovers. PIV and OATH take it at the migration arm;
+  `rsk-otp` takes it in `try_read_slot`'s own doc instead, rewritten four lines
+  for four, because `RSKeyAppletPolicies.tla` cites `power_up_bump` by line and
+  any insertion above it moves that citation. No image change — comments and test
+  messages, five of which said the copy "must stay in force" and now say what
+  that actually leaves; the three that still say it are the arms where the record
+  really does stay readable (the FIDO seed, the rescue devcert key, the cleartext
+  rpId).
+
+- **Two reasons `6754c81` gave were checked rather than inherited, and one was
+  false.** `ensure_seed` does NOT "write only what it found absent": it reaches
+  `rebuild_att_cert`, which rewrites `EF_EE_DEV` whenever the stored leaf fails
+  `cert_matches_template` — measured on a `Cut` medium with a fully provisioned
+  card and a stale template, the op log is `[Write(0xce00, 490B)]`, a superseding
+  write with nothing absent anywhere in it. The EXCLUSION stands, for the reason
+  now recorded at the site: `EF_EE_DEV` is a public X.509 leaf, not a
+  chip-serial-sealed secret, so the copy it displaces discloses nothing. And the
+  reason `migrate_slot`'s `weak` predicate drops `FORMAT_F1_OTP` (`0x11`) was
+  never given at all: that copy is fixed-IV/no-MAC CBC — a second at-rest
+  weakness the same re-seal repairs — but it is sealed under the OTP arm, so a
+  flash dump alone cannot open it and the lap is owed nothing.
+
+- **`f07a2dd`'s headline was refuted by its own sibling fault, and its sweep
+  count was stale by two.** "A refused re-arm now writes nothing at all" is true;
+  the entry's OPENING sentence is not, because the `EF_OTP_PIN` drop is a second
+  append after the seal and a medium refusing only THAT reaches the same end
+  state: `SET CODE` answers `6581`, `has_key(EF_OATH_CODE)` is true,
+  `has_data(EF_OTP_PIN)` is true, and a fresh SELECT offers a challenge whose
+  `LIST` answers `6982` while `VERIFY PIN` with the old PIN answers `9000` and
+  opens the store. No ordering closes it — dropping the PIN first trades a false
+  lock for a silent loss of protection — so it is **stated as the residual and
+  pinned by a test** that also records what the arm does buy: the lock-down,
+  which stands ahead of the drop. "`rsk-oath` has three `request_rescrub` sites"
+  was the count at 0x09BD; at `f07a2dd`'s own tree there were FIVE, because
+  0x09BE had added `reseal_if_plaintext`'s pair two commits earlier. Both read:
+  the conclusion survives, each has its re-arm ahead of its write.
+
+- **Moving that gate above the seal also stopped a refused re-arm from locking
+  the session down, which nothing declared and no test pinned.** Same-session
+  `LIST` after the refusal answers `9000` now and answered `6982` before; the
+  status word is `6581` either way, so only a test can see it. **The new
+  behaviour is the right one and is now pinned**: the command wrote nothing, so
+  it must leave the card — the caller's earned unlock included — exactly as it
+  found it, and the lock-down exists to revoke the second unlock path `SET CODE`
+  creates, which a refused re-arm never created. Both mutants read for direction:
+  the order reversion says `left: Sw(27010)` where `9000` is required, and moving
+  `self.validated = false` below the drop says `left: Sw(36864)` where the
+  installed-code arm must lock down. `crates/rsk-oath` gains both cases.
+
+- **Two more tombstones were checked for this class and are OUT of it, by
+  measurement rather than by shape.** OATH's `73 00` removal arm and `cmd_delete`
+  both append over records that ARE eagerly boot-migrated, which 0x09BE made a
+  skippable state. `cmd_delete` cannot reach a pre-OTP credential at all —
+  `find_cred` reads the current arm only, so it answers `6984` and writes
+  nothing. `73 00` can, but only behind `VERIFY PIN`: it needs `validated`, and
+  over a code that cannot be read that is the sole route to it — and `VERIFY PIN`
+  re-arms the lap itself, immediately before. Measured both ways: on a transient
+  fault the marker is already clear by the time `73 00` runs; on a persistent one
+  it is not, and a re-arm added here would be refused by that same medium. Inert
+  in both directions, so neither site gains one.
+
+- **The `bcdDevice` row could not tell an entry that records the bump from a file
+  that merely moved, and three shipped builds went through the hole.**
+  `bcd_gate.py` asked only `git diff --name-only <span> -- CHANGELOG.md`, so
+  0x09BE, 0x09BF and 0x09C0 all landed with the row printing
+  `bcd-gate: ok — 0x09C0, bumped by 88bbcdc5, nothing unbumped since` and no
+  record anywhere of what those builds carry — one of the three entries still
+  carrying a literal `«bumped by the manager»` placeholder. The row now also
+  requires a line the CHANGELOG **ADDS** over that span to read
+  `bcdDevice … 0x<value>`, and the three entries name theirs. Added lines only,
+  because the file is append-only and a whole-file search is satisfied by
+  history; bounded on the right, so `0x09C1` is not met by `0x09C10`;
+  case-insensitive, because `0x010a` is the same build. **The word and the value
+  must share one line, and that clause exists because the first cut of this rule
+  had the same family of hole it was closing**: a bare hex anywhere in the added
+  text counted, so an entry whose own bcd line said `the manager will fill this
+  in` passed on the strength of a sentence *about the rule* that quoted the
+  value. Found by driving the `bcd bump + CHANGELOG` row rather than the
+  function — the row printed `ok`, exit 0, over the exact defect it was written
+  for; it exits 1 now. Six table entries, each with the message that proved its
+  direction: an entry naming nothing, one naming the WRONG value (what an
+  `any 0x…` reading would pass), one where only an OLDER commit names it, that
+  quoted-prose case, the lower-case control and the longer-hex bound. The
+  fixture's own entry had to start naming its value too, which is what a real
+  one does. Host-only.
+
 - **No applet reset path in the tree re-armed the at-rest scrub — measured at
   five wipe-sweep sites across four applets, zero of them — and OATH RESET and
   PIV RESET do now.** A tombstone appends like a re-seal, which `rsk-fs`'s

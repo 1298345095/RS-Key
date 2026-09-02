@@ -508,6 +508,10 @@ fn migrate_slot<S: Storage>(dev: &Device, fs: &mut Fs<S>, fid: KeyFid) -> Result
     // `weak`: 0x01/0x02 are sealed under the chip-serial arm, so the re-seal below
     // supersedes a copy the public serial alone derives. This pass runs BEFORE the
     // boot's lap, but a boot that skipped the slot already latched the marker.
+    //
+    // 0x11 is deliberately OUT: the copy it displaces is fixed-IV/no-MAC CBC, but
+    // under the OTP arm, so a flash dump alone cannot open it. That is a second
+    // at-rest weakness this re-seal repairs and the lap owes nothing for.
     let weak = matches!(buf[0], FORMAT_F1 | FORMAT_G1) && dev.otp_key.is_some();
     let recovered = open_any(dev, &buf[..n]);
     buf.zeroize();
@@ -646,6 +650,12 @@ pub fn rebuild_att_cert<S: Storage>(
     // medium on a first boot too — and the skip then leaves the device with NO
     // certificate, or lets `backup_load` install a new seed and report success
     // over the leaf that certifies the old one.
+    //
+    // That rewrite IS a superseding write — measured, `[Write(0xce00, 490B)]` on a
+    // fully provisioned card with a stale template — so `ensure_seed` owes the
+    // at-rest lap no re-arm for the REASON stated here and not for "it writes only
+    // what it found absent": `EF_EE_DEV` is a public X.509 leaf, not a
+    // chip-serial-sealed secret, so the copy it displaces discloses nothing.
     let fresh = match fs.read(EF_EE_DEV, &mut buf) {
         Some(n) => cert_matches_template(&buf[..n.min(buf.len())], &key),
         None => false,

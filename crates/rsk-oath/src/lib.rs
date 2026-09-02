@@ -1552,6 +1552,12 @@ fn wipe_oath<S: Storage>(fs: &mut Fs<S>) -> Result<(), Sw> {
     // unlock records.
     let creds = sweep(fs, is_oath_cred_fid)?;
     let locks = sweep(fs, is_oath_lock_fid)?;
+    // Best-effort leaves the marker latched over every tombstone above when the
+    // head re-arm was refused, so retry it once the sweep is done: a single-shot
+    // refusal is the only kind either call recovers from (`rsk_otp`'s BUMP_TRIES
+    // states the same), and where the head landed this costs no append at all —
+    // `Fs::delete` skips a backend it already marked absent.
+    let _ = rsk_fs::request_rescrub(fs);
     if creds || locks {
         return Err(Sw::MEMORY_FAILURE);
     }
@@ -1767,6 +1773,11 @@ fn reseal_if_plaintext<S: Storage>(
         // Ahead of the write and gating it, per `rsk_fs::request_rescrub`: the copy
         // it supersedes is the pre-OTP one. The `return` stays outside — falling
         // through would re-seal that ciphertext as if it were plaintext.
+        //
+        // RESIDUAL: every command reads the CURRENT arm only, so a skipped
+        // credential leaves LIST answering `9000` over an EMPTY body until a later
+        // boot migrates it (measured). A reader fallback would re-admit the
+        // chip-serial arm at every command, not just at boot.
         if rsk_fs::request_rescrub(fs).is_ok() {
             let _ = seal::seal_put(dev, fs, rng, fid, &out[..n]);
         }
