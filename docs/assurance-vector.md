@@ -218,7 +218,17 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-TOOL-005` | Kani proves the presence arbiter's cross-executor flags under a SEQUEN |
 | platform | `PLAT-TOOL-006` | The `fuzz` axis counts a FILE that names the invariant, not a run of i |
 | platform | `PLAT-TOOLCHAIN-001` | The compiler on the path is the pinned rustc and its output is what th |
-| platform | `PLAT-TOOLCHAIN-002` | Every `unsafe` in the first-party tree upholds an invariant the compil |
+| platform | `PLAT-TOOLCHAIN-002` | docs/unsafe.md is the enumeration of the first-party `unsafe` sites: e |
+| platform | `PLAT-UNSAFE-002` | `SendUsb` is sound: `embassy_usb::UsbDevice` is `!Send` only for the ` |
+| platform | `PLAT-UNSAFE-003` | `HEAP.init` runs exactly once, over a static buffer nothing else touch |
+| platform | `PLAT-UNSAFE-004` | Each of the eight build-selected GPIOs handed to `AnyPin::steal` has e |
+| platform | `PLAT-UNSAFE-005` | The two `static mut` prime sieves are single-core-exclusive: `CORE0_SI |
+| platform | `PLAT-UNSAFE-006` | Each core programs MSPLIM once, on the core that owns that stack, befo |
+| platform | `PLAT-UNSAFE-007` | The three FFI calls into the vendored ARM assembly pass fully owned, l |
+| platform | `PLAT-UNSAFE-008` | The wiper's two ROM flash sequences run with interrupts off and XIP di |
+| platform | `PLAT-UNSAFE-010` | The two `link_section` image-definition statics are placed by the link |
+| platform | `PLAT-UNSAFE-011` | The small-prime table and the sieve step are placed in `.data.small_pr |
+| platform | `PLAT-UNSAFE-012` | The three `unsafe extern` blocks declare what they name: the RSA assem |
 | platform | `PLAT-CRYPTO-001` | The HMAC-SHA-256 under `pinUvAuthProtocol` is correct as a MAC; the ha |
 | platform | `PLAT-BUILD-002` | `ea-conformance-rpid`'s enterprise-attestation allowlist is a conforma |
 | platform | `PLAT-BUILD-003` | The `display` build implements the one-hold-one-ceremony latch SOMEWHE |

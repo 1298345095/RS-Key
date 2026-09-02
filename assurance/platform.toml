@@ -297,22 +297,202 @@ covers = ["slice:TCB-1", "slice:AS-RAM-4", "slice:AS-CRED-7", "slice:AS-RESET-9"
 [[assumption]]
 id = "PLAT-TOOLCHAIN-002"
 class = "toolchain"
-statement = "Every `unsafe` in the first-party tree upholds an invariant the compiler cannot check, and docs/unsafe.md is the enumeration of them."
-discharge = "A source audit per site, which docs/unsafe.md carries: justification, why a safe alternative does not work, and how the risk is contained. A new site owes that page an entry before this row can be said to cover it."
+statement = "docs/unsafe.md is the enumeration of the first-party `unsafe` sites: every site the tree carries has a justification there, and every justification is about a site the tree still has. What that enumeration does NOT establish is that any one justification is CORRECT — that is a reading per site, and the twelve PLAT-UNSAFE rows below are where each one is written down and can be refuted."
+discharge = "Two halves, and only the first is mechanical. MEMBERSHIP is derived: scripts/platform_gate.py produces one candidate per `unsafe` site and refuses both an unclaimed site and a claim on a site that is gone, and it compares that page's own `Runtime sites` count and its file list against the tree. The READING half is the twelve rows that refine this one; this entry is settled when they are. It deliberately covers no candidate of its own, so that it cannot stand in for a site nobody read."
 discharge_owner = "contributor"
 status = "pending"
-failure_direction = "security: the one class of memory-corruption defect safe Rust does not rule out"
-# Seven, not the twelve the first version of the derivation produced: four of
-# those carried the word only in a line saying the file has no `unsafe`, and one
-# was a code generator emitting it inside a string.
+failure_direction = "security: the one class of memory-corruption defect safe Rust does not rule out, and — before this row was split — a whole page of justifications standing behind a single registry entry"
+# This row covered SEVEN candidates, one per FILE, until the derivation moved to
+# sites. Seven files, thirty-one sites, twenty-one numbered justifications: a new
+# `unsafe` in a file that already had one changed no candidate and was exit 0.
+# It now covers none, and is anchored by the twelve `refines` edges below — a
+# roof row nothing points at is one a review deletes with the gate still green.
+
+# ---- The unsafe sites, one row per obligation --------------------------------
+#
+# Twelve rows over thirty-one sites, and the grouping is by what could be FALSE
+# rather than by file or by count. Eight of the sites are one obligation (the
+# GPIO type-erasures: each stolen pad has exactly one owner), three are another
+# (the sieves never alias across cores). The coverage relation is the registry's
+# own both-ways rule and needs nothing new: a ninth `AnyPin::steal` derives a
+# candidate no row claims and the gate goes red, and a row naming a site that
+# has been deleted or rewritten goes red the other way.
+
+[[assumption]]
+id = "PLAT-UNSAFE-001"
+class = "toolchain"
+statement = "`InterruptExecutor::on_interrupt` is called only from the interrupt the executor was started on: `EXECUTOR_HIGH.start(interrupt::SWI_IRQ_1)` is the only starter in the tree, and the `#[interrupt]` handler `SWI_IRQ_1` is its only caller."
+discharge = "Read both sides in firmware/src/main.rs and count them: one `EXECUTOR_HIGH.start`, which names `interrupt::SWI_IRQ_1`, and one `on_interrupt` call, inside the handler of that same name. Done, and the counts are what make it refutable — a second starter, a second caller, or a start naming a different interrupt refutes it, and each is one grep."
+discharge_owner = "contributor"
+status = "discharged"
+evidence = ["firmware/src/main.rs"]
+revalidated_by = "a second `EXECUTOR_HIGH.start` or `on_interrupt` call site anywhere in firmware/src/main.rs, or a start naming an interrupt other than the one the handler is bound to"
+evidence_commit = "709cb52c76b518716d75e3c8a6fb554be7f89d07"
+failure_direction = "memory-safety: an executor queue mutated from a context it does not own, in the task that runs USB"
+refines = ["PLAT-TOOLCHAIN-002"]
 covers = [
-  "unsafe:crates/rsk-rsa/build.rs",
-  "unsafe:crates/rsk-rsa/src/lib.rs",
-  "unsafe:firmware/build.rs",
-  "unsafe:firmware/src/core1.rs",
-  "unsafe:firmware/src/main.rs",
-  "unsafe:firmware/src/presence.rs",
-  "unsafe:rsk-wipe/src/main.rs",
+  "unsafe:firmware/src/main.rs#fn:swi_irq_1-executor_high-on_interrupt",
+  "unsafe:firmware/src/main.rs#block:executor_high-on_interrupt",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-002"
+class = "toolchain"
+statement = "`SendUsb` is sound: `embassy_usb::UsbDevice` is `!Send` only for the `&mut dyn Handler` control-request handlers it holds, and every stateful handler this firmware registers keeps its state in a critical-section static, while the wrapper itself is constructed once and moved into exactly one task on one executor."
+discharge = "Two readings, and only one is done. The OWNERSHIP half is read and holds: firmware/src/main.rs constructs `SendUsb` at one place and hands it to `usb_task` on the high-priority executor, and nothing else names the type. The HANDLER half is what is owed — a walk of every `Handler` the USB builder is given, asking of each whether its state is a zero-sized type or a `Sync` static. A handler with plain interior mutability refutes the row."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "memory-safety: a handler with non-`Sync` interior state reached from a second executor is a data race inside the USB control path"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = ["unsafe:firmware/src/main.rs#impl:send-for-sendusb"]
+
+[[assumption]]
+id = "PLAT-UNSAFE-003"
+class = "toolchain"
+statement = "`HEAP.init` runs exactly once, over a static buffer nothing else touches, and before the first allocation the image can make."
+discharge = "Read firmware/src/main.rs for the first two — one `HEAP.init`, one `HEAP_MEM`, both inside one block — which hold. The third is what is owed and is not visible from the call site: no allocating call on the path from the reset vector to that line, including inside `embassy_rp::init` and any `StaticCell` or dependency initialiser that runs before it. An allocation before the allocator is initialised refutes it."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "memory-safety: an allocation against an uninitialised allocator, or a second `init` over a live heap"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = ["unsafe:firmware/src/main.rs#block:heap-init-core-ptr-addr_of_mut-heap_mem"]
+
+[[assumption]]
+id = "PLAT-UNSAFE-004"
+class = "build-configuration"
+statement = "Each of the eight build-selected GPIOs handed to `AnyPin::steal` has exactly one owner at runtime: no two of them name the same pad, none of them is a pad another driver claims, and the LED data pin a host can re-aim cannot be pointed at any of them."
+discharge = "The compile-time asserts in firmware/build.rs and the boot-time filter in firmware/src/main.rs, read TOGETHER and against the five board files under firmware/boards. The asserts reject a build that collides LED_POWER_PIN, USR_LED_PIN, WAKE_PIN or the four panel control lines with each other, with the LED data pin, or with the hard-wired SPI1 and I2C1 lines; the filter drops a host-written data pin naming one of them back to the build default. What is owed is the PAIRWISE table: that the assert set covers every pair of the eight rather than the pairs somebody thought of. One uncovered pair refutes it."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "memory-safety and availability: two owners driving one pad is aliased ownership of a peripheral, and the loser is a button, an LED rail or a panel control line"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:firmware/src/presence.rs#block:anypin-steal-pin",
+  "unsafe:firmware/src/main.rs#block:embassy_rp-gpio-anypin-steal-build_usr_led_pin",
+  "unsafe:firmware/src/main.rs#block:embassy_rp-gpio-anypin-steal-build_led_power_pin",
+  "unsafe:firmware/src/main.rs#block:embassy_rp-gpio-anypin-steal-build_wake_pin",
+  "unsafe:firmware/src/main.rs#block:embassy_rp-gpio-anypin-steal-build_display_cs",
+  "unsafe:firmware/src/main.rs#block:embassy_rp-gpio-anypin-steal-build_display_dc",
+  "unsafe:firmware/src/main.rs#block:embassy_rp-gpio-anypin-steal-build_display_rst",
+  "unsafe:firmware/src/main.rs#block:embassy_rp-gpio-anypin-steal-build_display_tp_rst",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-005"
+class = "toolchain"
+statement = "The two `static mut` prime sieves are single-core-exclusive: `CORE0_SIEVE` is taken by reference only on core 0 and `CORE1_SIEVE` only on core 1, and the end-of-search scrub is issued by the core that owns the sieve it scrubs, so the two exclusive references never alias."
+discharge = "A source audit of the three access sites in firmware/src/core1.rs, each read for WHICH core reaches it: two on core 1 (the search, and the scrub on its STOP edge) and one on core 0, in `run_rsa_search`. The partition is structural rather than locked, so it is refuted by a fourth access, by a scrub issued from the reboot path on core 0, or by `run_rsa_search` becoming reachable from core 1."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "memory-safety: two live exclusive references to one residue array across cores, in the routine that is at that moment generating and storing a key"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:firmware/src/core1.rs#block:mut-core-ptr-addr_of_mut-core0_sieve",
+  "unsafe:firmware/src/core1.rs#block:mut-core-ptr-addr_of_mut-core1_sieve",
+  "unsafe:firmware/src/core1.rs#block:core-ptr-addr_of_mut-core1_sieve-scrub",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-006"
+class = "toolchain"
+statement = "Each core programs MSPLIM once, on the core that owns that stack, before any frame has been pushed below the value it writes: core 0 with the linker's `_stack_end`, core 1 with its own stack base."
+discharge = "Read the two write sites against the entry points that reach them — `arm_stack_limit` from the first statement of `main`, and the core-1 write from the top of the core-1 entry — and against the linker script that defines `_stack_end`. Whether the register TRAPS is a fact about ARMv8-M silicon and is deliberately NOT this row: no board result in this tree records it, and PLAT-UNSAFE rows are readings, not measurements."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "availability: a floor written after a deeper frame already exists faults the core on the next legitimate push, and `pause_core1` then spins forever on a core that never answers"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:firmware/src/main.rs#block:cortex_m-register-msplim-write-raw-const",
+  "unsafe:firmware/src/core1.rs#block:cortex_m-register-msplim-write-stack_floor",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-007"
+class = "toolchain"
+statement = "The three FFI calls into the vendored ARM assembly pass fully owned, length-checked buffers on both sides, so no routine can write past what the caller sized."
+discharge = "A call-by-call reading against crates/rsk-rsa/csrc/bignum_high_level.h: for each pointer, the buffer it names, the length the caller passes, and the length the C side writes. The containment already in place does not settle it and is worth being plain about — the power-on KAT gates key generation and every signature is Bellcore-checked, so a WRONG answer cannot leave the card, but neither check can see an out-of-bounds write."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "memory-safety: a length disagreement across the ABI writes into whatever the caller's stack frame holds, on the path that is handling a private key"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:crates/rsk-rsa/src/lib.rs#block:bignum_modexp_private_exponent-result-as_mut_ptr-exponent_be-as_ptr-modulus",
+  "unsafe:crates/rsk-rsa/src/lib.rs#block:rsa_private_exp_crt-result-as_mut_ptr-c-as_ptr-dp_be",
+  "unsafe:crates/rsk-rsa/src/lib.rs#block:bignum_modexp_public_exponent-result-as_mut_ptr-base-as_ptr-exp_be",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-008"
+class = "toolchain"
+statement = "The wiper's two ROM flash sequences run with interrupts off and XIP disabled for their whole extent, and no part of rsk-wipe is linked into the firmware image."
+discharge = "Two readings. That both sequences sit inside one `critical_section::with` from `connect_internal_flash` through `flash_enter_cmd_xip`, with nothing between them that could fetch from XIP — a reading of the two functions in rsk-wipe/src/main.rs. And that rsk-wipe is a workspace member built as its own binary that no firmware target depends on, which the manifests settle: firmware/Cargo.toml names it nowhere."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "availability: an instruction fetched from an erased array, on a device whose flash is at that moment half gone"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:rsk-wipe/src/main.rs#block:rom_data-connect_internal_flash-rom_data-flash_exit_xip-rom_data-flash_range_erase",
+  "unsafe:rsk-wipe/src/main.rs#block:rom_data-connect_internal_flash-rom_data-flash_exit_xip-rom_data-flash_range_program",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-009"
+class = "toolchain"
+statement = "Both `env::set_var` calls run in a build-script process that has spawned no thread, so there is no concurrent environment reader for the call to race, and nothing either of them sets reaches the firmware image."
+discharge = "Read both build scripts, which is the whole argument: cargo runs each as its own process, so the only code that could hold a concurrent `getenv` is the script and its build dependencies. Neither script names a thread, a spawn or a parallel iterator; both calls sit inside the script's own `main`, the rsk-rsa one directly and the firmware one through a closure defined there. firmware/Cargo.toml declares NO build dependencies at all, and crates/rsk-rsa/Cargo.toml declares one, `cc`, which the script first calls after the `set_var`. Refuted by either script spawning a thread, or by a build dependency called before the `set_var` doing so."
+discharge_owner = "contributor"
+status = "discharged"
+evidence = ["crates/rsk-rsa/build.rs", "firmware/build.rs", "firmware/Cargo.toml", "crates/rsk-rsa/Cargo.toml"]
+revalidated_by = "either build script spawning a thread, a new build dependency in firmware/Cargo.toml or crates/rsk-rsa/Cargo.toml, or a call moved ahead of the `env::set_var` in crates/rsk-rsa/build.rs or firmware/build.rs"
+evidence_commit = "709cb52c76b518716d75e3c8a6fb554be7f89d07"
+failure_direction = "build-time only, and loudly: a torn environment read in the process that picks the cross-compiler fails the build rather than shipping anything"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:crates/rsk-rsa/build.rs#block:std-env-set_var",
+  "unsafe:firmware/build.rs#block:env-set_var-k-v",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-010"
+class = "build-configuration"
+statement = "The two `link_section` image-definition statics are placed by the linker at an address the boot ROM reads as the RP2350 image definition, and `#[used]` keeps them in the image."
+discharge = "Read firmware/memory.x and the cortex-m-rt link script the build uses for a `.start_block` output section at the image base, and check both statics carry `#[used]`. This one fails LOUDLY rather than silently — a section the linker does not know places the block wherever it likes and the ROM then finds no image definition, which is a device that will not start — so the reading is owed for completeness rather than because a silent failure is plausible."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "availability, loudly: an image definition the boot ROM cannot find is a device that does not start, not one that starts wrong"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:firmware/src/main.rs#attr:link_section-static-image_def-embassy_rp-block-imagedef",
+  "unsafe:rsk-wipe/src/main.rs#attr:link_section-static-image_def-embassy_rp-block-imagedef",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-011"
+class = "build-configuration"
+statement = "The small-prime table and the sieve step are placed in `.data.small_primes` and `.data.sieve_step`, which the link script collects into `.data` in SRAM, so the sieve executes and reads out of RAM rather than through the XIP cache."
+discharge = "Read the link script's `.data` input-section pattern for `.data.*`, then confirm on a built image that both symbols land in the RAM region — `nm` over the ELF settles it in one command, and no artifact in this tree records that today. This row exists because the two sites were on NO line of docs/unsafe.md before the derivation moved to sites: they were the half of that page's enumeration nothing was holding."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "performance and predictability rather than memory-safety: a placement that silently stops applying puts key generation back on the XIP cache, which is the 1.36x regression the comment beside the sieve records"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:crates/rsk-rsa/src/lib.rs#attr:link_section-static-small_primes-u32",
+  "unsafe:crates/rsk-rsa/src/lib.rs#attr:link_section-pub-fn-step-mut-self",
+]
+
+[[assumption]]
+id = "PLAT-UNSAFE-012"
+class = "toolchain"
+statement = "The three `unsafe extern` blocks declare what they name: the RSA assembly signatures match the vendored C header, and the two firmware blocks declare linker symbols that are taken as addresses and never read as data."
+discharge = "A signature-by-signature reading of the rsk-rsa block against crates/rsk-rsa/csrc/bignum_high_level.h, and of the two firmware blocks against the symbols firmware/memory.x and the cortex-m-rt script define. The ADDRESS half is already visible at the call sites and holds — `kvmain_range`, `kvcnt_range` and `arm_stack_limit` each take `addr_of!` or `&raw const` and none dereferences — so what is owed is the ABI half, which no compiler on either side can check."
+discharge_owner = "contributor"
+status = "pending"
+failure_direction = "memory-safety: a declared signature that disagrees with its definition is a call made with the wrong stack layout, and neither the Rust side nor the C side can see the other"
+refines = ["PLAT-TOOLCHAIN-002"]
+covers = [
+  "unsafe:crates/rsk-rsa/src/lib.rs#extern:fn-bignum_modexp_private_exponent-result-mut-u32-exponent",
+  "unsafe:firmware/src/main.rs#extern:static-_stack_end-u8",
+  "unsafe:firmware/src/main.rs#extern:static-__kvmain_start-u32-static-__kvmain_end-u32",
 ]
 
 [[assumption]]

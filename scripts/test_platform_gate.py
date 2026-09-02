@@ -225,6 +225,20 @@ pub const EMITTED: &str = "\\n    unsafe fn ";
 pub const N: u8 = 1;
 """
 
+#: The enumeration AGENTS.md requires, reduced to the two things the page rules
+#: read: a `Runtime sites:` count, and a line naming every file that carries one.
+#: TWO, because `UNSAFE_RS` is one `block` site and the fixture writes it twice —
+#: and the fixture's build-script and declaration sites are deliberately NOT in
+#: that number, which is the partition the real page makes and this one must too.
+#: No `AS-` token: `docs/` is the design-page corpus, so a slice id here would
+#: derive a candidate nothing claims and redden every case in this file.
+UNSAFE_MD = """\
+# The `unsafe` audit
+
+**Runtime sites: 2.** One in `crates/rsk-a/src/lib.rs` and one in
+`firmware/src/main.rs`, each a read through a null pointer.
+"""
+
 #: Two crates, and only one declares an `abstracts` list — so the derivation is
 #: SELECTING rather than returning a candidate per ledger row. The `gap` prose
 #: names a semantic the list leaves out, which is the real ledger's shape too: a
@@ -317,7 +331,10 @@ discharge = "A source audit per site."
 discharge_owner = "contributor"
 status = "pending"
 failure_direction = "security: the one class safe Rust does not rule out"
-covers = ["unsafe:crates/rsk-a/src/lib.rs", "unsafe:firmware/src/main.rs"]
+covers = [
+  "unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",
+  "unsafe:firmware/src/main.rs#block:core-ptr-null-u8-read",
+]
 """
 
 #: The placeholder `Tree.__init__` swaps for the commit it just made. A literal
@@ -415,6 +432,7 @@ class Tree:
         # Three spellings of the word OUTSIDE code, in one file. Four of the
         # twelve files the first derivation produced were exactly this.
         self.write("crates/rsk-a/src/prose.rs", PROSE_RS)
+        self.write("docs/unsafe.md", UNSAFE_MD)
         self.git("init", "-q")
         # A real commit, because the freshness axis is pure committed history and
         # a fixture that only ever `git add`s has none: without one every settled
@@ -514,8 +532,8 @@ def test_the_fixture_derives_all_five_candidate_kinds(tree):
         "slice:AS-T-2",
         "model:WorldIsFlat",
         "board-only:29_reset_power_cut",
-        "unsafe:crates/rsk-a/src/lib.rs",
-        "unsafe:firmware/src/main.rs",
+        "unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",
+        "unsafe:firmware/src/main.rs#block:core-ptr-null-u8-read",
         "backend:rsk-a/tear",
     }, sorted(found)
 
@@ -560,7 +578,15 @@ def test_the_checkout_derives_what_it_is_measured_at():
         "model:RekeyOrderModelled",
     }, kinds["model"]
     assert len(kinds["slice"]) >= 8, kinds["slice"]
-    assert len(kinds["unsafe"]) >= 7, kinds["unsafe"]
+    # SITES, not files. The seven first-party `.rs` that carry the token bounded
+    # the old derivation at 7 whatever the tree did; 22 of these are what
+    # `docs/unsafe.md` numbers, and the rest are build-script and declaration
+    # sites that page keeps apart. Asserted as a floor above what a file-keyed
+    # derivation could ever reach, and as a shape: every key names its site.
+    assert len(kinds["unsafe"]) >= 22, kinds["unsafe"]
+    assert all("#" in k for k in kinds["unsafe"]), kinds["unsafe"]
+    steals = [k for k in kinds["unsafe"] if "anypin-steal" in k]
+    assert len(steals) == 8, steals
 
 
 # --- rule 1: every derived candidate is claimed --------------------------------
@@ -598,10 +624,13 @@ def test_an_unclaimed_board_only_suite_is_a_finding(tree):
     assert only(tree.problems(), "board-only:54_sram_residue: derived from")
 
 
-def test_an_unclaimed_unsafe_file_is_a_finding(tree):
+def test_an_unclaimed_unsafe_site_is_a_finding(tree):
     tree.write("crates/rsk-b/src/lib.rs", UNSAFE_RS)
     tree.git("add", "-A")
-    assert only(tree.problems(), "unsafe:crates/rsk-b/src/lib.rs: derived from")
+    assert only(
+        tree.problems(),
+        "unsafe:crates/rsk-b/src/lib.rs#block:core-ptr-null-u8-read: derived from",
+    )
 
 
 def test_a_deleted_store_row_leaves_its_backend_semantic_unclaimed(tree):
@@ -1067,22 +1096,24 @@ def test_the_word_in_a_comment_or_a_string_is_not_an_unsafe_site(tree):
     only in a line saying the file has no `unsafe`; a fifth emitted it inside a
     string. Stripping first is what makes the form list unnecessary."""
     found = platform_gate.candidates(tree.root)
-    assert "unsafe:crates/rsk-a/src/prose.rs" not in found, sorted(found)
-    assert "unsafe:crates/rsk-a/src/lib.rs" in found
+    assert not [k for k in found if "prose.rs" in k], sorted(found)
+    assert "unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read" in found
 
 
 def test_every_syntactic_form_of_unsafe_still_counts(tree):
     """And the other direction: stripping must not take the code with it."""
-    for body in (
-        "pub fn f() { unsafe { g() } }",
-        "pub unsafe fn f() {}",
-        "unsafe impl Send for T {}",
-        'unsafe extern "C" { fn g(); }',
-        '#[unsafe(link_section = ".data")]\npub static X: u8 = 0;',
+    for body, want in (
+        ("pub fn f() { unsafe { g() } }", "block:g"),
+        ("pub unsafe fn f() {}", "fn:f"),
+        ("unsafe impl Send for T {}", "impl:send-for-t"),
+        ('unsafe extern "C" { fn g(); }', "extern:fn-g"),
+        ('#[unsafe(link_section = ".data")]\npub static X: u8 = 0;',
+         "attr:link_section-pub-static-x-u8"),
     ):
         tree.write("crates/rsk-c/src/lib.rs", body + "\n")
         tree.git("add", "-A")
-        assert "unsafe:crates/rsk-c/src/lib.rs" in platform_gate.candidates(tree.root), body
+        found = platform_gate.candidates(tree.root)
+        assert f"unsafe:crates/rsk-c/src/lib.rs#{want}" in found, (body, sorted(found))
 
 
 def test_a_comment_in_the_usbip_guest_neither_covers_nor_uncovers(tree):
@@ -1119,7 +1150,10 @@ def test_a_new_top_level_crate_is_not_invisible(tree):
     """`rsk-wipe/`'s own shape. A whitelist of roots missed it silently."""
     tree.write("rsk-probe/src/main.rs", UNSAFE_RS)
     tree.git("add", "-A")
-    assert only(tree.problems(), "unsafe:rsk-probe/src/main.rs: derived from")
+    assert only(
+        tree.problems(),
+        "unsafe:rsk-probe/src/main.rs#block:core-ptr-null-u8-read: derived from",
+    )
 
 
 def test_a_vendored_fork_is_still_out(tree):
@@ -1969,3 +2003,173 @@ def test_a_heading_of_the_published_page_is_a_table_cell_too(tree, capsys):
     assert "| `PLAT-CRYPTO-001` | [Silicon \\| desk](limitations.md#silicon--desk) |" in (
         platform_gate.render(tree.root)
     )
+
+
+# --- the file->site move, and the two rules it makes checkable ------------------
+
+
+def test_a_second_site_in_a_file_that_already_has_one_is_a_finding(tree):
+    """The whole reason the derivation moved off the FILE.
+
+    Keyed by file, this append changes no candidate: `crates/rsk-a/src/lib.rs`
+    was already produced and already claimed, so a fresh `unsafe` under a row
+    that had never been read for it was exit 0 — measured on this fixture before
+    the move. Keyed by site it is a candidate nobody claims.
+    """
+    tree.append("crates/rsk-a/src/lib.rs", "pub fn two() {\n    unsafe { q() };\n}\n")
+    assert only(
+        tree.problems(),
+        "unsafe:crates/rsk-a/src/lib.rs#block:q: derived from",
+    )
+    # And the site that WAS there is still the one the row claims: the new one
+    # did not renumber it onto a neighbour.
+    assert not only(tree.problems(), "covers 'unsafe:crates/rsk-a/src/lib.rs#block:core-ptr")
+
+
+def test_a_row_naming_a_site_that_is_gone_is_a_finding(tree):
+    """The other direction, and it fires on a REWRITE and not only a deletion.
+
+    A site whose code changed is a justification that was written about
+    something else, which is the state a file key could never reach: the file
+    still carries `unsafe`, so the candidate was identical either way.
+    """
+    tree.edit("crates/rsk-a/src/lib.rs", "core::ptr::null::<u8>().read()", "other()")
+    assert only(
+        tree.problems(),
+        "covers 'unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read', which no"
+        " derivation produces",
+    )
+
+
+def test_inserting_a_site_does_not_re_point_an_existing_row(tree):
+    """The arm that refuses the obvious key, `<path>#<n-th unsafe in file>`.
+
+    An ordinal is derivable and stable-looking and is wrong in the one way that
+    is silent: this insertion makes the OLD site the second `unsafe` of the file,
+    so the row's `#1` would keep resolving — to the new site, whose justification
+    nobody has written. Measured here as the green half: the surviving key still
+    derives, and the only finding is the new site being unclaimed.
+    """
+    tree.edit(
+        "crates/rsk-a/src/lib.rs",
+        "pub fn steal() {",
+        "pub fn first() {\n    unsafe { earlier() };\n}\n\npub fn steal() {",
+    )
+    found = platform_gate.candidates(tree.root)
+    assert "unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read" in found
+    assert "unsafe:crates/rsk-a/src/lib.rs#block:earlier" in found
+    assert only(tree.problems(), "unsafe:crates/rsk-a/src/lib.rs#block:earlier: derived from")
+    assert not only(tree.problems(), "which no derivation produces")
+
+
+def test_two_identical_sites_in_one_file_are_told_apart(tree):
+    """`rsk-wipe`'s shape at six words, forced here at one.
+
+    Two sites agreeing on kind and on their first `SITE_WORDS` words are the same
+    construct twice; the suffix is an ordinal over THOSE and moves only when
+    another copy is inserted between them — not when any site at all is.
+    """
+    tree.append("crates/rsk-a/src/lib.rs", UNSAFE_RS.replace("steal", "again"))
+    found = platform_gate.candidates(tree.root)
+    assert "unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read~2" in found, sorted(found)
+    assert only(tree.problems(), "#block:core-ptr-null-u8-read~2: derived from")
+
+
+def test_an_attribute_site_is_named_by_the_item_it_decorates(tree):
+    """The lexer has already blanked the one thing that separates two of these.
+
+    `rsk-rsa` carries `#[cfg_attr(target_os = "none", unsafe(link_section = …))]`
+    twice, and the section NAME is a string literal — blanked before the token is
+    ever found, so a slug read from the attribute alone makes the two placements
+    one candidate. Reading past it to the item is what tells them apart, and the
+    intervening `#[inline(never)]` is why the attribute run is skipped.
+    """
+    tree.write(
+        "crates/rsk-c/src/lib.rs",
+        '#[unsafe(link_section = ".data.one")]\npub static A: u8 = 0;\n'
+        '#[unsafe(link_section = ".data.two")]\n#[inline(never)]\npub fn b() {}\n',
+    )
+    tree.git("add", "-A")
+    found = {k for k in platform_gate.candidates(tree.root) if "rsk-c" in k}
+    assert found == {
+        "unsafe:crates/rsk-c/src/lib.rs#attr:link_section-pub-static-a-u8",
+        "unsafe:crates/rsk-c/src/lib.rs#attr:link_section-pub-fn-b",
+    }, sorted(found)
+
+
+def test_the_unsafe_page_count_is_held_to_the_tree(tree):
+    """The page AGENTS.md requires, and the drift it shipped with.
+
+    `docs/unsafe.md` said `Runtime sites: 21` over a tree carrying 22 — the third
+    sieve access, added with that section's own prose and not with its heading.
+    No rule read the page at all, so the number was true on the day it was typed
+    and nothing after.
+    """
+    tree.edit("docs/unsafe.md", "Runtime sites: 2.", "Runtime sites: 3.")
+    assert only(tree.problems(), "says `Runtime sites: 3` and the tree has 2")
+
+
+def test_the_unsafe_page_states_its_count_exactly_once(tree):
+    """Both ways: none is a page with nothing to hold, two is a page with two
+    answers, and picking the first would make appending a second free."""
+    tree.edit("docs/unsafe.md", "**Runtime sites: 2.**", "The sites are enumerated below.")
+    assert only(tree.problems(), "0 `Runtime sites: <n>` statements")
+    tree.append("docs/unsafe.md", "\nRuntime sites: 2, again.\n")
+    tree.edit("docs/unsafe.md", "The sites are enumerated below.", "**Runtime sites: 2.**")
+    assert only(tree.problems(), "2 `Runtime sites: <n>` statements")
+
+
+def test_a_file_carrying_a_site_must_be_named_on_the_unsafe_page(tree):
+    """A count alone is met by editing one digit. This is the half that costs
+    prose, and it is the direction a new FILE of `unsafe` arrives in."""
+    tree.write("crates/rsk-b/src/lib.rs", UNSAFE_RS)
+    tree.edit("assurance/platform.toml",
+              '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",',
+              '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",\n'
+              '  "unsafe:crates/rsk-b/src/lib.rs#block:core-ptr-null-u8-read",')
+    tree.edit("docs/unsafe.md", "Runtime sites: 2.", "Runtime sites: 3.")
+    tree.git("add", "-A")
+    tree.regenerate()
+    assert only(tree.problems(), "names no site in crates/rsk-b/src/lib.rs")
+    # And the green arm, so the rule is not "every file, always": naming it is
+    # what settles it, and nothing else about the page changed.
+    tree.append("docs/unsafe.md", "\nAlso `crates/rsk-b/src/lib.rs`.\n")
+    assert tree.problems() == []
+
+
+def test_a_build_script_site_is_not_a_runtime_site(tree):
+    """The page's own partition, derived. A build-script `unsafe` is host-side
+    and never in the image, and that page files it apart from the numbered
+    sites — so counting it would make the page's honest number red."""
+    tree.write("crates/rsk-a/build.rs", UNSAFE_RS)
+    tree.edit("assurance/platform.toml",
+              '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",',
+              '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",\n'
+              '  "unsafe:crates/rsk-a/build.rs#block:core-ptr-null-u8-read",')
+    # Named on the page like the real build scripts are — the file half of the
+    # rule is about EVERY file with a site, and only the COUNT is partitioned.
+    tree.append("docs/unsafe.md", "\nBuild-time: `crates/rsk-a/build.rs`.\n")
+    tree.git("add", "-A")
+    tree.regenerate()
+    assert tree.problems() == []
+    assert platform_gate.runtime_sites(platform_gate.candidates(tree.root)) == [
+        "crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",
+        "firmware/src/main.rs#block:core-ptr-null-u8-read",
+    ]
+
+
+def test_a_declaration_site_is_not_a_runtime_site(tree):
+    """The other half of that partition: `unsafe extern` and `#[unsafe(…)]` mark
+    declarations rather than operations, and the page files them with the build
+    scripts. Both kinds, because one of them alone was the first version."""
+    tree.append(
+        "crates/rsk-a/src/lib.rs",
+        'unsafe extern "C" {\n    fn r();\n}\n#[unsafe(link_section = ".x")]\npub static Z: u8 = 0;\n',
+    )
+    tree.edit("assurance/platform.toml",
+              '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",',
+              '"unsafe:crates/rsk-a/src/lib.rs#block:core-ptr-null-u8-read",\n'
+              '  "unsafe:crates/rsk-a/src/lib.rs#extern:fn-r",\n'
+              '  "unsafe:crates/rsk-a/src/lib.rs#attr:link_section-pub-static-z-u8",')
+    tree.regenerate()
+    assert tree.problems() == []
