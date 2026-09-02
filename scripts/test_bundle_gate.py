@@ -1018,6 +1018,169 @@ def test_a_transcribed_gate_line_that_the_gate_does_not_derive(tmp_path, key, ol
     assert any(f"result.{key}" in p for p in problems), problems
 
 
+@pytest.mark.parametrize(
+    "old,new",
+    [("volatile=11/10", "volatile=11/12"),
+     ("persistent=12/4", "persistent=12/11"),
+     ("outcomes=7/6", "outcomes=7/12")],
+)
+def test_a_transcribed_fraction_denominator_is_that_gate_s(tmp_path, old, new):
+    """The pair rule reads `persistent=12/4` as `persistent=12` and stops at the
+    slash, so the denominator was left to the bare-integer rule — which asks only
+    whether the number stands SOMEWHERE in the derived line. Every denominator
+    here is replaced by one the SAME line carries (`11` off `api=11`, `12` off
+    `softlock=12`), so the old two rules are both satisfied and only
+    [`bundle_gate.CLAIMED_FRACTION`] can speak: measured, all three were exit 0
+    before it. 33 denominators over 11 bundles were held that way.
+
+    The count is asserted because it is the whole point — one finding, quoting
+    the WHOLE token. A message naming `persistent=12` would be the pair rule
+    firing on something else, and this case passing over it."""
+    root = tree(tmp_path)
+
+    def retype(doc):
+        assert old in doc["result"]["gate_ledger"], doc["result"]["gate_ledger"]
+        doc["result"]["gate_ledger"] = doc["result"]["gate_ledger"].replace(old, new, 1)
+
+    rewrite(root, retype)
+    problems = findings(root)
+    assert [p for p in problems if f"`{new}`" in p], problems
+    assert len(problems) == 1, problems
+
+
+def test_a_transcribed_assumption_total_is_the_line_s_own(tmp_path):
+    """The one leftover of `gate_assumption` the bare-integer rule reads, with ten
+    `TRUE=` / `FALSE=` pairs behind it to match any small number — `5 → 3` was
+    exit 0 off `ForceChangeModelled TRUE=3`. It is the same bite SEC-FIDO-003's
+    own leaf records at `4` off `PowerOnClearsScratch2 FALSE=4`, still standing in
+    the one line that had it.
+
+    TWO findings now and the second one is the point: `standing` is a noun the
+    same derived line writes a count for, so [`bundle_gate.CLAIMED_UNIT`] refuses
+    this edit as well. Measured, both ways round — the swap is exit 1 with
+    `CLAIMED_TOTAL` deleted, and exit 1 with the unit clause deleted. The count
+    stays asserted because it is still the discriminator it was: what it now says
+    is that exactly these two rules speak and no third one fired somewhere else."""
+    root = tree(tmp_path)
+    total = f"5 {bundle_gate.STANDING}"
+
+    def retype(doc):
+        line = doc["result"]["gate_assumption"]
+        assert total in line, line
+        doc["result"]["gate_assumption"] = line.replace(total, f"3 {bundle_gate.STANDING}", 1)
+
+    rewrite(root, retype)
+    problems = findings(root)
+    assert [p for p in problems if f"`3 {bundle_gate.STANDING}`" in p], problems
+    assert [p for p in problems if "says `3 standing` and" in p], problems
+    assert len(problems) == 2, problems
+
+
+def test_the_assumption_total_read_is_the_line_s_first():
+    """SEC-FIDO-003's leaf QUOTES the `4 standing assumption(s)` it once carried,
+    in the sentence that records the bite. A rule reading every occurrence calls
+    that bundle red over its own history — measured, exit 1 on an unedited tree —
+    so the total is the one the line opens with and the prose stays unread."""
+    line = (
+        f"assumption-gate: 5 {bundle_gate.STANDING} — the `4 {bundle_gate.STANDING}`"
+        " that stood here stayed GREEN off `PowerOnClearsScratch2 FALSE=4`"
+    )
+    assert bundle_gate.CLAIMED_TOTAL.search(line).group(1) == "5"
+
+
+@pytest.mark.parametrize(
+    "key,old,new",
+    [("gate_matrix", "(37 covered", "(106 covered"),
+     ("gate_ghost", "21 action(s)", "24 action(s)"),
+     ("gate_matrix", "954 gap", "106 gap"),
+     ("gate_ghost", "11 guard(s)", "21 guard(s)"),
+     ("gate_matrix", "0 conditional", "37 conditional"),
+     ("gate_matrix", "40 P0-family", "31 P0-family")],
+)
+def test_a_transcribed_unit_count_is_the_one_that_noun_was_written_for(tmp_path, key, old, new):
+    """`gate_ghost` and `gate_matrix` carry no `name=value` pair anywhere, so the
+    pair rule reads NOTHING in them and all 33 + 99 of their numbers fell to the
+    bare-integer rule — "do these digits stand somewhere in the derived line".
+
+    Every swap here takes its digits off a SIBLING count of the very line it
+    falsifies (`106` off `106 out-of-scope`, `24` off `24 route(s)`, `21` off `21
+    action(s)`, `37` off `37 covered`, `31` off `31 build`), so the old rules are
+    all satisfied and only [`bundle_gate.CLAIMED_UNIT`] can speak: measured, every
+    one was exit 0 before it. A swap onto a number the line NO LONGER carries is
+    a case the bare-integer rule answers as well, which is how `(139 covered`
+    stopped belonging here the hour `139 equivalent` became `143`.
+
+    The count is asserted, and so is the DIRECTION of the message: it must say
+    the claim carries a number the gate did not write for that noun. A case that
+    goes red because a sibling rule fired somewhere else is a case that proves
+    nothing about this one.
+
+    `gap` has already moved once under these arms — four cells went from `gap` to
+    `equivalent` while this case was being written, so `958 gap` is `954 gap` and
+    this parameter went red for the right reason: the bundles had been re-derived
+    and the case had not. It stays a typed number for the neighbour's reason one
+    case up — a third copy that fails loudly beats one that passes over a bundle
+    nobody re-derived."""
+    root = tree(tmp_path)
+
+    def retype(doc):
+        assert old in doc["result"][key], doc["result"][key]
+        doc["result"][key] = doc["result"][key].replace(old, new, 1)
+
+    rewrite(root, retype)
+    problems = findings(root)
+    assert [p for p in problems if f"says `{new.lstrip('(')}`" in p], problems
+    assert len(problems) == 1, problems
+
+
+def test_a_unit_count_the_gate_line_quotes_again_is_prose(tmp_path):
+    """The first occurrence of each noun and no other, for the reason the
+    assumption total records one rule up: SEC-FIDO-003's leaf QUOTES the `4
+    standing assumption(s)` it once carried, and a version reading every
+    occurrence called it red over its own history. This is that trap on a much
+    wider vocabulary — every noun of two derived lines rather than one phrase —
+    and it was measured the same way round: reading every occurrence produces
+    exactly one false finding on the unedited tree, on that leaf.
+
+    `106` is a number the derived line HAS — off `106 out-of-scope` — so the
+    bare-integer rule stays quiet and this case is about the carve-out and nothing
+    else."""
+    root = tree(tmp_path)
+
+    def quote(doc):
+        doc["result"]["gate_matrix"] += " The tier this replaced read 106 covered."
+
+    rewrite(root, quote)
+    assert findings(root) == [], findings(root)
+
+
+def test_a_count_whose_noun_the_gate_never_wrote_is_the_row_s_own(tmp_path):
+    """The vocabulary is the GATE's, derived from its own line, so a bundle
+    counting something the gate does not count is prose — `gate_matrix` ends in a
+    sentence about the slice and that sentence is the row's to write. A rule
+    holding every `<count> <noun>` against every number the line carries is the
+    naive version, and it fires on honest text."""
+    root = tree(tmp_path)
+
+    def add(doc):
+        doc["result"]["gate_matrix"] += " The slice adds 40 reviews of its own."
+
+    rewrite(root, add)
+    assert findings(root) == [], findings(root)
+
+
+def test_the_unit_vocabulary_stops_where_another_rule_already_reads():
+    """The lookbehind, which is what keeps this clause off numbers already
+    compared IN POSITION by the pair and fraction rules. Without the `=`, the
+    joined arm line offers `91 ForceChangeModelled` as a count of a constant
+    name; without the `/`, `persistent=12/4 outcomes=7/6` offers `4 outcomes`,
+    which is a roster size read as a count of the axis after it."""
+    arms = f"5 {bundle_gate.STANDING} AlwaysUvShipped TRUE=5 FALSE=91 ForceChangeModelled"
+    assert bundle_gate.derived_units(arms) == {"standing": {"5"}}
+    ledger = "GREEN keys=2 api=11 volatile=11/10 persistent=12/4 outcomes=7/6 walk=4"
+    assert bundle_gate.derived_units(ledger) == {}
+
+
 @pytest.mark.parametrize("key", bundle_gate.GATE_RESULTS)
 def test_a_transcribed_gate_line_with_its_numbers_taken_out(tmp_path, key):
     """Both rules above compare the numbers a line HAS, so a line with none

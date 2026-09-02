@@ -430,6 +430,68 @@ GATE_RESULTS = ("gate_ghost", "gate_ledger", "gate_assumption", "gate_matrix", "
 #: `name=<number>`, the shape those lines carry their counts in.
 CLAIMED_PAIR = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)=(\d+)\b")
 
+#: `name=<count>/<roster>`, the shape three of the ledger's axes carry. The pair
+#: rule reads `persistent=12/4` as `persistent=12` and stops at the slash, so the
+#: DENOMINATOR fell through to the bare-integer rule, which asks only whether the
+#: number stands SOMEWHERE in the derived line — 33 denominators over 11 bundles
+#: held that way, and `persistent=12/4 → 12/11` was exit 0 off the `api=11` in
+#: the same line. Compared as the whole token, numerator included.
+#:
+#: Arms, over the shipped bundles: `persistent=12/4 → 12/11` and `outcomes=7/6 →
+#: 7/12` are each exit 1 here, naming the token; delete this clause and both are
+#: exit 0 again with the bundle uncorrected.
+CLAIMED_FRACTION = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*=\d+/\d+)\b")
+
+#: What `gate_assumption`'s derived line counts in. One definition, because the
+#: derivation writes the phrase and the rule below reads it.
+STANDING = "standing assumption(s)"
+
+#: The total in front of that phrase, taken WHERE IT STANDS. It is the one
+#: leftover of that line the bare-integer rule reads, and it has ten `TRUE=` /
+#: `FALSE=` pairs behind it to match any small number: `5 → 3` was exit 0 off
+#: `ForceChangeModelled TRUE=3`, which is the `4`/`FALSE=4` bite SEC-FIDO-003
+#: records, still standing in the leaf that records it. The FIRST occurrence
+#: only — that leaf QUOTES the `4 standing assumption(s)` it once carried, and a
+#: version reading every occurrence called SEC-FIDO-003 red over its own history
+#: (measured; the whole point of the rule is that it does not read the prose).
+#:
+#: Arms: `5 → 3` is exit 1 here and exit 0 without the clause. That arm is now
+#: SHARED — [`CLAIMED_UNIT`] derives `standing` as a unit noun off the same line
+#: and refuses the same edit, so removing this clause alone leaves `5 → 3` at
+#: exit 1 (measured). It is kept because it is the narrower statement of the two:
+#: it names the whole phrase this line is counted in, and a widening that stops
+#: deriving that noun would take the check with it silently.
+CLAIMED_TOTAL = re.compile(rf"(\d+) {re.escape(STANDING)}")
+
+#: `<count> <unit>`, the shape a derived line carries a count in when it carries
+#: no `name=value` pair at all. `gate_ghost` and `gate_matrix` are written
+#: entirely that way, so the pair rule reads NOTHING in either and every number
+#: fell through to the bare-integer rule, which asks only whether the digits
+#: stand SOMEWHERE in the derived line: 33 + 99 numbers over 11 bundles held
+#: that way, and `(37 covered → (139 covered` and `21 action(s) → 24 action(s)`
+#: were each exit 0 on the shipped tree, every swap taking its digits off a
+#: sibling count of the very line it falsifies.
+#:
+#: The lookbehind is what keeps this off the numbers another rule already reads
+#: IN POSITION: `=` for the pair rule, `/` and `,` for the fraction rule and for
+#: a grouped `45,810`. Without the `=`, the joined arm line offers `91
+#: ForceChangeModelled` as a unit pair, which is a `FALSE=` value and a constant
+#: name and not a count of anything.
+#:
+#: The vocabulary is DERIVED from the gate's own line rather than listed here
+#: ([`derived_units`]), so the rule reaches exactly the counts the gate wrote a
+#: noun for and no prose beyond them — and the FIRST occurrence of each noun
+#: only, for the reason [`CLAIMED_TOTAL`] records: a version reading every
+#: occurrence calls SEC-FIDO-003 red over the `4 standing assumption(s)` its own
+#: prose quotes, measured again over this wider vocabulary and still exactly one
+#: false finding.
+#:
+#: Arms, over the shipped bundles: `(37 covered → (139 covered`, `21 action(s) →
+#: 24 action(s)`, `139 equivalent → 106 equivalent`, `11 guard(s) → 21 guard(s)`
+#: and `40 P0-family → 31 P0-family` are each exit 1 here, naming the pair; drop
+#: this clause and all five are exit 0 again with the bundle uncorrected.
+CLAIMED_UNIT = re.compile(r"(?<![=\w./,-])(\d+) ([A-Za-z][A-Za-z0-9_-]*(?:\(s\))?)")
+
 #: An assertion that fell describes the modelled defect, or its inverse. Anything
 #: else is a word nobody has to defend.
 DIRECTIONS = ("modelled", "inverse")
@@ -933,7 +995,7 @@ def gate_corpus() -> dict[str, str]:
     return {
         "gate_ghost": ghost_gate.audit(ROOT)[1],
         "gate_ledger": token_refinement_gate.audit(ROOT)[1],
-        "gate_assumption": f"{len(entries)} standing assumption(s) {arms}",
+        "gate_assumption": f"{len(entries)} {STANDING} {arms}",
         "gate_matrix": matrix_gate.audit(ROOT)[1],
         # The per-property vector rows, which is where `cfgs=46 … kani=4` is
         # counted; `check_generated_readme` is a sibling row's rule, not this one's.
@@ -957,13 +1019,34 @@ def registry_line(corpus: str, subject: str) -> str:
     return corpus
 
 
+def derived_units(derived: str) -> dict[str, set[str]]:
+    """The `<count> <unit>` vocabulary of one derived line: unit noun → its counts.
+
+    Read off the GATE's line and not off the bundle's, which is what scopes
+    [`CLAIMED_UNIT`] to nouns some other program wrote. A vocabulary listed here
+    instead would be a second copy of five gates' output, and the number it
+    would go stale on is the one this whole function exists to compare.
+
+    A noun the gate stops writing therefore stops being checked rather than
+    going red — the bare-integer rule is what remains under it, and a rename is
+    the one edit this clause cannot tell from a correction.
+    """
+    units: dict[str, set[str]] = {}
+    for value, unit in CLAIMED_UNIT.findall(derived):
+        units.setdefault(unit, set()).add(value)
+    return units
+
+
 def gate_transcriptions(bundle: pathlib.Path, doc: dict, findings: list[str]) -> None:
     """Every number in a transcribed `[result]` gate line is that gate's own.
 
-    A `name=<number>` pair is compared as a pair; everything else is compared as
-    an integer, which is what holds `21 actions … over 24 routes` where the line
-    carries no pairs at all. Neither reads the PROSE — `gate_matrix` ends in a
-    sentence about the slice, and that sentence is the row's to write.
+    A `name=<number>` pair is compared as a pair, a `name=<count>/<roster>` axis
+    as the whole token, the [`STANDING`] total with the words it is counted in,
+    and a bare `<count> <unit>` against the count the gate wrote that same unit
+    for — which is what holds `21 action(s) … over 24 route(s)` and the whole of
+    `gate_matrix`, where the line carries no pairs at all; everything still left
+    is compared as an integer. None of them reads the PROSE — `gate_matrix` ends
+    in a sentence about the slice, and that sentence is the row's to write.
     """
     corpus = gate_corpus()
     result = doc.get("result", {})
@@ -1002,6 +1085,33 @@ def gate_transcriptions(bundle: pathlib.Path, doc: dict, findings: list[str]) ->
                     f"{bundle}: `result.{key}` says `{name}={value}` and the gate"
                     f" derives `{derived[:120]}…` — a transcribed count is a copy of"
                     " a number some other program counts"
+                )
+        for token in CLAIMED_FRACTION.findall(claim):
+            if not re.search(rf"\b{re.escape(token)}(?!\d)", derived):
+                findings.append(
+                    f"{bundle}: `result.{key}` says `{token}` and the gate derives"
+                    f" `{derived[:120]}…` — the denominator is the roster the count"
+                    " is out of, and it is that gate's number as much as the count is"
+                )
+        total = CLAIMED_TOTAL.search(claim)
+        if total and not re.search(
+            rf"(?<!\d){total.group(1)} {re.escape(STANDING)}", derived
+        ):
+            findings.append(
+                f"{bundle}: `result.{key}` says `{total.group(0)}` and the gate"
+                f" derives `{derived[:120]}…` — the total is the line's own number"
+                " and not whichever arm count happens to carry those digits"
+            )
+        known, read = derived_units(derived), set()
+        for value, unit in CLAIMED_UNIT.findall(claim):
+            if unit not in known or unit in read:
+                continue  # a noun this gate never counted, or its prose again
+            read.add(unit)
+            if value not in known[unit]:
+                findings.append(
+                    f"{bundle}: `result.{key}` says `{value} {unit}` and the gate"
+                    f" derives `{'/'.join(sorted(known[unit]))} {unit}` — the noun"
+                    " is that gate's and so is the count standing in front of it"
                 )
         for number in re.findall(r"\d+", CLAIMED_PAIR.sub("", claim)):
             if not re.search(rf"(?<!\d){re.escape(number)}(?!\d)", derived):
