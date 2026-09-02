@@ -352,6 +352,115 @@ def test_test_failure_is_a_kill_even_with_error_word(tmp_path):
     assert verdict == "killed", verdict
 
 
+# The five below are one guard — read the two words only where a TEST wrote them
+# — and this is its mutation table, taken by deleting one clause of `run_one`'s
+# classifier at a time and driving `pytest scripts` (the gate's own row, not the
+# helper) over each. Unmutated: 82 passed.
+#
+#   clause deleted             the case that goes red
+#   RUSTC_QUOTES in `ran`      a_rustc_echo_of_the_word_is_not_a_kill
+#   RUSTC_QUOTES in `died`     a_rustc_echo_of_cargos_death_line_is_not_a_kill
+#   the `died` clause          a_test_binary_that_died_is_a_kill
+#   `"FAILED" in l`            a_terse_failure_line_is_a_kill
+#   `"test result" in l`       a_passing_summary_beside_a_failure_is_a_kill
+#   the `if not ran:` gate     those two, and test_failure_is_a_kill_even_with_…
+#   the `^error:` search       both echo cases, and compile_break_is_not_a_kill
+#
+# No row is empty, so no clause is decorative. The same seven arms were driven
+# over `cargo test -p rsk-fs` in a worktree, which is where the two verdicts
+# this fixes were measured in the first place; `sh -c` reaches the classifier
+# identically and costs no build, so that half is not repeated here.
+
+
+def test_a_rustc_echo_of_the_word_is_not_a_kill(tmp_path):
+    # THE defect this guard exists for. rustc quotes the file back, and three of
+    # the 28 patched files carry the word in a comment — `meta_find`'s own doc
+    # line reads `/// read that FAILED reads as "no record" here`. Measured
+    # before the fix by deleting it: ('killed', '676 | |     /// read that …').
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": [
+            "sh",
+            "-c",
+            'echo "error[E0433]: failed to resolve" >&2;'
+            ' echo "676 | |     /// read that FAILED reads as no record here" >&2;'
+            " exit 1",
+        ],
+    }
+    verdict, _ = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "build-broke", verdict
+
+
+def test_a_rustc_echo_of_cargos_death_line_is_not_a_kill(tmp_path):
+    # The same rule applied to the clause below it: a source line that happens to
+    # quote `error: test failed` must not buy a kill either, or the fix would
+    # have swapped one echo for another.
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": [
+            "sh",
+            "-c",
+            'echo "error[E0433]: failed to resolve" >&2;'
+            ' echo "12 |     // error: test failed is quoted here" >&2; exit 1',
+        ],
+    }
+    verdict, _ = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "build-broke", verdict
+
+
+def test_a_test_binary_that_died_is_a_kill(tmp_path):
+    # The inverse, and the reason the `test result:`-only reading was refused: a
+    # binary that ABORTS never prints a summary, so `^error:` sees only cargo's
+    # `error: test failed` and calls a suite that caught the defect by crashing a
+    # patch that will not build. Measured on a stack overflow in rsk-fs: 0
+    # `test result:` lines, 0 `FAILED` lines, SIGABRT, and ('build-broke', …).
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": [
+            "sh",
+            "-c",
+            'echo "fatal runtime error: stack overflow, aborting";'
+            ' echo "error: test failed, to rerun pass \\`-p rsk-fs --lib\\`" >&2;'
+            " exit 101",
+        ],
+    }
+    verdict, detail = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "killed", verdict
+    assert "test failed" in detail, detail
+
+
+def test_a_terse_failure_line_is_a_kill(tmp_path):
+    # Keeps "FAILED" load-bearing: libtest's per-test line carries it and the
+    # summary line has not been printed yet.
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": ["sh", "-c", 'echo "test mod::t ... FAILED"; echo "error: x" >&2; exit 1'],
+    }
+    verdict, _ = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "killed", verdict
+
+
+def test_a_passing_summary_beside_a_failure_is_a_kill(tmp_path):
+    # And keeps "test result" load-bearing: one binary reported ok before the
+    # slice went red elsewhere, which is still evidence that tests RAN.
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": ["sh", "-c", 'echo "test result: ok. 5 passed"; echo "error: x" >&2; exit 1'],
+    }
+    verdict, _ = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "killed", verdict
+
+
 def test_run_flags_a_verdict_that_differs_from_the_record(tmp_path, capsys):
     # The fixture records BugAlpha as expect="gap" over a `true` slice, which is
     # a gap. Point its slice at `false` without touching `expect`: the run now

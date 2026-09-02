@@ -848,6 +848,24 @@ PROOF_FELL = "Failed Checks:"
 PROOF_TIMED_OUT = "CBMC timed out"
 PROOF_NOT_A_KILL = ("not currently supported", "unwinding assertion")
 
+#: The shapes rustc uses to QUOTE THE FILE BACK inside a diagnostic: the `-->`
+#: locator, numbered echo lines (`676 | ...`, and `676 | | ...` for a multi-line
+#: span), the annotation bars, `= note:`/`= help:` footers, the `...` elision,
+#: and the `676 -`/`676 +` pair a structured suggestion renders. Nothing cargo or
+#: libtest prints takes any of them, which is what makes this separable: the
+#: words below are then read only where a TEST wrote them. Measured, not
+#: supposed -- deleting `meta_find` reddens rsk-fs with `error: expected item
+#: after doc comment`, whose echo carries that fn's own doc line `/// read that
+#: FAILED reads as "no record" here`, and it alone scored the patch `killed`.
+RUSTC_QUOTES = re.compile(r"^\s*(?:-->|\.\.\.|\||=|\d+\s*[|+-])")
+#: cargo's line when the test binary RAN and died -- a stack overflow, a signal
+#: -- so libtest never reached its summary. It has to be answered before the
+#: `error:` search below, which matches this cargo line exactly as readily as it
+#: matches rustc: measured on an overflow in `rsk-fs` (0 `test result:` lines, 0
+#: `FAILED` lines, SIGABRT), and the verdict was `build-broke` over a suite that
+#: caught the defect by crashing on it.
+TEST_BINARY_DIED = "error: test failed"
+
 
 def with_target(cmd: list[str], host: str) -> list[str]:
     """`--target <host>` on a `cargo test` and on nothing else."""
@@ -956,13 +974,28 @@ def run_one(root: pathlib.Path, bug: str, entry: dict, host: str) -> tuple[str, 
             return "gap", "every slice command stayed green"
         out = r.stdout + r.stderr
         # A compile error is not a kill: the tests never ran, so a broken patch
-        # would masquerade as "the tests caught the defect". A real test failure
-        # prints "test result:" / "FAILED"; a build break prints "error[E" /
-        # "error:" and no test line. Tell them apart, or a patch that does not
-        # compile scores a false killed — which is how BugPpuatIsAGate first read
-        # (EF_PAUTHTOKEN is a KeyFid, not a u16).
-        ran = [l for l in out.splitlines() if "FAILED" in l or "test result" in l]
+        # would masquerade as "the tests caught the defect" — which is how
+        # BugPpuatIsAGate first read (EF_PAUTHTOKEN is a KeyFid, not a u16).
+        #
+        # So read the two words only where cargo or libtest WROTE them, never
+        # where rustc quoted the file back. Refused the cheaper swap to
+        # `any("test result" in l)`: it buys this misclassification's inverse.
+        ran = [
+            l
+            for l in out.splitlines()
+            if ("FAILED" in l or "test result" in l) and not RUSTC_QUOTES.match(l)
+        ]
         if not ran:
+            # That inverse, concretely, and the reason this clause comes first.
+            died = [
+                l.strip()
+                for l in out.splitlines()
+                if TEST_BINARY_DIED in l and not RUSTC_QUOTES.match(l)
+            ]
+            if died:
+                return "killed", died[0]
+            # Kept broad on purpose: it is also what catches a clap usage error
+            # from a malformed slice, which `could not compile` would not.
             if re.search(r"^error(\[E\d+\])?:", out, re.M):
                 return "build-broke", "patch does not compile — not a kill"
             ran = ["slice exited nonzero (no test output)"]
