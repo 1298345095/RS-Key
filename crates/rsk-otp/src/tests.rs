@@ -2,6 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
+use rsk_fs::storage::faults::{Cut, RemoveStuck};
 use rsk_fs::storage::ram::RamStorage;
 
 const SERIAL: [u8; 8] = [0x12, 0x34, 0x56, 0x78, 0x9A, 0, 0, 0];
@@ -149,6 +150,126 @@ fn slot_sealed_before_otp_burn_survives_the_burn() {
             .unwrap()
             .is_some()
     );
+}
+
+#[test]
+fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_slot() {
+    // Standing before `run_at_rest_lap` in `firmware/src/main.rs` is not the same as
+    // standing before every lap. A boot whose re-seal here was refused latched the
+    // marker all the same, and the boot that finally migrates the slot supersedes
+    // the chip-serial-rooted copy under a marker the lap gates on and nothing clears.
+    let nootp = Device {
+        serial_hash: &SERIAL_HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let otp_key = [0x55u8; 32];
+    let otp = Device {
+        otp_key: Some(&otp_key),
+        ..nootp
+    };
+    let cfg = chalresp_config(&[0xAB; 20], &[0; 6], 0);
+    let fid = KeyFid::new(EF_OTP_SLOT1);
+    let mut rng = CountRng(7);
+    let mut buf = [0u8; SLOT_SIZE];
+
+    // The ORDER, on the one medium that can tell the two orderings apart.
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    assert!(seal::seal_put(&nootp, &mut fs, &mut rng, fid, &cfg));
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+    medium.clear_ops();
+    migrate_seal(&otp, &mut fs, &mut rng);
+    medium.assert_re_armed_before(EF_OTP_SLOT1, |_| false, "migrate_seal's pre-OTP arm");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the re-seal superseded a chip-serial-rooted copy, so the lap must run again"
+    );
+
+    // The GATE. A medium refusing only `remove(EF_HARDENED)` reaches that same end
+    // state with no reset in it, so the re-seal must not go ahead at all.
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    assert!(seal::seal_put(&nootp, &mut fs, &mut rng, fid, &cfg));
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    migrate_seal(&otp, &mut fs, &mut rng);
+    assert!(
+        try_read_slot(&otp, &mut fs, EF_OTP_SLOT1, &mut buf)
+            .unwrap()
+            .is_none(),
+        "the re-arm never landed, so the pre-OTP copy must stay in force instead of \
+         being superseded under a marker nothing will clear"
+    );
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+
+    // The control, same medium, fault cleared: the migration DOES happen, so the
+    // assertion above is about the gate and not about a pass that never fires.
+    medium.refuse(None);
+    migrate_seal(&otp, &mut fs, &mut rng);
+    assert!(
+        try_read_slot(&otp, &mut fs, EF_OTP_SLOT1, &mut buf)
+            .unwrap()
+            .is_some()
+    );
+    assert!(!medium.live(rsk_fs::EF_HARDENED));
+}
+
+#[test]
+fn the_boot_pass_re_arms_the_lap_before_it_seals_a_cleartext_slot() {
+    // The other arm of the same pass, over a copy weaker still: the legacy record
+    // holds this slot's AES key in the clear, and sealing it in place appends over
+    // it. `run_at_rest_lap`'s caller gates the lap on the OTP key, so this does too.
+    let otp_key = [0x55u8; 32];
+    let otp = Device {
+        serial_hash: &SERIAL_HASH,
+        serial_id: &SERIAL,
+        otp_key: Some(&otp_key),
+    };
+    let cfg = chalresp_config(&[0x0B; 20], &[0; 6], 0);
+    let mut rng = CountRng(1);
+
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    fs.put(EF_OTP_SLOT1, &cfg).unwrap(); // the legacy plaintext write
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.clear_ops();
+    migrate_seal(&otp, &mut fs, &mut rng);
+    medium.assert_re_armed_before(EF_OTP_SLOT1, |_| false, "migrate_seal's plaintext arm");
+    assert!(!fs.has_data(rsk_fs::EF_HARDENED));
+
+    // The gate, and its control on the same unpoisoned medium.
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    fs.put(EF_OTP_SLOT1, &cfg).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    migrate_seal(&otp, &mut fs, &mut rng);
+    let mut stored = [0u8; seal::MAX_BLOB];
+    assert_eq!(
+        fs.read_key(KeyFid::new(EF_OTP_SLOT1), &mut stored),
+        Some(CONFIG_SIZE),
+        "the re-arm never landed, so the cleartext config must stay in force rather \
+         than be superseded under a marker nothing will clear"
+    );
+    medium.refuse(None);
+    migrate_seal(&otp, &mut fs, &mut rng);
+    let n = fs
+        .read_key(KeyFid::new(EF_OTP_SLOT1), &mut stored)
+        .expect("fixture: the slot is still there");
+    assert!(n > CONFIG_SIZE, "the healthy medium does seal it");
+    assert!(!medium.live(rsk_fs::EF_HARDENED));
 }
 
 fn configure(

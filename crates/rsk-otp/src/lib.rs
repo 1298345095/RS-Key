@@ -1029,14 +1029,25 @@ pub fn migrate_seal<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut dyn Rng)
         if dev.otp_key.is_some()
             && let Some(n) = seal::seal_read(&dev.without_otp(), fs, fid, &mut out)
         {
-            let _ = seal::seal_put(dev, fs, rng, fid, &out[..n]);
+            // Ahead of the write and gating it, per `rsk_fs::request_rescrub`: the
+            // copy it supersedes is the pre-OTP one. The `continue` stays outside —
+            // falling through would re-seal that ciphertext as if it were plaintext.
+            if rsk_fs::request_rescrub(fs).is_ok() {
+                let _ = seal::seal_put(dev, fs, rng, fid, &out[..n]);
+            }
             continue;
         }
         if let Some(n) = fs.read_key(fid, &mut raw) {
             // Only re-seal a genuine plaintext config; anything longer is not a
             // legacy record — the smallest sealed blob is already > SLOT_SIZE,
             // asserted at compile time in `seal.rs`.
-            if (CONFIG_SIZE..=SLOT_SIZE).contains(&n) {
+            //
+            // The re-arm is the pre-OTP one's, for a copy that is weaker still: this
+            // slot's AES key is in the clear on the medium. Gated on the OTP key
+            // because that is what `run_at_rest_lap`'s caller gates the lap on.
+            if (CONFIG_SIZE..=SLOT_SIZE).contains(&n)
+                && (dev.otp_key.is_none() || rsk_fs::request_rescrub(fs).is_ok())
+            {
                 let _ = seal::seal_put(dev, fs, rng, fid, &raw[..n]);
             }
         }

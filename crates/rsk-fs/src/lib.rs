@@ -76,6 +76,10 @@ pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
 /// nothing to scrub. It is a multi-second stall, so the caller runs it at boot, before
 /// USB attach. The write ORDER is the property this refines, and `firmware/` has no
 /// host tests, which is why the order lives here rather than in the boot glue.
+///
+/// Standing after the boot migrations does NOT exempt them from [`request_rescrub`]:
+/// this latches once per device, so a boot that silently skipped a record leaves the
+/// marker over the boot that finally supersedes it. They re-arm too, for that reason.
 /// Refines `RSKeyBootHardening!MarkerNeverLies` — SEC-BOOT-001.
 pub fn run_at_rest_lap<S: Storage>(fs: &mut Fs<S>) {
     if fs.has_data(EF_HARDENED) {

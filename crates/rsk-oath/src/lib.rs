@@ -1755,12 +1755,21 @@ fn reseal_if_plaintext<S: Storage>(
     if dev.otp_key.is_some()
         && let Some(n) = seal::seal_read(&dev.without_otp(), fs, fid, out)
     {
-        let _ = seal::seal_put(dev, fs, rng, fid, &out[..n]);
+        // Ahead of the write and gating it, per `rsk_fs::request_rescrub`: the copy
+        // it supersedes is the pre-OTP one. The `return` stays outside — falling
+        // through would re-seal that ciphertext as if it were plaintext.
+        if rsk_fs::request_rescrub(fs).is_ok() {
+            let _ = seal::seal_put(dev, fs, rng, fid, &out[..n]);
+        }
         return;
     }
+    // The re-arm is the pre-OTP arm's, for a copy weaker still: this record's HMAC
+    // secret is in the clear on the medium. Gated on the OTP key because that is
+    // what `run_at_rest_lap`'s caller gates the lap on.
     if let Some(n) = fs.read_key(fid, raw)
         && let Some(blob) = raw.get(..n)
         && is_legacy_plaintext(fid, blob)
+        && (dev.otp_key.is_none() || rsk_fs::request_rescrub(fs).is_ok())
     {
         let _ = seal::seal_put(dev, fs, rng, fid, blob);
     }

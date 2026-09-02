@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::consts::EF_COUNTER;
+use rsk_fs::storage::faults::{Cut, RemoveStuck};
 use rsk_fs::storage::ram::RamStorage;
 
 /// Test-only: `seed` AES-CBC-encrypted under `dev`'s arm (fixed serial-hash IV)
@@ -264,6 +265,85 @@ fn boot_migration_reseals_plain_seed_to_otp_kbase() {
     // Idempotent: a second pass is a no-op (tag already 0x12).
     migrate_keydev_boot(&otp_dev(), &mut fs).unwrap();
     assert_eq!(load_keydev(&otp_dev(), &mut fs), Some(seed));
+}
+
+#[test]
+fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_seed() {
+    // Standing before `run_at_rest_lap` in `firmware/src/main.rs` is not the same as
+    // standing before every lap. A boot whose `read_key` here faulted skipped the
+    // slot and latched the marker all the same, so the boot that finally re-seals it
+    // supersedes a chip-serial-rooted copy under a marker the lap gates on.
+    let seed = [0x5A; 32];
+    let mut raw = [0u8; KEYDEV_G1_LEN];
+
+    // The ORDER, on the one medium that can tell the two orderings apart.
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    encrypt_keydev_f1(&dev(), &mut fs, &seed).unwrap(); // 0x02 pre-OTP arm
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+    medium.clear_ops();
+    migrate_keydev_boot(&otp_dev(), &mut fs).unwrap();
+    medium.assert_re_armed_before(EF_KEY_DEV.get(), |_| false, "migrate_keydev_boot");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the re-seal superseded a chip-serial-sealed copy, so the lap must run again"
+    );
+    fs.read(EF_KEY_DEV.get(), &mut raw).unwrap();
+    assert_eq!(raw[0], FORMAT_G1_OTP);
+
+    // The GATE. A medium refusing only `remove(EF_HARDENED)` reaches that same end
+    // state with no reset in it, so the re-seal must not go ahead at all.
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    encrypt_keydev_f1(&dev(), &mut fs, &seed).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    assert!(
+        migrate_keydev_boot(&otp_dev(), &mut fs).is_err(),
+        "a re-arm the medium refused is not a migration that may proceed"
+    );
+    fs.read(EF_KEY_DEV.get(), &mut raw).unwrap();
+    assert_eq!(
+        raw[0], FORMAT_G1,
+        "the re-arm never landed, so the pre-OTP record must stay in force instead \
+         of being superseded under a marker nothing will clear"
+    );
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+
+    // The control, same medium, fault cleared: the migration DOES happen, so the
+    // assertion above is about the gate and not about a pass that never fires.
+    medium.refuse(None);
+    migrate_keydev_boot(&otp_dev(), &mut fs).unwrap();
+    fs.read(EF_KEY_DEV.get(), &mut raw).unwrap();
+    assert_eq!(raw[0], FORMAT_G1_OTP);
+    assert_eq!(load_keydev(&otp_dev(), &mut fs), Some(seed));
+    assert!(!medium.live(rsk_fs::EF_HARDENED));
+
+    // The other pre-OTP tag the same arm accepts: a legacy fixed-IV CBC record
+    // (0x01) is chip-serial-rooted too, so it owes the same re-arm — and the
+    // attestation slot rides the same helper as the seed.
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    write_legacy_cbc(&dev(), &mut fs, EF_ATT_KEY, &seed);
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.clear_ops();
+    migrate_keydev_boot(&otp_dev(), &mut fs).unwrap();
+    medium.assert_re_armed_before(
+        EF_ATT_KEY.get(),
+        |_| false,
+        "migrate_keydev_boot's 0x01 arm",
+    );
+    assert_eq!(load_att_key(&otp_dev(), &mut fs), Some(seed));
 }
 
 #[test]

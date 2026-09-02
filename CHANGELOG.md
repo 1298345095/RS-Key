@@ -2740,6 +2740,108 @@ and to the statuses it quotes.
 
 ### Security
 
+- **The boot pass re-keys pre-OTP records too, and standing before the at-rest lap
+  is not the same as standing before the lap that latched.** 0x09BD swept thirteen
+  lazy re-keys onto "re-arm first, and write only if the re-arm landed"; the eight
+  calls at `firmware/src/main.rs:610-617` were left out on the reading that the lap
+  at the foot of their own block covers whatever they supersede. It covers only the
+  boot they run on. `run_at_rest_lap` latches `EF_HARDENED` once per device and
+  gates on it and nothing else, so a boot that silently skipped a record — every
+  one of these migrations opens with a `read_key`/`seal_read` that spells a flash
+  READ FAULT the same way it spells an absent slot, and closes with a `let _ = put`
+  — latches the marker anyway, and the boot that finally migrates that record
+  supersedes a copy still sealed under `HKDF("NO-OTP", serial_hash)` with the lap
+  gated shut for the life of the key. No reset is needed anywhere in it.
+
+  One member needs no fault at all, which is what settled that this is reachable
+  rather than latent. `migrate_rp_seal` returns whole while `load_keydev` answers
+  `None` — a PIN-wrapped `0x03`/`0x13` seed, or a soft-locked device — so on such
+  a key the boot that boxes a legacy cleartext rpId is *routinely* not the boot
+  that latched the marker, and the domain it displaces stays readable in a flash
+  dump. That record's own comment already assumed "the one-shot `EF_HARDENED`
+  compact lap that runs after this pass" would take it.
+
+  **Six superseding arms across five crates**, each now calling
+  `rsk_fs::request_rescrub` ahead of its write and skipping (or failing) the write
+  when the medium refuses it: `migrate_slot` in `crates/rsk-fido/src/seed.rs` (the
+  seed and the attestation key, tags `0x01`/`0x02`), `migrate_kbase` in
+  `crates/rsk-rescue/src/keydev.rs` (a pre-OTP GCM blob or a bare 32-byte CBC
+  record), `migrate_kbase` in `crates/rsk-piv/src/seal.rs`, both arms of
+  `migrate_seal` in `crates/rsk-otp/src/lib.rs` — the pre-OTP one and the legacy
+  plaintext one, whose superseded copy holds the slot's AES key in the clear — and
+  `migrate_rp_seal` in `crates/rsk-fido/src/credential.rs`. Each is gated on
+  `dev.otp_key`, the same gate the boot glue puts on the lap, so a pre-OTP board
+  neither re-arms nor has its migration made conditional on one.
+
+  It costs nothing where it fires: the re-arm clears a marker the lap at the foot
+  of the same boot block re-latches, and on a steady-state boot no arm is reached,
+  so no lap is forced. The narrowness matters — `migrate_keydev_pin`'s re-arm had
+  to stay this narrow at 0x09BD, or every correct PIN verify would order a
+  multi-second compaction on the next boot.
+
+  Three boot calls were measured and are **not** in the class: `ensure_seed` writes
+  only records it found absent; `scan_files` writes factory defaults, its one
+  superseding path (`neutralize_default_reset_code`) having re-armed since 0x09BD;
+  and `rsk_otp::power_up_bump`, which runs *after* the lap, reads through a
+  `try_read_slot` that opens under the current arm only, with no pre-OTP fallback,
+  so it can never supersede a chip-serial-rooted copy.
+
+  Six host tests, one per arm, each in three parts: the append ORDER read off a
+  `Cut` medium's log; the GATE driven on a `RemoveStuck` that refuses
+  `remove(EF_HARDENED)` and serves everything else, which is the fault that reaches
+  the losing end state with no reset in it; and a control on that same medium with
+  the fault cleared, so the gate assertion is about a write that was refused and
+  not about a pass that never fired. Fourteen mutation arms, each reverting one
+  change alone and each read for its DIRECTION: every ordering reversion says
+  `was superseded BEFORE the lap was re-armed` over a log reading
+  `[Write(fid), Remove(0xce14)]`, and every gate reversion says the migration went
+  ahead over a copy the re-arm had not cleared — never the inverse. A narrowing arm
+  (dropping the legacy `0x01` tag from the seed's `weak` predicate) is killed too,
+  and one arm was first written as a DELETION, reported `nothing re-armed the
+  at-rest lap at all`, and was redone as a reversion — the same correction 0x09BD's
+  entry records. rsk-fido 672 → 674, rsk-piv 155 → 156, rsk-otp 79 → 81,
+  rsk-rescue 41 → 42.
+
+  **Not closed, and named so the next sweep starts from a list.**
+  `rsk_oath::migrate_seal`'s `reseal_if_plaintext` carries the same two arms — a
+  pre-OTP re-seal and a legacy plaintext one — and is unfixed here. And the model
+  would not have caught this: `RSKeyBootHardening`'s `Boot` is one atomic step with
+  no state between the migrations and the lap, and `LazyRekey` / `RekeyBegin` are
+  guarded on `phase = "serving"` — so a boot-phase re-key, and a migration that
+  fails on one boot and succeeds on the next, are states that module cannot enter.
+  The rule it asserts is the right one; what it cannot express is where this change
+  applies it.
+
+- **OATH's boot pass was the sixth member of the boot-migration class, and it
+  carries the two arms the other five did.** `rsk_oath::migrate_seal` runs at
+  `firmware/src/main.rs:613`, ahead of `run_at_rest_lap`, and standing ahead of
+  the lap is not the same as standing ahead of every lap — `rsk-fs`'s own doc now
+  says so. `reseal_if_plaintext` re-seals a credential (or the SET CODE key) that
+  opens only under `dev.without_otp()`, i.e. under `HKDF("NO-OTP", serial_hash)`,
+  which the public chip serial alone derives; and it seals a legacy record whose
+  HMAC secret is in the clear on the medium. Neither write was conditional on
+  anything. A boot whose `seal_put` was refused latched `EF_HARDENED` all the
+  same, and the boot that finally migrates that record supersedes the weak copy
+  under a marker `run_at_rest_lap` gates on and nothing clears.
+
+  Both arms re-arm ahead of the write and are gated on it landing, in the shape
+  the five sibling passes use — the plaintext arm on `dev.otp_key.is_none() ||
+  …is_ok()`, because that is what `run_at_rest_lap`'s caller gates the lap on.
+
+  Measured before it was fixed, and in both directions. The order half fails on
+  the `Cut` medium's log with **one op in it** — `[Write(0xba00, 51B)]` for the
+  pre-OTP arm, `[Write(0xba00, 58B)]` for the plaintext arm — "nothing re-armed
+  the at-rest lap at all", which is the tree's actual defect and not its inverse.
+  The gate half, read on a `RemoveStuck` medium refusing only
+  `remove(EF_HARDENED)`, fails saying the pre-OTP copy was superseded anyway.
+  Four mutants kill, each reddening only its own arm: each re-arm moved AFTER its
+  write (a reorder, not a deletion — the property is an order) says "superseded
+  BEFORE the lap was re-armed" with `[Write(0xba00, …), Remove(0xce14)]`, and
+  each re-arm's answer swallowed says the copy was superseded with the marker
+  still on the medium. Each case carries a control on the same medium with the
+  fault cleared, so the refusal assertion is about the gate and not about a pass
+  that never fires. `crates/rsk-oath` 127 → 130 tests.
+
 - **Every lazy re-key re-arms the at-rest scrub before it writes, *and does not
   write when the re-arm did not land*.** The re-key and the
   `rsk_fs::request_rescrub` under it are two separate flash appends with no

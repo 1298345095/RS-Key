@@ -622,6 +622,13 @@ async fn main(spawner: Spawner) {
         // that belongs before USB attach, at an attended provisioning boot, and
         // because the OTP gate is ours — a pre-OTP board has nothing weaker to
         // supersede. See `flash_storage::FlashStorage::compact`.
+        //
+        // Standing here AFTER the migrations is not what makes the order hold, and
+        // each of them re-arms before its own superseding write for that reason: a
+        // boot where one silently skipped a record — a faulted `read_key`, a refused
+        // `put` — latches the marker anyway, and the boot that finally migrates that
+        // record finds the lap gated shut for the life of the key. The re-arm costs
+        // nothing at this position: it clears the marker the lap below re-latches.
         if mkek.is_some() {
             rsk_fs::run_at_rest_lap(&mut fs);
         }
@@ -694,7 +701,7 @@ async fn main(spawner: Spawner) {
     config.max_power = 100;
     config.max_packet_size_0 = 64;
     // bcdDevice build counter; also surfaced on the trusted-display Firmware screen.
-    let device_release: u16 = 0x09BD;
+    let device_release: u16 = 0x09BE;
     config.device_release = device_release;
 
     let mut builder = Builder::new(

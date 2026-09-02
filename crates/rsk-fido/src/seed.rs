@@ -505,11 +505,22 @@ fn migrate_slot<S: Storage>(dev: &Device, fs: &mut Fs<S>, fid: KeyFid) -> Result
         buf.zeroize();
         return Ok(());
     }
+    // `weak`: 0x01/0x02 are sealed under the chip-serial arm, so the re-seal below
+    // supersedes a copy the public serial alone derives. This pass runs BEFORE the
+    // boot's lap, but a boot that skipped the slot already latched the marker.
+    let weak = matches!(buf[0], FORMAT_F1 | FORMAT_G1) && dev.otp_key.is_some();
     let recovered = open_any(dev, &buf[..n]);
     buf.zeroize();
     match recovered {
         Some(mut v) => {
-            let r = put_sealed32(dev, fs, fid, &v);
+            // Ahead of the write and gating it, per `rsk_fs::request_rescrub`: a
+            // reset in the window then costs one idempotent lap, and a medium that
+            // refuses the re-arm leaves the pre-OTP record in force instead.
+            let r = if weak && rsk_fs::request_rescrub(fs).is_err() {
+                Err(Error::MemoryFatal)
+            } else {
+                put_sealed32(dev, fs, fid, &v)
+            };
             v.zeroize();
             r
         }

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 use super::*;
+use rsk_fs::storage::faults::{Cut, RemoveStuck};
 use rsk_fs::storage::ram::RamStorage;
 
 fn dev() -> Device<'static> {
@@ -1041,4 +1042,83 @@ fn a_faulted_probe_of_another_rps_slot_does_not_deny_this_registration() {
         Some(2),
         "the second credential for example.com must be counted on its own record"
     );
+}
+
+#[test]
+fn the_boot_pass_re_arms_the_lap_before_it_boxes_a_cleartext_rp_id() {
+    // This pass converges over boots BY DESIGN: it returns whole while the seed is
+    // PIN-wrapped or the device soft-locked, and skips a record whose read faulted.
+    // So the boot that boxes an rpId is routinely NOT the boot that latched the
+    // marker, and what the box supersedes is the domain in the clear.
+    const OTP: [u8; 32] = [0x77; 32];
+    let otp_dev = Device {
+        otp_key: Some(&OTP),
+        ..dev()
+    };
+    let rp_hash = sha256(b"example.com");
+    let mut rec = [0u8; RP_REC_MAX];
+    rec[0] = 1;
+    rec[1..RP_PREFIX].copy_from_slice(&rp_hash);
+    rec[RP_PREFIX..RP_PREFIX + 11].copy_from_slice(b"example.com");
+    let legacy = rec[..RP_PREFIX + 11].to_vec();
+    let mut buf = [0u8; RP_REC_MAX];
+    let mut scratch = [0u8; RP_REC_MAX];
+
+    // The ORDER, on the one medium that can tell the two orderings apart.
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    crate::seed::encrypt_keydev_f1(&otp_dev, &mut fs, &SEED).unwrap();
+    fs.put(EF_RP, &legacy).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+    medium.clear_ops();
+    migrate_rp_seal(&otp_dev, &mut fs);
+    medium.assert_re_armed_before(EF_RP, |_| false, "migrate_rp_seal");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the box superseded a cleartext rpId, so the lap must run again"
+    );
+    let n = fs.read(EF_RP, &mut buf).unwrap();
+    assert_eq!(
+        unseal_rp_id(&SEED, &rp_hash, &buf[RP_PREFIX..n], &mut scratch),
+        Some(("example.com", true)),
+        "fixture: the record really is boxed now"
+    );
+
+    // The GATE. A medium refusing only `remove(EF_HARDENED)` reaches that same end
+    // state with no reset in it, so the box must not go ahead at all.
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    crate::seed::encrypt_keydev_f1(&otp_dev, &mut fs, &SEED).unwrap();
+    fs.put(EF_RP, &legacy).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    migrate_rp_seal(&otp_dev, &mut fs);
+    let n = fs.read(EF_RP, &mut buf).unwrap();
+    assert_eq!(
+        unseal_rp_id(&SEED, &rp_hash, &buf[RP_PREFIX..n], &mut scratch),
+        Some(("example.com", false)),
+        "the re-arm never landed, so the cleartext record must stay in force instead \
+         of being superseded under a marker nothing will clear"
+    );
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+
+    // The control, same medium, fault cleared: the box DOES happen, so the assertion
+    // above is about the gate and not about a pass that never fires.
+    medium.refuse(None);
+    migrate_rp_seal(&otp_dev, &mut fs);
+    let n = fs.read(EF_RP, &mut buf).unwrap();
+    assert_eq!(
+        unseal_rp_id(&SEED, &rp_hash, &buf[RP_PREFIX..n], &mut scratch),
+        Some(("example.com", true))
+    );
+    assert!(!medium.live(rsk_fs::EF_HARDENED));
 }

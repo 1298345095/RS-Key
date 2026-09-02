@@ -5955,6 +5955,72 @@ fn set_retries_re_arms_the_at_rest_lap() {
     );
 }
 
+
+#[test]
+fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_key_slot() {
+    // Standing before `run_at_rest_lap` in `firmware/src/main.rs` is not the same as
+    // standing before every lap. A boot whose `seal_put` here was refused latched the
+    // marker all the same, and the boot that finally re-seals the slot supersedes a
+    // chip-serial-rooted copy under a marker the lap gates on and nothing clears.
+    const OTP: [u8; 32] = [0x9C; 32];
+    let dev_pre = Device {
+        serial_hash: &HASH,
+        serial_id: &SERIAL,
+        otp_key: None,
+    };
+    let dev_otp = Device {
+        otp_key: Some(&OTP),
+        ..dev_pre
+    };
+    let fid = crate::files::key_fid(SLOT_AUTHENTICATION);
+    let plain = [0x5Au8; 33];
+    let mut rng = TestRng(21);
+    let mut out = [0u8; 64];
+
+    // The ORDER, on the one medium that can tell the two orderings apart.
+    let (mut fs, medium) = new_cut_fs();
+    seal::seal_put(&dev_pre, &mut fs, &mut rng, fid, &plain).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        fs.has_data(rsk_fs::EF_HARDENED),
+        "fixture: an earlier boot latched the marker"
+    );
+    medium.clear_ops();
+    migrate_kbase(&dev_otp, &mut fs, &mut rng);
+    medium.assert_re_armed_before(fid.get(), |_| false, "PIV migrate_kbase");
+    assert!(
+        !fs.has_data(rsk_fs::EF_HARDENED),
+        "the re-seal superseded a chip-serial-rooted copy, so the lap must run again"
+    );
+    assert_eq!(seal::seal_read(&dev_otp, &mut fs, fid, &mut out), Ok(33));
+
+    // The GATE. A medium refusing only `remove(EF_HARDENED)` reaches that same end
+    // state with no reset in it, so the re-seal must not go ahead at all.
+    let (stuck, medium) = rsk_fs::storage::faults::RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.scan();
+    seal::seal_put(&dev_pre, &mut fs, &mut rng, fid, &plain).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    migrate_kbase(&dev_otp, &mut fs, &mut rng);
+    assert_eq!(
+        seal::seal_read(&dev_pre, &mut fs, fid, &mut out),
+        Ok(33),
+        "the re-arm never landed, so the pre-OTP copy must stay in force instead of \
+         being superseded under a marker nothing will clear"
+    );
+    assert!(
+        medium.live(rsk_fs::EF_HARDENED),
+        "fixture: the refusal really left the marker on the medium"
+    );
+
+    // The control, same medium, fault cleared: the migration DOES happen, so the
+    // assertion above is about the gate and not about a pass that never fires.
+    medium.refuse(None);
+    migrate_kbase(&dev_otp, &mut fs, &mut rng);
+    assert_eq!(seal::seal_read(&dev_otp, &mut fs, fid, &mut out), Ok(33));
+    assert!(!medium.live(rsk_fs::EF_HARDENED));
+}
 /// Targeted property fuzz for the Pivman ADMIN-DATA (`5FFF00`) parse and the
 /// PIN-protected PRINTED (`5FC109`) assembly. A management-key-authenticated
 /// host can PUT *arbitrary* bytes into the ADMIN-DATA object; `mgm_is_protected`
