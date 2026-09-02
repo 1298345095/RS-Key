@@ -107,14 +107,22 @@ CODE = {
 #: every cell that used it: all of them compared an empty feature set with an
 #: empty one, while `FLASH_SIZE`, `KVMAIN`, `LED_KIND` and `led_order` — real
 #: `rustc-env`/`rustc-cfg` inputs, and a regenerated `memory.x` — moved unread.
+#:
+#: WHOLE-workspace, and the narrower reading is a programme decision rather than
+#: a knob here: run over the OWNER crates' closure alone, the same rule clears
+#: 737 of the 958 `gap` cells against 194 today (measured 2026-09-02). The
+#: argument for leaving that on the table is in the ledger's header, beside the
+#: number.
 SAME_FEATURES = "same-cargo-features"
 #: The property's owner crates are not compiled into this column at all. Checked
 #: against the same feature resolution, so `rsk-ui` being absent is a fact and
 #: not a recollection.
 CRATE_ABSENT = "crate-absent"
 #: The cell names `feature`; the column enables it, and production Rust really
-#: does gate on it. What the gate is (a `no-touch` presence auto-confirm, say)
-#: is the `why`'s job; that the switch exists and is thrown here is this one's.
+#: does gate on it, at a site inside the property's own owners — or, where the
+#: site is `firmware`'s glue, behind a `hook` the owners name. What the gate is
+#: (a `no-touch` presence auto-confirm, say) is the `why`'s job; that the switch
+#: exists, is thrown here, and is THIS property's is this one's.
 GATE_COMPILED_OUT = "gate-compiled-out"
 #: This column IS the default build: no cargo features, no knobs.
 DEFAULT_BUILD = "default-build"
@@ -153,7 +161,7 @@ ALLOWED = {
 CELL_FIELDS = ("properties", "columns", "disposition", "basis", "why")
 BASIS_FIELDS = {
     SAME_FEATURES: ("same_as", "knob_delta"),
-    GATE_COMPILED_OUT: ("feature", "cfg"),
+    GATE_COMPILED_OUT: ("feature", "cfg", "hook"),
     CHECK_SH_ROWS: ("evidence",),
     CRATE_ABSENT: (),
     DEFAULT_BUILD: (),
@@ -445,6 +453,22 @@ def manifest_features(root):
     return tuple(tomllib.loads((root / MANIFEST).read_text())["features"])
 
 
+def cargo_part(command):
+    """The cargo invocation inside a row's command, or "" if there is none.
+
+    `-p` and `--features` are cargo's own flags and mean nothing to anything
+    else, so they are read from here on and nowhere else. `python tests/emu.py
+    tests/29_reset_power_cut.py -p rsk-fido --features fips-profile` hands
+    `emu.py` two arguments it never reads, and both were credited: the row
+    "selected" the property's owner crate and "matched" the column's feature set,
+    and four `gap` cells took `covered` on it at EXIT=0. Derived from the command
+    rather than from a list of the programs that take the flags, which would be a
+    second roster beside [`COMPILE_ONLY`] with nothing holding the two together.
+    """
+    found = re.search(r"(?<![\w-])cargo(?![\w-])", command)
+    return command[found.start() :] if found else ""
+
+
 def check_sh_rows(root):
     """label -> (cargo features, env knobs, command) for every `check.sh` row.
 
@@ -460,7 +484,9 @@ def check_sh_rows(root):
             continue
         label, command = found.groups()
         features = frozenset(
-            feature for group in FEATURE_FLAG.findall(command) for feature in group.split(",")
+            feature
+            for group in FEATURE_FLAG.findall(cargo_part(command))
+            for feature in group.split(",")
         )
         # The knobs sit in the `env …` prefix, ahead of the cargo they wrap.
         env = {
@@ -1055,13 +1081,13 @@ def check_chains(placed):
     for (pid, column), entry in placed.items():
         if entry.get("disposition") != "equivalent":
             continue
-        # `knob_delta` is a function of (column, same_as), so two `equivalent`
-        # cells on one pair derive the SAME delta and differ only in their row
-        # list and their prose — one cell written twice, with two `why` bodies
-        # free to contradict. Measured: appending a second `firmware-2mb` =
-        # `firmware` cell for three more rows was EXIT=0 beside a first one whose
-        # own `why` says "every other row on this column stays `gap`".
-        split.setdefault((column, entry.get("same_as")), set()).add(id(entry))
+        # Keyed on the COLUMN, and the pair `(column, same_as)` it used to be
+        # keyed on was an escape: closure equality is an equivalence relation, so
+        # a second cell had only to name a DIFFERENT identical-closure column to
+        # make a new key. Measured: a second `firmware-16mb` cell saying
+        # `same_as = "waveshare-one"` — which chains to the same `firmware` — was
+        # EXIT=0 for 5 more rows, its `why` free to contradict the first's.
+        split.setdefault(column, set()).add(id(entry))
         seen, at = [column], entry.get("same_as")
         while True:
             if at in seen:
@@ -1088,14 +1114,15 @@ def check_chains(placed):
                     " disposition, so say THAT one here rather than pointing at it"
                 )
             break
-    for (column, at), entries in sorted(split.items(), key=lambda item: str(item[0])):
+    for column, entries in sorted(split.items(), key=str):
         if len(entries) > 1:
             problems.append(
-                f"{column}: {len(entries)} `equivalent` cells say it compiles like"
-                f" `{at}` — the knob delta is derived from that pair, so these are one"
-                " cell split in two and the halves are free to argue opposite things."
-                " Widen the first cell's `properties` instead, where the `why` that"
-                " refuses the other rows is standing"
+                f"{column}: {len(entries)} `equivalent` cells claim this one column"
+                " — sameness of the derived closure is an equivalence relation, so"
+                " they are one cell split in two whatever each names in `same_as`,"
+                " and the halves are free to argue opposite things. Widen the first"
+                " cell's `properties` instead, where the `why` that refuses the"
+                " other rows is standing"
             )
     return problems
 
@@ -1179,9 +1206,37 @@ def check_gate(root, where, pid, column, entry, own):
     `firmware-fips` with `feature = "fips-profile"` passed on nothing more than
     some production Rust somewhere gating on that feature. So the cell names the
     `cfg` site(s), each one has to really gate on the feature, and each has to
-    sit in the property's blast radius: a crate whose Rust carries the property's
-    tag, or `firmware`, which is the glue wiring every applet and where a
-    presence switch like `no-touch` actually lives.
+    sit in the property's blast radius — which is the property's OWN owners, and
+    was `carries | {"firmware"}`.
+
+    That union is the hole this function shipped with, and it is the same hole
+    one door over: `firmware` owns exactly one of the forty rows, so admitting it
+    for all forty admits every `firmware/` switch as every property's gate. The
+    reassembler is the measurement — `crates/rsk-usb` carries no `cfg` for any of
+    the fourteen features in play and is compiled and live in all thirty-one
+    columns, and `SEC-TRANS-001/002/003` × the nine columns whose feature has a
+    `firmware/` site took `out-of-scope` on `firmware/src/presence.rs` at EXIT=0.
+    27 cells, on a switch that is the touch button.
+
+    So `firmware` is not a member of the radius, it is a ROUTE INTO it, and the
+    cell has to say which one: [`hook`] names the trait the firmware site
+    implements on the applets' behalf. Two things are then derived, and both
+    refuse rather than excuse. The feature must gate code INSIDE that
+    `impl <hook> for …` block, not merely somewhere in the file — `no-touch`
+    gates inside `impl rsk_sdk::UserPresence for ButtonPresence`, while
+    `strict-config`'s one site in `worker.rs` sits in an inherent `impl Worker`
+    and reaches neither `MsgHandler` nor `ApduHandler`, which are the two traits
+    `rsk-usb` would otherwise have named. And every one of the property's owner
+    crates has to name the hook: `rsk-fido`, `rsk-device`, `rsk-oath` and
+    `rsk-rescue` all name `UserPresence` and `rsk-usb` does not.
+
+    What it still cannot say is that the hook is what the STATEMENT is about;
+    that link is prose, and four crate-level rules for deriving it (the site's
+    crate mentions, its `use` graph, a shared threat-model anchor, a shared
+    identifier) were each measured against this pair and each admitted the false
+    cell — `presence.rs` and `rsk-usb` share 177 identifiers once comments count.
+    The trait is the narrowest thing the tree writes down, so it is the one asked
+    for.
     """
     feature = entry.get("feature")
     if feature not in column.features:
@@ -1202,7 +1257,7 @@ def check_gate(root, where, pid, column, entry, own):
             f" `{feature}` in {sorted(gating)}, and which of those is {pid}'s gate is"
             " the whole claim"
         ]
-    problems, carries = [], own.get(pid, frozenset())
+    problems, carries, glue = [], own.get(pid, frozenset()), []
     for site in named:
         if site not in gating:
             problems.append(
@@ -1211,12 +1266,99 @@ def check_gate(root, where, pid, column, entry, own):
             )
             continue
         crate = site.split("/")[1] if site.startswith("crates/") else "firmware"
-        if crate not in carries | {"firmware"}:
+        if crate in carries:
+            continue
+        if crate != "firmware":
             problems.append(
                 f"{where}: `{site}` gates on `{feature}` in `{crate}`, and {pid} is"
                 f" carried by {sorted(carries)} — that switch is another property's gate"
             )
+            continue
+        glue.append(site)
+    hook = entry.get("hook")
+    if glue and not hook:
+        return problems + [
+            f"{where}: {sorted(glue)} gate on `{feature}` in `firmware`, which does"
+            f" not carry {pid} ({sorted(carries)} does) — name the `hook` the site"
+            " implements for it, or the glue crate is every property's gate"
+        ]
+    if hook:
+        problems.extend(check_hook(root, where, pid, feature, named, hook, carries))
     return problems
+
+
+def check_hook(root, where, pid, feature, named, hook, carries):
+    """The trait a `firmware/` gate stands in for, held to both of its ends.
+
+    Read whenever a cell declares one, not only where the glue route needs it: a
+    `hook` that were checked only when required would be a field nothing reads on
+    every other cell, which is the shape `[[cell]]` has refused since it shipped.
+    """
+    impls = [site for site in named if impl_gates(root, site, hook, feature)]
+    problems = []
+    if not impls:
+        problems.append(
+            f"{where}: no `cfg` named here implements `{hook}` with `{feature}`"
+            " gating code inside that impl — the hook is how a glue site becomes"
+            f" {pid}'s gate, so a switch elsewhere in the file is not it"
+        )
+    leaf = names_artifact(hook.split("::")[-1])
+    if not any(leaf.search(text) for text in crate_rust(root, carries)):
+        problems.append(
+            f"{where}: {sorted(carries)} — the crate(s) whose production Rust"
+            f" carries {pid} — never name `{hook}`, so this hook wires some other"
+            " property's code and the gate behind it is that property's"
+        )
+    return problems
+
+
+#: An `impl <trait> for <type>` header, with the trait path AS WRITTEN. Generics
+#: on either side are skipped: `impl<'a> Foo<'a> for Bar<'a>` is the same wiring
+#: as `impl Foo for Bar`, and a cell made to spell the lifetimes out would be
+#: naming the file's formatting rather than the trait.
+IMPL_FOR = re.compile(
+    r"^[ \t]*impl(?:\s*<[^>]*>)?\s+((?:[A-Za-z_]\w*::)*[A-Z]\w*)(?:\s*<[^>]*>)?\s+for\s[^{;]*\{",
+    re.M,
+)
+
+
+@functools.cache
+def impl_gates(root, site, hook, feature):
+    """Whether `feature` gates code inside an `impl <hook> for …` at `site`.
+
+    Brace-matched from the header rather than read to the next `impl`, because an
+    inherent `impl Worker` sitting after the trait one would otherwise donate its
+    switches to the trait above it — which is exactly the pair the reassembler
+    measurement turns on. An unbalanced file yields no block and the caller then
+    refuses, which is the direction a parse this crude has to fail in.
+    """
+    text = (root / site).read_text(errors="ignore")
+    pattern = re.compile(rf'feature\s*=\s*"{re.escape(feature)}"')
+    for found in IMPL_FOR.finditer(text):
+        if found.group(1) != hook:
+            continue
+        at, depth = found.end() - 1, 0
+        for index in range(at, len(text)):
+            if text[index] == "{":
+                depth += 1
+            elif text[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    if pattern.search(text[at : index + 1]):
+                        return True
+                    break
+    return False
+
+
+@functools.cache
+def crate_rust(root, crates):
+    """The production Rust of `crates`, as text. Cached: one read per gate cell."""
+    out = []
+    for path in production_rust(root):
+        rel = path.relative_to(root).parts
+        if (rel[1] if rel[0] == "crates" else "firmware") in crates:
+            out.append(path.read_text(errors="ignore"))
+    return tuple(out)
 
 
 def check_evidence(root, where, pid, column, entry, own, names):
@@ -1289,7 +1431,16 @@ def check_evidence(root, where, pid, column, entry, own, names):
                 f" this column and executes none of it, so it cannot say {pid} holds"
                 " here. `covered` is the word for a measurement"
             )
-        runs_owner |= bool(own.get(pid, frozenset()) & gate_lines.packages(command))
+        cargo = cargo_part(command)
+        for word in name_filters(cargo):
+            if not selected_tests(root, gate_lines.packages(cargo), word):
+                inert.append(
+                    f"{where}: `{label}` filters `cargo test` on `{word}`, and no"
+                    f" `#[test]` in {sorted(gate_lines.packages(cargo)) or 'the workspace'}"
+                    " carries that name — the row runs 0 tests and exits 0, which is"
+                    " a green row that measured nothing"
+                )
+        runs_owner |= bool(own.get(pid, frozenset()) & gate_lines.packages(cargo))
         produces |= any(names_artifact(artifact).search(command) for artifact in artifacts)
     if not runs_owner and not problems:
         problems.append(
@@ -1305,6 +1456,74 @@ def check_evidence(root, where, pid, column, entry, own, names):
             " configuration, and a crate's own unit tests are in none of its classes"
         )
     return problems + inert
+
+
+#: A `#[test]` function — what a `cargo test` name filter can actually select.
+#: A Kani harness is `#[cfg(kani)]` and is compiled by no `cargo test`, and the
+#: `_assurance.rs` mirror beside it is a plain `pub fn` of the same name, so a
+#: bare `fn` scan would have found the name and excused the row. The attribute is
+#: the whole rule.
+TEST_FN = re.compile(r"#\[(?:\w+::)*test\]\s*(?:#\[[^\]]*\]\s*)*(?:async\s+)?fn\s+(\w+)")
+
+
+def name_filters(cargo):
+    """The positional name filters a `cargo test` command passes the harness.
+
+    `cargo test … --target "$HOST" reset_keeps_the_pin_gate` prints `running 0
+    tests … 664 filtered out` and exits 0, and the gate read that as evidence —
+    this repo's own recorded trap (`cargo test -- a b --exact` selects zero tests
+    at rc 0), arriving inside the matrix. Which words are operands is derived
+    from the command: a `-` token takes the next word unless that word is itself
+    a `-` token, so `--workspace --exclude firmware` reads correctly and so does
+    `--target "$HOST" bench`. The shape it cannot see is a boolean flag written
+    immediately before the filter (`cargo test --release bench`), which reads the
+    filter as that flag's operand and lets the row through; none of this tree's
+    14 `cargo test` rows is written that way.
+    """
+    words = cargo.split()
+    if words[:2] != ["cargo", "test"]:
+        return []
+    out, at = [], 2
+    while at < len(words):
+        word = words[at]
+        if word.startswith("-"):
+            takes = "=" not in word and at + 1 < len(words) and not words[at + 1].startswith("-")
+            at += 2 if takes else 1
+            continue
+        out.append(word)
+        at += 1
+    return out
+
+
+@functools.cache
+def member_dirs(root):
+    """package name -> its directory, for every [workspace] member."""
+    members = tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["members"]
+    out = {}
+    for member in members:
+        doc = tomllib.loads((root / member / "Cargo.toml").read_text())
+        out[doc["package"]["name"]] = member
+    return out
+
+
+@functools.cache
+def selected_tests(root, crates, word):
+    """Whether any `#[test]` in `crates` carries `word` — cargo's substring match.
+
+    An empty `crates` is `--workspace` and every member is searched, which is the
+    permissive reading of the one input this cannot resolve; the refusal it
+    raises is about a name nothing in the tree answers to, and widening the
+    haystack only makes that refusal harder to earn.
+    """
+    dirs = member_dirs(root)
+    for crate in sorted(crates) or sorted(dirs):
+        where = root / dirs.get(crate, crate)
+        if not where.is_dir():
+            continue
+        for path in sorted(where.rglob("*.rs")):
+            if any(word in name for name in TEST_FN.findall(path.read_text(errors="ignore"))):
+                return True
+    return False
 
 
 def unpinned_knobs(column, env):
@@ -1364,9 +1583,14 @@ def knob_delta(column, other):
     spellings of one knob (a flake argument `flashSize`, a board key
     `flash.size_mb`) — that would be a mapping table going stale beside
     `build.rs`, and both spellings reaching the reader is the honest answer.
+
+    A knob this column does not set at all reads `(unset)` and not `key=`, which
+    is the empty string a knob can also be SET to. No pair in the ledger today
+    puts a knob on the far side only, so nothing here moves — the spelling is for
+    the first cell that does.
     """
     return sorted(
-        f"{key}={column.knobs.get(key, '')}"
+        f"{key}={column.knobs[key]}" if key in column.knobs else f"{key}=(unset)"
         for key in set(column.knobs) | set(other.knobs)
         if column.knobs.get(key) != other.knobs.get(key)
     )
@@ -1553,7 +1777,9 @@ def render(root):
             extra = f" (`same_as = {entry['same_as']}`; knob delta: {knobs})"
         elif entry.get("feature"):
             sites = ", ".join(f"`{s}`" for s in entry.get("cfg", [])) or "none"
-            extra = f" (`feature = {entry['feature']}`; gate: {sites})"
+            hook = entry.get("hook")
+            extra = f" (`feature = {entry['feature']}`; gate: {sites}"
+            extra += f"; hook: `{hook}`)" if hook else ")"
         out += [
             f"**{entry['disposition']}** — basis `{entry['basis']}`{extra}",
             "",

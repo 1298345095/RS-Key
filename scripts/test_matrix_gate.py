@@ -304,6 +304,8 @@ def tree(tmp_path, monkeypatch):
     monkeypatch.setattr(matrix_gate, "FLOOR_BOARDS", 1)
     monkeypatch.setattr(matrix_gate, "FLOOR_ROWS", 2)
     matrix_gate.cfg_sites.cache_clear()
+    matrix_gate.impl_gates.cache_clear()
+    matrix_gate.crate_rust.cache_clear()
     return Tree(tmp_path)
 
 
@@ -718,6 +720,94 @@ def test_a_compiled_out_gate_in_a_crate_the_property_is_not_about_is_rejected(tr
     said = red(tree, capsys)
     assert "gates on `no-touch` in `rsk-core`" in said
     assert "another property's gate" in said
+
+
+#: The glue route, in the shape the real tree has it: the switch is in
+#: `firmware`, and the property it is claimed for lives in a crate. `firmware`
+#: carries 1 of the real matrix's 40 rows, so the `carries | {"firmware"}` that
+#: used to be the radius admitted every `firmware/` switch as every property's
+#: gate — measured, `SEC-TRANS-001/002/003` took `out-of-scope` on the touch
+#: button across nine columns, 27 cells, at EXIT=0.
+GLUE_PRESENCE = """\
+/// Refines `Fixture!Gated` — SEC-A-001.
+pub fn gated() {}
+
+impl fixture_sdk::UserPresence for Button {
+    #[cfg(not(feature = "no-touch"))]
+    fn press(&self) -> bool {
+        sample()
+    }
+}
+"""
+#: The owner crate of `SEC-A-002`, and whether it names the hook is the whole
+#: separation: the four properties the real `no-touch` cell is about all name
+#: `UserPresence` and `rsk-usb` — which owns the reassembler — does not.
+GLUE_CORE = """\
+/// Refines `Fixture!Held` — SEC-A-002.
+pub fn held(_p: &dyn UserPresence) {}
+"""
+
+
+def glue(tree, core=GLUE_CORE, hook='hook = "fixture_sdk::UserPresence"\n'):
+    """Move `SEC-A-002` into `rsk-core` and claim the firmware switch for it."""
+    tree.write("firmware/src/presence.rs", GLUE_PRESENCE)
+    tree.write("crates/rsk-core/src/lib.rs", core)
+    tree.edit(
+        "assurance/configurations.toml",
+        'properties = ["SEC-A-001"]\ncolumns = ["firmware-no-touch"]',
+        'properties = ["SEC-A-002"]\ncolumns = ["firmware-no-touch"]',
+    )
+    tree.edit(
+        "assurance/configurations.toml",
+        'feature = "no-touch"',
+        hook + 'feature = "no-touch"',
+    )
+
+
+def test_a_firmware_switch_claimed_for_a_crates_property_owes_a_hook(tree, capsys):
+    """The radius is the property's OWNERS. `firmware` is a route into it and not
+    a member, so a glue site that names no hook is the blanket back again."""
+    glue(tree, hook="")
+    said = red(tree, capsys)
+    assert "gate on `no-touch` in `firmware`, which does not carry SEC-A-002" in said
+    assert "the glue crate is every property's gate" in said
+
+
+def test_a_hook_the_owner_crate_never_names_is_rejected(tree, capsys):
+    """The reassembler measurement, in miniature: the switch is real, the impl is
+    real, and the property's own crate has never heard of the trait."""
+    glue(tree, core="/// Refines `Fixture!Held` — SEC-A-002.\npub fn held() {}\n")
+    said = red(tree, capsys)
+    assert "never name `fixture_sdk::UserPresence`" in said
+    assert "the gate behind it is that property's" in said
+
+
+def test_a_hook_the_feature_does_not_gate_inside_is_rejected(tree, capsys):
+    """A switch elsewhere in the file is not the hook's switch. This is the arm
+    the owner half cannot raise: `rsk-usb` DOES name `MsgHandler`, and
+    `strict-config`'s one site in `worker.rs` sits in an inherent `impl Worker`."""
+    glue(tree)
+    tree.edit(
+        "firmware/src/presence.rs",
+        '    #[cfg(not(feature = "no-touch"))]\n',
+        "",
+    )
+    tree.edit(
+        "firmware/src/presence.rs",
+        "pub fn gated() {}",
+        '#[cfg(not(feature = "no-touch"))]\npub fn gated() {}',
+    )
+    said = red(tree, capsys)
+    assert "no `cfg` named here implements `fixture_sdk::UserPresence`" in said
+    assert "a switch elsewhere in the file is not it" in said
+
+
+def test_a_hook_the_owner_names_and_the_feature_gates_inside_is_accepted(tree):
+    """Both directions: the rule has to let the real `no-touch` cell through, or
+    it is a rule that refuses the 16 cells it was written to keep."""
+    glue(tree)
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
 
 
 def test_covered_on_a_configured_column_owes_the_rows_that_produced_it(tree, capsys):
@@ -1370,14 +1460,18 @@ def test_a_second_equivalent_cell_on_one_column_is_rejected(tree, capsys):
         'why = "the same pair again, for the row the cell above stopped naming."',
     )
     said = red(tree, capsys)
-    assert "firmware-pinned: 2 `equivalent` cells say it compiles like `firmware`" in said
+    assert "firmware-pinned: 2 `equivalent` cells claim this one column" in said
     assert "one cell split in two" in said
 
 
-def test_one_equivalent_cell_per_pair_is_accepted(tree):
-    """The green direction: two `equivalent` cells on one COLUMN are fine when
-    they name different `same_as` columns, because the delta is then a different
-    derivation and the two arguments are about different things."""
+def test_a_second_equivalent_cell_escaping_by_another_same_as_is_rejected(tree, capsys):
+    """The escape the `(column, same_as)` key left open, and the reason the key
+    is now the column alone: sameness of the derived closure is an equivalence
+    relation, so a second cell had only to name a DIFFERENT identical-closure
+    column to mint a new key. Measured on the real ledger: a second
+    `firmware-16mb` cell saying `same_as = "waveshare-one"` — which chains to the
+    same `firmware` — added 5 cells at EXIT=0, its `why` free to contradict the
+    first cell's."""
     tree.edit(
         "assurance/configurations.toml",
         'properties = ["SEC-A-001", "SEC-A-002"]\ncolumns = ["firmware-pinned-too"]\n'
@@ -1397,6 +1491,20 @@ def test_one_equivalent_cell_per_pair_is_accepted(tree):
         'disposition = "equivalent"\n'
         'basis = "same-cargo-features"\n'
         'why = "measured against the default build rather than against its sibling."',
+    )
+    said = red(tree, capsys)
+    assert "firmware-pinned-too: 2 `equivalent` cells claim this one column" in said
+    assert "whatever each names in `same_as`" in said
+
+
+def test_one_equivalent_cell_retargeted_at_the_default_build_is_accepted(tree):
+    """The green direction, and it keeps the rule about the COLUMN rather than
+    about the target: the same single cell, pointed at the default build instead
+    of at its sibling, still passes."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'columns = ["firmware-pinned-too"]\nsame_as = "firmware-pinned"',
+        'columns = ["firmware-pinned-too"]\nsame_as = "firmware"',
     )
     matrix_gate.run(tree.root, write=True)
     assert tree.run() == 0

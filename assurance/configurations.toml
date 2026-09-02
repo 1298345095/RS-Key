@@ -31,7 +31,12 @@
 #                 --features fips-profile` cannot carry the word — and the gate
 #                 ran without that half long enough for 80 `gap` cells to sit
 #                 one edit away from `covered` on eight rows of exactly that
-#                 shape. There is no prose spelling: `covered` asserts more than
+#                 shape. Two things a named row cannot be: one whose `-p` and
+#                 `--features` are inert because its program is not cargo (a
+#                 `python tests/emu.py … -p rsk-fido --features fips-profile` row
+#                 carried four cells to `covered`), and a `cargo test` filtered
+#                 on a name no `#[test]` answers to — `running 0 tests`, rc 0.
+#                 There is no prose spelling: `covered` asserts more than
 #                 `equivalent` does, and it used to assert it on nothing
 #   equivalent    it compiles the property's code as another column does;
 #                 `same_as` names that column and `basis` must be
@@ -39,12 +44,27 @@
 #                 derived per-crate feature closure. There is deliberately no
 #                 second way to spell an equivalence: "the names look similar"
 #                 is exactly how a false one gets written. One column carries at
-#                 most ONE `equivalent` cell per `same_as`, because `knob_delta`
-#                 is derived from that pair: a second is one cell split in two,
-#                 and the halves are free to argue opposite things
+#                 most ONE `equivalent` cell — the KEY IS THE COLUMN, and it was
+#                 the pair (column, `same_as`): closure sameness is an
+#                 equivalence relation, so a second cell had only to name a
+#                 different identical-closure column to mint a new key, and a
+#                 second `firmware-16mb` cell pointing at `waveshare-one` (which
+#                 chains to the same `firmware`) added 5 cells at EXIT=0. A
+#                 second cell is one cell split in two whatever it names, and the
+#                 halves are free to argue opposite things
 #   conditional   claimed only under a stated condition
 #   out-of-scope  the claim is not made here — the code is absent, or the gate
-#                 the property is about is compiled out
+#                 the property is about is compiled out. The compiled-out half
+#                 names `feature` and the `cfg` site(s), and the site has to sit
+#                 in the property's OWN owners. Where it sits in `firmware`
+#                 instead — the glue, which carries 1 of the 40 rows — the cell
+#                 also names the `hook` that site implements for them, and the
+#                 gate derives both ends: the feature must gate code INSIDE that
+#                 `impl <hook> for …`, and every owner crate must name the hook.
+#                 `firmware` was in every property's radius unconditionally, and
+#                 that admitted the touch button as the CTAPHID reassembler's
+#                 gate: SEC-TRANS-001/002/003 across the nine columns whose
+#                 feature has a `firmware/` site, 27 cells, EXIT=0
 #   gap           undecided. A cell nobody names is one of these, and the
 #                 column then owes a [[question]] below. A matrix full of honest
 #                 gaps is the deliverable; invented equivalences are the failure
@@ -53,6 +73,26 @@
 # column or a new property is NOT swept into an old judgement — it arrives as
 # `gap` cells and a docs/assurance-matrix.md that no longer matches its
 # generator, which is the check.sh row going red.
+#
+# The rule that would retire most of this file, MEASURED and not taken: an
+# `equivalent` derived over the OWNER crates' closure instead of the whole
+# workspace's — a cell clears wherever the crates carrying the property's tag
+# compile as they do on the default build, whatever else moved. Measured here on
+# 2026-09-02, against this ledger: it clears 737 of the 958 `gap` cells, and it
+# reaches every one of the 28 columns that carry a gap; the shipped rule, run
+# over the whole workspace, clears 194 of the same 958. 77% of the matrix on one
+# derivation, which would be the largest weakening this row could take, so it is
+# a programme decision and not a gate edit.
+# Why not taken: roadmap §8A п.3 lets a CONCRETE equivalence proof stand in
+# for a repeated one, and a closure comparison is not one. It cannot see a
+# property whose own evidence is itself feature-conditional, and it cannot see a
+# violation that arrives from composition OUTSIDE the owner crate — the glue that
+# wires the applets is `firmware`, whose closure the rule discards by
+# construction, and `firmware` is exactly where no-touch's presence gate lives.
+# What would settle it is per row and not per rule: for a given property, an
+# argument that its statement is closed under everything the column changes
+# outside its owners — which SEC-STORE-* cannot make on a column that moves the
+# flash geometry, and SEC-TRANS-001..003 might make on one that does not.
 
 # ---- Tranches ---------------------------------------------------------------
 #
@@ -506,6 +546,7 @@ columns = [
 ]
 feature = "no-touch"
 cfg = ["firmware/src/presence.rs"]
+hook = "rsk_sdk::UserPresence"
 disposition = "out-of-scope"
 basis = "gate-compiled-out"
 why = """

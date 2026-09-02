@@ -103,6 +103,80 @@ def test_both_reasons_reach_the_reader(tree, capsys):
     assert "no row named here selects ['rsk-screen']" in said
 
 
+# --- flags the row's program never reads -------------------------------------
+
+
+def test_a_device_script_carrying_cargo_flags_is_not_read_as_cargo(tree, capsys):
+    """`-p` and `--features` are cargo's flags and mean nothing to anything else.
+    Measured on the real tree: `python tests/emu.py tests/29_reset_power_cut.py
+    -p rsk-fido --features fips-profile` had BOTH inert, and the gate credited
+    both — four `gap` cells took `covered` on `firmware-fips` at EXIT=0."""
+    swap_evidence(
+        tree,
+        'run "emu (screen)" python tests/emu.py tests/01_screen.py'
+        " -p rsk-screen --features screen\n",
+        "emu (screen)",
+    )
+    said = red(tree, capsys)
+    assert "`emu (screen)` builds [] and this column is ['screen']" in said
+
+
+def test_a_device_scripts_package_flag_does_not_select_the_owner(tree, capsys):
+    """The other half of the same rule, on the one column shape where the feature
+    half is vacuous: a board preset enables nothing, so an inert `-p` was the
+    whole of what made the row look like evidence about the property."""
+    tree.edit(
+        "assurance/configurations.toml",
+        'properties = ["SEC-B-001"]\ncolumns = ["firmware-screen"]',
+        'properties = ["SEC-A-001"]\ncolumns = ["board-a"]',
+    )
+    swap_evidence(
+        tree,
+        'run "emu (board-a)" env BOARD=board-a python tests/emu.py tests/01_board.py'
+        " -p firmware\n",
+        "emu (board-a)",
+    )
+    said = red(tree, capsys)
+    assert "no row named here selects ['firmware']" in said
+
+
+# --- a name filter that selects nothing ---------------------------------------
+
+
+def filtered_row(name):
+    """The fixture's `cargo test` row, with a trailing name filter."""
+    return (
+        f'run_tests "test (screen filter)" cargo test -p rsk-screen -p firmware'
+        f" --features screen {name}\n"
+    )
+
+
+def test_a_cargo_test_row_filtered_on_no_test_at_all_is_refused(tree, capsys):
+    """A filter that selects zero tests prints `running 0 tests … filtered out`
+    and exits 0 — this repo's own recorded trap, arriving inside the matrix. The
+    real one filtered on `reset_keeps_the_pin_gate`, which is a `#[cfg(kani)]`
+    harness no `cargo test` ever compiles."""
+    swap_evidence(tree, filtered_row("no_such_test_name"), "test (screen filter)")
+    said = red(tree, capsys)
+    assert "filters `cargo test` on `no_such_test_name`" in said
+    assert "the row runs 0 tests and exits 0" in said
+
+
+def test_a_cargo_test_row_filtered_on_a_real_test_still_carries_covered(tree):
+    """The green direction, and it is what keeps the rule off every filtered row:
+    the same command with a filter a `#[test]` answers to passes, so what is
+    refused is the empty selection and not the filtering."""
+    tree.write(
+        "crates/rsk-screen/src/lib_tests.rs",
+        "#[test]\nfn shown_holds_on_every_build_smoke() {}\n",
+    )
+    swap_evidence(
+        tree, filtered_row("shown_holds_on_every_build"), "test (screen filter)"
+    )
+    matrix_gate.run(tree.root, write=True)
+    assert tree.run() == 0
+
+
 # --- and on the tree it ships in ---------------------------------------------
 
 
