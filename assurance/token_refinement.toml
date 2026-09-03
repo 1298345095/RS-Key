@@ -159,11 +159,12 @@ function = "sweep"
 op = "ClearPin"
 generic = true
 
-# authenticatorReset itself, which chooses the predicates `sweep` deletes by. The
-# roster owned the helper and not the command for as long as it existed.
+# `authenticatorReset`'s flash half, which chooses the predicates `sweep` deletes
+# by. The roster owned the helper and not its chooser for as long as it existed;
+# the chooser was `reset` until `f06de17` extracted `wipe` out from under it.
 [[persistent_writer]]
 file = "crates/rsk-fido/src/reset.rs"
-function = "reset"
+function = "wipe"
 op = "ClearPin"
 
 [[outcome_producer]]

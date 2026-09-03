@@ -3,14 +3,14 @@
 # Copyright (C) 2026 RS-Key contributors
 """Every registered δC/Step owner, bound to the image that ships.
 
-`assurance/token_refinement.toml` owns 48 rows over 44 source sites, and until
+`assurance/token_refinement.toml` owns 48 rows over 45 source sites, and until
 this row nothing asked whether any of them is in the firmware. A ledger of
 functions is a claim about the SOURCE; the property is about the DEVICE, and the
 step between the two — this function, that symbol, this ELF — was written
 nowhere. Stage 11A work 4 is that step, and `BINARY-CHECKED` is the VALUE of a
 `method` field here rather than a word in a sentence.
 
-**The measurement that decides the design: 21 of the 44 owners have NO SYMBOL.**
+**The measurement that decides the design: 22 of the 45 owners have NO SYMBOL.**
 Counted on the default image: 15 owners are standalone functions
 `arm-none-eabi-nm` defines, 21 exist only as a DWARF abstract instance folded
 into their callers (`seed.rs::clear_ppuat` at 4 call sites,
@@ -46,7 +46,7 @@ specification references in this image, and reading the instances alone finds
 
 Two readers are imported rather than rewritten: `elf_gate` for which ELF, which
 tools, and the `DW_AT_producer` parser — a STRIPPED image would otherwise read
-as 44 absent owners and this gate would be decorative, so no producers is
+as 45 absent owners and this gate would be decorative, so no producers is
 refused before anything else is judged — and `ct_gate.demangle` for the legacy
 `_ZN…` scheme 1332 of this image's symbols use, so a finding names a function
 and not a mangling. The roster and its production/test split come from
@@ -890,7 +890,7 @@ def audit(root, registry_text=None, raw=None, sites=None, gated=None, floors=FLO
     if counts["inlined"] < floors["inlined"]:
         findings.append(
             f"{artifact}: {counts['inlined']} owner(s) bound by an inlined call"
-            f" site, floor {floors['inlined']} — that class is 21 of 44 on this"
+            f" site, floor {floors['inlined']} — that class is 22 of 45 on this"
             " image, and losing it silently turns the roster into exemptions"
         )
 
