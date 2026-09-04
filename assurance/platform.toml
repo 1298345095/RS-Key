@@ -82,9 +82,17 @@ supports = ["SEC-BOOT-002"]
 id = "PLAT-ROM-002"
 class = "boot-rom"
 statement = "The vendor applet's reboot really reaches the bootloader: `tests/51_secure_reboot.py` has no runner in this tree, because the emulator has no bootloader to fall into."
-discharge = "A run of `tests/51_secure_reboot.py --bootsel` against a no-touch board — the plain run drives P1=0x00, the warm reset, and only `--bootsel` takes the P1=0x01 path this row is about; afterwards the board needs a UF2 re-dragged. The capture belongs under assurance/board/."
+discharge = "TAKEN on 2026-09-03, and the reading is deliberately not the script's. `tests/51_secure_reboot.py --bootsel` ran against a no-touch board — the plain run drives P1=0x00, the warm reset, and only `--bootsel` takes the P1=0x01 path this row is about — and exited 0 over `SELECT vendor AID -> 9000` and `REBOOT (P1=0x01) -> 9000`. That is not the discharge: its last line reads `secure-reboot PASS (BOOTSEL requested)`, and a request is not an arrival — the same line would print over a warm reset, which is the FAIL this row names. What settles it is the host afterwards, read separately and captured under assurance/board/: the device re-enumerated as the RP2350 mass-storage bootloader, its drive mounted, and the PC/SC reader list came back empty, so the CCID interface is gone. Both halves, because `expected` names the drive and the interface, and it is the interface half that rules out the warm reset. The board was re-dragged with a UF2 afterwards, which is why the run wants a throwaway board and not the provisioned one."
 discharge_owner = "maintainer"
-status = "pending"
+status = "discharged"
+evidence = [
+  "assurance/board/PLAT-ROM-002-2026-09-03-enumeration.txt",
+  "assurance/board/PLAT-ROM-002-2026-09-03-reboot.log",
+  "assurance/board/image-2026-09-03.txt",
+]
+board_revision = "RP2350 A4"
+revalidated_by = "The dispatch the drop rides, and the boot configuration it is a fact about. The applet half is the INS_REBOOT arm of crates/rsk-vendor/src/lib.rs, which reads the P1 byte, and the board half is the reset_to_usb_boot call in firmware/src/worker.rs it ends at — a second P1 value routed there, or a reboot taken by some other route, is a different drop and this run says nothing about it. The configuration half unsettles it outright: a stepping other than the one recorded, secure boot switched on (which changes what the bootloader exposes to a host), or an image other than firmware-no-touch, where the reboot is presence-gated and the run measures the gate rather than the drop."
+evidence_commit = "7904f012e8387e44b4b8629e32ee2a5e00eb0255"
 failure_direction = "availability: a reboot that lands nowhere leaves a key that cannot be updated in the field"
 covers = ["board-only:51_secure_reboot"]
 supports = ["SEC-ADM-001"]
@@ -93,9 +101,16 @@ supports = ["SEC-ADM-001"]
 id = "PLAT-MEM-001"
 class = "memory"
 statement = "SRAM does not survive the drop to BOOTSEL, so a seed unwrapped in RAM is not readable through the bootloader."
-discharge = "A re-run of `python tests/54_sram_residue.py control`, keeping what the 2026-08-05 run did not. That run reached the good outcome — tests/54_sram_residue.py:48 — and cannot discharge this row for two reasons, both in assurance/board/PLAT-MEM-001.toml: nobody kept the sha256 of the image it ran on, and the outcome it reached is the script`s `settled` (exit 3), which is defined as SETTLED WITHOUT THE SCAN, so `residue` never ran and neither `present` nor `absent` was measured. The earlier wording of this route said the only thing missing was the capture; that was wrong on both counts."
+discharge = "TAKEN BY `control` ALONE, on the maintainer's ruling of 2026-09-04, over a run of 2026-09-03. `python tests/54_sram_residue.py control` was driven against an image whose UF2 and ELF sha256 are both kept — assurance/board/PLAT-MEM-001-2026-09-03-control.log and assurance/board/image-2026-09-03.txt — and reproduced the 2026-08-05 outcome, tests/54_sram_residue.py:48, exactly: 4 KiB of `.text` byte-exact against the ELF, the whole 532480-byte dump zero at one distinct value, and the 256-byte pattern written through picoboot reading straight back. Those two are the halves assurance/board/PLAT-MEM-001.toml's `expected` calls PASS, and that `expected` was committed before the board was powered, which is what makes this a discharge rather than a criterion fitted to a result. The second arm is RETAINED, not met: `residue` has no reader of its own — it calls the same `check_readable` and `settled` raises out of it ahead of the region scan, ahead of the verdict and ahead of `--expect` — so it is a demand on a boot configuration where SRAM SURVIVES the drop and not on a re-run of this board, and the better the platform behaves the more certainly it refuses to answer. WHAT THE NARROWED ROUTE STILL REFUSES: a mismatching `.text` window is a FAIL and catches the wrong image, which is the mix-up the control exists for; zeros with a write-back that does not come back are INCONCLUSIVE, the picoboot-only-answers-zeros case; a short dump is INCONCLUSIVE, because regions the verdict covers went unread; and a `.data` window zero over a dump that is not is INCONCLUSIVE, the partial clear that would leave the stack and the keygen heap intact. PASS needs both halves and zeros alone are not one of them. WHAT IT DOES NOT SETTLE: that `worker::reboot`'s scrub works. The platform cleared main SRAM, not our code, and a dump that is zero everywhere cannot tell those apart — this is a platform result about this silicon and this boot configuration, and nothing here is evidence about the firmware's own wipe."
 discharge_owner = "maintainer"
-status = "pending"
+status = "discharged"
+evidence = [
+  "assurance/board/PLAT-MEM-001-2026-09-03-control.log",
+  "assurance/board/image-2026-09-03.txt",
+]
+board_revision = "RP2350 A4"
+revalidated_by = "The dispatch the drop rides, and the boot configuration the result is a fact about. The dispatch half is PLAT-ROM-002's: the INS_REBOOT arm of crates/rsk-vendor/src/lib.rs and the reset_to_usb_boot call in firmware/src/worker.rs it ends at. It has to be that warm drop — holding the button through a replug is a power-on reset, which loses SRAM for reasons this row is not about — so a reboot routed anywhere else is a different drop and this run says nothing about it. The configuration half unsettles it outright: a stepping other than the one recorded; secure boot switched on, which changes what the bootloader exposes to a host and turns the script's own refusal branch, picoboot serving nothing, into the answer in place of this one; a picotool other than the recorded version, or any picotool serving memory differently, since the entire reading is a picoboot save and a picoboot load; and a build whose RAM layout moves `.data`, because the window the verdict is read from is that section's address and size out of the ELF. tests/54_sram_residue.py is the fourth: it is the instrument, and a change to check_readable's decision table changes what a PASS here means."
+evidence_commit = "7904f012e8387e44b4b8629e32ee2a5e00eb0255"
 failure_direction = "security: a plaintext seed readable over the bootloader's mass-storage interface"
 depends_on = ["PLAT-ROM-002"]
 # `slice:AS-RAM-6` and not a row of its own: the slice's assumption IS this

@@ -572,7 +572,14 @@ assumed: on RP2350 A4 the platform clears main SRAM across the drop. All 520 KiB
 read back as zeros while a pattern written through picoboot read straight back,
 so the zeros are the memory and not a refused read
 ([`tests/54_sram_residue.py`](https://github.com/TheMaxMur/RS-Key/blob/main/tests/54_sram_residue.py),
-2026-08-05, secure boot off). This is a property of the silicon revision and boot
+2026-09-03, secure boot off). That run is the one on the record: it carries the
+sha256 of the image it ran on, and it is read against an expectation committed
+before the board was powered. It discharges `PLAT-MEM-001` in the platform
+registry ([platform-assumptions.md](platform-assumptions.md)) — read the row for
+the transcript, the picotool version, and what the result does *not* establish,
+which is that the firmware's own scrub works. An earlier run on 2026-08-05
+reached the same outcome and is superseded here because nobody kept the hash of
+the image it ran on. This is a property of the silicon revision and boot
 configuration, so it is re-measured when either moves; the explicit wipes stay as
 depth in case a future one keeps SRAM.
 

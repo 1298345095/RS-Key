@@ -19,6 +19,7 @@ for saying it has no board result.
 """
 
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -571,11 +572,22 @@ def test_the_page_cannot_claim_more_than_the_axes(tree):
     assert "**0 of 3** carry at least one Kani harness" in evidence_gate.render(tree.root)
 
 
-def test_the_page_never_says_a_board_result_the_tree_has_none_of():
-    """The one sentence a release note is most likely to get wrong."""
+def test_the_page_says_about_a_board_what_the_axis_says():
+    """The one sentence a release note is most likely to get wrong.
+
+    Held to the AXIS and not to the empty state, because the empty state stopped
+    being this tree's: `PLAT-ROM-002` is discharged on a recorded stepping and
+    the page prints the claim instead of the prohibition. A pin on "none" would
+    have had to be DELETED for that to land, and a rule deleted to let a change
+    through never fires again -- so what is pinned is that the page and the
+    vectors point the same way, whichever way that is. The branch itself is
+    driven both ways on the fixture, by the pending and the discharged silicon
+    obligation below; this case is the reading of the real page.
+    """
     page = (ROOT / evidence_gate.ARTIFACT).read_text()
-    assert "**no** row carries a hardware result" in page
-    assert "carry a result measured on a board" not in page
+    measured = [r for r in evidence_gate.vectors(ROOT, []) if r["vector"]["hardware"]]
+    assert ("carry a result measured on a board" in page) == bool(measured), measured
+    assert ("**no** row carries a hardware result" in page) == (not measured)
 
 
 # --- the wiring ----------------------------------------------------------------
@@ -786,6 +798,40 @@ def test_the_prohibition_does_not_invert_when_the_axis_moves(tree):
     page = evidence_gate.render(tree.root)
     assert "carry a result measured on a board" in page
     assert "row carries a hardware result" not in page
+
+
+def test_the_axis_paragraph_prints_the_axis_and_not_a_literal(tree):
+    """The SECOND copy of that sentence, which the case above could not see.
+
+    `render`'s "The axes" prose carried the same claim as a hard-coded literal —
+    "both give 0 … every obligation there is `pending`" — so the page went on
+    refusing a board result through the commit that recorded two, and `--write`
+    reproduced the refusal byte for byte, which left the page's own diff gate
+    blind to it. Pinned to the AXIS and not to a wording, and driven both ways:
+    the fixture registry is all-`pending`, and the same tree with its obligation
+    discharged on a stepping must print the other number.
+    """
+    def printed(root):
+        assurance_gate.co_refuted.cache_clear()
+        page = evidence_gate.render(root)
+        found = re.search(r"`hardware` reads two sources[^\n]*?\*\*(\d+) of (\d+)\*\*", page)
+        assert found, "the axes prose prints no count off the hardware axis"
+        return int(found.group(1)), int(found.group(2))
+
+    def axis(root):
+        assurance_gate.co_refuted.cache_clear()
+        rows = evidence_gate.vectors(root, [])
+        return sum(1 for row in rows if row["vector"]["hardware"]), len(rows)
+
+    assert axis(tree.root)[0] == 0, "the fixture registry is meant to be all-pending"
+    assert printed(tree.root) == axis(tree.root), "with the axis at 0"
+
+    tree.edit("assurance/platform.toml", 'status = "pending"',
+              'status = "discharged"\nboard_revision = "RP2350 A2"\n'
+              'evidence = ["assurance/properties.toml"]\n'
+              'revalidated_by = "a new stepping"')
+    assert axis(tree.root)[0] == 1, "the discharged obligation did not move the axis"
+    assert printed(tree.root) == axis(tree.root), "with the axis moved"
 
 
 # --- the hardware axis's other source -----------------------------------------

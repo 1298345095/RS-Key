@@ -997,8 +997,8 @@ def check_shape(name, entry, findings):
 #: shape ([`BOARD_EVIDENCE`]), and refused it only where the row records a
 #: `board_revision`, so the module's own sentence — "a rule met by any file that
 #: merely exists is met by `README.md`" — stood unenforced over every row that
-#: records none, which today is all of them: `grep -c '^board_revision'` over the
-#: registry answers zero, because no discharge here has yet been taken on silicon.
+#: records none. That was all 74 of them when this was written; `grep -c
+#: '^board_revision'` answers 2 now, and 85 of the 87 still have only this rule.
 #:
 #: WHY THIS KIND. A hand-written page RESTATES a claim; it does not settle one.
 #: The registry already has the field for a restatement and requires it —
@@ -1184,8 +1184,8 @@ def check_evidence(root, name, entry, findings, generated, tree):
                 " `board_revision` — a platform result names the platform it"
                 " was taken on"
             )
-        # DECORATIVE today: 0 of 74 rows carry a `board_revision`, so cutting this
-        # arm leaves the summary byte-identical; a discharge carrying one wakes it.
+        # AWAKE since 2026-09-03: 2 of the 87 rows carry a `board_revision`, so
+        # this arm judges them — a board claim owes a [`BOARD_EVIDENCE`] capture.
         if board and not any(str(rel).startswith(BOARD_EVIDENCE) for rel in evidence):
             findings.append(
                 f"{name}: a discharge on {board!r} cites no artifact under"
@@ -1306,8 +1306,8 @@ BOARD_OUTCOMES = {"planned", "pass", "fail", "inconclusive"}
 #: Which registry status each outcome may sit under, in BOTH directions. The
 #: reverse direction is the one that has actually gone wrong here: a run that was
 #: taken and whose status never moved reads, from the registry alone, exactly
-#: like a run nobody took -- PLAT-MEM-001 is that shape today, and its record
-#: says so rather than promoting itself.
+#: like a run nobody took -- PLAT-MEM-001 was that shape until its record was
+#: promoted, and this rule is what makes such a promotion a diff in both files.
 OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}
 
 BOARD_SHA = re.compile(r"[0-9a-f]{64}")
@@ -2257,9 +2257,10 @@ def render(root, registered=None, dated=None):
         "",
         f"- that any of these {len(rows)} statements is known to be true —"
         f" {len(pending)} are `pending`, which means no artifact in this tree"
-        " records a result for them. One of those rows names a run that HAPPENED"
-        " and whose capture was never committed, which is a different state and"
-        " says so in its own discharge route.",
+        " records a result for them. `pending` covers two states this page cannot"
+        " tell apart: a run nobody took, and a run that happened and whose capture"
+        " never reached a record. A row in the second says so in its own discharge"
+        " route, because nothing here can derive it.",
         f"- that the list is complete. {len(FLOORS)} derivations produce it, and"
         " stage 10's inventory names eleven categories — a category with no"
         " candidate source is a category this page cannot see.",

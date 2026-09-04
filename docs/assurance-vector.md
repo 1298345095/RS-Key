@@ -24,7 +24,9 @@ So the axes are printed apart. Every one is derived from the tree on every gate 
 
 Three readings the axes are built to stop. A `kani` count does not fill in for `hardware`: a bounded proof is about execution paths and a board result is about a platform, and neither substitutes for the other. A `trace` count is DIRECT — a recorded session reaches a property only if a configuration checking that property replays it, so the refinement properties carry the session and the invariants they refine do not inherit it. And a configuration NAMING an invariant is not one ASSERTING it: most of them are mutants that exist for it to fall in, which is why `model` and `trace` are printed as two numbers each.
 
-`hardware` reads two sources and both give 0, which is the honest state of this tree. One is a bundle's DECLARATION, and the gate's job there is that a declaration cannot arrive without the board revision it was taken on. The other is `docs/platform-assumptions.md`'s registry, which is where a board result will actually land — every obligation there is `pending`, and one moving to `discharged` with a real stepping recorded is what would move this column, whatever class it is filed under. Read a `0` as "nothing here was measured on hardware", never as a measurement.
+`hardware` reads two sources, and together they give **2 of 59**. One is a bundle's DECLARATION, and the gate's job there is that a declaration cannot arrive without the board revision it was taken on. The other is `docs/platform-assumptions.md`'s registry, which is where a board result actually lands — an obligation moving to `discharged` with a real stepping recorded is what moves this column, whatever class it is filed under.
+
+Neither direction of that number says more than it is. A `0` is "nothing here was measured on hardware" and never a measurement: the axis prints the same 0 over a question nobody asked and over one a board refused to answer. A non-zero is not the property holding on hardware either — it is THESE rows and no others, on the stepping and the boot configuration they name, and it lapses when either moves.
 
 The `freshness` axis reads committed history only, so an uncommitted edit to an owner is invisible until it lands. That is deliberate: the answer must not change between writing this page and committing it.
 
@@ -37,6 +39,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 - **11 of 59** carry at least one Kani harness named after them. That is all `BOUNDED` keys on — a harness NAME, not the `#[kani::proof]` attribute, not a bound, not a `cfg` — so it points at the bundle's method table and is never the proof itself.
 - Rows carrying a dated raw evidence bundle: **11 of 59**; of those, still ahead of every input they are about: **0**.
 - No property is claimed on more than **10** built image(s) of the configuration ledger; every other column is a gap or out of scope.
+- **2 of 59** carry a result measured on a board, each naming the revision it was taken on.
 
 ## What a release may not say
 
@@ -45,7 +48,6 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 - that a `model` count is the strength of the evidence — its denominator counts every configuration NAMING the invariant, and most of those are mutants that exist for it to fall in. `asserted` is the half a claim may rest on, and for a `clause_of` row it can be 0 while the parent invariant carrying that clause is asserted.
 - that the model-checked properties hold on *the firmware* — they hold on the images the scope axis names, and `docs/assurance-matrix.md` carries the rest of that row.
 - that the reconstructed `v1` column is an independent check on the registry's word. It reads the two derivations `assurance_gate.py` already forces that word from, so its disagreement set is empty on every input that gate accepts: it records that the scalar is a projection, and cannot discover that it is not.
-- that any property was measured on a board — **no** row carries a hardware result. A bundle claiming one without a board revision is refused rather than published, and every obligation of the platform registry is still `pending`.
 - that 48 of the rows are current — they carry no evidence date at all, so nothing here says when they were last true.
 
 ## The vector
@@ -69,7 +71,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-FIDO-006A` | `ResetKeepsThePinGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 4 | 0 | `b185fc3` stale (2 input(s) newer) | BOUNDED |
 | `SEC-FIDO-006B` | `ResetKeepsTheAlwaysUvGate` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 4 | 0 | `b185fc3` stale (2 input(s) newer) | BOUNDED |
 | `SEC-FIDO-006C` | `ResetKeepsTheBackupSeal` | 1 of 2 | 1 | 0 of 0 | 1 | 0 | 4 | 0 | `b185fc3` stale (2 input(s) newer) | BOUNDED |
-| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `3e08f75` stale (9 input(s) newer) | MODELLED-ONLY |
+| `SEC-FIDO-007` | `RamNeverOutlivesFlashSeed` | 4 of 5 | 1 | 0 of 0 | 0 | 1 | 4 | 0 | `3e08f75` stale (9 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-008` | `NoLiveTokenWithoutPinRecord` | 4 of 5 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | `31c21a7` stale (4 input(s) newer) | MODELLED-ONLY |
 | `SEC-FIDO-009` | `OpAdvancesIsOneActivity` | 1 of 2 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-FIDO-L01` | `EveryOpQuiesces` | 2 of 3 | 0 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
@@ -99,7 +101,7 @@ The `freshness` axis reads committed history only, so an uncommitted edit to an 
 | `SEC-POL-004` | `OathCredentialNeedsItsGates` | 1 of 13 | 2 | 0 of 0 | 0 | 0 | 3 | 4 | — | MODELLED-ONLY |
 | `SEC-POL-005` | `OtpSlotMutationNeedsItsCode` | 1 of 12 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
 | `SEC-POL-006` | `OtpCounterNeverRepeats` | 1 of 15 | 4 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
-| `SEC-ADM-001` | `AdminSurfaceAlwaysReachable` | 1 of 6 | 1 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
+| `SEC-ADM-001` | `AdminSurfaceAlwaysReachable` | 1 of 6 | 1 | 0 of 0 | 0 | 1 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-ADM-002` | `PrivilegedOpNeedsPresence` | 1 of 6 | 1 | 0 of 0 | 0 | 0 | 3 | 4 | — | MODELLED-ONLY |
 | `SEC-ADM-003` | `DisableSetSurvivesLockWrite` | 1 of 6 | 1 | 0 of 0 | 0 | 0 | 0 | 0 | — | MODELLED-ONLY |
 | `SEC-ADM-004` | `DisabledAppletNeverDispatches` | 1 of 6 | 1 | 0 of 0 | 0 | 0 | 4 | 0 | — | MODELLED-ONLY |
@@ -206,8 +208,6 @@ Three spellings of "not current", which used to sit on two different pages and i
 | bundle | `SEC-TRANS-003` | no raw evidence bundle |
 | platform | `PLAT-RESET-001` | A real RP2350 power-on reset clears `WATCHDOG.scratch2`, so the PIN so |
 | platform | `PLAT-ROM-001` | M7-Q2: the boot ROM's BOOTSEL return path leaves `WATCHDOG.scratch2` a |
-| platform | `PLAT-ROM-002` | The vendor applet's reboot really reaches the bootloader: `tests/51_se |
-| platform | `PLAT-MEM-001` | SRAM does not survive the drop to BOOTSEL, so a seed unwrapped in RAM  |
 | platform | `PLAT-FLASH-001` | The silicon's program/erase tear behaviour under a real supply cut is  |
 | platform | `PLAT-OTP-001` | OTP read permissions, lock state and the chaffing layout behave as the |
 | platform | `PLAT-INPUT-001` | A PC/SC reader's `FEATURE_VERIFY_PIN_DIRECT` layer carries the PIN to  |

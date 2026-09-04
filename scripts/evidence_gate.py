@@ -27,15 +27,15 @@ record that was wrong in three of six fields before a line of code existed.
 | scope | the built images the ledger disposes this property on | `assurance/configurations.toml` |
 | freshness | whether a bundle's commit post-dates every evidence input | `git log` |
 
-`hardware` has two sources and both read 0, which is the honest state of this
-tree. A bundle's DECLARATION is one, and the rules below are about a declaration
-never arriving without the board it was taken on. `assurance/platform.toml` is
-the other, and it is where a board result will actually land: that registry holds
-the obligations no model constant can carry, so a silicon-class row moving to
-`discharged` with its stepping recorded is a measurement, and an axis that did
-not read it would go on printing "no property was measured on a board" over one.
-Neither source is allowed to invent a number — the registry's silicon rows are
-all `pending`, so the axis is 0 for all 59 either way.
+`hardware` has two sources. A bundle's DECLARATION is one, and the rules below
+are about a declaration never arriving without the board it was taken on.
+`assurance/platform.toml` is the other, and it is where a board result actually
+lands: that registry holds the obligations no model constant can carry, so a row
+moving to `discharged` with its stepping recorded is a measurement, and an axis
+that did not read it would go on printing "no property was measured on a board"
+over one. Neither source may invent a number and neither may pin one: the
+registry was all-`pending` when this was written and two rows are discharged on
+an A4 now, which is why the page's own paragraph is templated off the axis.
 
 Nothing here re-derives what a sibling row owns. Which configurations exist and
 what each names is `assurance_gate.py`'s; whether the ledger's columns are the
@@ -931,6 +931,12 @@ def render(root, rows=None):
     """`docs/assurance-vector.md` as the tree makes it."""
     rows = vectors(root, []) if rows is None else rows
     may, must_not = claims(rows)
+    # Templated off the axis for the reason [`claims`] is: the untemplated copy
+    # of this paragraph asserted an all-`pending` registry through the commit
+    # that discharged two rows, and `--write` reproduced it. A COUNT and not a
+    # branch on emptiness -- a row discharged with a stepping that supports no
+    # property leaves this axis 0, so "0" cannot be spelled "all pending".
+    measured = [r for r in rows if r["vector"]["hardware"]]
     out = [
         "<!-- SPDX-License-Identifier: AGPL-3.0-only -->",
         "<!-- Copyright (C) 2026 RS-Key contributors -->",
@@ -973,15 +979,21 @@ def render(root, rows=None):
         " ASSERTING it: most of them are mutants that exist for it to fall in,"
         " which is why `model` and `trace` are printed as two numbers each.",
         "",
-        "`hardware` reads two sources and both give 0, which is the honest state"
-        " of this tree. One is a bundle's DECLARATION, and the gate's job there"
-        " is that a declaration cannot arrive without the board revision it was"
-        " taken on. The other is `docs/platform-assumptions.md`'s registry, which"
-        " is where a board result will actually land — every obligation there is"
-        " `pending`, and one moving to `discharged` with a real stepping recorded"
-        " is what would move this column, whatever class it is filed under. Read"
-        " a `0` as \"nothing here was measured on hardware\", never as a"
-        " measurement.",
+        "`hardware` reads two sources, and together they give"
+        f" **{len(measured)} of {len(rows)}**. One is a bundle's DECLARATION,"
+        " and the gate's job there is that a declaration cannot arrive without"
+        " the board revision it was taken on. The other is"
+        " `docs/platform-assumptions.md`'s registry, which is where a board"
+        " result actually lands — an obligation moving to `discharged` with a"
+        " real stepping recorded is what moves this column, whatever class it is"
+        " filed under.",
+        "",
+        "Neither direction of that number says more than it is. A `0` is"
+        " \"nothing here was measured on hardware\" and never a measurement: the"
+        " axis prints the same 0 over a question nobody asked and over one a"
+        " board refused to answer. A non-zero is not the property holding on"
+        " hardware either — it is THESE rows and no others, on the stepping and"
+        " the boot configuration they name, and it lapses when either moves.",
         "",
         "The `freshness` axis reads committed history only, so an uncommitted"
         " edit to an owner is invisible until it lands. That is deliberate: the"
