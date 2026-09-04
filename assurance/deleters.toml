@@ -254,11 +254,11 @@ answer = "read"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "must-read"
-why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared. The folded answer is kept deliberately (reviewed 0x0989): the record half here is only ever the shared blob being unreadable, but that is equally true of vendor.rs:425/428 and crates/rsk-openpgp/src/putdata.rs:159/165, and splitting the halves for this caller alone would re-open the swallowed drop 0x0987 closed. One-shot commands lose the command, not a sweep's range."
+why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared. The folded answer is kept deliberately (reviewed 0x0989): the record half here is only ever the shared blob being unreadable, but that is equally true of vendor.rs:426/428 and crates/rsk-openpgp/src/putdata.rs:159/165, and splitting the halves for this caller alone would re-open the swallowed drop 0x0987 closed. One-shot commands lose the command, not a sweep's range."
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
-line = 433
+line = 434
 call = ".force_delete(EF_ATT_KEY.get())"
 verb = "force_delete"
 answer = "read"
@@ -269,7 +269,7 @@ why = "ATT_CLEAR, measured: discarding these two reported 'org attestation remov
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
-line = 436
+line = 437
 call = ".force_delete(EF_ATT_CHAIN)"
 verb = "force_delete"
 answer = "read"
@@ -280,7 +280,7 @@ why = "the chain half of the same erase, ordered after the key so the surviving 
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
-line = 923
+line = 924
 call = "if ctx.fs.delete(EF_EE_DEV).is_err() {"
 verb = "delete"
 answer = "read"
@@ -571,7 +571,7 @@ why = "the source's certificate. Public, gating nothing, and MOVE's own answer a
 
 [[fs_removal]]
 file = "crates/rsk-fs/src/fs.rs"
-line = 488
+line = 518
 method = "factory_wipe"
 call = "self.storage.remove(fid)?;"
 rearms = true
@@ -580,7 +580,7 @@ why = "the device-wide wipe, and the reason this table exists. Its `compact()` t
 
 [[fs_removal]]
 file = "crates/rsk-fs/src/fs.rs"
-line = 569
+line = 599
 method = "delete"
 call = "self.storage.remove(fid)?;"
 rearms = false
@@ -589,7 +589,7 @@ why = "the family's own conditional removal. It cannot re-arm: `request_rescrub`
 
 [[fs_removal]]
 file = "crates/rsk-fs/src/fs.rs"
-line = 618
+line = 648
 method = "force_delete_halves"
 call = "if let Err(refused) = self.storage.remove(fid) {"
 rearms = false
@@ -598,7 +598,7 @@ why = "the unconditional twin, and `force_delete`'s body as well. Same reason: t
 
 [[fs_removal]]
 file = "crates/rsk-fs/src/fs.rs"
-line = 793
+line = 823
 method = "meta_delete"
 call = "self.storage.remove(EF_META)?;"
 rearms = false

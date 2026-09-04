@@ -11,7 +11,8 @@
 //! - `BACKUP_EXPORT` (0x02) — hand the seed to the host over that channel (gated).
 //! - `BACKUP_LOAD` (0x03) — install a seed from the host, re-sealed to this chip.
 //! - `BACKUP_FINALIZE` (0x04) — seal the one-time export window.
-//! - `BACKUP_STATE` (0x05) — read `{sealed, has_seed, locked, unlocked}`.
+//! - `BACKUP_STATE` (0x05) — read `{sealed, has_seed, locked, unlocked,
+//!   rescrub_refused}`.
 //! - `UNLOCK` (0x06) — soft-lock: decrypt `EF_KEY_DEV_ENC` into RAM for this
 //!   power cycle. The lock is engaged and released by `authenticatorConfig`
 //!   vendor ids AUT_ENABLE / AUT_DISABLE ([`crate::config`]).
@@ -950,17 +951,23 @@ fn backup_finalize<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, req: &Req) -> CtapRe
     Ok(0)
 }
 
-/// `BACKUP_STATE`: `{1: sealed, 2: has_seed, 3: locked, 4: unlocked}` — ungated,
-/// for host-side status. `locked` is the flash state (the wrapped blob is what's
-/// stored); `unlocked` says a RAM copy from a vendor UNLOCK is live this power
+/// `BACKUP_STATE`: `{1: sealed, 2: has_seed, 3: locked, 4: unlocked, 5: rescrub_refused}`
+/// — ungated, for host-side status. `locked` is the flash state (the wrapped blob is
+/// what's stored); `unlocked` says a RAM copy from a vendor UNLOCK is live this power
 /// cycle.
+///
+/// Key 5 is medium health, and it rides here because this is the only ungated status
+/// map the host already reads: `authenticatorReset` re-arms the at-rest lap
+/// best-effort and answers success whatever the medium said, so the refusal has to
+/// leave by another door than the wipe's own status (`Fs::rescrub_refused`).
 fn backup_state<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, out: &mut [u8]) -> CtapResult {
     let sealed = backup_sealed(ctx.fs);
     let has_seed = ctx.fs.has_key(EF_KEY_DEV);
     let locked = lock_engaged(ctx.fs);
     let unlocked = ctx.state.keydev_dec.is_some();
+    let rescrub_refused = ctx.fs.rescrub_refused();
     encode(out, |e| {
-        e.map(4)?
+        e.map(5)?
             .u8(1)?
             .bool(sealed)?
             .u8(2)?
@@ -968,7 +975,9 @@ fn backup_state<S: Storage, R: Rng>(ctx: &mut Ctx<S, R>, out: &mut [u8]) -> Ctap
             .u8(3)?
             .bool(locked)?
             .u8(4)?
-            .bool(unlocked)?;
+            .bool(unlocked)?
+            .u8(5)?
+            .bool(rescrub_refused)?;
         Ok(())
     })
 }

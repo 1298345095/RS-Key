@@ -131,6 +131,21 @@ pub struct Fs<S: Storage> {
     /// transient boot fault made every slot read occupied for the rest of the power
     /// cycle, a factory reset included.
     scan_truncated: bool,
+    /// Set when a [`crate::request_rescrub`] this power cycle could not be shown to
+    /// have landed. It says the MEDIUM refused a re-arm — NOT that the marker lies:
+    /// at the gated call sites the refusal stops the write it guards, so nothing is
+    /// superseded and the marker stays true, whether the site then errors to the
+    /// host or skips a lazy migration. The wipe paths are why it exists: there the
+    /// refusal is best-effort, because "leave the record in force" would mean leave
+    /// the secrets live, so a wipe over a persistently stuck medium answers the host
+    /// success with the lap latched off, and nothing else in the tree says so.
+    ///
+    /// In RAM, per power cycle, and never persisted: a flash breadcrumb would be a
+    /// write to the medium that is refusing, and its own failure would be
+    /// unreportable by the same argument. Reading the marker on demand is no
+    /// substitute — latched is the steady state of every provisioned device past its
+    /// first lap, so a bare marker read reports trouble on a healthy key.
+    rescrub_refused: bool,
 }
 
 impl<S: Storage> Fs<S> {
@@ -142,6 +157,7 @@ impl<S: Storage> Fs<S> {
             decided: [0u8; FID_PRESENT_BYTES],
             write_gen: 0,
             scan_truncated: false,
+            rescrub_refused: false,
         }
     }
 
@@ -150,6 +166,20 @@ impl<S: Storage> Fs<S> {
     /// changes (see [`write_gen`](Self#structfield.write_gen)).
     pub fn write_gen(&self) -> u32 {
         self.write_gen
+    }
+
+    /// Did the medium refuse an at-rest-lap re-arm this power cycle? Medium health,
+    /// reported out of band because the wipe paths discard the refusal by design
+    /// (see [`rescrub_refused`](Self#structfield.rescrub_refused)).
+    pub fn rescrub_refused(&self) -> bool {
+        self.rescrub_refused
+    }
+
+    /// Latch the answer [`rescrub_refused`](Self::rescrub_refused) carries.
+    /// `pub(crate)` because [`crate::request_rescrub`] is what decides that a re-arm
+    /// was refused, and it is the only re-arm in the tree.
+    pub(crate) fn note_rescrub_refused(&mut self) {
+        self.rescrub_refused = true;
     }
 
     /// Recover the backend (e.g. to rebuild the `Fs` — used in tests to model a

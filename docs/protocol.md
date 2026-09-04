@@ -999,7 +999,7 @@ Keys 3/4 are present only when a PIN is set (see gating).
 | `02` | BACKUP_EXPORT | — | `{1: blob(60)}` | MSE + touch + PIN-token; refused if sealed |
 | `03` | BACKUP_LOAD | `{1: blob(60)}` | — | MSE + touch + PIN-token; refused if soft-locked. With **no PIN set** it additionally takes a distinct "Replace device seed?" confirmation — the PIN-token half is waived in that state, and a LOAD re-keys every existing credential |
 | `04` | BACKUP_FINALIZE | — | — | touch + PIN-token when a PIN is set (no MSE) |
-| `05` | BACKUP_STATE | — | `{1: sealed, 2: has_seed, 3: locked, 4: unlocked}` | **ungated** |
+| `05` | BACKUP_STATE | — | `{1: sealed, 2: has_seed, 3: locked, 4: unlocked, 5: rescrub_refused}` | **ungated** |
 | `06` | UNLOCK | `{1: blob(60)}` | — | MSE (the lock key *is* the auth) |
 | `07` | AUDIT_READ | — | journal window | PIN-token; **touch** if no PIN |
 | `08` | AUDIT_CHECKPOINT | `{1: nonce ≤32}` | DEVK signature over chain head ‖ nonce | PIN-token + touch |
@@ -1009,6 +1009,34 @@ Keys 3/4 are present only when a PIN is set (see gating).
 | `0C` | CONFIG_WRITE | `{1: target(uint), 2: blob(bstr)}` — target `0`=DEV_CONF, `1`=PHY, `2`=LED | — | **ungated by default**; touch + PIN-token under `strict-config`; no MSE. A write that changes nothing is a no-op: no flash write, no journal entry, and for PHY no reboot latch |
 | `0D` | CONFIG_READ | `{1: target(uint)}` — target `1`=PHY, `2`=LED | `{1: blob(bstr)[, 2: {phy_tag: uint}]}` | **ungated**; `CTAP2_ERR_OTHER` if the record cannot be read — an empty blob means *absent*, never *unreadable*, because the host read-modify-writes on this answer |
 | `0E` | AUDIT_CONFIG | `{1: op(uint)}` — `0`=disable, `1`=enable, `2`=status | `{1: enabled(bool)}` | set: PIN-token + touch; status (`2`): **ungated** |
+
+> ### `rescrub_refused` (`BACKUP_STATE` key 5, bcdDevice ≥ `0x09C5`)
+> **Flash health for this power cycle, and nothing more.** After the one-shot
+> at-rest hardening lap has run, any command that supersedes a record still sealed
+> to the pre-OTP root must re-arm that lap by clearing its marker. The wipe paths —
+> `authenticatorReset` and the applet factory resets — take that re-arm
+> best-effort and go on regardless, because refusing there would mean leaving the
+> secrets live, and they answer `0x00` whatever the flash said. Key 5 is `true` when
+> a re-arm this power cycle could not be shown to have landed, so a stuck medium is
+> reported somewhere other than in the answer to a reset that did succeed.
+>
+> It does **not** say the hardening marker is wrong, or that hardening failed. Away
+> from the wipe paths the re-arm *gates* the write that follows it, so a refusal
+> stops that write: nothing is superseded, and the command either errors or skips a
+> lazy migration and leaves the older record in force. Read key 5 as "this device's
+> flash refused a write it was asked for", and nothing stronger.
+>
+> Coverage is lost in one arm only, a wipe whose refusal was **persistent**. A wipe
+> tries more than once — ahead of its sweep and again after it — and a refusal the
+> retry recovers still sets key 5 even though the marker is then gone and the next
+> boot laps as it should. When no attempt lands, the marker stays latched over the
+> records the wipe superseded, no later boot ever laps, and those copies stay
+> recoverable from a physical flash dump while the reset answered `0x00`. Key 5 does
+> not say which arm it is, and repeating the reset does not recover what that one
+> already exposed, so a device that keeps reporting it has a failing medium and
+> should be retired rather than trusted at rest. It is RAM state, so it clears on
+> the next power cycle whether or not the flash recovered, and an older build simply
+> omits the key.
 
 > ### Device configuration over FIDO (`CONFIG_WRITE 0x0C`)
 > The pcscd-free twin of the CCID device-config writes (§6 WRITE CONFIG and the

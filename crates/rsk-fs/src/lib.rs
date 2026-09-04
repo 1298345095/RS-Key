@@ -54,16 +54,27 @@ pub const EF_HARDENED: u16 = 0xCE14;
 /// reaches the same end state with no reset in it at all. So this answers rather than
 /// swallowing, and `Ok` means what the caller needs — the lap WILL run.
 /// Every caller shipped the second order until 0x09BD and the swallow until 0x09BE.
+/// A refusal is ALSO latched in RAM for [`Fs::rescrub_refused`], because the wipe
+/// paths take this best-effort and their refusal reaches nobody: the latch says the
+/// medium refused a re-arm this power cycle, never that the marker lies.
 /// Refines `RSKeyBootHardening!MarkerNeverLies` — SEC-BOOT-001.
 pub fn request_rescrub<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
     let _ = fs.delete(EF_HARDENED);
     // Not `delete`'s own answer: it reports the METADATA drop (EF_HARDENED, a one-byte
     // flag, keeps none) and answers `Ok` where the present bit is clear over a live
     // marker — what a read-fault-truncated `Fs::scan` leaves. Ask the lap's own gate.
-    if fs.try_has_data(EF_HARDENED)? {
-        return Err(Error::MemoryFatal);
+    let answer = match fs.try_has_data(EF_HARDENED) {
+        Ok(true) => Err(Error::MemoryFatal),
+        Ok(false) => Ok(()),
+        Err(e) => Err(e),
+    };
+    // Both arms, and before the caller can drop it: an unreadable probe is a re-arm
+    // that cannot be shown to have landed, which is the same medium fault the wipe
+    // sites discard.
+    if answer.is_err() {
+        fs.note_rescrub_refused();
     }
-    Ok(())
+    answer
 }
 
 /// Run the one-shot at-rest scrub lap: iff [`EF_HARDENED`] is absent, drive a full

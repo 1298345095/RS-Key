@@ -1004,6 +1004,15 @@ fn a_refused_re_arm_does_not_stop_a_factory_wipe() {
         !medium.live(crate::EF_HARDENED),
         "the sweep's own phase-1 removal is this re-arm's retry, and it did not run"
     );
+    // The headline, read at the wipe rather than at `request_rescrub`: the `Ok` above
+    // is correct AND it is the whole report, so the refusal the wipe swallowed to
+    // give it has to leave by `Fs::rescrub_refused` or by nothing. A wipe does not
+    // repair flash, so it does not clear this either.
+    assert!(
+        fs.rescrub_refused(),
+        "the wipe answered success over a re-arm the medium refused, and left no \
+         trace of the refusal anywhere on the device"
+    );
 }
 
 /// `Storage` whose `remove` starts failing after `budget` successes.
@@ -1603,6 +1612,100 @@ fn a_key_past_the_dynamic_cap_reads_refuses_writes_and_still_wipes() {
 }
 
 #[test]
+fn a_healthy_device_reports_no_refused_re_arm() {
+    // Written first, because it is the whole false-positive argument for
+    // `Fs::rescrub_refused`. The obvious surface — read EF_HARDENED on demand —
+    // reports trouble on every healthy key: latched is the STEADY STATE of an
+    // OTP-provisioned device past its first lap. The latch is a fact about a
+    // transition instead, and this is that transition on a medium that serves it.
+    let mut fs = fs();
+    fs.put(KEY_DEV, b"pre-otp").unwrap();
+    crate::run_at_rest_lap(&mut fs);
+    assert!(
+        fs.has_data(crate::EF_HARDENED),
+        "fixture: the lap completed and the marker is latched, as on every \
+         provisioned key"
+    );
+    assert!(
+        !fs.rescrub_refused(),
+        "a completed lap is not a refused re-arm"
+    );
+
+    // An ordinary wipe. `factory_wipe` re-arms at its head, best-effort, and this
+    // medium serves it — no medium fault happened, so none may be reported.
+    fs.factory_wipe(|_| false, |_| false, |_| false).unwrap();
+    assert!(
+        !fs.rescrub_refused(),
+        "a healthy wipe reported the medium as refusing a re-arm, which would make \
+         the signal fire on every shipped key and mean nothing"
+    );
+    assert!(
+        !fs.has_data(crate::EF_HARDENED),
+        "fixture: the head re-arm really did clear the marker"
+    );
+}
+
+#[test]
+fn a_marker_probe_that_cannot_answer_is_a_refusal_too() {
+    // The other arm of `request_rescrub`'s `Err`, and the one the tests missed: the
+    // removal may land and the READ-BACK still fault, and a re-arm nobody could
+    // confirm is not a re-arm that landed. Narrowing the latch to the marker-still-
+    // there arm left this whole shape reported as a healthy device.
+    use crate::storage::faults::ProbeStuck;
+    let (backend, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.put(crate::EF_HARDENED, b"\x01").unwrap();
+    // Rebuilt without a `scan`, as a boot that never enumerated leaves it: the
+    // present bit is UNDECIDED, so `delete` skips the backend and the read-back is
+    // the only thing that can answer — and it is exactly what faults.
+    let mut fs = Fs::new(fs.into_storage());
+    medium.stick(Some(crate::EF_HARDENED));
+
+    assert_eq!(
+        crate::request_rescrub(&mut fs),
+        Err(Error::MemoryFatal),
+        "fixture: the probe faulted rather than reading the marker back"
+    );
+    assert!(
+        fs.rescrub_refused(),
+        "a re-arm whose read-back could not answer was reported as one that landed"
+    );
+}
+
+#[test]
+fn a_single_shot_refusal_the_retry_recovered_still_reports() {
+    // The judgement this latch turns on, argued rather than assumed. `refuse_once`
+    // is the arm the wipe sites' retry recovers: the marker leaves the medium, so
+    // the lap WILL run and nothing lies. Setting the latch anyway is what makes it
+    // honest — it says the medium refused a re-arm this power cycle, and it did.
+    // Clearing it on the retry would narrow it to "the LAST re-arm failed", and a
+    // wipe is exactly that shape: head refused, retry served, host told nothing.
+    let (stuck, medium) = RemoveStuck::new();
+    let mut fs = Fs::new(stuck);
+    fs.put(crate::EF_HARDENED, b"\x01").unwrap();
+    medium.refuse_once(crate::EF_HARDENED);
+
+    assert!(
+        crate::request_rescrub(&mut fs).is_err(),
+        "fixture: the single-shot fault fired on the head re-arm"
+    );
+    assert!(
+        crate::request_rescrub(&mut fs).is_ok(),
+        "fixture: and the retry recovered it, which is what makes this the arm the \
+         answer alone cannot distinguish from a healthy device"
+    );
+    assert!(
+        !fs.has_data(crate::EF_HARDENED),
+        "fixture: the lap is genuinely re-armed — this is NOT a marker that lies"
+    );
+    assert!(
+        fs.rescrub_refused(),
+        "a recovered retry cleared the latch, so a medium that refused is now \
+         indistinguishable from one that never did"
+    );
+}
+
+#[test]
 fn a_refused_re_arm_is_reported_and_not_swallowed() {
     // F1: the write order alone covers a power cut and nothing else. A medium that
     // refuses `remove(EF_HARDENED)` and serves everything around it reaches the SAME
@@ -1630,6 +1733,14 @@ fn a_refused_re_arm_is_reported_and_not_swallowed() {
         fs.has_data(crate::EF_HARDENED),
         "fixture: and the lap's own gate still reads it as done",
     );
+    // The answer is the gated sites' half. The wipe paths discard it on purpose —
+    // refusing there would leave the secrets live — so a refusal nothing latches
+    // is a refusal nothing can ever report, and the wipe answers the host success.
+    assert!(
+        fs.rescrub_refused(),
+        "a persistently stuck medium left no trace of the refusal outside the \
+         return value the wipe paths throw away"
+    );
 
     // The control, and not a no-op: the same medium with the fault cleared re-arms,
     // says so, and the marker leaves the medium.
@@ -1639,6 +1750,11 @@ fn a_refused_re_arm_is_reported_and_not_swallowed() {
         "a healthy medium must still report the re-arm as landed"
     );
     assert!(!medium.live(crate::EF_HARDENED));
+    assert!(
+        fs.rescrub_refused(),
+        "the latch is per POWER CYCLE, not per call: a later healthy re-arm does \
+         not un-refuse the one this medium already refused"
+    );
 }
 
 #[test]
@@ -1673,4 +1789,9 @@ fn a_re_arm_the_present_cache_skipped_is_not_reported_as_landed() {
         "the failed re-arm settled the cache, so a retry must actually re-arm"
     );
     assert!(!fs.has_data(crate::EF_HARDENED));
+    assert!(
+        fs.rescrub_refused(),
+        "the swallow one layer down again: a cache-skipped re-arm the retry \
+         recovered is still a re-arm this power cycle could not be shown to land"
+    );
 }

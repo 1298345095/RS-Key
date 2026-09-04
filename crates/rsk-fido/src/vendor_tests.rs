@@ -959,7 +959,39 @@ fn backup_state_reports_flags() {
     let (mut fs, mut rng, mut st) = setup();
     assert_eq!(
         state_flags(&mut fs, &mut rng, &mut st),
-        (false, true, false, false) // not sealed, has seed, not locked, not unlocked
+        // not sealed, has seed, not locked, not unlocked, no refused re-arm
+        (false, true, false, false, false)
+    );
+}
+
+/// A refused at-rest re-arm leaves by a door other than the wipe's own answer.
+/// `authenticatorReset` re-arms best-effort and reports success whatever the medium
+/// said — a non-zero status there would teach a host to call a working reset failed
+/// — so the only place it can surface is this ungated status map.
+#[test]
+fn backup_state_reports_a_refused_re_arm_out_of_band() {
+    let (backend, medium) = rsk_fs::storage::faults::RemoveStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    let mut st = FidoState::new();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    assert!(
+        !state_flags(&mut fs, &mut rng, &mut st).4,
+        "control: a latched marker is the steady state of every provisioned key, so \
+         it must not read as a fault"
+    );
+
+    // The persistent arm: the wipe sites' retry cannot recover it, and their answer
+    // is discarded, so without this key the host is told nothing at all.
+    medium.refuse(Some(rsk_fs::EF_HARDENED));
+    assert!(
+        rsk_fs::request_rescrub(&mut fs).is_err(),
+        "fixture: the medium refused the re-arm"
+    );
+    assert!(
+        state_flags(&mut fs, &mut rng, &mut st).4,
+        "the refusal never reached the host"
     );
 }
 
@@ -981,24 +1013,28 @@ fn backup_status_mirrors_the_host_flags() {
 
 // ---- soft-lock ----
 
-/// Read BACKUP_STATE and return `(sealed, has_seed, locked, unlocked)`.
-fn state_flags(
-    fs: &mut Fs<RamStorage>,
+/// Read BACKUP_STATE and return `(sealed, has_seed, locked, unlocked,
+/// rescrub_refused)`. Generic over the backend so the faulting media can drive it.
+fn state_flags<S: Storage>(
+    fs: &mut Fs<S>,
     rng: &mut SeqRng,
     st: &mut FidoState,
-) -> (bool, bool, bool, bool) {
+) -> (bool, bool, bool, bool, bool) {
     let mut req = [0u8; 16];
     let n = one_byte_req(&mut req, VENDOR_BACKUP_STATE);
     let mut out = [0u8; 64];
     let r = call(fs, rng, st, &mut AlwaysConfirm, &req[..n], &mut out).unwrap();
     let mut d = Decoder::new(&out[..r]);
-    assert_eq!(d.map().unwrap(), Some(4));
-    let mut flags = [false; 4];
-    for f in flags.iter_mut() {
-        d.u8().unwrap();
+    assert_eq!(d.map().unwrap(), Some(5));
+    let mut flags = [false; 5];
+    // The key numbers, not just the arity: read positionally, a map keyed 2..=6
+    // decodes as if it were 1..=5, so every assertion below still passes while the
+    // wire has moved under the host. Key 5 is the whole of `rescrub_refused`.
+    for (key, f) in (1u8..).zip(flags.iter_mut()) {
+        assert_eq!(d.u8().unwrap(), key, "BACKUP_STATE key {key}");
         *f = d.bool().unwrap();
     }
-    (flags[0], flags[1], flags[2], flags[3])
+    (flags[0], flags[1], flags[2], flags[3], flags[4])
 }
 
 /// Host side of the channel: wrap 32 bytes as nonce ‖ ct ‖ tag.
@@ -1142,7 +1178,7 @@ fn lock_enable_wraps_seed_and_drops_plain() {
     assert_eq!(load_keydev(&dev(), &mut fs), None);
     assert_eq!(
         state_flags(&mut fs, &mut rng, &mut st),
-        (false, false, true, false)
+        (false, false, true, false, false)
     );
 }
 
@@ -1165,7 +1201,7 @@ fn unlock_restores_operations_for_the_session() {
     assert!(!fs.has_data(EF_KEY_DEV.get()));
     assert_eq!(
         state_flags(&mut fs, &mut rng, &mut st),
-        (false, false, true, true)
+        (false, false, true, true, false)
     );
 }
 
@@ -1197,7 +1233,7 @@ fn disable_restores_plain_seed() {
     assert_eq!(load_keydev(&dev(), &mut fs), Some(seed));
     assert_eq!(
         state_flags(&mut fs, &mut rng, &mut st),
-        (false, true, false, false)
+        (false, true, false, false, false)
     );
 }
 

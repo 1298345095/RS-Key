@@ -2740,6 +2740,56 @@ and to the statuses it quotes.
 
 ### Security
 
+- **A wipe that could not re-arm the at-rest scrub says so now — out of band, and
+  never in the wipe's own answer.** The wipe paths call `rsk_fs::request_rescrub`
+  best-effort (`let _ = …`), deliberately: on a wipe "leave the record in force"
+  means leave the secrets live, so a refused re-arm must not stop a factory reset.
+  Most carry a head call and a retry, and the retry recovers a **single-shot**
+  refusal. A **persistent** one it cannot — `EF_HARDENED` stays latched over an
+  already-tombstoned, chip-serial-rooted verifier, no later boot ever laps, and the
+  wipe still answers the host success. Nothing anywhere reported that.
+
+  `Fs` now latches it in RAM (`Fs::rescrub_refused`), set on `request_rescrub`'s
+  `Err` path — which is why **no call site changed** — and
+  `authenticatorVendor 0x41 / 0x05` BACKUP_STATE carries it as key `5`
+  (`docs/protocol.md` §9). `rsk status` prints a line only when it is set; older
+  hosts ignore an unknown key and older builds omit it.
+
+  **What it does NOT say**, because that is the whole trap: not "the marker lies",
+  not "hardening failed". At the *gated* call sites a refusal already stops the
+  write it guards, so nothing is superseded and the marker stays true — and the
+  command either errors to the host or skips a lazy migration and leaves the older
+  record in force. Key 5 is **medium health for this power cycle** — a re-arm was
+  refused — and it is worded that way in the wire spec and at the field.
+
+  **Why a latch and not a read.** A latched `EF_HARDENED` is the steady state of
+  every OTP-provisioned device past its first lap (`RSKeyBootHardening`'s `Init` is
+  `marker = TRUE`), so reading the marker on demand would report trouble on a
+  healthy key; the condition is a fact about a *transition*, and after a healthy
+  wipe the marker is absent. So something must remember, and RAM is the floor: a
+  flash breadcrumb would be a write to the medium that is refusing, and its own
+  failure would be unreportable by the same argument. It clears on the next power
+  cycle whether or not the flash recovered.
+
+  The **control was written first**, because it is the entire false-positive
+  argument: a device that completed its lap, re-latched the marker and took an
+  ordinary `factory_wipe` reports nothing. Beside it, the arm that decides the
+  wording — a single-shot refusal the retry recovered reports anyway, since the flag
+  says the medium refused rather than that the lap is lost, and clearing it on the
+  retry would narrow it to "the LAST re-arm failed", which is exactly the shape a
+  wipe has — and the arm the earlier tests had missed entirely: a removal that lands
+  while the READ-BACK faults, which no case drove and which a latch set only on the
+  marker-still-there arm would have reported as a healthy device.
+
+  **No `tests/*.py` repro exists and none is claimed.** `rsk_fs::run_at_rest_lap`
+  has exactly one caller, `firmware/src/main.rs:633`, gated on `mkek.is_some()`;
+  `tools/emu` never calls it and builds its device with `otp_key: None`, so on the
+  emulator `EF_HARDENED` is never latched and its RAM medium refuses nothing. A
+  board would need a `FAKE_MKEK` build *and* a persistently refusing
+  `remove(EF_HARDENED)`, and no hook in this tree injects a flash-remove fault on
+  device. Falsified through the gate row instead: dropping the latch takes
+  `test (host)` to rc 101. **bcdDevice → 0x09C5.**
+
 - **PIV RESET and OATH RESET re-arm the at-rest scrub unskippably too — the
   four-member class is closed.** The two applets closed at 0x09C0 got the pair
   the other two did: `request_rescrub` at the head, ahead of every tombstone, and
