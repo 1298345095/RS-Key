@@ -21,6 +21,12 @@ secure_boot_*.pem
 # throwaway test key and one committed to a public repository.
 *.store
 
+# `tests/54_sram_residue.py` dumps 520 KiB of main SRAM, taken while the firmware
+# may have held an unwrapped key in RAM — the same class as the flash image above.
+# Its default is out of the tree now; this catches an older checkout, or a command
+# line still spelling `--dump sram.bin`, and the windows derived beside it.
+sram.bin*
+
 # TLC output: one log per configuration (`formal/run-tlc.sh`), plus the state
 # directory TLC creates for its fingerprint set. NOTHING here is committed. A
 # summary table used to be, "so the README's results table stays auditable" --
