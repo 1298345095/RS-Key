@@ -1314,12 +1314,30 @@ BOARD_SHA = re.compile(r"[0-9a-f]{64}")
 
 
 #: Below this the obligation lost a row rather than discharging one. Four of the
-#: twelve `covers` nothing and are `depends_on` by nothing, so a review deleted
-#: each of them WITH its record and the gate stayed green — the derivations do not
-#: produce a candidate for "the timer is monotonic", and nothing else anchored
-#: them. A floor is the smallest thing that makes the deletion a diff; what would
-#: make it a derivation is stage 10's inventory, which is not this file's.
-BOARD_ROW_FLOOR = 12
+#: TWELVE ROWS LIVE WHEN THIS WAS WRITTEN `covers` nothing and were `depends_on` by
+#: nothing, so a review deleted each of them WITH its record and the gate stayed
+#: green — the derivations do not produce a candidate for "the timer is monotonic",
+#: and nothing else anchored them. A floor is the smallest thing that makes the
+#: deletion a diff; what would make it a derivation is stage 10's inventory, which
+#: is not this file's. THAT COUNT IS DATED AND NOT LIVE: a number spelled in prose
+#: is the thing this constant exists to stop rotting silently, and the sentence is
+#: kept as the reason the floor was written, never as a fact about the tree today.
+#:
+#: RATCHETED 12 -> 13 on 2026-09-05 for `PLAT-TIMER-003`, and the ratchet earns
+#: its place rather than following the count: that row is the one the timebase
+#: split left owned by nothing — three liveness properties `supports`-ed by a
+#: DISCHARGED rate reading while the progress they actually rest on was
+#: registered nowhere — so it is exactly the shape the paragraph above describes,
+#: a row a later reviewer deletes WITH its record while the gate stays green. It
+#: `covers` nothing, so no derivation anchors it. The one thing that names it,
+#: `PLAT-TIMER-002`'s `depends_on`, is not an anchor a deletion respects: the
+#: deletion takes the link with it and [`check_links`] then has nothing to resolve.
+#: Measured on this tree: the row, its record and that link removed together is
+#: exit 0 at a floor of 12 and exit 1 at 13, on the finding this constant prints.
+#: LOWERING IT IS ALSO RED, and not here — `test_the_record_vocabulary_is_ratcheted`
+#: pins it at `>= 13`, because this number is one line and a deletion that edits it
+#: in the same diff would otherwise cost a reviewer nothing to miss.
+BOARD_ROW_FLOOR = 13
 
 
 def board_rows(ids):

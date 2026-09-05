@@ -377,7 +377,9 @@ sha256 = "519cc0f9fdbc2ccf2084ed75a0af2c6d4f53a77be2b7096dd3f034d7ca4e8823"
 # names the field an integrator must extend; five need a new `PLAT-SEAL-*` entry,
 # and every one of those five is `discharge_owner = "contributor"` — a
 # maintainer-owned row would owe a board record for a question no board answers,
-# and the board obligation stays at twelve. The exact edits are in the platform
+# so this bundle leaves the board obligation where it found it. Its size is not
+# spelled here: it read `twelve` until `PLAT-TIMER-003` made it thirteen on
+# 2026-09-05 and nothing went red. The exact edits are in the platform
 # delta accompanying this bundle; `python3 scripts/platform_gate.py` is RED on
 # the twelve `slice:AS-SEAL-*` candidates until they are merged.
 

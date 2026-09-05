@@ -350,8 +350,11 @@ sha256 = "7fd0e161123d9a68075df4bc35aa3cced6a78e19672f8f92ffef4038f9b20160"
 # this clause: AS-AUV-1, AS-AUV-2, AS-AUV-3. `python3 scripts/platform_gate.py`
 # is RED on those three until an integrator registers them; the proposal is in
 # the report accompanying this bundle, and every proposed entry is
-# `discharge_owner = "contributor"`, because the board obligation is twelve rows
-# and a thirteenth would owe a board record for a question no board answers.
+# `discharge_owner = "contributor"`, because a maintainer-owned row would owe a
+# board record for a question no board answers. How many such rows there already
+# are is `board_rows`' to say and is not spelled here: it read `twelve` until
+# `PLAT-TIMER-003` made it thirteen on 2026-09-05 and nothing went red — and a
+# thirteenth row DOES now exist, for a question a board does answer.
 
 [[assumption]]
 id = "AS-AUV-1"

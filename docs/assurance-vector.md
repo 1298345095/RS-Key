@@ -247,7 +247,8 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-MODEL-013` | The two Kani harnesses named for this property cover the SESSION token |
 | platform | `PLAT-MODEL-015` | `RSKeyBootHardening` treats the lazy re-key as ATOMIC in thirteen of i |
 | platform | `PLAT-TRNG-001` | The RP2350's ring-oscillator TRNG delivers full-entropy words once its |
-| platform | `PLAT-TIMER-001` | `embassy_time::Instant` is monotonic and makes progress, so a timeout  |
+| platform | `PLAT-TIMER-002` | The 32-bit alarm comparator survives its own wrap. `embassy-rp` arms ` |
+| platform | `PLAT-TIMER-003` | The timebase ADVANCES: RP2350 `TIMER0`'s counter keeps counting for as |
 | platform | `PLAT-XIP-001` | Core 1 is paused for the whole of every flash erase or program, so no  |
 | platform | `PLAT-DISPLAY-001` | A panel update completes before the firmware treats the card as shown, |
 | platform | `PLAT-TRACE-001` | A trace-linked claim rests on the fields the recorded session VARIES;  |

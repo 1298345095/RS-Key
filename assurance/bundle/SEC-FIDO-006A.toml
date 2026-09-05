@@ -384,7 +384,9 @@ sha256 = "5a4076dcac2269d97f0193554ee17b1284e3c8fa5f0f8b86b9a4e81a336c4ce5"
 # in `covers`. Three are new and have no home: they are the two findings above
 # and the fold in the runtime columns. The proposals are in the delta file
 # accompanying this bundle, and every new entry proposed there is
-# `discharge_owner = "contributor"` so the board obligation stays at twelve.
+# `discharge_owner = "contributor"`, so this bundle adds nothing to the board
+# obligation. The size of that obligation is not spelled here: it read `twelve`
+# until `PLAT-TIMER-003` made it thirteen on 2026-09-05 and nothing went red.
 
 [[assumption]]
 id = "AS-PIN-1"

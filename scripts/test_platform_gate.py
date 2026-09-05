@@ -518,7 +518,7 @@ class Tree:
 
     def problems(self, board_floor=2):
         """`board_floor` is a PARAMETER, the way this tree's other floors are:
-        the fixture carries two maintainer-owned rows and the checkout twelve,
+        the fixture carries two maintainer-owned rows and the checkout thirteen,
         and a floor hard-coded to the checkout's number reddens every case."""
         return platform_gate.audit(self.root, board_floor)[0]
 
@@ -1538,7 +1538,20 @@ def test_an_expected_committed_before_the_run_is_accepted(tree):
 
 def test_the_record_vocabulary_is_ratcheted():
     """M6/M10: widening `BOARD_OUTCOMES` or the sha alphabet moves the
-    vocabulary with no rule deleted and no case red."""
+    vocabulary with no rule deleted and no case red.
+
+    [`platform_gate.BOARD_ROW_FLOOR`] is here for the axis the sibling case
+    below cannot cover, and it is a tooth that case COST when it stopped
+    spelling the number: holding the obligation equal to the constant catches a
+    row ADDED without a ratchet, and it made hiding a row DELETED one edit
+    cheaper, because lowering the constant to match the smaller tree now
+    reddens nothing anywhere. Measured both ways on this checkout, deleting
+    `PLAT-TIMER-003` with its record and the `depends_on` that names it: at a
+    floor of 13 the gate is exit 1 on its own finding; with the floor lowered
+    to 12 in the same diff the gate is exit 0 and every case here passed —
+    198 of them — until this line. `>=`, not `==`: a genuine later ratchet has
+    to raise the constant and must not have to edit this case to do it.
+    """
     assert platform_gate.BOARD_OUTCOMES == {"planned", "pass", "fail", "inconclusive"}
     assert platform_gate.BOARD_PLAN_FIELDS == ("method", "boot_config", "expected")
     assert platform_gate.BOARD_RESULT_FIELDS == (
@@ -1546,14 +1559,24 @@ def test_the_record_vocabulary_is_ratcheted():
     )
     assert platform_gate.BOARD_SHA.pattern == r"[0-9a-f]{64}"
     assert set(platform_gate.OUTCOME_STATUS) == {"pass", "fail"}
+    assert platform_gate.BOARD_ROW_FLOOR >= 13, platform_gate.BOARD_ROW_FLOOR
 
 
 def test_the_obligation_and_the_page_count_the_same_rows():
     """The first version obliged 9 rows while the page it generates told the
-    reader 12 routes end at a board. One expression now."""
+    reader 12 routes end at a board. One expression now.
+
+    Held to [`platform_gate.BOARD_ROW_FLOOR`] rather than to a literal, and that
+    is a tooth rather than tidiness: the literal was `12`, it went red on
+    `PLAT-TIMER-003` and its repair could have been a second `13` — one more
+    hard-coded twin of a number that had just moved. The gate's own rule is `at
+    least the floor`, so ADDING a row without ratcheting is green there (13 >= 12)
+    and the new row is then as deletable as the four that made this constant
+    necessary. Equality here is what makes the ratchet a step someone has to take.
+    """
     registered = platform_gate.entries(ROOT, [])
     owed = platform_gate.board_rows(registered)
-    assert len(owed) == 12, sorted(owed)
+    assert len(owed) == platform_gate.BOARD_ROW_FLOOR, sorted(owed)
     page = (ROOT / "docs/platform-assumptions.md").read_text()
     assert f"discharge {len(owed)} of these rows" in page
 
