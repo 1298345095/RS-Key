@@ -119,14 +119,44 @@ CASE = re.compile(r"^def test_", re.M)
 #: this catches the COLLAPSE and not a slide — and the collapse is what was
 #: measured: `test_verdict_gate.py` truncated to its SPDX line took 241 cases out
 #: of `pytest scripts -q` with ZERO new failures, because the rule below asked
-#: only whether the file exists. What it still does not cover: this file, which
-#: is a table nothing else is a roster for, and the aggregate — `pytest` exits 5
-#: on a collection of nothing, and no row floors it above that.
+#: only whether the file exists.
 TABLE_FLOOR = 5
+
+#: Every `def test_` under `scripts/`, and it is an EQUALITY rather than a floor.
+#:
+#: What it closes is the hole `TABLE_FLOOR` names and cannot reach: a single case
+#: deleted from a 176-case table. Driven WITHOUT this rule —
+#: `test_a_label_a_sentence_merely_WRITES_is_not_an_arm` deleted outright left
+#: this file at exit 0, `test_platform_gate.py` at exit 0 with one fewer case
+#: collected, and `scripts/platform_gate.py` at exit 0. Every case in this tree
+#: could be deleted the same way, and `platform_gate.py`'s hollow-arm floor and
+#: its misplaced-label diagnostic trip on no record in the checkout, so pytest is
+#: the whole of their protection. With this rule the same deletion is exit 1 here
+#: and still exit 0 in the file it was deleted from, which is the point: the
+#: roster is what notices, not the table that lost the case.
+#:
+#: A FLOOR cannot do this and that is why this is not one: set at today's count it
+#: decays to blind on the first case anyone adds, because 2500 - 1 still clears
+#: 2499. The price of the equality is that ADDING a case is also a red, with one
+#: number to move — the same shape as `platform_gate.py --write`, and the message
+#: below prints the value to write. One number and not fifty-seven per-table ones:
+#: this tree has a commit of its own removing three hard-coded twins of a count
+#: that moved, and a twin per table is that defect fifty-seven times over.
+#:
+#: What it still does not cover: a case gutted rather than deleted. `assert True`
+#: counts here exactly as the case it replaced did, and nothing in this file reads
+#: a case's body.
+SUITE_CASES = 2521
 
 
 def check_sh():
     return (ROOT / "scripts/check.sh").read_text()
+
+
+def suite_cases():
+    """`def test_` over every table under `scripts/`, this file included."""
+    return sum(len(CASE.findall(p.read_text()))
+               for p in sorted(HERE.glob("test_*.py")))
 
 
 def test_there_are_gates_to_check():
@@ -186,6 +216,21 @@ def test_no_board_table_is_owed_a_check_sh_row():
     row = check_sh()
     running = [g for g in BOARD_TABLES if gate_lines.runs(row, pathlib.PurePath(g).name)]
     assert not running, f"check.sh runs {running}, which need hardware"
+
+
+def test_no_case_has_been_deleted_from_the_suite():
+    """One case out of a 176-case table was a green tree. See [`SUITE_CASES`].
+
+    The count is over `def test_` and not over what pytest collects, for the same
+    reason [`CASE`] is: re-entering pytest to find out costs more than the rule is
+    worth, and a parametrized case counts as one either way — which is enough,
+    because a DELETED case takes its `def` with it.
+    """
+    now = suite_cases()
+    assert now == SUITE_CASES, (
+        f"scripts/ holds {now} `def test_` and SUITE_CASES says {SUITE_CASES}."
+        f" If you added cases, write {now}. If you did not, one has been deleted"
+    )
 
 
 def test_the_named_guards_still_exist():

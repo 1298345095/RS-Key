@@ -34,7 +34,7 @@ grown past sixty, and no rule holds a number a docstring states. Measured, the
 [`main`] was the wrong function: `--write` returns before the audit, and a red run
 prints on stderr. The page is what a reader who never runs the gate sees.
 
-Twelve rules, and the first is the one that earns the file:
+Thirteen rules, and the first is the one that earns the file:
 
 * **candidates are DERIVED, and every one is claimed.** Five derivations, each
   floored where its source exists and it found nothing:
@@ -68,14 +68,33 @@ Twelve rules, and the first is the one that earns the file:
   measured, and `PLAT-STORE-003`'s discharge records it. [`PROSE_PAGE`] is that
   axis's half and weaker: the comment there says which attacks it does not stop.
 * **a maintainer-owned row owes a validated RECORD.** `assurance/board/<id>.toml`,
-  plan half refused empty, result half refused while `planned`, `expected` older
-  in git than it and `planned` there, an outcome the status must match BOTH ways.
+  plan half refused empty, result half refused while `planned`, an outcome the
+  status must match BOTH ways, and SOME commit carrying this `expected` under
+  `outcome = "planned"` — which is less than "the expectation predates the run",
+  and the gap is priced at [`check_expected_predates`].
+* **and a run that happened TRANSCRIBES THE CRITERION it was read against.**
+  `outcome = "pass"` is a word, and the word was the whole claim: a record moved
+  to `pass` with an `expected` byte-identical to its committed one and every
+  clause above green — the plan half non-empty, the expectation unmoved, the
+  status agreeing. `arm_taken` is refused unless it is the arm's own label, a
+  full stop, and then the WHOLE of that record's `expected`, up to whitespace.
+  The whole and not the arm alone: an arm runs to the next label, so criterion
+  prose written after the first one belongs to exactly one arm and is dropped by
+  every other quotation — `PLAT-ROM-001` is that shape today, and a fabricated
+  PASS quoting 126 of its 327 characters was exit 0. An arm with no word after
+  its `=` is not one. Not a banned word: `bundle_gate.DISPOSITIONS` measured that
+  shape and the cheapest way past a refusal is typing the other word. What this
+  still cannot reach is an `actual` that did not happen — nothing here measures a
+  board.
 * **links resolve.** `supports` names registry properties, `depends_on` and
   `refines` name entries here, `discharges` names constants of the first
   registry — and an entry covering `model:X` must discharge `X`, so the two
   registries cannot drift into two answers about the same constant.
-* **a cell stays a cell.** A line break in `statement` or `discharge` takes Owner
-  and Supports off the published row; a `<` publishes raw HTML or ends the build.
+* **a cell stays a cell.** A line break in `statement` or `discharge` — or in a
+  record's `expected`, which the page publishes beside the outcome — takes the
+  columns after it off the published row. A `<` used to be banned beside it and
+  is ESCAPED now: `&lt;` reaches it, so a registry about measurement can write an
+  inequality, and the ban's own message said no escape could.
 * **a settled result is DATED.** A full-sha `evidence_commit`, read against the
   row's `evidence` and the paths its own `revalidated_by` names; stale is a page.
 * **an accepted risk says WHERE it is published.** `out_of_scope_by` resolves to a
@@ -110,6 +129,7 @@ switched off. It goes in when a real pair arrives.
 """
 
 import ast
+import collections
 import pathlib
 import re
 import subprocess
@@ -1294,8 +1314,14 @@ def check_covered_files(name, entry, findings):
 #: one row's class to `toolchain` deleted its obligation. Both numbers come from
 #: the same expression now.
 BOARD_PLAN_FIELDS = ("method", "boot_config", "expected")
+#: `arm_taken` is a RESULT and belongs here for the same reason `actual` does:
+#: which arm of `expected` the run took is knowable only after it. It is the
+#: field that stops `outcome` being self-declared — see [`check_arm_taken`]. It
+#: is also the one entry here that is owed CONDITIONALLY, and the condition is
+#: in [`check_board_records`]: a record that states no arm under its outcome has
+#: nothing to quote.
 BOARD_RESULT_FIELDS = ("board", "stepping", "firmware_sha256",
-                       "first_boot_capture", "actual")
+                       "first_boot_capture", "actual", "arm_taken")
 #: Read like any other field -- `note` had no rule at all in the first version,
 #: and a review put "Ran it, RP2350 A2, sha 0xdeadbeef, PASSED" in it on a
 #: `planned` record at exit 0.
@@ -1311,6 +1337,90 @@ BOARD_OUTCOMES = {"planned", "pass", "fail", "inconclusive"}
 OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}
 
 BOARD_SHA = re.compile(r"[0-9a-f]{64}")
+
+#: How an `expected` states an ARM: an outcome's own name, uppercased, an `=`,
+#: and the OPENING OF A SENTENCE. The vocabulary is [`BOARD_OUTCOMES`]'s rather
+#: than a second list, less `planned`, which is the state before any arm is taken
+#: and so the one outcome with no arm.
+#:
+#: What the anchor is for, stated narrowly because a review measured the wide
+#: version and it was wrong. The earlier claim here was that the anchor closes
+#: the 84-character quote a `\b` label opens ("its own PASS = zero exit tells you
+#: only that the command was accepted", prepended to PLAT-ROM-002). Re-measured
+#: with the anchor reverted to `\b` and that sentence prepended to the real
+#: record: the arms parse `['pass', 'pass', 'fail']` and the gate exits 1 saying
+#: "`expected` states 2 PASS arms" — a DUPLICATE label, which is a clause of its
+#: own in [`check_board_records`]. On the checkout untouched, that revert left
+#: `python scripts/platform_gate.py` at exit 0 and fell three pytest cases, two
+#: of them on the parser assertion and none on `tree.problems()`. So the anchor's
+#: own job is the one shape nothing else sees: a mid-sentence label of an outcome
+#: the record states NOWHERE ELSE, which would satisfy [`ARM_REQUIRED`] and let
+#: `outcome` name it. Since the [`ARM_MISPLACED`] cases below assert findings
+#: rather than the parser, the same revert now falls nine.
+#:
+#: What it costs is a plan-time red on prose that means the arm. Measured over
+#: nine spellings: a semicolon and a colon are sentence ends here and stay green;
+#: a comma, an em dash, an opening parenthesis, a `.)` or `."` before the label,
+#: an ellipsis, and a sentence-case `Pass =` are all red. That red is worth
+#: paying only if it says so — the finding used to read "`expected` states no
+#: PASS arm" over an `expected` that visibly states one — so
+#: [`ARM_MISPLACED`] is what turns each of those into its own diagnostic.
+ARM_LABEL = re.compile(
+    r"(?:\A|(?<=[.:;!?])\s+)("
+    + "|".join(sorted(o.upper() for o in BOARD_OUTCOMES - {"planned"}))
+    + r")\s*=\s*"
+)
+
+#: The same label WITHOUT the anchor and without the case, read only to tell an
+#: author which red they are looking at. It states no rule: everything it matches
+#: and [`ARM_LABEL`] does not is a spelling the record meant as an arm, and the
+#: nine measured above are what a message has to name to be worth its red.
+ARM_MISPLACED = re.compile(
+    r"\b(" + "|".join(sorted(o.upper() for o in BOARD_OUTCOMES - {"planned"}))
+    + r")\s*=\s*", re.IGNORECASE
+)
+
+#: A WORD in an arm's own body: two or more letters, so digits and punctuation
+#: are not one. The floor a stated arm has to clear. Two shapes carry no
+#: criterion at all and both are here: `PASS =` with nothing after it, which the
+#: first version accepted as an arm and discharged on; and the `PASS = 0.` that
+#: prose about a script's exit codes ("FAIL = 1 and PASS = 0.") mints without
+#: anyone crafting it. A CHARACTER floor separates neither — `PLAT-DISPLAY-001`'s
+#: whole PASS body is `both.`, five characters, so a length that admits this tree
+#: admits `0.` with it. Measured over the 33 arms of the thirteen records: the
+#: minimum is ONE word and no arm has zero, so the floor reddens nothing here.
+#:
+#: It is NOT what stops a quotation being twelve characters — [`arm_claim`] is,
+#: and it carries the whole `expected` whatever any one arm says. What is left
+#: for this floor is the record's own plan: an outcome whose arm has no body has
+#: no criterion of its own, and the run that takes it is read against a field
+#: that never says what taking it would mean.
+ARM_WORD = re.compile(r"[^\W\d_]{2,}")
+
+#: The arms every record owes BEFORE the board is powered, and "before" is a
+#: convention here rather than something git is read for. [`check_expected_predates`]
+#: asks only that SOME commit carry this `expected` with `outcome = "planned"`;
+#: it reads no other field of that version and does not order it against the
+#: capture. Driven on the DISCHARGED PLAT-ROM-002, two commits — a "re-plan" that
+#: rewrites `expected`, sets `outcome = "planned"`, blanks the result half and
+#: moves the registry row back to `pending`, then a second restoring the run —
+#: exit 0 at all five points measured, including both intermediates, with the
+#: quoted criterion going from 136 characters carrying "the CCID interface is
+#: gone" to 39 that carry nothing. Blanking the result half is what removes the
+#: red an earlier version of this comment priced the manoeuvre at. So the price
+#: of writing an arm late is two commits nobody is looking for.
+#: Not INCONCLUSIVE, and the number is SIX of the thirteen, not five: PLAT-OTP-001,
+#: PLAT-ROM-001, PLAT-ROM-002, PLAT-TIMER-003, PLAT-TRNG-001 and PLAT-XIP-001
+#: state no such arm, and requiring one would put every one of them through those
+#: two commits. What makes the honest inconclusive run recordable instead is the
+#: other half, in [`check_board_records`]: `arm_taken` is owed only where the
+#: record states an arm under the outcome. This tuple is what keeps that escape
+#: out of `pass` and `fail`'s reach, so widening it is not a free edit --
+#: `test_the_record_vocabulary_is_ratcheted` pins the pair, and
+#: `test_an_expected_that_states_no_arm_is_a_finding` parametrizes over a LITERAL
+#: and asserts this tuple against it, so narrowing the tuple reddens both cases
+#: rather than collecting one fewer.
+ARM_REQUIRED = ("pass", "fail")
 
 
 #: Below this the obligation lost a row rather than discharging one. Four of the
@@ -1359,6 +1469,130 @@ def _text(record, key):
     """
     value = record.get(key)
     return value.strip() if isinstance(value, str) else None
+
+
+def _spaced(text):
+    """One run of whitespace is one space. The only difference `arm_taken` may
+    have from the criterion it quotes: a TOML `\"\"\"…\"\"\"` wrapped for a reader is
+    the same sentence, and refusing the wrap would buy nothing but a line length.
+    It is also why nothing here may say VERBATIM, which two docstrings and the
+    published page all did over this call."""
+    return " ".join(str(text).split())
+
+
+#: One arm of an `expected`: its label and the arm's own body. There is no third
+#: member any more. A `claim` field held the quotation a discharge had to
+#: reproduce — the preamble plus this one arm — and that quotation is what a
+#: review measured as droppable: see [`arm_claim`].
+Arm = collections.namedtuple("Arm", "outcome body")
+
+
+def expected_arms(text):
+    """The arms an `expected` states — the label, and the arm's own body.
+
+    An arm runs from its label to the next one, so the last arm takes the tail.
+    `PLAT-ROM-001`'s FAIL swallows the sentence after it — "No datasheet clause
+    states it either way; a vendor erratum settles it as well as a board does",
+    which is a statement about how the row may be discharged AT ALL rather than
+    about failing. That boundary is what made the old per-arm quotation a rule
+    about a FRAGMENT: the sentence is inside exactly one arm, so a PASS discharge
+    quoted 126 characters of a 327-character `expected` and dropped 201 including
+    that one. Driven on the real checkout, one commit, exit 0. It is not
+    repairable by moving the boundary — the tail is inside the last arm's span
+    with no marker to tell them apart, and the arm bodies here are not sentences
+    (`PLAT-ROM-002`'s FAIL writes "i.e." mid-body), so a sentence-shaped rule
+    reds the tree. What is repairable is the quotation, and [`arm_claim`] is it.
+
+    A LIST and not a dict keyed by outcome: two arms wearing one label is a
+    malformed record, and [`check_board_records`] says so by name — collapsing
+    them here would hide the second.
+    """
+    marks = list(ARM_LABEL.finditer(text))
+    ends = [mark.start() for mark in marks[1:]] + [len(text)]
+    return [
+        Arm(mark.group(1).lower(), _spaced(text[mark.end(): end]))
+        for mark, end in zip(marks, ends)
+    ]
+
+
+def arm_claim(outcome, expected):
+    """The ONE value `arm_taken` may carry under `outcome`: the arm, then all of it.
+
+    One expression, called by the rule and by its finding, so the message cannot
+    describe a value the check would refuse.
+
+    The whole `expected` and not the arm's own span, because the span is what a
+    review drove through. Criterion prose written after the first label belongs
+    to exactly one arm and is dropped by every other claim, and that is not a
+    contrivance: it is the live shape of `PLAT-ROM-001`, where a fabricated PASS
+    quoted 126 characters and left behind the sentence saying an erratum settles
+    the row as well as a board does. Quoting everything closes the family — there
+    is nothing left in the field to omit. What it does NOT do is make the outcome
+    less of a hand-typed word: the label is the only part of this value that
+    varies with the outcome, exactly as the old per-arm quotation's label was.
+    The gate never measures a board, and no shape of this field will change that.
+
+    Up to whitespace ([`_spaced`]) and not byte-for-byte, so a TOML `\"\"\"…\"\"\"`
+    may be wrapped for a reader. "Verbatim" is what this docstring and the
+    published page both used to say, and it was false in both.
+    """
+    return _spaced(f"{outcome.upper()}. {expected}")
+
+
+def check_arm_taken(rel, record, stated, findings):
+    """The whole criterion the run was read against, and `outcome` agreeing.
+
+    `outcome = "pass"` is a word, and a word is free: the flip that provoked this
+    rule moved one record to `pass` with an `expected` byte-identical to the
+    committed one and nothing else changed, and every rule above read only that
+    both strings are non-empty and that one had not moved. What this rule adds is
+    a TRANSCRIPTION: the word costs the whole of the criterion beside it, in the
+    record's own text, so the operator who types it has the expectation under
+    their hand and the reader has it under the outcome.
+
+    What it does NOT do, and what an earlier version of this docstring claimed:
+    make the value a quotation of text the record committed BEFORE the board was
+    powered. [`check_expected_predates`] asks only that some commit carry this
+    `expected` under `outcome = "planned"`, and a commit that says so can be
+    written afterwards. Driven on the discharged PLAT-ROM-002: a "re-plan" commit
+    rewriting `expected`, blanking the result half and moving the registry row
+    back to `pending`, then a commit restoring the run — exit 0 at every point
+    including both intermediates, and the quoted criterion went from 136
+    characters to 39. Blanking the result half is what removes even the red
+    intermediate. So what is enforced is that the tree CONTAINS a planned version
+    of this text, not that it predates the run.
+
+    What it also does not reach: an operator who transcribes the right criterion
+    and writes an `actual` that did not happen — and `first_boot_capture` is met
+    by any existing file that is not the record, so that residue needs no
+    fabricated capture either. Nothing in the tree measures a board.
+
+    The two clauses are two `if`s and not an `if`/`elif`, and the second re-states
+    `taken` because of it. A chained arm cannot be deleted on its own — the delete
+    is a `SyntaxError`, not a green run — and a clause whose deletion arm cannot
+    be driven is the shape this file refuses everywhere else.
+    """
+    quoted = _spaced(_text(record, "arm_taken") or "")
+    if not quoted:
+        return  # an empty field is the result-half rule's finding, not a second one
+    outcome = _text(record, "outcome")
+    expected = _text(record, "expected") or ""
+    taken = [o for o in sorted(stated) if arm_claim(o, expected) == quoted]
+    if not taken:
+        want = arm_claim(outcome or "", expected)
+        findings.append(
+            f"{rel}: `arm_taken` is not this record's `expected` under an arm it"
+            " states — the value is the arm's label, a full stop, and then the"
+            " WHOLE of `expected`, up to whitespace, because a quotation of one"
+            " arm drops whatever the record wrote after the first label."
+            f" Wanted: {want[:64]!r}…. Got: {quoted[:64]!r}"
+        )
+    if taken and outcome not in taken:
+        findings.append(
+            f"{rel}: `arm_taken` names the {taken[0].upper()} arm under outcome"
+            f" {outcome!r} — the arm the run took and the word the registry moves"
+            " on are one answer, and a record where they differ has recorded neither"
+        )
 
 
 def check_board_records(root, ids, findings, floor=None):
@@ -1422,6 +1656,87 @@ def check_board_records(root, ids, findings, floor=None):
                     " before the board is powered is the half that must be written"
                     " before it is"
                 )
+        expected = _text(record, "expected") or ""
+        arms = expected_arms(expected)
+        stated = {arm.outcome for arm in arms}
+        # An EMPTY `expected` is the plan-field rule's finding above and not three
+        # more here, the way an empty `arm_taken` is the result-field rule's.
+        for missing in (o for o in ARM_REQUIRED if expected and o not in stated):
+            # The label is THERE and the anchor is what refused it: say so.
+            # Without this branch each of the nine measured spellings -- comma,
+            # em dash, `(`, `.)`, `."`, ellipsis, sentence-case `Pass =` -- read
+            # "states no PASS arm" over an `expected` that visibly states one.
+            # Compared on group(1), because ARM_LABEL's own match starts at the
+            # whitespace its lookbehind consumes and ARM_MISPLACED's at the label.
+            read = {a.start(1) for a in ARM_LABEL.finditer(expected)}
+            misplaced = [
+                m.group(0).strip() for m in ARM_MISPLACED.finditer(expected)
+                if m.group(1).lower() == missing and m.start(1) not in read
+            ]
+            if misplaced:
+                findings.append(
+                    f"{rel}: `expected` writes {misplaced[0]!r} where an arm has to"
+                    " OPEN a sentence and be uppercase — a label is a word, and"
+                    " prose about a verdict writes the word, so only a label after"
+                    " `.`, `:`, `;`, `!`, `?` or at the start of the field is read"
+                    " as an arm. A comma, a dash, a bracket or a quote before it"
+                    " is not a sentence end here"
+                )
+                continue
+            findings.append(
+                f"{rel}: `expected` states no {missing.upper()} arm — `arm_taken`"
+                " reproduces this record's `expected` under an arm it states, and"
+                " cannot name one that is not there. [`check_expected_predates`]"
+                " does not FREEZE this field — it asks only that some commit carry"
+                " this `expected` under `outcome = \"planned\"` — so the reason to"
+                " write the arm now is that later it costs two commits nobody is"
+                " looking for"
+            )
+        # One label, one arm. It is a rule about the RECORD's plan rather than
+        # about the quotation now -- [`arm_claim`] carries the whole field either
+        # way -- and what it refuses is a record that says two different things
+        # happen under one outcome, so `actual` can meet one and miss the other
+        # and `outcome` reads the same. The cheap way to mint the second is prose
+        # inside another arm's body, which [`ARM_LABEL`]'s anchor does not reach.
+        for double in sorted({o for o in stated
+                              if [a.outcome for a in arms].count(o) > 1}):
+            findings.append(
+                f"{rel}: `expected` states {[a.outcome for a in arms].count(double)}"
+                f" {double.upper()} arms — one outcome, two criteria, and a run"
+                " that met one of them records the same word as a run that met"
+                " the other"
+            )
+        # A label with nothing behind it is not an arm. Also a plan rule and not
+        # a quotation rule: what it refuses is an outcome the record labels and
+        # never defines.
+        for hollow in (arm for arm in arms if not ARM_WORD.search(arm.body)):
+            findings.append(
+                f"{rel}: `expected` states a {hollow.outcome.upper()} arm with no"
+                " word in it — an arm whose body is empty or a bare number states"
+                " no criterion for the outcome it labels, and the run that takes"
+                " that outcome is read against a field that never says what taking"
+                f" it would mean. Got: {hollow.body[:32]!r}"
+            )
+        # `expected` reaches the published page now ([`render`]), so it is held to
+        # [`CELL_REFUSED`] the way `statement` and `discharge` are — named per
+        # record here, refused outright by [`cell`] there. `<` is NOT in that set:
+        # [`cell`] escapes it, and `&lt;` was measured through mdBook rendering as
+        # a `<`. What is left is the line break, and it is worth naming what that
+        # costs a DISCHARGED record: rewrapping `expected` is a new string, which
+        # no `planned` commit carries, so a purely typographic repair goes through
+        # [`check_expected_predates`]'s two commits. `arm_taken` is compared up to
+        # whitespace ([`arm_claim`]) and reaches no page, so it may be wrapped
+        # freely -- an asymmetry between the two, stated because it is not one a
+        # reader would guess.
+        carried = sorted({c for c in expected if c in CELL_REFUSED})
+        if carried:
+            findings.append(
+                f"{rel}: `expected` carries {carried} — {ARTIFACT} publishes it"
+                " into a `|`-delimited row, where a line break takes the columns"
+                " after it off the page. Write it on one line; `arm_taken` may be"
+                " wrapped, because it is compared up to whitespace and published"
+                " nowhere"
+            )
         # A stepping is a RESULT, so it may live in one field and no other. This
         # is the rule that makes the plan/result split about substance rather
         # than about which key a sentence was typed under.
@@ -1442,7 +1757,19 @@ def check_board_records(root, ids, findings, floor=None):
                     " measured"
                 )
         else:
-            for key in BOARD_RESULT_FIELDS:
+            # `arm_taken` is owed where there is an ARM TO NAME. Without this
+            # every honest INCONCLUSIVE run on the six records that state no
+            # INCONCLUSIVE arm is red in every direction at once -- naming PASS
+            # is the wrong label, a fresh sentence reproduces no `expected`, and
+            # leaving the field empty is this loop -- and the only way out is the
+            # post-hoc `planned` commit [`check_expected_predates`] exists to
+            # make visible. It is not an exemption for `inconclusive`: the
+            # condition is the RECORD's, so a record that does state that arm
+            # still owes the quote, and [`ARM_REQUIRED`] holds PASS and FAIL open
+            # so no word that moves a registry status can reach it.
+            owed_fields = [k for k in BOARD_RESULT_FIELDS
+                           if k != "arm_taken" or outcome in stated]
+            for key in owed_fields:
                 if key not in filled:
                     findings.append(f"{rel}: outcome {outcome!r} with no `{key}`")
             if "stepping" in filled and not names_a_stepping(_text(record, "stepping")):
@@ -1465,6 +1792,7 @@ def check_board_records(root, ids, findings, floor=None):
                     " is the `met by README.md` rule one layer in"
                 )
             check_expected_predates(root, rel, record, findings)
+            check_arm_taken(rel, record, stated, findings)
         want = OUTCOME_STATUS.get(outcome)
         status = ids[name].get("status")
         if want and status != want:
@@ -1485,29 +1813,47 @@ def check_board_records(root, ids, findings, floor=None):
         )
 
 
-def board_outcome(root, name):
-    """One record's outcome for the generated page, or why it has none.
+def board_says(root, name, key):
+    """One field of one record for the generated page, or why it has none.
 
     Reported rather than counted: `render` printed the obligation and not what
     the records say, so nine `planned` files and nine PASSes read the same on the
-    page the reader is pointed at.
+    page the reader is pointed at. `expected` goes the same way and for the same
+    reason one layer in — the page published `discharge`, the sentence a row says
+    it is discharged BY, and never the criterion the run is read against, so a
+    `pass` beside an unmet expectation read exactly like a met one. Measured on
+    the page before this: `grep -c 'still owes' docs/platform-assumptions.md` = 0,
+    over a record whose own INCONCLUSIVE arm ends on those words.
     """
     path = root / BOARD_EVIDENCE / f"{name}.toml"
     if not path.is_file():
         return "**no record**"
     try:
-        return str(_toml(path).get("outcome", "")).strip() or "**no outcome**"
+        return str(_toml(path).get(key, "")).strip() or f"**no {key}**"
     except (OSError, tomllib.TOMLDecodeError):
         return "**unreadable**"
 
 
 def check_expected_predates(root, rel, record, findings):
-    """`expected` was committed BEFORE the run, in a version that had no result.
+    """SOME commit carries this `expected` under `outcome = "planned"`.
 
-    Without this the whole plan/result split is a convention: one commit can
-    create the record with `expected` and `actual` together, `expected` written
-    to match what the board did. Read out of git rather than asserted, because
-    the tree cannot tell the two orders apart and history can.
+    Which is less than the heading this rule used to carry ("`expected` was
+    committed BEFORE the run"). What it closes is the ONE-commit shape: a record
+    created with `expected` and `actual` together, the expectation written to
+    match what the board did. What it does not close is the two-commit shape, and
+    the price is worth writing down because two docstrings priced it wrong.
+    Driven on the discharged PLAT-ROM-002: commit one rewrites `expected` to a
+    weaker question, sets `outcome = "planned"`, BLANKS the result half and moves
+    the registry row back to `pending`; commit two restores the run with
+    `arm_taken` naming the new text. `python scripts/platform_gate.py` is exit 0
+    at all five points measured — before, both working trees, both commits — and
+    the criterion went from 136 characters carrying "the CCID interface is gone"
+    to 39 that carry nothing. Blanking the result half is what removes the red an
+    earlier version priced this at; nothing here reads the capture's date, the
+    commit order, or any other field of the older version.
+
+    Read out of git rather than asserted, because the tree cannot tell one
+    ordering from the other and history can tell some of it.
     """
     done = subprocess.run(
         ["git", "-C", str(root), "log", "--format=%H", "--", str(rel)],
@@ -2008,10 +2354,14 @@ def audit(root, board_floor=None):
 #: `failure_direction` is hand-written prose and is NOT here, because no
 #: generator in this tree renders it: `git grep failure_direction -- scripts/`
 #: answers three hits in this file and none outside a test.
+#: A board record's `expected` is rendered prose too and is NOT here for a
+#: different reason: it is a field of a RECORD and this tuple is read against a
+#: registry entry. [`check_board_records`] applies the same [`CELL_REFUSED`] set
+#: to it, per record, which is where a record's other field rules already are.
 RENDERED_PROSE = ("statement", "discharge")
 
-#: What such a cell may not carry. A `|` is ESCAPED ([`cell`]); these cannot be,
-#: and every one is measured through mdBook rather than reasoned about:
+#: What such a cell may not carry, which is the LINE BREAK and nothing else.
+#: Both spellings measured through mdBook rather than reasoned about:
 #:
 #: * `\n` — a line break ends the row exactly as a bare `|` did. Measured with
 #:   one in `PLAT-MODEL-002`'s discharge: the published row rendered four cells,
@@ -2022,16 +2372,20 @@ RENDERED_PROSE = ("statement", "discharge")
 #:   back to `\n`, so the byte-diff finds the page differs from the generator
 #:   FOREVER and asks for a `--write` that cannot settle it. Measured: exit 1
 #:   after `--write`, with a message about committing the result.
-#: * `<` — raw HTML. `</td><td>` exits `mdbook build` **101** ("pop too far"), so
-#:   the docs row dies rather than reddening with a name; `<script>alert(1)</script>`,
-#:   `<br>` and `<!-- -->` all reached the built page as markup, at exit 0.
+#:
+#: `<` WAS here, and a review measured the reason it should not be: `&lt;` is an
+#: escape that reaches it. Driven — `PASS = jitter &lt; 1 us` is exit 0 through
+#: the gate, `--write` and `scripts/docs.sh check`, and the built HTML renders a
+#: `<`. So [`cell`] applies that escape the way it applies `\|`, and a registry
+#: whose subject is measurement can write an inequality. What is refused stays
+#: refused for a reason no escape answers: a table cell cannot span two lines.
 #:
 #: NOT `>`: seven rows write one (`->`, `a > b`) and GFM prints `&gt;`. NOT `&`,
 #: which three rows write. Nor the fullwidth `｜`, a tab, a leading `#`, a
 #: trailing `\`, or a `|` inside a code span — all five measured at exit 0, seven
 #: cells, no markup. A clause for a character no row carries and no arm can drive
 #: is the shape this file refuses everywhere else.
-CELL_REFUSED = "\r\n<"
+CELL_REFUSED = "\r\n"
 
 
 def check_cells(name, entry, findings):
@@ -2049,8 +2403,7 @@ def check_cells(name, entry, findings):
             findings.append(
                 f"{name}: `{key}` carries {carried} — {ARTIFACT} interpolates it"
                 " into a `|`-delimited row, where a line break takes Owner and"
-                " Supports off the page and `<` publishes raw HTML into it or"
-                " ends the build"
+                " Supports off the page. Write it on one line"
             )
 
 
@@ -2068,20 +2421,39 @@ def cell(text):
     `\|` — restoring the `git grep` alternation `PLAT-MODEL-009` means the
     reader to paste, which this page had been eating.
 
-    [`CELL_REFUSED`] is the half no escape reaches, and it RAISES rather than
-    mangling: [`audit`] catches `ValueError` off [`render`] and so does
-    `evidence_gate.audit`, so both pages refuse to be generated with a named
+    `<` is escaped here too, and that is a REPAIR rather than a second guard: it
+    used to be in [`CELL_REFUSED`], where the message said "no escape reaches" —
+    and `&lt;` reaches it. Driven: `PASS = jitter &lt; 1 us` in a record's
+    `expected` is exit 0 through the gate, `--write` and `scripts/docs.sh check`,
+    and mdBook renders a `<`. Writing the escape here is what lets an author who
+    is measuring something write `<` at all; the ban told them nothing.
+
+    [`CELL_REFUSED`] is what no escape reaches — the line break — and it RAISES
+    rather than mangling: [`audit`] catches `ValueError` off [`render`] and so
+    does `evidence_gate.audit`, so both pages refuse to be generated with a named
     finding, and [`run`] refuses the `--write` rather than writing the damage.
+    Collapsing the break instead would end that raise and the two catches with
+    it, and would silently reflow a contributor's paragraph into one line.
     """
     text = str(text)
     carried = sorted({c for c in text if c in CELL_REFUSED})
     if carried:
         raise ValueError(
             f"a table cell carries {carried}, which no escape reaches — a line"
-            " break ends the row as a bare `|` does and `<` opens raw HTML in a"
-            f" published page. In: {text.strip()[:48]!r}"
+            " break ends the row as a bare `|` does, and a cell is one line."
+            f" In: {text.strip()[:48]!r}"
         )
-    return text.replace("|", "\\|")
+    return text.replace("|", "\\|").replace("<", "&lt;")
+
+
+def fields(names):
+    """One half of a board record, as the page names it.
+
+    Derived rather than transcribed: both halves were typed into that paragraph,
+    so adding `arm_taken` to [`BOARD_RESULT_FIELDS`] would have left the page
+    describing the record this file used to refuse.
+    """
+    return ", ".join(f"`{name}`" for name in names)
 
 
 def render(root, registered=None, dated=None):
@@ -2127,15 +2499,43 @@ def render(root, registered=None, dated=None):
         "",
         f"Each of those {len(board)} owes a RECORD as well —"
         f" `{BOARD_EVIDENCE}<id>.toml` — split into the half that is knowable"
-        " before the board is powered (`method`, `boot_config`, `expected`) and"
-        " the half that is not (`board`, `stepping`, `firmware_sha256`,"
-        " `first_boot_capture`, `actual`). A result field on a run that has not"
+        f" before the board is powered ({fields(BOARD_PLAN_FIELDS)}) and"
+        f" the half that is not ({fields(BOARD_RESULT_FIELDS)})."
+        " A result field on a run that has not"
         " happened is refused, and so is an `expected` first committed in the"
-        " same commit as its result. What they say today:",
+        " same commit as its result. `expected` is printed here beside the"
+        " outcome rather than summarised, because the outcome is one word and the"
+        " criterion is the thing it has to have met: a row whose own arm says it"
+        " still owes a second instrument reads, in one word, exactly like one"
+        " that owes nothing. `arm_taken` is what holds the two together — it"
+        " names the arm the run took and then reproduces, up to whitespace, the"
+        " WHOLE of the `expected` beside it. The whole and not the arm's own"
+        " sentence, because criterion prose written after the first label belongs"
+        " to one arm and is dropped by every other quotation: on the row about"
+        " the boot ROM's scratch word, a PASS quoting its own arm leaves behind"
+        " the sentence saying a vendor erratum settles the row as well as a board"
+        " does. It is owed wherever the record states an arm under that outcome,"
+        " which is every PASS and every FAIL.",
         "",
-        "| record | outcome |",
-        "|---|---|",
-        *(f"| `{name}` | {board_outcome(root, name)} |" for name in board),
+        "Two prices this page owes the reader rather than the rule. An arm has to"
+        " OPEN a sentence — `PASS = …` after a full stop, colon or semicolon, and"
+        " not after a comma, a dash, a bracket or an ellipsis, and not written"
+        " `Pass =` — so seven honest spellings are a red at planning time, each"
+        " with its own message saying the label is there and misplaced. And what"
+        " is enforced about ORDER is smaller than it looks: the gate asks that"
+        " some commit carry this `expected` under `outcome = \"planned\"`, not"
+        " that the commit predates the run. A record can be re-planned and"
+        " re-recorded in two commits, neither of them red, which is what it costs"
+        " to weaken a criterion after the board has spoken."
+        " What they say today:",
+        "",
+        "| record | outcome | expected |",
+        "|---|---|---|",
+        *(
+            f"| `{name}` | {board_says(root, name, 'outcome')} |"
+            f" {cell(board_says(root, name, 'expected'))} |"
+            for name in board
+        ),
         "",
         f"The candidates are DERIVED — {len(found)} of them, from the slice"
         " bundles and design pages, the model registry, the suites no runner in"

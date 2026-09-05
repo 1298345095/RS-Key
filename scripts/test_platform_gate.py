@@ -77,6 +77,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import tomllib
 
 import pytest
 
@@ -396,20 +397,54 @@ STORE_ROW = REGISTRY[
 ]
 
 
+#: The fixture record's expectation, in the arm shape every record in the
+#: checkout writes. Split into its parts because the cases below both REWRITE the
+#: expectation and NAME one of its arms, and a literal retyped at each of them
+#: is the copy this suite's own subject keeps finding rotted.
+#:
+#: The PREAMBLE is its own name because the cases drive it on both sides of the
+#: rule change: it used to be the half a per-arm quotation carried, and the shape
+#: that refuted that rule is prose written AFTER the first label, which no
+#: quotation of one arm carries. `PASS_CLAIM` comes from `arm_claim` rather than
+#: being typed, so the fixture cannot state a value the gate would refuse — the
+#: same reason the gate has one expression for it.
+#: The record vocabulary, written out ONCE for this file. Every case that loops
+#: over a record-field tuple loops over these and asserts the gate's tuple
+#: against them, because parametrizing over the constant a case guards makes
+#: NARROWING it collect one case fewer instead of failing — measured, and the
+#: measurement is in [`ARMS_OWED`]. `test_the_record_vocabulary_is_ratcheted`
+#: reads these too rather than retyping them, which is the twin this tree has a
+#: commit of its own about.
+PLAN_FIELDS = ("method", "boot_config", "expected")
+RESULT_FIELDS = ("board", "stepping", "firmware_sha256", "first_boot_capture",
+                 "actual", "arm_taken")
+
+PREAMBLE = "Old-or-refused at every offset."
+PASS_ARM = "PASS = no plausible wrong value at any offset tried."
+FAIL_ARM = "FAIL = one record reading back as a value nobody wrote."
+BOARD_EXPECTED = f"{PREAMBLE} {PASS_ARM} {FAIL_ARM}"
+PASS_CLAIM = platform_gate.arm_claim("pass", BOARD_EXPECTED)
+FAIL_CLAIM = platform_gate.arm_claim("fail", BOARD_EXPECTED)
+#: The value the OLD rule accepted: the preamble and one arm. It is now the
+#: sharpest `NOT_AN_ARM` case there is, because it is what an operator who read
+#: the previous version of the page would write.
+OLD_PASS_CLAIM = f"{PREAMBLE} {PASS_ARM}"
+
 #: The one maintainer-owned hardware row of the fixture, and so the one that
 #: owes a record. Written in the PLANNED shape: the plan half filled, the result
 #: half empty, which is what a row nobody can discharge here must look like.
-BOARD_RECORD = """\
+BOARD_RECORD = f"""\
 assumption = "PLAT-FLASH-001"
 method = "A supply cut at a controlled offset into a store write."
 boot_config = "The default image, 4 MB."
-expected = "Old-or-refused at every offset. PASS = no plausible wrong value."
+expected = "{BOARD_EXPECTED}"
 outcome = "planned"
 board = ""
 stepping = ""
 firmware_sha256 = ""
 first_boot_capture = ""
 actual = ""
+arm_taken = ""
 """
 
 #: The same record after a run: every result field filled, and the registry row
@@ -422,7 +457,9 @@ BOARD_PASS = BOARD_RECORD.replace(
     'firmware_sha256 = ""', 'firmware_sha256 = "' + "0" * 63 + '1"'
 ).replace(
     'first_boot_capture = ""', 'first_boot_capture = "assurance/board/flash-cut.log"'
-).replace('actual = ""', 'actual = "Old-or-refused at all 64 offsets."')
+).replace('actual = ""', 'actual = "Old-or-refused at all 64 offsets."').replace(
+    'arm_taken = ""', f'arm_taken = "{PASS_CLAIM}"'
+)
 
 
 class Tree:
@@ -1326,7 +1363,7 @@ def test_a_record_for_no_registry_row_is_a_finding(tree):
 
 def test_a_missing_plan_field_is_a_finding(tree):
     tree.edit("assurance/board/PLAT-FLASH-001.toml",
-              'expected = "Old-or-refused at every offset. PASS = no plausible wrong value."',
+              f'expected = "{BOARD_EXPECTED}"',
               'expected = ""')
     assert only(tree.problems(), "no `expected`")
 
@@ -1421,27 +1458,37 @@ def test_a_pass_whose_stepping_is_prose_is_a_finding(tree):
 # the same diff. The review's own list is the docstring of each.
 
 
-@pytest.mark.parametrize("field", platform_gate.BOARD_PLAN_FIELDS)
+@pytest.mark.parametrize("field", PLAN_FIELDS)
 def test_every_plan_field_is_pinned(tree, field):
     """M15: the loop was pinned by ONE case on `expected`, so narrowing it to
-    `("expected",)` left `method` and `boot_config` unheld."""
+    `("expected",)` left `method` and `boot_config` unheld.
+
+    Over the LITERAL and not over the gate's tuple, for the reason
+    [`ARMS_OWED`] records: parametrizing over the constant a case guards makes
+    narrowing it collect one case fewer instead of failing. Three cases in this
+    file were that shape, and the equality below is what turns each of them from
+    a case that vanishes into a case that reds.
+    """
+    assert platform_gate.BOARD_PLAN_FIELDS == PLAN_FIELDS
     tree.edit("assurance/board/PLAT-FLASH-001.toml",
               f'{field} = "', f'{field} = ""\nunused_{field} = "')
     assert only(tree.problems(), f"no `{field}`")
 
 
-@pytest.mark.parametrize("field", platform_gate.BOARD_RESULT_FIELDS)
+@pytest.mark.parametrize("field", RESULT_FIELDS)
 def test_every_result_field_is_refused_on_a_planned_run(tree, field):
     """M4: pinned by ONE case on `actual`, so four of the five could be filled
     before the run with the suite green."""
+    assert platform_gate.BOARD_RESULT_FIELDS == RESULT_FIELDS
     tree.edit("assurance/board/PLAT-FLASH-001.toml", f'{field} = ""',
               f'{field} = "written before anything ran"')
     assert only(tree.problems(), f"outcome 'planned' with `{field}` filled")
 
 
-@pytest.mark.parametrize("field", platform_gate.BOARD_RESULT_FIELDS)
+@pytest.mark.parametrize("field", RESULT_FIELDS)
 def test_every_result_field_is_required_on_a_run_that_happened(tree, field):
     """M5: pinned by ONE case on `first_boot_capture`."""
+    assert platform_gate.BOARD_RESULT_FIELDS == RESULT_FIELDS
     tree.write("assurance/board/PLAT-FLASH-001.toml",
                BOARD_PASS.replace(f'{field} = "', f'{field} = ""\nunused_{field} = "'))
     assert only(tree.problems(), f"outcome 'pass' with no `{field}`")
@@ -1496,7 +1543,7 @@ def test_a_plan_field_that_is_not_text_is_a_finding(tree, value):
     """`str(record.get(key, ""))` made `str([])` == "[]" a filled field. Four
     types measured green before the rule read the type."""
     tree.edit("assurance/board/PLAT-FLASH-001.toml",
-              'expected = "Old-or-refused at every offset. PASS = no plausible wrong value."',
+              f'expected = "{BOARD_EXPECTED}"',
               f"expected = {value}")
     assert only(tree.problems(), "`expected` is")
 
@@ -1536,6 +1583,473 @@ def test_an_expected_committed_before_the_run_is_accepted(tree):
     assert not only(tree.problems(), "no committed version of this record carries")
 
 
+# --- the criterion a run was read against, in the record's own words ----------
+#
+# `outcome = "pass"` is a word and a word is free. Measured before this rule: a
+# record moved to `pass` with an `expected` byte-identical to the committed one,
+# a full result half and a fabricated `actual` — `python scripts/platform_gate.py`
+# exit 0, with every clause above green.
+#
+# TWO versions have been refuted here and the cases are what they cost. The
+# first read `arm_taken` against the arm ALONE, and an arm starts at its label —
+# so on a record whose criterion sits above the arms the arm is a pronoun:
+# `arm_taken = "PASS = both."`, twelve characters, discharged `PLAT-DISPLAY-001`
+# over a fabricated `actual` at exit 0. The second carried the preamble as well,
+# and a review drove the mirror image of the same hole: criterion prose written
+# AFTER the first label belongs to exactly one arm and is dropped by every other
+# quotation. Live on the checkout, no contrivance and one commit —
+# `PLAT-ROM-001`'s FAIL arm swallows "No datasheet clause states it either way;
+# a vendor erratum settles it as well as a board does", a statement about how the
+# row may be discharged AT ALL, and a fabricated PASS quoting 126 characters of
+# its 327-character `expected` was exit 0.
+#
+# So the value is the arm's label and then ALL of `expected`. There is nothing
+# left in the field to omit, which is the only closure available: the tail is
+# inside the last arm's span with no marker, and a sentence-shaped boundary reds
+# the tree (`PLAT-ROM-002`'s FAIL body writes "i.e." mid-body). The cases below
+# drive that, refuse both refuted shapes by name, and keep the two directions
+# that must stay green: a real discharge, and an honest INCONCLUSIVE on a record
+# that states no such arm.
+
+
+@pytest.mark.parametrize("outcome", ("pass", "fail", "inconclusive"))
+def test_a_run_that_happened_names_the_criterion_it_met(tree, outcome):
+    """The constructed defect, in all three shapes a run can have.
+
+    Named for [`platform_gate.check_arm_taken`] and now driving it. The version
+    this replaces EMPTIED the field instead, which is the result-half
+    completeness loop's finding — the required-on-a-run case above parametrizes
+    over [`RESULT_FIELDS`] and already covers `arm_taken`, so this case's
+    `[pass]` shape was a verbatim duplicate of it. Measured: with
+    `check_arm_taken`'s call deleted this case was GREEN, three passed, over the
+    one rule it is named for.
+    """
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace('outcome = "pass"', f'outcome = "{outcome}"')
+               .replace(f'arm_taken = "{PASS_CLAIM}"',
+                        'arm_taken = "It all looked fine on the day."'))
+    assert only(tree.problems(), "is not this record's `expected`")
+
+
+def test_a_criterion_written_after_the_arms_cannot_be_dropped(tree):
+    """The refutation of the per-arm quotation, in the shape it was driven in.
+
+    A framing sentence, the arms, and THEN the criterion — the ordering
+    `PLAT-ROM-001` writes today. Under the old rule the PASS claim carried
+    neither the criterion nor the sentence about the erratum, and quoting it was
+    exit 0; here that same value is refused and the satisfying one carries the
+    whole field. Both halves are asserted, because a rule that refused every
+    value would pass the first alone.
+    """
+    tail = ("The delays are listed in the transcript, and a run that lists none"
+            " settles nothing either way.")
+    rewritten = f"{PREAMBLE} {PASS_ARM} {FAIL_ARM} {tail}"
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", BOARD_EXPECTED, rewritten)
+    tree.write("assurance/board/flash-cut.log", "a capture\n")
+    tree.commit("the plan")
+    run = BOARD_PASS.replace(f'expected = "{BOARD_EXPECTED}"',
+                             f'expected = "{rewritten}"')
+    # what the OLD rule accepted: the preamble and the PASS arm, tail dropped
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               run.replace(f'arm_taken = "{PASS_CLAIM}"',
+                           f'arm_taken = "{OLD_PASS_CLAIM}"'))
+    assert only(tree.problems(), "is not this record's `expected`")
+    assert tail not in OLD_PASS_CLAIM
+    whole = platform_gate.arm_claim("pass", rewritten)
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               run.replace(f'arm_taken = "{PASS_CLAIM}"', f'arm_taken = "{whole}"'))
+    tree.commit("the run")
+    assert not only(tree.problems(), "`arm_taken`")
+    assert tail in whole
+
+
+#: `ARM_REQUIRED`'s value, written out. NOT the constant itself: parametrizing
+#: over the constant makes narrowing it COLLECT ONE FEWER CASE instead of failing
+#: — measured, `("pass", "fail") -> ("pass",)` took this file from 245 to 244
+#: collected with nothing red, and the `[fail]` case simply was not there. The
+#: case body asserts the constant against this literal, so the narrowing is a red
+#: in every case rather than a case that vanishes. Second instance of that class
+#: in one review; the sibling is a floor parametrized over itself.
+ARMS_OWED = ("pass", "fail")
+
+
+@pytest.mark.parametrize("missing", ARMS_OWED)
+def test_an_expected_that_states_no_arm_is_a_finding(tree, missing):
+    """The arms are owed BEFORE the run as a convention, NOT because
+    `check_expected_predates` forbids a later one — which is what this suite and
+    the gate both said until it was driven. That rule asks only that SOME commit
+    carry this `expected` with `outcome = "planned"`, and it reads no other field
+    of that version: a discharged record can be re-planned and re-recorded in two
+    commits, both green, the criterion rewritten in between. The price of writing
+    an arm late is those two commits, not a refusal."""
+    assert platform_gate.ARM_REQUIRED == ARMS_OWED
+    arm = {"pass": PASS_ARM, "fail": FAIL_ARM}[missing]
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", f" {arm}", "")
+    assert only(tree.problems(), f"`expected` states no {missing.upper()} arm")
+
+
+#: Every spelling of an arm the anchor refuses, with the one it accepts beside
+#: them. Measured on the real parser: a semicolon and a colon END a sentence
+#: here; a comma, an em dash, an opening bracket, a `.)` or `."` before the
+#: label, an ellipsis, and a sentence-case `Pass =` do not. All seven were a red
+#: reading "`expected` states no PASS arm" — a message that tells the author the
+#: arm is missing when it is visibly there, and never mentions the anchor.
+MISPLACED_PASS = {
+    "comma": "The clock behaves, PASS = expiry observed.",
+    "em dash": "The clock behaves — PASS = expiry observed.",
+    "parenthesis": "The clock behaves (PASS = expiry observed).",
+    "full stop in brackets": "The clock behaves (it does.) PASS = expiry observed.",
+    # TOML-escaped, because the fixture writes it inside a basic string.
+    "full stop in quotes": 'The clock behaves \\"it does.\\" PASS = expiry observed.',
+    "ellipsis": "The clock behaves… PASS = expiry observed.",
+    "sentence case": "The clock behaves. Pass = expiry observed.",
+}
+ACCEPTED_PASS = {
+    "full stop": "The clock behaves. PASS = expiry observed.",
+    "semicolon": "The clock behaves; PASS = expiry observed.",
+    "colon": "The clock behaves: PASS = expiry observed.",
+}
+
+
+@pytest.mark.parametrize("spelling", sorted(MISPLACED_PASS))
+def test_a_misplaced_label_says_it_is_misplaced(tree, spelling):
+    """The anchor's cost, with a message that describes it.
+
+    The red is the trade this file takes; the wrong diagnostic was not. Both
+    halves: the misplaced-label finding is there, and the "states no PASS arm"
+    one — which would send the author looking for an arm they can see — is not.
+    """
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", BOARD_EXPECTED,
+              f"{MISPLACED_PASS[spelling]} {FAIL_ARM}")
+    problems = tree.problems()
+    assert only(problems, "where an arm has to OPEN a sentence")
+    assert not only(problems, "states no PASS arm")
+
+
+@pytest.mark.parametrize("spelling", sorted(ACCEPTED_PASS))
+def test_a_sentence_end_the_anchor_accepts_is_green(tree, spelling):
+    """The green arm, and the half that says the anchor is not "punctuation".
+    Without it the case above passes over a rule that refused every spelling."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", BOARD_EXPECTED,
+              f"{ACCEPTED_PASS[spelling]} {FAIL_ARM}")
+    assert not only(tree.problems(), "`expected`")
+
+
+#: An arm with nothing behind its `=`, in the three shapes that reach a record:
+#: the label ending the field, a label and punctuation, and the `PASS = 0.` that
+#: needs no crafting at all — prose documenting a script's exit codes mints it.
+#: All three were quotable arms, and `arm_taken = "PASS ="` discharged.
+HOLLOW_EXPECTED = (
+    f"{PREAMBLE} {FAIL_ARM} PASS =",
+    f"{PREAMBLE} PASS =. {FAIL_ARM}",
+    f"{PREAMBLE} PASS = 0. {FAIL_ARM}",
+)
+
+
+@pytest.mark.parametrize("hollow", HOLLOW_EXPECTED)
+def test_an_arm_with_no_word_in_it_is_not_an_arm(tree, hollow):
+    """`PASS =` was an arm, and `arm_taken = "PASS ="` discharged.
+
+    It is no longer the quotation this protects — `arm_claim` carries the whole
+    `expected` whatever any one arm says — so what is left for the floor is the
+    record's PLAN: an outcome whose arm has no body states no criterion of its
+    own, and a run that takes it is read against a field that never said what
+    taking it would mean. One WORD and not a character count:
+    `PLAT-DISPLAY-001`'s whole PASS body is `both.`, five characters, so a length
+    admitting this tree admits `0.` with it. Measured over the 33 arms of the
+    thirteen records — minimum one word, none with zero.
+    """
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", BOARD_EXPECTED, hollow)
+    assert only(tree.problems(), "states a PASS arm with no word in it")
+
+
+def test_an_expected_that_opens_on_its_arms_is_quoted_whole(tree):
+    """The rule that used to be here is GONE, and this is its replacement.
+
+    A record whose `expected` opens on its first label was refused, on the ground
+    that the quotation would then be the arm alone — a pronoun on three of the
+    thirteen records. `arm_claim` carries the whole field, so that ground is gone:
+    the value an operator must write is the same length whether or not a framing
+    sentence stands above the arms. What is left is a weak `expected`, which no
+    rule here can strengthen — the measured floor is two letters either way. So
+    the record is GREEN and the quotation still carries every word of it.
+    """
+    opened = f"{PASS_ARM} {FAIL_ARM}"
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", BOARD_EXPECTED, opened)
+    tree.write("assurance/board/flash-cut.log", "a capture\n")
+    tree.commit("the plan")
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace(f'expected = "{BOARD_EXPECTED}"',
+                                  f'expected = "{opened}"')
+               .replace(f'arm_taken = "{PASS_CLAIM}"',
+                        f'arm_taken = "{platform_gate.arm_claim("pass", opened)}"'))
+    tree.commit("the run")
+    problems = tree.problems()
+    # Targeted rather than `== []`: the fixture's registry row is still `pending`,
+    # which is a finding of the status rule and not this one's.
+    assert not only(problems, "`expected`") and not only(problems, "`arm_taken`")
+    assert FAIL_ARM in platform_gate.arm_claim("pass", opened)
+
+
+def test_two_arms_under_one_label_is_a_finding(tree):
+    """A rule about the record's PLAN, since `arm_claim` carries the whole field
+    either way: what it refuses is a record saying two different things happen
+    under one outcome, so a run that meets one and misses the other writes the
+    same word. The cheap way to mint the second is prose inside another arm's
+    body, which the sentence anchor refuses; this is the shape it does NOT reach.
+    """
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", BOARD_EXPECTED,
+              f"{BOARD_EXPECTED} PASS = it also worked.")
+    assert only(tree.problems(), "`expected` states 2 PASS arms")
+
+
+def test_a_label_a_sentence_merely_WRITES_is_not_an_arm(tree):
+    """An arm opens a sentence, because a label is a word and prose about a
+    verdict writes the word.
+
+    What the anchor buys, measured rather than asserted: under a bare `\\b` this
+    prose parses as `['PASS', 'PASS', 'FAIL']`, and the DUPLICATE is what
+    `check_board_records` reds on its own — so the 84-character quote this
+    comment used to credit the anchor with closing was already closed. The job
+    that is the anchor's alone is a mid-sentence label of an outcome the record
+    states NOWHERE ELSE, which would satisfy `ARM_REQUIRED` and let `outcome`
+    name it. The record must stay GREEN, which is the half that says the anchor
+    is not a new red.
+    """
+    prose = ("Read the verdict off the host, not off the script: its own"
+             " PASS = zero exit tells you only that the command was accepted.")
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", PREAMBLE, f"{prose} {PREAMBLE}")
+    expected = tomllib.loads(
+        (tree.root / "assurance/board/PLAT-FLASH-001.toml").read_text()
+    )["expected"]
+    arms = platform_gate.expected_arms(expected)
+    assert [arm.outcome for arm in arms] == ["pass", "fail"], arms
+    # The measurement the comment above rests on, in the test rather than in
+    # prose: a bare `\b` mints a THIRD arm out of that sentence, and a duplicate
+    # label is refused by a clause of its own.
+    bare = re.compile(r"\b(PASS|FAIL|INCONCLUSIVE)\s*=\s*")
+    assert [m.group(1) for m in bare.finditer(expected)] == ["PASS", "PASS", "FAIL"]
+    problems = tree.problems()
+    for needle in ("`expected` states", "OPEN a sentence", "is not this record's"):
+        assert not only(problems, needle), needle
+
+
+def test_a_label_inside_another_arms_body_is_not_a_second_arm(tree):
+    """The same anchor one layer in. `FAIL = … which the script reports as
+    PASS = it disagreed with the model.` parsed as three arms, and the third was
+    quotable on its own — an arm minted out of another arm's prose."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", FAIL_ARM,
+              f"{FAIL_ARM[:-1]}, which the script reports as PASS = it disagreed.")
+    arms = platform_gate.expected_arms(
+        tomllib.loads(
+            (tree.root / "assurance/board/PLAT-FLASH-001.toml").read_text()
+        )["expected"]
+    )
+    assert [arm.outcome for arm in arms] == ["pass", "fail"], arms
+    assert not only(tree.problems(), "`expected` states 2 PASS arms")
+
+
+#: Everything an operator might reach for that is not the value. The first is the
+#: whole point — a bare `PASS` is the self-declared word this rule exists to
+#: refuse. `PASS_ARM` and `PREAMBLE` are the FIRST refutation's two halves: the
+#: arm without the sentence it back-references, and that sentence without the arm.
+#: `OLD_PASS_CLAIM` is the SECOND refutation's: the value the previous rule
+#: accepted, which drops whatever the record wrote after its first label — this
+#: is the case an operator who read the previous page would write, so it is the
+#: one that must be refused by name. The last two are near misses: the arm
+#: without its label, and the arm with the clause it does not want dropped.
+NOT_AN_ARM = (
+    "PASS",
+    "pass",
+    "n/a",
+    "—",
+    "tbd",
+    "It all looked fine on the day.",
+    "offset",
+    PASS_ARM,
+    PREAMBLE,
+    OLD_PASS_CLAIM,
+    BOARD_EXPECTED,
+    "no plausible wrong value at any offset tried.",
+    "PASS = no plausible wrong value.",
+)
+
+
+@pytest.mark.parametrize("quoted", NOT_AN_ARM)
+def test_an_arm_taken_that_is_not_this_record_s_criterion_is_a_finding(tree, quoted):
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace(f'arm_taken = "{PASS_CLAIM}"',
+                                  f'arm_taken = "{quoted}"'))
+    assert only(tree.problems(), "is not this record's `expected`")
+
+
+def test_naming_ANY_arm_is_not_enough(tree):
+    """The FAIL value carries the same whole `expected` and differs by its label
+    alone. That label is the one part of the value the outcome varies, so it is
+    the part this clause reads — and a record where the two disagree has recorded
+    neither."""
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace(f'arm_taken = "{PASS_CLAIM}"',
+                                  f'arm_taken = "{FAIL_CLAIM}"'))
+    assert only(tree.problems(), "`arm_taken` names the FAIL arm under outcome 'pass'")
+
+
+def test_a_wrapped_quote_is_the_same_quote(tree):
+    """The one difference `arm_taken` may have from the criterion: whitespace. A
+    TOML triple-quote wrapped for a reader is the same sentence, and refusing the
+    wrap would buy a line length and cost the operator a reason to copy blind.
+    It is also why nothing here may claim the quote is VERBATIM.
+
+    `expected` does NOT get this, and the asymmetry is deliberate rather than an
+    oversight: that field is published into a `|`-delimited row, where a line
+    break takes the columns after it off the page. It costs a discharged record
+    two commits to REWRAP its `expected`, which is what the record's own finding
+    now says out loud.
+    """
+    wrapped = 'arm_taken = """\n' + PASS_CLAIM.replace(". ", ".\n  ", 2) + '"""'
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace(f'arm_taken = "{PASS_CLAIM}"', wrapped))
+    assert "\n" in wrapped and wrapped.count("\n") >= 3
+    assert not only(tree.problems(), "`arm_taken`")
+
+
+def test_a_discharge_that_quotes_its_own_criterion_is_accepted(tree):
+    """The direction that matters most: a rule that reds an honest row is worse
+    than the hole. `PLAT-MEM-001` and `PLAT-ROM-002` are the checkout's two, and
+    `test_this_checkout_is_green` is where they are read."""
+    tree.write("assurance/board/flash-cut.log", "a capture\n")
+    tree.commit("the plan")
+    tree.write("assurance/board/PLAT-FLASH-001.toml", BOARD_PASS)
+    tree.commit("the run")
+    assert not only(tree.problems(), "`arm_taken`")
+
+
+def test_an_inconclusive_run_on_a_record_with_no_such_arm_is_recordable(tree):
+    """The false red the first version of this rule introduced.
+
+    `ARM_REQUIRED` leaves INCONCLUSIVE out — a rule that reddens an honest row is
+    worse than the hole — and then demanded a quote whose label is the outcome,
+    which on a record with no INCONCLUSIVE arm is unsatisfiable. Driven on
+    `PLAT-TIMER-001`, one of the SIX such records in the checkout: an empty field
+    is "outcome 'inconclusive' with no `arm_taken`", naming PASS is "names the
+    PASS arm under outcome 'inconclusive'", and a fresh INCONCLUSIVE sentence is
+    "not this record's `expected`" — every candidate red at once, and the only
+    escape the post-hoc `planned` commit `check_expected_predates` makes visible.
+    """
+    tree.write("assurance/board/flash-cut.log", "a capture\n")
+    tree.commit("the plan")
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace('outcome = "pass"', 'outcome = "inconclusive"')
+               .replace(f'arm_taken = "{PASS_CLAIM}"', 'arm_taken = ""'))
+    tree.commit("the run")
+    assert not only(tree.problems(), "`arm_taken`")
+
+
+def test_the_escape_is_out_of_reach_of_a_word_that_moves_the_registry(tree):
+    """What keeps `pass` out of the exemption above is `ARM_REQUIRED`, one rule
+    away — so the reach is asserted here rather than reasoned about. Deleting the
+    PASS arm to earn the exemption reddens the record on the way out, and the
+    second assertion records what that costs: the field finding really is gone,
+    and the red comes from the other clause."""
+    tree.write("assurance/board/flash-cut.log", "a capture\n")
+    tree.write("assurance/board/PLAT-FLASH-001.toml",
+               BOARD_PASS.replace(f'arm_taken = "{PASS_CLAIM}"', 'arm_taken = ""')
+               .replace(f" {PASS_ARM}", ""))
+    problems = tree.problems()
+    assert only(problems, "`expected` states no PASS arm")
+    assert not only(problems, "with no `arm_taken`")
+
+
+@pytest.mark.parametrize("carried", ("\\n", "\\r"))
+def test_a_record_expected_is_held_to_the_published_cell(tree, carried):
+    """`expected` reaches `docs/platform-assumptions.md` now, so it is held to
+    `CELL_REFUSED` the way `statement` and `discharge` are. Named per record
+    here; `cell` is what stops the page being written, and it cannot say which
+    record the 48 characters it quotes came from."""
+    tree.edit("assurance/board/PLAT-FLASH-001.toml",
+              "Old-or-refused", f"Old-or{carried}-refused")
+    assert only(tree.problems(), "`expected` carries")
+
+
+def test_a_less_than_in_an_expected_is_written_and_not_refused(tree):
+    """`<` WAS refused, over a message reading "which no escape reaches".
+
+    It is reached by `&lt;`, and the ban told the author nothing about that — on
+    a registry whose subject is measurement, `PASS = jitter < 1 us` was
+    unwritable. So `cell` escapes it, and this drives both halves: the record is
+    green, and the published cell carries the escape rather than the raw `<`.
+    `scripts/docs.sh check` and the built HTML are the third half and are not
+    this suite's; they were driven by hand and render a `<`.
+    """
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", PASS_ARM,
+              "PASS = jitter < 1 us at every offset tried.")
+    tree.regenerate()
+    assert tree.problems() == []
+    header, rows = board_table(platform_gate.render(tree.root))
+    carried = next(r for r in rows if "`PLAT-FLASH-001`" in r[0])[header.index(" expected ")]
+    assert "&lt; 1 us" in carried and "< 1 us" not in carried
+
+
+def test_the_arms_are_split_at_the_next_label():
+    """The parser. The boundary is the record's, and it is why the QUOTATION is
+    the whole field rather than one arm: the last arm swallows whatever follows
+    it, so prose after the first label belongs to exactly one arm. That is
+    `PLAT-ROM-001` today, and the reason `Arm` no longer has a `claim`."""
+    text = ("Preamble. PASS = a b. FAIL = c, and a trailing sentence."
+            " INCONCLUSIVE = d e.")
+    assert platform_gate.expected_arms(text) == [
+        ("pass", "a b."),
+        ("fail", "c, and a trailing sentence."),
+        ("inconclusive", "d e."),
+    ]
+    assert platform_gate.expected_arms("no arms here at all") == []
+    # An `expected` that opens on its first label parses, and is no longer a
+    # finding: `arm_claim` carries the whole field either way.
+    assert platform_gate.expected_arms("PASS = a b.") == [("pass", "a b.")]
+    # The value the rule wants is the label, a full stop, and all of `expected`.
+    assert platform_gate.arm_claim("fail", text) == f"FAIL. {text}"
+    # Up to whitespace, on the argument as well as on the field.
+    assert platform_gate.arm_claim("pass", " a\n  b ") == "PASS. a b"
+
+
+def test_the_page_publishes_the_expected_beside_the_outcome():
+    """Half of the rule is a person's. The page carried `discharge` — the
+    sentence a row says it is discharged BY — and never the criterion the run is
+    read against, so a `pass` beside an unmet expectation read like a met one.
+    Measured on the page before this: `grep -c 'still owes'` was 0 over a record
+    whose own INCONCLUSIVE arm ends on those words.
+
+    `render(ROOT)` and not the committed page: reading the file made this case
+    survive BOTH mutations of the column it is named for — the byte-diff in
+    `audit` is what caught them, so this case's own subject was held by another.
+    """
+    page = platform_gate.render(ROOT)
+    assert "| record | outcome | expected |" in page
+    record = tomllib.loads((ROOT / "assurance/board/PLAT-FLASH-001.toml").read_text())
+    assert record["expected"] in page
+    for arm in platform_gate.expected_arms(record["expected"]):
+        assert arm.body in page, arm
+
+
+def test_the_page_names_the_record_fields_from_the_tuples(monkeypatch):
+    """`fields` says it is "derived rather than transcribed", and nothing read it.
+
+    Measured: hard-coding today's two lists in place of `fields(BOARD_PLAN_FIELDS)`
+    and `fields(BOARD_RESULT_FIELDS)` left this file at 234 passed and the gate at
+    exit 0 — the claim was a docstring over a call site no case could tell from a
+    literal. A field added to either tuple would then have left the page
+    describing a record the gate refuses.
+    """
+    assert platform_gate.fields(("a", "b")) == "`a`, `b`"
+    added = platform_gate.BOARD_RESULT_FIELDS + ("photograph_sha256",)
+    monkeypatch.setattr(platform_gate, "BOARD_RESULT_FIELDS", added)
+    page = platform_gate.render(ROOT)
+    assert "`photograph_sha256`" in page
+    monkeypatch.setattr(platform_gate, "BOARD_PLAN_FIELDS",
+                        platform_gate.BOARD_PLAN_FIELDS + ("rig",))
+    assert "`rig`" in platform_gate.render(ROOT)
+
+
 def test_the_record_vocabulary_is_ratcheted():
     """M6/M10: widening `BOARD_OUTCOMES` or the sha alphabet moves the
     vocabulary with no rule deleted and no case red.
@@ -1553,13 +2067,33 @@ def test_the_record_vocabulary_is_ratcheted():
     to raise the constant and must not have to edit this case to do it.
     """
     assert platform_gate.BOARD_OUTCOMES == {"planned", "pass", "fail", "inconclusive"}
-    assert platform_gate.BOARD_PLAN_FIELDS == ("method", "boot_config", "expected")
-    assert platform_gate.BOARD_RESULT_FIELDS == (
-        "board", "stepping", "firmware_sha256", "first_boot_capture", "actual"
-    )
+    assert platform_gate.BOARD_PLAN_FIELDS == PLAN_FIELDS
+    assert platform_gate.BOARD_RESULT_FIELDS == RESULT_FIELDS
     assert platform_gate.BOARD_SHA.pattern == r"[0-9a-f]{64}"
     assert set(platform_gate.OUTCOME_STATUS) == {"pass", "fail"}
     assert platform_gate.BOARD_ROW_FLOOR >= 13, platform_gate.BOARD_ROW_FLOOR
+    # The arm vocabulary is BOARD_OUTCOMES', less the one state that has no arm.
+    # ARM_REQUIRED is load-bearing twice: it is the list of arms a record owes,
+    # and it is what holds `pass` and `fail` out of `check_board_records`'
+    # exemption for an outcome the record states no arm under.
+    assert platform_gate.ARM_REQUIRED == ARMS_OWED
+    assert platform_gate.ARM_WORD.pattern == r"[^\W\d_]{2,}"
+    assert set(platform_gate.ARM_LABEL.findall("PASS = a. FAIL = b. INCONCLUSIVE = c.")) == {
+        o.upper() for o in platform_gate.BOARD_OUTCOMES - {"planned"}
+    }
+    assert not platform_gate.ARM_LABEL.search("the run printed PASS and stopped")
+    # The anchor's own arm: a label a SENTENCE writes is not one. What that buys
+    # is narrower than this comment used to claim -- under `\b` the sentence
+    # below mints a DUPLICATE PASS, which is a finding of its own -- so what is
+    # pinned here is the anchor, and the double-arm case is where the other half
+    # is driven.
+    assert not platform_gate.ARM_LABEL.search("its own PASS = zero exit tells you")
+    # The diagnostic pattern is the same vocabulary, unanchored and case-blind.
+    # It states no rule; widening the RULE by widening it instead is a diff here.
+    assert platform_gate.ARM_MISPLACED.flags & re.IGNORECASE
+    assert [m.group(1) for m in
+            platform_gate.ARM_MISPLACED.finditer("behaves, Pass = a. FAIL = b.")
+            ] == ["Pass", "FAIL"]
 
 
 def test_the_obligation_and_the_page_count_the_same_rows():
@@ -1616,6 +2150,23 @@ def registry_table(page):
     """
     lines = page.splitlines()
     head = next(i for i, line in enumerate(lines) if line.startswith("| ID | Class |"))
+    rows = []
+    for line in lines[head + 2:]:
+        if not line.startswith("| `PLAT-"):
+            break
+        rows.append(UNESCAPED_PIPE.split(line)[1:-1])
+    return UNESCAPED_PIPE.split(lines[head])[1:-1], rows
+
+
+def board_table(page):
+    """The RECORD table the same way, because it grew a prose column.
+
+    A second reader and not a parameter on the first: the two tables have
+    different headers and different row keys, and a shared one would have to be
+    told which — which is the copy this suite keeps finding rotted.
+    """
+    lines = page.splitlines()
+    head = next(i for i, line in enumerate(lines) if line.startswith("| record |"))
     rows = []
     for line in lines[head + 2:]:
         if not line.startswith("| `PLAT-"):
@@ -1701,6 +2252,28 @@ def test_the_escape_carries_the_prose_rather_than_dropping_it(tree, field):
     assert carried.replace("\\|", "|") == PIPED_DISCHARGE
 
 
+def test_a_pipe_in_a_record_expected_does_not_end_the_row(tree):
+    """`cell` at the record table's `expected` column had no case at all.
+
+    Measured: with `cell()` dropped from that column the suite was fully green,
+    this case not yet among it. No record in the checkout carries a `|` in
+    `expected` and no fixture put one there, so the call site the new column
+    added was driven by nothing — which is exactly what `FIXTURE_PROSE` above
+    records about `statement` one table over. A `|` is the one character `cell`
+    ESCAPES rather than raising on, so this is the escape's arm and not
+    `CELL_REFUSED`'s; both halves are asserted for the same reason the registry
+    cases assert both — a `cell` that DROPPED the pipe would give the right cell
+    count too.
+    """
+    piped = f"{PREAMBLE} Read it back with `dd | xxd`. {PASS_ARM} {FAIL_ARM}"
+    tree.edit("assurance/board/PLAT-FLASH-001.toml", BOARD_EXPECTED, piped)
+    header, rows = board_table(platform_gate.render(tree.root))
+    assert rows, "the fixture rendered no record rows"
+    assert [len(row) for row in rows] == [len(header)] * len(rows)
+    carried = next(r for r in rows if "`PLAT-FLASH-001`" in r[0])[header.index(" expected ")]
+    assert carried.strip().replace("\\|", "|") == piped
+
+
 # --- and the characters no escape reaches -------------------------------------
 
 
@@ -1710,15 +2283,15 @@ def test_the_escape_carries_the_prose_rather_than_dropping_it(tree, field):
 #: Owner and Supports were empty, and `platform_gate.py`, this suite and
 #: `mdbook build` were all exit 0. `\r` is that break plus a red that never
 #: converges — `read_text` folds it to `\n`, so the byte-diff asks forever for a
-#: `--write` that cannot settle it. `</td><td>` exits `mdbook build` **101**, so
-#: the docs row dies rather than reddening with a name; `<script>`, `<br>` and
-#: `<!-- -->` reached the built page as markup a contributor wrote.
+#: `--write` that cannot settle it.
+#:
+#: The three `<` payloads are NOT here any more. They were, under a message
+#: reading "which no escape reaches" — and `&lt;` reaches them, so `cell` writes
+#: that escape and they moved to `ESCAPED_MARKUP` below. What is left is the one
+#: thing no escape answers: a cell is one line.
 REFUSED = {
     "line break": "a\\nb",
     "carriage return": "a\\rb",
-    "table injection": "a</td><td>b",
-    "script": "a<script>alert(1)</script>b",
-    "comment": "a<!-- c -->b",
 }
 
 #: The green arm, and it is the half that says the rule is not "punctuation".
@@ -1727,6 +2300,17 @@ REFUSED = {
 #: trailing backslash, and a `|` inside a code span. Widening the rule to any of
 #: them is a diff here rather than a silent tightening.
 RENDERS = ["a > b", "a & b", "a ｜ b", "a\\tb", "# a b", "a b \\\\", "a `x | y` b"]
+
+#: What `<` used to be refused for, kept as the arm that says the ESCAPE is what
+#: replaced the ban. `</td><td>` exited `mdbook build` 101 raw and `<script>` and
+#: `<!-- -->` reached the built page as markup; escaped, each is text. Both
+#: halves are asserted below — the gate is green AND the cell carries `&lt;` —
+#: because a `cell` that DROPPED the character would give a green gate too.
+ESCAPED_MARKUP = {
+    "table injection": "a</td><td>b",
+    "script": "a<script>alert(1)</script>b",
+    "comment": "a<!-- c -->b",
+}
 
 
 @pytest.mark.parametrize("field", sorted(FIXTURE_PROSE))
@@ -1763,15 +2347,34 @@ def test_a_character_that_renders_is_not_refused(tree, field, payload):
     assert tree.problems() == []
 
 
+@pytest.mark.parametrize("field", sorted(FIXTURE_PROSE))
+@pytest.mark.parametrize("what", sorted(ESCAPED_MARKUP))
+def test_markup_is_escaped_rather_than_refused(tree, field, what):
+    """The repair `<` got instead of the ban it used to carry.
+
+    Both halves, because either alone is satisfied by a `cell` that drops the
+    character: the gate is green over a field that carries markup, AND the cell
+    that reaches the page carries `&lt;` where the field carried `<`.
+    """
+    payload = ESCAPED_MARKUP[what]
+    _header, _rows, carried = poisoned_row(tree, field, payload)
+    tree.regenerate()
+    assert tree.problems() == []
+    assert "<" not in carried, carried
+    assert carried == payload.replace("<", "&lt;")
+
+
 def test_write_refuses_the_page_rather_than_writing_the_damage(tree, capsys):
     """`--write` runs no rule, so the raise is the only thing standing there.
 
     A traceback would be the crash this file refuses everywhere else, and a
     half-written page would be worse: the assertion is that the page on disk is
-    the one that was there before.
+    the one that was there before. The payload is a LINE BREAK now: `<br>` used
+    to be one and is escaped instead, so this case would have driven nothing.
     """
     tree.edit(
-        "assurance/platform.toml", FIXTURE_PROSE["discharge"], 'discharge = "a<br>b"'
+        "assurance/platform.toml", FIXTURE_PROSE["discharge"],
+        "discharge = \"\"\"a\nb\"\"\"",
     )
     before = (tree.root / platform_gate.ARTIFACT).read_text()
     assert platform_gate.run(tree.root, write=True) == 1
@@ -2058,22 +2661,26 @@ def test_an_abbreviated_evidence_commit_is_a_finding(tree):
     assert only(tree.problems(), "is not a full commit sha")
 
 
-def test_a_heading_of_the_published_page_is_a_table_cell_too(tree, capsys):
+def test_a_heading_of_the_published_page_is_a_table_cell_too(tree):
     """The new cells come from a file `check_cells` does not read.
 
     `RENDERED_PROSE` names the two REGISTRY fields that reach the page as prose,
-    and a heading of `docs/limitations.md` is now a third source that is neither.
-    The named half cannot see it; the half that RAISES can, and that is the one
-    standing between a `<` and a published page — `--write` refuses and leaves the
-    page alone, and `audit` reports it rather than a traceback. A `|` is escaped
-    as `\\|` and as nothing else."""
+    and a heading of `docs/limitations.md` is a third source that is neither. The
+    named half cannot see it, so [`cell`] is the whole of what stands between
+    that heading and the page — and both of its escapes are driven here. It used
+    to be the RAISE that was driven instead, over `<b>`; `<` is escaped now, and
+    a heading is one line by construction, so nothing a heading can carry raises.
+    That is the point rather than a gap: the escape reaches what the ban did not.
+    """
     tree.edit("docs/limitations.md", "## Silicon & desk", "## Silicon <b>&</b> desk")
     tree.edit("assurance/platform.toml", "#silicon--desk", "#silicon-bb-desk")
-    before = (tree.root / platform_gate.ARTIFACT).read_text()
-    assert platform_gate.run(tree.root, write=True) == 1
-    assert (tree.root / platform_gate.ARTIFACT).read_text() == before
-    assert "not written" in capsys.readouterr().err
-    assert only(tree.problems(), "cannot be generated")
+    tree.regenerate()
+    assert tree.problems() == []
+    # `&` is deliberately NOT escaped -- three real rows write one and GFM prints
+    # it -- so this line is also the arm that says the escape is `<` and nothing
+    # that merely looks like it.
+    assert ("| `PLAT-CRYPTO-001` | [Silicon &lt;b>&&lt;/b> desk]"
+            "(limitations.md#silicon-bb-desk) |") in platform_gate.render(tree.root)
     tree.edit("docs/limitations.md", "## Silicon <b>&</b> desk", "## Silicon | desk")
     tree.edit("assurance/platform.toml", "#silicon-bb-desk", "#silicon--desk")
     assert "| `PLAT-CRYPTO-001` | [Silicon \\| desk](limitations.md#silicon--desk) |" in (

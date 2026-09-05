@@ -36,7 +36,7 @@ assurance/board/PLAT-TIMER-002.toml	firmware/src/presence.rs	237-240	#[cfg(featu
 assurance/board/PLAT-TIMER-002.toml	firmware/src/usb_attach.rs	34-36	/// Milliseconds since the attach — the clock the FIDO layer gets as `Ctx::now_ms`,	pub fn elapsed_ms() -> u64 {
 assurance/board/PLAT-TIMER-002.toml	firmware/src/worker.rs	307-307	const BTN_POLL_MS: u64 = 16;	const BTN_POLL_MS: u64 = 16;
 assurance/board/PLAT-TIMER-002.toml	firmware/src/worker.rs	469-469	crate::usb_attach::elapsed_ms(),	crate::usb_attach::elapsed_ms(),
-assurance/board/PLAT-TIMER-002.toml	scripts/platform_gate.py	1311-1311	OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}	OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}
+assurance/board/PLAT-TIMER-002.toml	scripts/platform_gate.py	1337-1337	OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}	OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}
 assurance/board/PLAT-TIMER-002.toml	tools/rsk/audit.py	170-170	print(f"{'seq':>6}  {'uptime':>10}  {'event':<18} aux  detail")	print(f"{'seq':>6}  {'uptime':>10}  {'event':<18} aux  detail")
 assurance/board/PLAT-TIMER-003.toml	crates/rsk-fido/src/journal.rs	215-217	if !ctx.state.audit_boot_logged {	let _ = raw_append(&ctx.dev, ctx.fs, ctx.now_ms, EV_BOOT, 0, &[]);
 assurance/board/PLAT-TIMER-003.toml	crates/rsk-fido/src/vendor.rs	481-481	journal::vendor_read(ctx, out)	journal::vendor_read(ctx, out)
@@ -44,7 +44,7 @@ assurance/board/PLAT-TIMER-003.toml	firmware/src/main.rs	516-516	let mut config 
 assurance/board/PLAT-TIMER-003.toml	firmware/src/main.rs	787-787	usb_attach::mark();	usb_attach::mark();
 assurance/board/PLAT-TIMER-003.toml	firmware/src/pin_lock.rs	54-54	rp_pac::WATCHDOG.scratch2().write_value(encode(lock));	rp_pac::WATCHDOG.scratch2().write_value(encode(lock));
 assurance/board/PLAT-TIMER-003.toml	firmware/src/usb_attach.rs	34-36	/// Milliseconds since the attach — the clock the FIDO layer gets as `Ctx::now_ms`,	pub fn elapsed_ms() -> u64 {
-assurance/board/PLAT-TIMER-003.toml	scripts/platform_gate.py	1311-1311	OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}	OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}
+assurance/board/PLAT-TIMER-003.toml	scripts/platform_gate.py	1337-1337	OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}	OUTCOME_STATUS = {"pass": "discharged", "fail": "refuted"}
 assurance/board/PLAT-TIMER-003.toml	tools/rsk/audit.py	170-170	print(f"{'seq':>6}  {'uptime':>10}  {'event':<18} aux  detail")	print(f"{'seq':>6}  {'uptime':>10}  {'event':<18} aux  detail")
 assurance/bundle/SEC-FIDO-001.toml	crates/rsk-fido/src/clientpin.rs	724-724	/// Refines `RSKeySecurityState!NoAuthorizationBypass` — SEC-FIDO-001.	/// Refines `RSKeySecurityState!NoAuthorizationBypass` — SEC-FIDO-001.
 assurance/bundle/SEC-FIDO-001.toml	crates/rsk-fido/src/state.rs	172-172	/// Refines `RSKeySecurityState!NoAuthorizationBypass` — SEC-FIDO-001.	/// Refines `RSKeySecurityState!NoAuthorizationBypass` — SEC-FIDO-001.
@@ -119,7 +119,7 @@ assurance/bundle/SEC-FIDO-003.toml	fuzz/fuzz_targets/fido_session.rs	1430-1433	a
 assurance/bundle/SEC-FIDO-003.toml	scripts/citation_gate.py	618-621	return re.compile(	)
 assurance/bundle/SEC-FIDO-003.toml	scripts/evidence_gate.py	459-490	def freshness(root, commit, inputs):	return ("fresh" if not behind else "stale"), behind
 assurance/bundle/SEC-FIDO-003.toml	scripts/kani.sh	299-299	export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft"	export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft"
-assurance/bundle/SEC-FIDO-003.toml	scripts/platform_gate.py	1540-1568	def check_bundles(root, ids, findings):	)
+assurance/bundle/SEC-FIDO-003.toml	scripts/platform_gate.py	1886-1914	def check_bundles(root, ids, findings):	)
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-device/src/ctap.rs	201-201	persistent_grant_record: fs.has_key(EF_PAUTHTOKEN),	persistent_grant_record: fs.has_key(EF_PAUTHTOKEN),
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-device/src/ctap.rs	236-236	persistent_grant: fs.has_key(EF_PAUTHTOKEN),	persistent_grant: fs.has_key(EF_PAUTHTOKEN),
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-fido/src/clientpin.rs	413-416	// §6.5.5.7.2 step 12 / .3 step 11: a `pcmr` request is answered with the	// exists only while some platform holds the grant (`EF_PAUTHTOKEN`).
@@ -165,7 +165,7 @@ assurance/bundle/SEC-FIDO-004.toml	scripts/citation_gate.py	368-374	def bundle_p
 assurance/bundle/SEC-FIDO-004.toml	scripts/comutate.py	898-902	"RUSTFLAGS": (	).strip(),
 assurance/bundle/SEC-FIDO-004.toml	scripts/evidence_gate.py	459-490	def freshness(root, commit, inputs):	return ("fresh" if not behind else "stale"), behind
 assurance/bundle/SEC-FIDO-004.toml	scripts/ghost_gate.py	64-64	INVARIANT = "NoAuthorizationBypass"	INVARIANT = "NoAuthorizationBypass"
-assurance/bundle/SEC-FIDO-004.toml	scripts/platform_gate.py	1540-1568	def check_bundles(root, ids, findings):	)
+assurance/bundle/SEC-FIDO-004.toml	scripts/platform_gate.py	1886-1914	def check_bundles(root, ids, findings):	)
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	795-795	/// Refines `RSKeySecurityState!NoUnmanageableCredential` — SEC-FIDO-005.	/// Refines `RSKeySecurityState!NoUnmanageableCredential` — SEC-FIDO-005.
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	853-853	bump_rp(fs, seed, rp_id_hash, rp_id)?;	bump_rp(fs, seed, rp_id_hash, rp_id)?;
 assurance/bundle/SEC-FIDO-005.toml	crates/rsk-fido/src/credential.rs	867-867	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);	let _ = crate::credmgmt::decrement_rp(fs, rp_id_hash);
@@ -198,7 +198,7 @@ assurance/bundle/SEC-FIDO-005.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...
 assurance/bundle/SEC-FIDO-005.toml	scripts/bundle_gate.py	1450-1450	verdicts = len(named) - inverse	verdicts = len(named) - inverse
 assurance/bundle/SEC-FIDO-005.toml	scripts/comutate.py	328-356	def solo_index(root: pathlib.Path) -> dict[str, list[str]]:	return out
 assurance/bundle/SEC-FIDO-005.toml	scripts/comutate.py	891-893	# Sequential runs share the main build cache: only the patched	"CARGO_TARGET_DIR": str(root / "target"),
-assurance/bundle/SEC-FIDO-005.toml	scripts/platform_gate.py	1540-1568	def check_bundles(root, ids, findings):	)
+assurance/bundle/SEC-FIDO-005.toml	scripts/platform_gate.py	1886-1914	def check_bundles(root, ids, findings):	)
 assurance/bundle/SEC-FIDO-006.toml	crates/rsk-device/src/lib.rs	54-54	/// power-cycled, and §6.6 opens the `authenticatorReset` window only just after a	/// power-cycled, and §6.6 opens the `authenticatorReset` window only just after a
 assurance/bundle/SEC-FIDO-006.toml	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
 assurance/bundle/SEC-FIDO-006.toml	crates/rsk-fido/src/consts.rs	368-368	pub const PIN_MISMATCH_LIMIT: u8 = 3;	pub const PIN_MISMATCH_LIMIT: u8 = 3;
