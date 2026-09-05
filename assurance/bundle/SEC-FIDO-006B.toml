@@ -189,7 +189,7 @@ artifact = "fuzz/fuzz_targets/power_cut.rs::reset_property_holds fuzz/fuzz_targe
 bound_oracles = 2
 stops_oracles = "any rung either oracle does not reach. One is a boolean over a mounted store, the other a sequence of CTAP commands after an operator's cut, and neither has an assertion this clause owns"
 bound_separable_clauses = 1
-stops_separable_clauses = "this clause and its PIN sibling, on both rungs. `reset_property_holds` folds them into one conjunct — `!credential_usable || (fs.has_data(EF_PIN) && fs.has_data(EF_ALWAYS_UV))` — so a failure names the function; tests/29_reset_power_cut.py:190-193 folds them into `assert assertion_status != 0`, which says the assertion was refused without saying which gate refused it. Only the backup seal is separable, and it is the sibling this bundle is not about"
+stops_separable_clauses = "this clause and its PIN sibling, on both rungs. `reset_property_holds` folds them into one conjunct — `!credential_usable || (fs.has_data(EF_PIN) && fs.has_data(EF_ALWAYS_UV))` — so a failure names the function; tests/29_reset_power_cut.py:526-529 folds them into `assert assertion_status != 0`, which says the assertion was refused without saying which gate refused it. Only the backup seal is separable, and it is the sibling this bundle is not about"
 bound_recorded_runs = 0
 stops_recorded_runs = "everything the board rung would say. The `test` column counts a FILE that names the invariant; no board run is recorded anywhere, `hardware` is 0 on the evidence vector, and PLAT-FLASH-001 owns the missing result at `status = \"pending\"`"
 bound_asserts = 2

@@ -235,7 +235,7 @@ assurance/bundle/SEC-FIDO-006A.toml	formal/run-tlc.sh	236-237	"$JAVA" -XX:+UsePa
 assurance/bundle/SEC-FIDO-006A.toml	fuzz/fuzz_targets/power_cut.rs	29-31	//! After a real reboot it checks `ResetNeverWeakensSurvivingState` and its three	//! `ResetKeepsTheBackupSeal`. This is the byte-granular half of the phase-6
 assurance/bundle/SEC-FIDO-006A.toml	fuzz/fuzz_targets/power_cut.rs	202-202	(!credential_usable || (fs.has_data(EF_PIN) && fs.has_data(EF_ALWAYS_UV)))	(!credential_usable || (fs.has_data(EF_PIN) && fs.has_data(EF_ALWAYS_UV)))
 assurance/bundle/SEC-FIDO-006A.toml	tests/29_reset_power_cut.py	12-14	This is the runtime witness for `ResetNeverWeakensSurvivingState` and its three	`ResetKeepsTheBackupSeal`. It provisions one owner seed, seals its export window,
-assurance/bundle/SEC-FIDO-006A.toml	tests/29_reset_power_cut.py	190-194	assertion_status = old_credential_without_gates(dev, cid, credential_id)	)
+assurance/bundle/SEC-FIDO-006A.toml	tests/29_reset_power_cut.py	526-530	assertion_status = old_credential_without_gates(dev, cid, credential_id)	)
 assurance/bundle/SEC-FIDO-006B.toml	crates/rsk-fido/src/config.rs	315-315	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");	const DEFAULT_ALWAYS_UV: bool = cfg!(feature = "always-uv");
 assurance/bundle/SEC-FIDO-006B.toml	crates/rsk-fido/src/config.rs	327-329	pub(crate) fn always_uv_enabled<S: Storage>(fs: &mut Fs<S>) -> bool {	}
 assurance/bundle/SEC-FIDO-006B.toml	crates/rsk-fido/src/config.rs	334-340	fn always_uv_state<S: Storage>(fs: &mut Fs<S>) -> rsk_sdk::error::Result<bool> {	}
@@ -267,7 +267,7 @@ assurance/bundle/SEC-FIDO-006B.toml	formal/gen-configs.sh	321-328	# minting one 
 assurance/bundle/SEC-FIDO-006B.toml	formal/run-tlc.sh	16-16	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.	# (sha256 936a2620...), so `floors.txt` still describes the TLC that measured it.
 assurance/bundle/SEC-FIDO-006B.toml	formal/run-tlc.sh	236-237	"$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \	-nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
 assurance/bundle/SEC-FIDO-006B.toml	scripts/kani.sh	122-122	STATEFUL="rsk-fido rsk-fs"	STATEFUL="rsk-fido rsk-fs"
-assurance/bundle/SEC-FIDO-006B.toml	tests/29_reset_power_cut.py	190-193	assertion_status = old_credential_without_gates(dev, cid, credential_id)	f"(clientPin={options.get('clientPin')}, alwaysUv={options.get('alwaysUv')})"
+assurance/bundle/SEC-FIDO-006B.toml	tests/29_reset_power_cut.py	526-529	assertion_status = old_credential_without_gates(dev, cid, credential_id)	f"(clientPin={options.get('clientPin')}, alwaysUv={options.get('alwaysUv')})"
 assurance/bundle/SEC-FIDO-006C.toml	crates/rsk-display/src/backup.rs	47-47	can_reveal: st.has_seed && st.exportable && !st.sealed && !st.locked && device_pin_set,	can_reveal: st.has_seed && st.exportable && !st.sealed && !st.locked && device_pin_set,
 assurance/bundle/SEC-FIDO-006C.toml	crates/rsk-fido/src/consts.rs	295-295	pub const EF_BACKUP_SEALED: u16 = 0xCC02; // [1] once the seed has been backed up	pub const EF_BACKUP_SEALED: u16 = 0xCC02; // [1] once the seed has been backed up
 assurance/bundle/SEC-FIDO-006C.toml	crates/rsk-fido/src/consts.rs	364-364	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;
@@ -318,7 +318,8 @@ assurance/bundle/SEC-FIDO-006C.toml	fuzz/fuzz_targets/power_cut.rs	229-232	fs.pu
 assurance/bundle/SEC-FIDO-006C.toml	fuzz/fuzz_targets/power_cut.rs	236-241	let budget = u32::from_be_bytes([	]);
 assurance/bundle/SEC-FIDO-006C.toml	fuzz/fuzz_targets/power_cut.rs	244-246	let mut state = rsk_fido::FidoState::new();	state.keydev_dec = rsk_fido::seed::load_keydev(&identity, &mut fs);
 assurance/bundle/SEC-FIDO-006C.toml	scripts/comutate.py	301-325	def armed_subject(config, companion: dict[str, str]) -> str | None:	return None
-assurance/bundle/SEC-FIDO-006C.toml	tests/29_reset_power_cut.py	201-201	assert current != owner_seed, "owner seed survived after its backup seal disappeared"	assert current != owner_seed, "owner seed survived after its backup seal disappeared"
+assurance/bundle/SEC-FIDO-006C.toml	tests/29_reset_power_cut.py	526-527	assertion_status = old_credential_without_gates(dev, cid, credential_id)	assert assertion_status != 0, (
+assurance/bundle/SEC-FIDO-006C.toml	tests/29_reset_power_cut.py	537-537	assert current != owner_seed, "owner seed survived after its backup seal disappeared"	assert current != owner_seed, "owner seed survived after its backup seal disappeared"
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-device/src/ctap.rs	221-221	keydev_ram_raw: st.keydev_dec.is_some(),	keydev_ram_raw: st.keydev_dec.is_some(),
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/config.rs	405-409	/// [`crate::state::FidoState::mse_cid`] two fields above it, `keydev_dec` carries no channel,	/// itself. What the finding does close is the consent: the prompt named "Unlock",
 assurance/bundle/SEC-FIDO-007.toml	crates/rsk-fido/src/config.rs	415-415	if ctx.state.keydev_dec.is_none() {	if ctx.state.keydev_dec.is_none() {
@@ -476,7 +477,7 @@ assurance/platform.toml	scripts/check.sh	489-489	run_tests "test (host)"        
 assurance/platform.toml	scripts/fuzz-all.sh	41-41	mapfile -t targets < <(cargo fuzz list)	mapfile -t targets < <(cargo fuzz list)
 assurance/platform.toml	scripts/kani_gate.py	389-409	def workflow_pins(root):	}
 assurance/platform.toml	scripts/kani_gate.py	697-708	elif len(said) > 1:	)
-assurance/platform.toml	tests/29_reset_power_cut.py	191-194	assert assertion_status != 0, (	)
+assurance/platform.toml	tests/29_reset_power_cut.py	527-530	assert assertion_status != 0, (	)
 assurance/platform.toml	tests/54_sram_residue.py	48-48	Run on 2026-08-05, Waveshare RP2350 Zero (silicon A4, secure boot off, picotool	Run on 2026-08-05, Waveshare RP2350 Zero (silicon A4, secure boot off, picotool
 assurance/token_refinement.toml	crates/rsk-device/src/ctap.rs	122-122	*st = rsk_fido::FidoState::new();	*st = rsk_fido::FidoState::new();
 assurance/toolchain.toml	crates/rsk-rsa/src/lib.rs	305-317	fn rsa_private_exp_crt(	);

@@ -96,6 +96,17 @@ NAMED = {
     # belongs here rather than in the carve-out that forbids one.
     "reproduce.sh": ("test_reproduce.py", "check.sh"),
 }
+#: The board-only scripts under `tests/` that have a host table here, as
+#: **(script, its table)**. They are not guards and no `check.sh` row runs them —
+#: that is exactly why they need naming: neither rule above can see a table whose
+#: subject is not a row, so both members of this family could have been emptied
+#: with `pytest scripts` green. Measured on the newer one: truncated to its SPDX
+#: line, `python -m pytest scripts -q` was rc 0 until this dict existed.
+BOARD_TABLES = {
+    "../tests/54_sram_residue.py": "test_sram_residue_dump.py",
+    "../tests/29_reset_power_cut.py": "test_reset_power_cut.py",
+}
+
 #: The pytest invocation that has to reach the tests, wherever it is spelled.
 COLLECTS = re.compile(r"pytest\s+([^\n|;&]*)")
 
@@ -137,8 +148,10 @@ def test_every_gate_is_run_by_check_sh():
 
 
 def tables():
-    """(guard, its mutation table) for both halves of the roster."""
-    return [(g, f"test_{g}") for g in GATES] + [(g, t) for g, (t, _) in NAMED.items()]
+    """(subject, its mutation table) for every half of the roster."""
+    return ([(g, f"test_{g}") for g in GATES]
+            + [(g, t) for g, (t, _) in NAMED.items()]
+            + sorted(BOARD_TABLES.items()))
 
 
 def test_every_gate_has_a_mutation_table():
@@ -156,6 +169,23 @@ def test_every_mutation_table_has_cases_in_it():
              if (HERE / table).is_file()
              and len(CASE.findall((HERE / table).read_text())) < TABLE_FLOOR}
     assert not empty, f"mutation tables under the floor of {TABLE_FLOOR}: {empty}"
+
+
+def test_the_board_scripts_with_a_table_still_exist():
+    """A table kept for a script that moved is one nobody will notice go stale,
+    and these are the entries no other rule here can reach."""
+    missing = [g for g in BOARD_TABLES if not (HERE / g).is_file()]
+    assert not missing, f"{missing} are named here but not in tests/"
+
+
+def test_no_board_table_is_owed_a_check_sh_row():
+    """The reason they are a separate roster: `check.sh` must NOT run them.
+
+    They need a board and a real supply cut. A row appearing for one is a
+    different mistake from a table going missing, and this says which."""
+    row = check_sh()
+    running = [g for g in BOARD_TABLES if gate_lines.runs(row, pathlib.PurePath(g).name)]
+    assert not running, f"check.sh runs {running}, which need hardware"
 
 
 def test_the_named_guards_still_exist():

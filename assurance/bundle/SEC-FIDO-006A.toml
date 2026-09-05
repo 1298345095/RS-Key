@@ -36,7 +36,7 @@
 #    clause-A half is `&&`-folded with clause B's into one boolean
 #    (fuzz/fuzz_targets/power_cut.rs:202), and `test = 1` counts an assertion
 #    that says an assertion was refused without saying which gate refused it
-#    (tests/29_reset_power_cut.py:190-194). Two of this row's four non-zero
+#    (tests/29_reset_power_cut.py:526-530). Two of this row's four non-zero
 #    evidence columns cannot report this clause.
 #  * AND THE PARENT BUNDLE MISNAMES THE THREAT CLAUSE'S OTHER CLAIMANT.
 #    `assurance/bundle/SEC-FIDO-006.toml:64` says `TM-HOST-POWER-CUT` "is
@@ -216,7 +216,7 @@ artifact = "fuzz/fuzz_targets/power_cut.rs::reset_property_holds tests/29_reset_
 bound_oracle_conjuncts = 1
 stops_oracle_conjuncts = "any attribution at all. The fuzz oracle's first conjunct is `!credential_usable || (has_data(EF_PIN) && has_data(EF_ALWAYS_UV))` — clauses A and B `&&`-folded — so a failure names the function and never the clause, and a run that dropped EF_ALWAYS_UV reports identically to one that dropped EF_PIN"
 bound_assertions = 1
-stops_assertions = "the same attribution, one rung up. tests/29_reset_power_cut.py:190-194 asserts the old credential's assertion was REFUSED; the refusal could be either gate's and the assertion does not say. The failure MESSAGE prints both option flags, so a human reading a red run could tell — the assertion could not"
+stops_assertions = "the same attribution, one rung up. tests/29_reset_power_cut.py:526-530 asserts the old credential's assertion was REFUSED; the refusal could be either gate's and the assertion does not say. The failure MESSAGE prints both option flags, so a human reading a red run could tell — the assertion could not"
 bound_recorded_board_runs = 0
 stops_recorded_board_runs = "everything the board column might have been. No run of that script is recorded anywhere in the tree; `hardware` is 0 on this row's vector, `build` names no board revision because there is no board result to date one, and PLAT-FLASH-001 owns the missing result with `status = \"pending\"`"
 shipped_relation = "both files NAME this clause in their doc comments — fuzz/fuzz_targets/power_cut.rs:29-31 and tests/29_reset_power_cut.py:12-14 list all three — and neither can report it. So of the four non-zero evidence columns on this row, two are counts of files whose oracles fold this clause into a sibling's. The columns are not wrong; they count what they say they count, which is a file"
@@ -303,7 +303,7 @@ c_twin = "the code twin is `BugResetGatesFirst`, whose `formal/comutants.toml` e
 r_owners = "one `Refines` tag, at crates/rsk-fido/src/reset.rs:245, and it is on `is_fido_gate_record` — a five-member `matches!` — rather than on the order the clause is about. `rust = 1` is a count of FILES: `assurance_gate.grep_word` returns file names, so the tag and the ordering block resolve to the same one file whether the tag names one clause or three"
 r_alpha_is_weaker = "the Rust α states a WEAKER implication than the model. crates/rsk-fido/src/reset_assurance.rs:106-112 puts four conjuncts in the antecedent where RSKeySecurityState.tla:1837-1839 has three: `owner_credential_usable` at :100-102 is `persistent.credential && owner_seed_reachable`, and the model's `SeedReachable` is only the second half. Adding a conjunct to an antecedent can only make an implication easier to satisfy, so the C tier proves less here than the B tier does — and the two are read as one ladder anyway"
 f_fuzz = "`fuzz = 1` counts fuzz/fuzz_targets/power_cut.rs, whose module doc at :29-31 names all three clauses and whose oracle at :194-204 folds two of them: the first conjunct is `!credential_usable || (has_data(EF_PIN) && has_data(EF_ALWAYS_UV))`. A failure names `reset_property_holds` and cannot say which record went. The only recorded run of that target anywhere is a sentence in docs/reset-refinement.md, and no log of it is in the tree or in this bundle"
-t_hil = "`test = 1` counts tests/29_reset_power_cut.py, whose doc at :12-14 names all three clauses and whose post-cut assertion at :190-194 says the old credential's assertion was refused without saying which gate refused it. No board run is recorded anywhere: PLAT-FLASH-001's discharge is a PASS of exactly that script, its status is pending, `hardware` is 0 on the vector, and `build` records no board revision because there is no board result to name one for"
+t_hil = "`test = 1` counts tests/29_reset_power_cut.py, whose doc at `tests/29_reset_power_cut.py:12-14` names all three clauses and whose post-cut assertion at `tests/29_reset_power_cut.py:526-530` says the old credential's assertion was refused without saying which gate refused it. No board run is recorded anywhere: PLAT-FLASH-001's discharge is a PASS of exactly that script, its status is pending, `hardware` is 0 on the vector, and `build` records no board revision because there is no board result to name one for"
 
 # The gates, each with the number it derives, transcribed from a live run.
 gate_ghost = "ghost-gate: ok — 21 action(s) record NoAuthorizationBypass over 24 route(s), consulting 11 guard(s) — unchanged by this bundle, and transcribed because the roster rule asks for every gate line whether or not this property moved it. The ghost records a different invariant, correctly: this clause is a state predicate and no action writes its name into the violation set"

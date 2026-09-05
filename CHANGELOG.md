@@ -45,6 +45,140 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The real-power HIL run asks the board whether the reset had started, and
+  refuses to call a cut a tear until it answers.** `PLAT-FLASH-001`'s discharge
+  is "a recorded PASS of `tests/29_reset_power_cut.py`", and `main` asserted
+  only that the device was fail-closed after the reboot. A device on which the
+  reset never began is fail-closed for free, so a cut landing before the RESET
+  request reached the board satisfied every assertion and printed PASS —
+  driven, not reasoned: with the new gate removed, a cut at t=0 and a write the
+  host stack buffered into a void both come back `PASS`, exit 0.
+
+  The device settles it. `rsk_usb::ctaphid`'s `run_with_keepalive` is entered
+  only after the whole CBOR request has been reassembled, and it writes its
+  first `CTAPHID_KEEPALIVE` one `KEEPALIVE_MS` (100 ms) later, so one frame
+  carrying `STATUS_PROCESSING` says the request arrived AND the handler had
+  been running that long; `STATUS_UPNEEDED` says the opposite — a touch
+  ceremony, which stands ahead of every flash write in `reset`. Without a
+  `PROCESSING` frame the run is now `INCONCLUSIVE` rather than PASS. It is not
+  proof that an erase landed: nothing on this wire separates the ceremony's
+  return from `wipe`'s first tombstone, and the signal exists at all only
+  because this operation is slower than 100 ms — 487.2 ms measured on the board
+  the row cites. The relay's default delay moves 25 ms → `2 * KEEPALIVE_MS`,
+  since at 25 ms no cut can be confirmed at all.
+
+  Each cut also appends one JSON object to a record — one run is one cut, so a
+  sweep is a series of runs — defaulting outside the checkout, with
+  `RSK_POWER_CUT_LOG` to aim it at a file meant to be committed. Four instants
+  go in, none of them the moment the supply went: when the device was first
+  seen inside the reset, the newest frame that came back (a LOWER bound, and an
+  empty read is not a frame — hidapi returns an empty list on a timed-out read
+  rather than raising), the sender's transfer death, and the host-observed
+  disappearance. The transfer death bounds the cut only when the handle itself
+  failed; one that died of `ctaphid.read`'s own 20 s budget is recorded as
+  bounding nothing, because it does not — driven, it otherwise reports a cut
+  269 ms before the tear, at a verdict that excludes it. The record is written
+  from `cut_during_reset`'s `finally`, in its own `try`, over a directory it
+  creates: so a relay that failed, a key that never disappeared and a key that
+  never came back are recorded too, and a record that cannot be written costs
+  the line instead of replacing the assertion underneath it.
+
+  The manual prompt is unchanged, and that is a decision rather than an
+  omission: the `CUT POWER NOW` line reaches the operator at most 0.11 ms after
+  the window opens — the widest value over every run measured across three
+  sessions, where an earlier draft quoted "under 0.1 ms over seven runs" and
+  two of the first twelve were not. Stated as a ceiling and not an interval
+  because the floor carries nothing and kept moving: a later session read
+  0.006 ms. So a 200–300 ms reaction to it lands inside the
+  487.2 ms window and above the 100 ms floor, where a yank riding the Enter
+  press lands at ~0 ms — under the floor, in the one part of the window this
+  instrument cannot tell from a cut that never reached the board. That part is
+  not small and `docs/reset-refinement.md` now says what it costs: the handler
+  starts at 0 and the confirmable band opens at 100 ms, so the first
+  `KEEPALIVE_MS` of `reset()` — `request_rescrub` and the first tombstones — is
+  un-PASSable by construction. On a simulated board over a 1 ms grid the flip
+  is at the floor exactly — last `unconfirmed` 100 ms, first `torn` 101 — and
+  a real board adds USB and host latency nothing here measures, so the
+  false-red band starts at 100 ms and ends somewhere above it this cannot
+  name. The 200 ms default is 100 ms clear of the floor.
+
+  Two repairs ride along, both inside the same instrument's blast radius.
+  The read comment saying the device "sends one upfront keepalive, not a
+  stream" — it streams one every `KEEPALIVE_MS` and the first is not upfront,
+  and that sentence is why the signal read as unavailable — is fixed in BOTH
+  copies, `tests/ctaphid.py` and `tools/rsk/ctaphid.py`. One site was left
+  alone in an earlier draft on the grounds that it is a different package; the
+  tree's own rule is to sweep a defect by class rather than by site, and the
+  `tools/rsk` copy contradicted itself in place, three lines from its own
+  `KEEPALIVE_DEADLINE_S = 120` comment describing the stream. No
+  `tools/rsk/__init__.py` version bump rides with it: CONTRIBUTING.md scopes
+  that to a **user-facing** change, and a comment reaches no build a `pipx`
+  user could be stale against. And `SEC-FIDO-006A`'s and `SEC-FIDO-006C`'s
+  references to the sibling clauses' folded assertion were bare `:NNN` outside
+  backticks, a form `citation_gate` reads as nothing at all — and which, once
+  backticked, would have resolved against the last file their paragraph named
+  instead. They are spelled in full now, and `formal/citations.lock` carries
+  the lines that prove the gate can see them.
+
+- **The cut instrument is a gate row, and the keepalive it trusts has to be
+  ours.** Three of the guard's clauses were falsified by nothing: a review drove
+  a board that never saw the RESET, with `PROCESSING` keepalives arriving on
+  channel `aabbccdd`, and got `verdict: torn`, `wipe_observed: true`, PASS at
+  exit 0. `TappedHid.read` tested the KEEPALIVE command byte and read the status
+  at offset 7 without ever comparing `frame[0:4]` to the channel it had asked on
+  — and hidraw and IOHIDManager hand every input report to every open handle, so
+  a second host process with a slow CBOR in flight is enough. The tap is scoped
+  to `cid` now (the same reason `ctaphid_init` matches its nonce), frames on
+  another channel are counted rather than credited, and a run refused for that
+  reason says so. `cut_lower_ms.last_frame` is deliberately NOT scoped: any
+  frame on any channel is the board answering, which is all that bound claims.
+
+  The falsification lives in the tree instead of a scratchpad. `tests/29_*.py`
+  is board-only and no `check.sh` row runs it, so the whole guard could have
+  been deleted with the gate green — the shape `scripts/test_sram_residue_dump.py`
+  already covers one script over. `scripts/test_reset_power_cut.py` is that
+  table: 58 checks over 26 scenarios against a model of hidapi's contract, and
+  25 mutants that each name the checks which must go red for them, so a kill is
+  read by WHICH assertion fell. It runs in the `pytest (gate scripts)` row in
+  ~23 s, five of which are one scenario waiting out the subject's own
+  `worker.join(5)`. Three defects it now catches were invisible to the scratchpad version:
+  `processing_at()` answering the LAST keepalive rather than the first (the
+  field is `first_keepalive` and the docs call it the earliest instant),
+  that number replaced by a hard-coded `0.0`, and the `CTAPHID_KEEPALIVE` test
+  deleted — which the old fake board could not see, because it only ever
+  returned one response body, and a real device answering CTAP `0x01` to the
+  RESET donates a byte 7 that reads as `PROCESSING`.
+
+  And a roster for it, because the family had none. `test_gate_scripts.py`
+  holds every guard to a mutation table, but both halves of that roster are
+  about `check.sh` ROWS — and a board-only script is not one, which is why it
+  needed a table in the first place. Measured: with the new table truncated to
+  its SPDX line, `python -m pytest scripts -q` was rc 0, 70 passed, the same as
+  the control. `BOARD_TABLES` names the two of them — this one and
+  `tests/54_sram_residue.py`'s, which sat in the same blind spot — and asserts
+  the opposite direction too: `check.sh` must NOT grow a row for a script that
+  needs a real supply cut. The three counts this entry publishes are held
+  against the tables themselves by a case in the new file, for
+  `run_count_gate.py`'s reason one region over: a number whose only copy of the
+  truth is the moment somebody typed it.
+
+  Four smaller repairs to the same instrument. An `INCONCLUSIVE` now says WHICH
+  of its three worlds it is in — a board that ANSWERED (`0x30` past the CTAP 2.1
+  §6.6 window comes back well under the keepalive floor, and the old remedy,
+  "cut later than 100 ms", was the wrong advice for it), a board still waiting
+  for a finger, or a cut that arrived before the request. `STATUS_UPNEEDED` was
+  assigned and never read; it is what tells the second world from the third. The
+  record carries a `run_id`, printed beside `PASS` too, and a `records` field
+  saying in as many words that the verdict is the CUT's: it is written before
+  `main`'s post-reboot assertions, so a run that FAILED them leaves the line a
+  passing run leaves, and the pasted record cannot be read alone. The write and
+  its console summary have their own scopes, because one `try` spanning both
+  printed "no cut record written" over a record already on disk. And the default
+  record path is per-uid, created `0700`, appended through `O_NOFOLLOW`: it is
+  a predictable name in a shared temp, and unlike `tests/54_sram_residue.py` it
+  cannot use a fresh `mkdtemp`, because a sweep that enumerates its delays needs
+  the lines to accumulate in one file.
+
 - **The boot-hardening module's three mutation switches are co-mutants now, and
   the exclusion that hid them was covering two sites nobody had opened.**
   `formal/comutants.toml` pairs every model mutant with a real Rust patch that
