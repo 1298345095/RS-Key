@@ -127,6 +127,21 @@ covers the security boundary. This page covers feature and hardware gaps.
   A2. The firmware is A4-compatible and A4 is recommended. *Status: never. These
   are silicon properties, not firmware ones; closing them fully is what a
   dedicated secure element is for.*
+- **The TRNG is not characterised, and there is no vendor number to check it
+  against.** The RP2350's ring-oscillator source runs behind three continuous
+  health checks and RS-Key leaves all of them armed, so a source that *dies*
+  stalls or halts the device rather than handing out predictable keys. What nobody has
+  measured is what the raw source is *worth*. Raspberry Pi's datasheet asserts
+  compliance and publishes a generation rate, states that its software does not
+  configure the ROSC settings Arm's characterisation procedure provides, and
+  gives no min-entropy figure; the part carries no NIST ESV or ENT listing.
+  Qualifying it across temperature, supply and process would need a thermal
+  chamber, a programmable supply and parts from several lots — and even with all
+  of that, a result with nothing published to hold it against. A
+  degraded-but-still-passing source is the one TRNG failure this device cannot
+  notice. *Status: accepted. The desk-conditions measurement that IS reachable is
+  `PLAT-TRNG-002`, and this corner gap is `PLAT-TRNG-003`, both in
+  [platform assumptions](platform-assumptions.md).*
 - **The at-rest seals are not authenticated against a flash writer.** They keep a
   flash *dump* from yielding key material, which is what the OTP burn buys. They
   do not stop someone who can *write* flash over BOOTSEL from planting a record:

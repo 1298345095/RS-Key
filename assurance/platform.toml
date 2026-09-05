@@ -833,15 +833,147 @@ supports = ["SEC-FIDO-006", "SEC-FIDO-006A", "SEC-FIDO-006B", "SEC-FIDO-006C"]
 # that already are. That is the honest shape and it is also the weakness: a
 # category with no candidate source is a category this page cannot force.
 
+# ---- The TRNG: one route, split in three -------------------------------------
+# `PLAT-TRNG-001` carried three claims of very different reachability under one
+# id until 2026-09-05 — that the health check catches a dead source, that the raw
+# source has entropy, and that both hold at every corner the datasheet qualifies
+# — and its PASS clause named a number that does not exist. `PASS = min-entropy
+# at or above the datasheet figure`: the RP2350 datasheet of 29 July 2025
+# publishes no min-entropy per bit, §12.12.2 p.1213 records that Raspberry Pi's
+# software does not configure the settings Arm's characterisation procedure
+# provides, and the part holds no NIST ESV or ENT listing. That is
+# `PLAT-TIMER-001`'s 584,542-year run and `PLAT-MEM-001`'s `residue` arm a third
+# time: a route no passing world can walk.
+#
+# TWO OF THE ROW'S OWN PREMISES WERE FALSE AS WELL, and the split is where they
+# are corrected rather than dropped. The raw source needs no exotic bench rig —
+# the same datasheet's bootrom listing (§12.12.4.1 p.1214) streams it with two
+# register writes and shipping pico-sdk does the same — so the entropy
+# measurement is REACHABLE, and it is `PLAT-TRNG-002`. And the failure is not
+# silent: the checks are continuous, a failed one presents no result and zeroes
+# EHR_DATA, AUTOCORR_ERR latches, and a source that has died stalls the boot
+# before USB comes up. What is genuinely invisible is a DEGRADED source that
+# still passes, and that is the only thing left in the security row.
+#
+# THE CLASSES FOLLOW THE ROUTES, the way the timebase's do: `HARDWARE_CLASSES` in
+# scripts/platform_gate.py is, in its own words, "the classes whose discharge is a
+# measurement on silicon, and so must record the stepping". This row's discharge
+# is a reading of a dependency pin, a driver default and one assignment, so it is
+# `build-configuration` and owes no stepping; `PLAT-TRNG-002`'s is a measurement
+# on silicon and `PLAT-TRNG-003`'s would be, so both stay `trng`. THE BOARD
+# OBLIGATION DOES NOT MOVE: this row leaves it and `PLAT-TRNG-002` takes its
+# place, and `PLAT-TRNG-003` owes no record because a `planned` record for a run
+# no equipment here can take is one more route no world walks.
+
 [[assumption]]
 id = "PLAT-TRNG-001"
+class = "build-configuration"
+statement = "The RP2350 TRNG's three health checks are CONTINUOUS, this image leaves all three armed, and they fail CLOSED: `embassy_rp::trng::Config::default()` clears every bypass bit and `Trng::new` writes them into TRNG_DEBUG_CONTROL, firmware/src/main.rs:596 edits `sample_count` and nothing else, and on a failed check the part presents no result and every EHR_DATA register reads zero. So a source that has DIED cannot be drawn from: at boot that stalls before the USB pull-up goes up, and at the 64 KiB DRBG reseed (firmware/src/handler.rs:78) it wedges or halts the operation in flight. That the surviving source has ENTROPY is a DIFFERENT claim and PLAT-TRNG-002's, not this row's: three continuous checks are a dead-source detector, never an entropy estimator."
+discharge = "READ on 2026-09-05, and it is the reading half of a route that used to carry three claims of very different reachability under one id. FOUR READINGS. (1) ALL THREE CHECKS ARE ARMED, and the image WRITES that rather than inheriting a reset value: `embassy_rp::trng::Config::default()` sets `disable_autocorrelation_test`, `disable_crngt_test` and `disable_von_neumann_balancer` all `false`, and `Trng::new`'s `initialize_rng` writes those three bits into TRNG_DEBUG_CONTROL (0x138) on every construction. firmware/src/main.rs:588 takes that default, firmware/src/main.rs:596 edits `sample_count` alone, and firmware/src/main.rs:597 is the tree's ONLY `Trng::new`, and no first-party Rust assigns any of the three bypass fields: `git grep -E 'disable_autocorrelation_test|disable_crngt_test|disable_von_neumann_balancer' -- 'firmware/*.rs' 'crates/*.rs' 'tools/*.rs'` exits 1. THE THREE NAMES AND THE PATHSPEC ARE BOTH THE POINT, not tidiness. Unscoped, that grep answers this row's own prose and the page generated from it, so a claim about what the tree contains would be falsified by writing it down — PLAT-TIMER-001 records that trap one row over. And `disable_` alone over the same pathspec is NOT empty, which is why the command is the three field names and not the prefix — and the count is worth getting right, because the first version of this sentence got it wrong: FOUR hits in TWO files, two test names in crates/rsk-fido/src/vendor_tests.rs and two `disable_raw_mode` calls in tools/tui/src/main.rs, because git's pathspec matching lets `tools/*.rs` cross a `/`. The revision is pinned in Cargo.lock: embassy-rp 0.10.0 at git rev 6c28443489ad5940ab8c1824c090b1f8a7233bf6. (2) THEY ARE CONTINUOUS, AND THERE IS NO START-UP TEST. RNG_ISR (0x104, RP2350 datasheet of 29 July 2025, p.1217) carries VN_ERR — 32 identical consecutive bits — CRNGT_ERR — two equal consecutive 16-bit blocks — and AUTOCORR_ERR, and each is evaluated as a block is produced rather than once at reset — AUTOCORR_ERR latching after four failures in a row rather than on the first, which the driver's own comment quotes from the register description. That datasheet describes no start-up test and no Adaptive Proportion Test, which is worth writing down because SP800-90B's health-test vocabulary makes a reader expect both: what this part gives is a per-block continuous test and nothing else. (3) THEY FAIL CLOSED AND LOUDLY, which is the half the row this was split from had backwards. §12.12.3 p.1213: on failure no results are presented and the EHR_DATA registers all read as 0, so TRNG_VALID.ehr_valid stays low and no byte reaches the caller; AUTOCORR_ERR is LATCHED — in the datasheet's own words the RNG then ceases functioning until the next reset — and the interrupt-clear register does not lift it: what the driver does instead is assert TRNG_SW_RESET and re-initialise, which is the loop below and not a recovery. This firmware's boot draw is the BLOCKING one: firmware/src/handler.rs:63 takes the `Trng` and firmware/src/handler.rs:65 fills 48 bytes through `blocking_fill_bytes`, whose not-valid branch soft-resets and re-samples on AUTOCORR_ERR and panics on anything else. Either way the boot does not finish — it is the 30-105 s stall firmware/src/main.rs:589-595 records, taken before the bus pull-up (firmware/src/usb_attach.rs:8) — and a device that never enumerates is not a device handing out predictable keys. AND THE BOOT IS NOT THE ONLY DRAW, which the first version of this reading missed: firmware/src/handler.rs:78 calls the same `blocking_fill_bytes` again on every `RESEED_INTERVAL` (firmware/src/handler.rs:57, 64 KiB of DRBG output), so a source that dies AFTER boot meets the same loop on an ENUMERATED device, inside whatever operation asked for the bytes. Loud in a second way — a wedged command or a `panic-halt` freeze rather than a device that never appears — and still not a quiet weak key, which is the claim. (4) WHAT `sample_count = 1000` DOES, AND WHAT IT DOES NOT. SAMPLE_CNT1 (0x130, p.1218) is the number of rng_clk cycles BETWEEN two consecutive ROSC samples, so 25 -> 1000 buys DECORRELATION and costs generation time; it does not change the 192 bits an EHR block carries and it adds no entropy to any of them. Why it was raised is on record and was measured on hardware at `2cdcc282e9605d601631b4b06727b2f746325727`: at 25 the autocorrelation check failed on nearly every block on one Waveshare unit and the driver soft-reset in a loop, an inverter-chain change did NOT help, and 1000 gives a seed in about a second and a half. THREE THINGS THIS DOES NOT SETTLE. That the surviving source has ENTROPY — the checks catch a source that has DIED and a merely DEGRADED one passes all three, which is the single failure this row's statement deliberately leaves open and PLAT-TRNG-002's whole subject. WHICH loud arm a CRNGT or VN failure takes: `blocking_wait_for_successful_generation` branches on `autocorr_err` alone and panics otherwise, and whether the part drops TRNG_BUSY with `ehr_valid` low on those two is a clause this reading does not have — a stall and a `panic-halt` freeze are both loud and neither is a quiet weak key, so the claim survives either answer while the answer stays unread. And NOTHING IN THIS TREE BACKS THE FAIL-CLOSED CLAUSE: the driver's `read_ehr_registers_into_array` copies EHR_DATA0 through EHR_DATA5 with no zero check and firmware/src/handler.rs:63 does not inspect the seed it gets, so `no byte reaches the caller` rests on the datasheet's promise that `ehr_valid` stays low and on no code here — a part that ever raised that flag over zeroed result registers would seed the DRBG with 48 zero bytes and nothing would say so. And the CORNERS: everything above is about what this image configures at desk conditions, and temperature, supply and process are PLAT-TRNG-003's. TWO THINGS THE READING FOUND AND DID NOT REPAIR, because they are firmware comments rather than registry entries, and they are two copies of one claim: firmware/src/handler.rs:44 tells the reader the block is drawn `only through a working ROSC config (chain=0)` and firmware/src/handler.rs:61 repeats it as `drawn through the working ROSC config the caller set on the Trng`, and no such configuration exists — `2cdcc282e9605d601631b4b06727b2f746325727` REPLACED the `inverter_chain_length = InverterChainLength::None` assignment with the `sample_count` one and left that sentence standing, so the shipped image runs the driver's default chain length of One, which the same sentence calls catastrophic."
+discharge_owner = "contributor"
+status = "discharged"
+evidence = [
+  "Cargo.lock",
+  "firmware/src/handler.rs",
+  "firmware/src/main.rs",
+]
+revalidated_by = "Three edits, each of which makes this reading false while leaving its text true-looking, and the first is not in this tree at all. A DIFFERENT EMBASSY: the embassy-rp revision in Cargo.lock, because `Config::default()`'s three `false`s, the TRNG_DEBUG_CONTROL write inside `initialize_rng` and the blocking path's soft-reset-on-AUTOCORR loop are that crate's code and not this repository's — a driver that stopped writing the register would leave every sentence here intact and the subject unconfigured. A DIFFERENT CONFIGURATION: firmware/src/main.rs, where any of the three `disable_*` fields set true, a `sample_count` other than 1000, or a second `Trng::new` changes what is armed or how far apart the samples are taken. A DIFFERENT DRAW: firmware/src/handler.rs, where moving the seed from `blocking_fill_bytes` to the async `fill_bytes` swaps the failure handling for the interrupt handler's, which WARNS on CRNGT_ERR and VN_ERR and clears them WITHOUT waking the waker, so `fill_bytes`'s `poll_fn` answers `Poll::Pending` for ever: not the absence of a stall but a SILENT one, and this row's `loudly` would then be false of the path the device actually uses."
+evidence_commit = "578a924e4adb172d15b879008de228c68a98cdbc"
+failure_direction = "coverage, and saying so is the correction this split makes: the row this was scoped out of read `security, and silently — nothing downstream can notice`, which is false of the failure it named. A source that DIES is the loudest thing this firmware does, since the boot never reaches the USB pull-up. What a failure of THIS reading costs is a reader who takes three continuous dead-source checks for an entropy guarantee, and a bypass bit or an async draw that turns the loud arm quiet. The weak key is real and it is PLAT-TRNG-002's direction, not this one's"
+# NO `supports`, and the reason is narrower than the first version of this
+# comment claimed. It said a DISCHARGED row REMOVES A CONDITION and may not carry
+# `supports`; that is false of this registry — five of the discharged rows carry
+# one — and a review refuted it. WHAT IS TRUE is that this reading removes ONE ARM
+# of what the two properties need and not the arm that decides them. It removes
+# `the source is dead`, and that arm is real: a stuck source repeats the
+# pinUvAuthToken across the very power cycle SEC-FIDO-003 names, and it is exactly
+# what the three checks catch. It does NOT remove `the source is weak`, which is
+# what makes a token GUESSABLE rather than repeated, and no reading anywhere
+# reaches it. Both ids are on PLAT-TRNG-002 alone, so the page shows them resting
+# on the row that owns the undecided arm.
+#
+# A COPY WAS CONSIDERED AND IS THE MAINTAINER'S CALL, not a thing this file should
+# settle by itself. The registry does let two rows support one property —
+# PLAT-BUILD-001 and PLAT-MODEL-010 both name SEC-FIDO-001 — and a
+# `supports = ["SEC-FIDO-003"]` here would record the one piece of good news this
+# split produced, that the stuck-source condition is now discharged. What it costs
+# is that the generated page would list a DISCHARGED row beside a pending one under
+# the same property, which is the reading PLAT-TIMER-001's defect consisted of.
+# Written as a move because the weight the properties actually turn on is one row's;
+# reversing it is one line here and one in PLAT-TRNG-002.
+
+[[assumption]]
+id = "PLAT-TRNG-002"
 class = "trng"
-statement = "The RP2350's ring-oscillator TRNG delivers full-entropy words once its health check passes, so every key, nonce, blinding factor and pinUvAuthToken drawn after boot is unpredictable to a host."
-discharge = "A board measurement of the raw source before whitening, on a known stepping and at the temperature and supply corners the datasheet qualifies — not a statistical test of the whitened output, which passes over a stuck source. The boot health check was raised 25 -> 1000 samples after a stall was measured, so the startup transient is the part that is known and the steady state is the part that is not."
+statement = "The RAW ring-oscillator source clears the floor the shipped whitening needs — at least half a bit of min-entropy per raw bit, measured AT THE SAMPLE SPACING THE PRODUCT USES, on the die this project owns and at desk conditions. HALF A BIT IS SUFFICIENT AND NOT NECESSARY, and which way round is the point rather than a hedge: a von Neumann debiaser emits at most one bit per two raw bits, so at 0.5 bits per raw bit every whitened bit is backed by a full bit of input min-entropy AT EVERY RATE THAT BALANCER CAN ACHIEVE, and at a slower real rate by more. Below the floor the BOUND stops holding, not the device — von Neumann's output is exactly uniform for any fixed bias, so bias alone never starves it and what actually threatens it is CORRELATION between samples, which is what `sample_count` buys (PLAT-TRNG-001) and what the non-IID estimators are chosen to see. Neither of the two things this tree already has can answer it: the three continuous checks PLAT-TRNG-001 reads detect a source that has DIED and pass a degraded one, and a statistical test of the WHITENED output passes over a stuck source, which is what whitening is for. What rests on the floor is the 48-byte DRBG seed firmware/src/handler.rs:64 declares and firmware/src/handler.rs:65 fills at every boot, and every key the device mints afterwards."
+discharge = "A BENCH IMAGE AND SP800-90B, and the route is REACHABLE — the first thing this split corrects, because the row it came from said the raw source needs an image `this tree does not ship` and left a reader picturing an exotic rig. The raw pre-whitening samples are readable in software on a stock part: TRNG_DEBUG_CONTROL (0x138, RP2350 datasheet of 29 July 2025, p.1219) exposes AUTO_CORRELATE_BYPASS, TRNG_CRNGT_BYPASS and VNC_BYPASS, and that datasheet's own bootrom listing at §12.12.4.1 p.1214 sets `sample_cnt1 = 0` and `trng_debug_control = -1u` and reads EHR_DATA to stream raw TRNG ROSC samples — shipping pico-sdk does the same in `src/rp2_common/pico_rand/rand.c`. THE RUN, in assurance/board/PLAT-TRNG-002.toml: that bypass configuration on one board, at least 1,000,000 consecutive raw samples captured and hashed into the record, then the SP800-90B §6.3 non-IID estimator suite over them. AT THE SHIPPED `SAMPLE_CNT1`, AND THAT IS A CORRECTION rather than a detail: the bootrom listing sets the sample period to 0 because it wants throughput, and 0 is the MOST correlated setting this part offers, while the product spaces its samples 1000 cycles apart. A verdict taken at 0 would be about a stream the device never draws, and this row's own FAIL is gate-forced to `refuted` — so the criterion is read off the 1000 capture and the 0 capture is kept beside it as the correlated control, which is also what makes the pair say whether the spacing bought anything. AND A SECOND HALF THE SAME SESSION CAN TAKE: AUTOCORR_STATISTIC (0x134, p.1218) read with the checks re-enabled at `sample_count` 25 and at the shipped 1000 on the same unit, which is the only way this project can put a RATE behind firmware/src/main.rs:596 — what stands behind it today is one wall-clock observation of a boot on one Waveshare unit at `2cdcc282e9605d601631b4b06727b2f746325727`, and a boot time is not a health-check failure rate. WHY THE CRITERION NAMES NO DATASHEET FIGURE, said here because the row this was split from named one and there is none. §12.12.1 p.1212 makes a bare compliance assertion and gives `approximately 7.5 kb/s of entropy`, which is a RATE and not min-entropy per bit; §12.12.2 p.1213 records that `software does not configure the ROSC length and sample count settings provided by the Arm characterisation procedure`, so the vendor declined the procedure that would have produced one; and the part holds no NIST ESV or ENT listing. `PASS = min-entropy at or above the datasheet figure` was therefore a clause no passing world could walk. The record names its own threshold and justifies it there instead, which is the whole of what changed. WHAT THIS RUN DOES NOT REACH, said because a PASS read as covering it would be read wrong: one die, one desk, one temperature and one supply — the corners are PLAT-TRNG-003's — and the whitening itself, since the capture bypasses it, so this measures the SOURCE and says nothing about how many raw bits the shipped path spends per EHR block."
 discharge_owner = "maintainer"
 status = "pending"
-failure_direction = "security, and silently: a degraded source weakens every secret the device mints, and nothing downstream can notice"
+failure_direction = "security, and the size of the claim is what a `fail` here must not overstate, since the gate forces one to `refuted`: the floor is SUFFICIENT AND NOT NECESSARY, so an estimate below it WITHDRAWS the counting bound standing behind the 48-byte seed rather than establishing a weak one — a real source at h = 0.25 sits at a balancer rate near 0.13 and still carries a full bit into every whitened bit, and nobody here has measured that rate. What a `fail` establishes is exactly that much: the argument behind every key, nonce, blinding factor and pinUvAuthToken drawn after boot is gone, and the measurement that would settle whether the secrets themselves are weak is one this project has never taken. That open half is the serious one, because PLAT-TRNG-001's three continuous checks pass a degraded source by construction — a source that IS weak is noticed by nothing on the device, which is what separates this row from that one, whose failure stalls the boot — and the observable, if there is one, is a host that guesses a credential"
+# The raw capture is only evidence about the SHIPPED device because the shipped
+# device leaves the whitening and the three checks in the state that row reads;
+# a bypass bit set in the product would make this measurement about a different
+# machine. The same shape PLAT-ROM-001 uses for a measurement that needs another
+# one settled first.
+depends_on = ["PLAT-TRNG-001"]
+# MOVED here from PLAT-TRNG-001 on 2026-09-05, and the two ids are NOT carried for
+# the same reason — the first version of this comment said they were, and a review
+# refuted it. SEC-FIDO-003 is the one the route serves: a grant that "never
+# authorizes again" needs the next pinUvAuthToken to be UNGUESSABLE and not merely
+# different, which is a min-entropy claim, and this is the only one of the three
+# rows whose run could establish it. The reading they came from removes the
+# stuck-source arm and nothing else, and PLAT-TRNG-003 cannot carry a property at
+# all, because a row that ACCEPTS a risk and supports one publishes that property
+# as conditional on something nobody is going to retire, while the condition
+# SEC-FIDO-003 needs is the one THIS row is scheduled to answer.
+#
+# SEC-FIDO-008 IS INHERITED, NOT RE-DERIVED, and the argument above is not about
+# it. It is `NoLiveTokenWithoutPinRecord` — a live token implies EF_PIN exists —
+# which is a structural fact about which record is present, and no entropy figure
+# decides one: a token drawn from a dead source is as live as any other. It is
+# carried because dropping a `supports` link would be a scope change smuggled into
+# a split whose whole job is to move claims rather than retire them. Whether it
+# belongs on a TRNG row at all is a real question and this change does not settle
+# it — one line here, and the maintainer's to take off.
 supports = ["SEC-FIDO-003", "SEC-FIDO-008"]
+
+[[assumption]]
+id = "PLAT-TRNG-003"
+class = "trng"
+statement = "Nothing in this project qualifies the raw source at the TEMPERATURE, SUPPLY and PROCESS corners. PLAT-TRNG-002 is one die on one desk, and a ring oscillator's entropy is a function of the jitter its corner leaves it, so a source that measures well at room temperature on a bench supply is not thereby a source that measures well in a warm pocket, on a hub that sags, or on the next wafer. The gap is ACCEPTED here rather than scheduled, and its severity is UNKNOWN rather than low."
+discharge = "ACCEPTED, and the two routes are dead for DIFFERENT reasons — which is what makes this something other than an ordinary expensive row. THE EQUIPMENT: a thermal chamber, a programmable supply and enough parts for a process spread, none of which this project has, and hardware is the maintainer's alone under AGENTS.md. That much is only cost. THE REFERENCE IS THE HALF THAT DOES NOT COME BACK: there is no vendor number a corner result could be held against. §12.12.2 p.1213 of the RP2350 datasheet of 29 July 2025 records that `software does not configure the ROSC length and sample count settings provided by the Arm characterisation procedure` — the vendor declined the procedure — §12.12.1 p.1212 publishes a generation rate and no min-entropy per bit, and the part holds no NIST ESV or ENT listing. So even a fully instrumented corner run would produce a number with nothing to compare it to except a threshold this project chose for itself, which is a self-consistency check and not a qualification. WHY THIS IS NOT PLAT-CRYPTO-002'S SHAPE, and the difference is the reason this is a row instead of a sentence inside that one: that row accepts a residual it argues LOW, and it argues it FROM EVIDENCE IN THIS TREE — four command surfaces read for whether any hands a host a time-resolved observation, and arithmetic over a window table whose stride is in the source. THIS ROW CAN MAKE NO SUCH ARGUMENT AND MUST NOT LOOK AS THOUGH IT DOES. It has no in-scope half to read, no vendor figure to lean on and no measurement in either direction, so sitting under the same status word is the only thing the two have in common. WHAT WOULD TAKE THE ACCEPTANCE OFF, since an `accepted-risk` row may carry no `revalidated_by`: Raspberry Pi publishing a characterisation or a min-entropy figure for this ROSC; an ESV or ENT listing appearing for the part; an independent corner qualification of an RP2350 TRNG published by anyone; or this project acquiring the chamber and the supply, at which point the row becomes a maintainer-owned board obligation with a record of its own — and not before, because a `planned` record for a run no equipment can take is the dead route this split exists to remove."
+# `vendor` and not the `maintainer` the class would suggest, nor the
+# `contributor` PLAT-CRYPTO-002 uses. There is no source half here for a
+# contributor to read, and `maintainer` is refused for that row's own stated
+# reason: it would owe an assurance/board/PLAT-TRNG-003.toml carrying PASS and
+# FAIL arms for a run no equipment in this project can take, which is precisely
+# the shape this split was opened to delete. What is left is the party that could
+# produce the missing half — the characterisation Raspberry Pi declined — and the
+# field records that rather than pretending somebody here will do it. First
+# `vendor` row in this registry; the vocabulary already had the word and no
+# instance, which is the shape this file otherwise refuses, so it is worth saying
+# that this is an instance and not a rule invented for it.
+#
+# WHAT THIS FIELD IS GUARDED BY, MEASURED, because the paragraph above is an
+# argument and only one of the three wrong answers costs anything. With the
+# generated page rewritten each time, `maintainer` is rc 1 on
+# scripts/platform_gate.py — "PLAT-TRNG-003: maintainer-owned trng row with no
+# assurance/board/PLAT-TRNG-003.toml" — while `contributor` and `upstream` are
+# both rc 0, so the only value this registry stops is the one the reasoning above
+# refuses, and the other two are silent. The other four gates (evidence, citation,
+# assurance, threat) all answered rc 0 under `maintainer`, so the platform gate is
+# the only one that ANSWERS on this field. And before the page is regenerated EVERY
+# flip is red through the generator-diff rule — a staleness red about the page,
+# not a rule about owners, and counting it as one would be reading the wrong red.
+discharge_owner = "vendor"
+status = "accepted-risk"
+out_of_scope_by = "docs/limitations.md#hardware--physical"
+failure_direction = "security, and UNBOUNDED rather than low: if the source degrades at a corner the device meets in ordinary use — a warm pocket, a hub that sags, a part from another lot — every secret minted there is weaker than its length claims, and PLAT-TRNG-001's three continuous checks pass a degraded source by construction. What makes this worse than an unmeasured risk is that there is no figure to be wrong about: nobody, the vendor included, has published what this source is worth at any corner"
+# A corner result is an EXTENSION of the desk-conditions measurement and there is
+# nothing to extend until that one is taken, so `depends_on` and not `refines` —
+# this row is WIDER than PLAT-TRNG-002, and `refines` in this registry means the
+# narrow half of a broader row (PLAT-TOOL-002 of PLAT-TOOL-001).
+depends_on = ["PLAT-TRNG-002"]
 
 # ---- The timebase: one route, split in three ---------------------------------
 # `PLAT-TIMER-001` carried BOTH halves of its own route until 2026-09-05 — a
@@ -931,8 +1063,12 @@ depends_on = ["PLAT-TIMER-001"]
 # row exists. Each of the three is an EVENTUALLY claim, so none of them is
 # decided by the rate that row reads and every one of them is falsified by a
 # tick that stops. `supports` means the properties that REST on this assumption,
-# the way PLAT-TRNG-001's does, and not the ones it establishes: this row is
+# the way PLAT-TRNG-002's does, and not the ones it establishes: this row is
 # `pending`, so what the three have gained is an owner and a route, not evidence.
+# It read `PLAT-TRNG-001's` until 2026-09-05, when the TRNG split moved that row's
+# `supports` off it and left this sentence pointing at a row with none — the same
+# rot this file keeps recording, one file over and inside the comment that defines
+# the word.
 supports = ["SEC-FIDO-L01", "SEC-FIDO-L02", "SEC-FIDO-L03"]
 
 [[assumption]]

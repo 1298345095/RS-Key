@@ -604,6 +604,36 @@ and to the statuses it quotes.
 
 ### Changed
 
+- **The TRNG row asked for a number nobody has published, and carried three
+  claims of very different reachability under one id.** `PLAT-TRNG-001`'s PASS
+  clause read "min-entropy at or above the datasheet figure" at "every qualified
+  corner", and neither half exists: the RP2350 datasheet of 29 July 2025 asserts
+  compliance and publishes a generation *rate*, records that Raspberry Pi's own
+  software does not configure the ROSC settings Arm's characterisation procedure
+  provides, and the part holds no NIST ESV or ENT listing. That is
+  `PLAT-TIMER-001`'s 584,542-year run a second time — a route no passing world
+  walks.
+
+  Split in three, and two of the old row's premises were false rather than
+  merely unreachable. The raw source needs no bench rig: the datasheet's own
+  bootrom listing streams it with two register writes, so the entropy
+  measurement is REACHABLE and is `PLAT-TRNG-002`, maintainer-owned, whose
+  record argues its own floor — half a bit of min-entropy per raw bit, read at
+  the SHIPPED sample spacing and not the bootrom's period-0 one — instead of
+  citing a figure that is not there. And the failure is not silent: the three
+  health checks are continuous and fail closed, so a source that has DIED stalls
+  the boot before USB comes up. That half is read, so `PLAT-TRNG-001` is
+  **discharged** and reclassed `build-configuration`. What is genuinely
+  invisible is a source that is DEGRADED and still passes, and that is all the
+  security row still carries.
+
+  The corners are `PLAT-TRNG-003`, `accepted-risk` and the registry's first row
+  owned by `vendor`: the missing half is a characterisation only Raspberry Pi
+  can publish, and a `planned` record for a run no equipment here can take would
+  be one more dead route. It is published in
+  [limitations](docs/limitations.md) — the TRNG is not characterised, and there
+  is no vendor number to check a result against.
+
 - **The at-rest scrub lap left the boot glue, because the property it carries
   could not be measured where it lived.** `MarkerNeverLies` (SEC-BOOT-001) is
   about a write ORDER — the `EF_HARDENED` marker is written only after a

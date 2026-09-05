@@ -1409,10 +1409,14 @@ ARM_WORD = re.compile(r"[^\W\d_]{2,}")
 #: gone" to 39 that carry nothing. Blanking the result half is what removes the
 #: red an earlier version of this comment priced the manoeuvre at. So the price
 #: of writing an arm late is two commits nobody is looking for.
-#: Not INCONCLUSIVE, and the number is SIX of the thirteen, not five: PLAT-OTP-001,
-#: PLAT-ROM-001, PLAT-ROM-002, PLAT-TIMER-003, PLAT-TRNG-001 and PLAT-XIP-001
+#: Not INCONCLUSIVE, and the ROSTER is the argument rather than its size, because
+#: the size is a number in a comment and this one has already been wrong once (it
+#: read five before PLAT-TIMER-003 arrived, and six until the TRNG split):
+#: PLAT-OTP-001, PLAT-ROM-001, PLAT-ROM-002, PLAT-TIMER-003 and PLAT-XIP-001
 #: state no such arm, and requiring one would put every one of them through those
-#: two commits. What makes the honest inconclusive run recordable instead is the
+#: two commits. PLAT-TRNG-001 was on this list until 2026-09-05, when the split
+#: moved its board half to PLAT-TRNG-002 and that record states the arm.
+#: What makes the honest inconclusive run recordable instead is the
 #: other half, in [`check_board_records`]: `arm_taken` is owed only where the
 #: record states an arm under the outcome. This tuple is what keeps that escape
 #: out of `pass` and `fail`'s reach, so widening it is not a free edit --
@@ -1940,7 +1944,9 @@ PAGE_HEADING = re.compile(r"^(#{1,6})\s+(\S.*?)\s*$")
 PAGE_FENCE = re.compile(r"^\s*(?:```|~~~)")
 
 #: This registry's ids as PROSE writes them, which is the other direction of the
-#: same citation. Three are on the page today.
+#: same citation. How many are on the page is not spelled here: it read `three`
+#: until PLAT-TRNG-003 was published there on 2026-09-05 and nothing went red,
+#: which is what a count in a comment is worth.
 PAGE_ENTRY_ID = re.compile(r"\bPLAT-[A-Z]+-\d{3}\b")
 
 
@@ -1995,13 +2001,17 @@ def check_out_of_scope(name, entry, findings, headings, mentions):
 
     The obligation is DERIVED from the page rather than declared here, the way
     `check_bundles` derives `registered`: a row is owed a pin when the page
-    already names it. That is 2 of the 4 accepted-risk rows and it is deliberately
-    not 4 — `PLAT-MODEL-008` and `PLAT-MODEL-014` are model OVER-APPROXIMATIONS
-    whose discharge route reads "nothing to run", and this page opens by saying it
-    covers feature and hardware gaps. Minting an anchor for them would publish a
-    proof-scope note as a user-facing limitation, which is a page saying something
-    it does not mean; the honest reading is that `accepted-risk` is carrying two
-    different things and splitting it is the maintainer's call.
+    already names it. It is deliberately not ALL of them, and the split is by
+    KIND rather than by count: `PLAT-MODEL-008` and `PLAT-MODEL-014` are model
+    OVER-APPROXIMATIONS whose discharge route reads "nothing to run", and this
+    page opens by saying it covers feature and hardware gaps. Minting an anchor
+    for them would publish a proof-scope note as a user-facing limitation, which
+    is a page saying something it does not mean; the honest reading is that
+    `accepted-risk` is carrying two different things and splitting it is the
+    maintainer's call. `PLAT-TRNG-003` is the other side of that line and was
+    published on 2026-09-05: it is a hardware gap, which is what the page is for,
+    and leaving it unpublished would have made [`render`]'s own sentence — that
+    the unpublished rows are model over-approximations — false.
     """
     published = {n for ids in mentions.values() for n in ids}
     ref = str(entry.get("out_of_scope_by", "")).strip()
@@ -2048,13 +2058,14 @@ def check_published_ids(ids, findings, mentions):
     """Every `PLAT-…` the page writes is an entry of this registry.
 
     The reverse of the rule above and the cheaper half: `docs/limitations.md` sends
-    a reader to three of these ids in prose, and a rename or a deletion here would
-    leave the page authoritative and pointing at nothing. Not the other reverse —
-    holding every SECTION to an accepted-risk row was measured and refused: the
-    page has 5, and at most 2 could ever be claimed, because the rest publish
-    feature gaps (brainpool, X448, the USB identity) that are not platform
-    assumptions at all. A rule red by construction over content it has no business
-    governing is the decoration this file refuses everywhere else.
+    a reader to several of these ids in prose, and a rename or a deletion here
+    would leave the page authoritative and pointing at nothing. Not the other
+    reverse — holding every SECTION to an accepted-risk row was measured and
+    refused: most of that page's sections publish feature gaps (brainpool, X448,
+    the USB identity) that are not platform assumptions at all, so the rule would
+    be red by construction over content it has no business governing, which is
+    the decoration this file refuses everywhere else. The counts that used to
+    stand in this paragraph are gone for the reason [`PAGE_ENTRY_ID`] gives.
     """
     for anchor, names in sorted(mentions.items()):
         for name in sorted(names):
