@@ -669,6 +669,42 @@ and to the statuses it quotes.
   witness is `multi_frame_reassembly`, which says a message completed that had
   not arrived.
 
+- **The seam model's OATH default-open exemption is refutable now — five places
+  it is stated, five switches, and a measured code twin for each.**
+  `assurance/model_exceptions.toml` carried sixteen rows saying `owes`, and five
+  of them were one fact restated: `validated = !code_set`
+  (`crates/rsk-oath/src/lib.rs:214-215`) appears in `RSKeyAppletSeams`'s initial
+  predicate, in `ClearedFor`, in `AllCleared`, in `FactoryWipe` and inside
+  `NoStatusOutsideItsSelection` itself, and deleting any of them changed the
+  input of no gate. Each has a `Bug…` switch now, all five aimed at the existing
+  seam invariant, and all ten generated configurations are RED on it — each on
+  the trace its own row describes, read rather than taken from the colour: a
+  provisioned OATH keeping its unlock across a re-SELECT and across a card
+  reset, a fresh card handing out the OTP PIN beside the access code, a factory
+  wipe taken without the reboot its callers queue (a PIV status standing at
+  `sel = NoApplet` over freshly-defaulted verifiers), and the invariant's own
+  exemption removed, which reddens the SHIPPED tree at the initial state and is
+  what says that clause is reached rather than decorative. Each was also run
+  with its switch OFF and is GREEN over the whole 410-distinct space, so none
+  reddens for something else. `formal/comutants.toml` is closed-world over
+  `SeamMut_*`, so each switch also carries a code twin, and those were measured
+  too: four are `killed` (the witness assertions and their directions are in the
+  entries) and **one is a recorded GAP** — dropping the trusted display's
+  `request_reboot` after a completed factory wipe leaves all 127 `rsk-display`
+  tests green, so nothing at host level asserts that the wipe asks for the
+  reboot the model folds into the same step. Only one direction of each clause
+  is refutable here and the rows say so: a status that goes FALSE is never one
+  held outside its selection, so a code-less OATH that LOCKS still owes a
+  requirement-side statement rather than a switch. `MX-POL-001` was in the same
+  wave and is left owing on a measurement rather than an argument:
+  `BugNeverSlotSpendsFreshness` — a PIN-policy-NEVER slot that spends the
+  freshness it never established — was built and run at `Policies.cfg`'s
+  constants against all six invariants and is GREEN over a state space
+  *identical* to the shipped one, 9 200 521 states and 331 776 distinct in both
+  arms, because spending there reaches no state the other two policies do not.
+  Only the edges differ, so no state predicate can see it and the debt is a
+  recorder at the step.
+
 ### Changed
 
 - **The TRNG row asked for a number nobody has published, and carried three

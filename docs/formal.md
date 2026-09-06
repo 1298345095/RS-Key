@@ -175,7 +175,8 @@ generated table in `formal/README.md` records every one, its target invariant,
 its model verdict and its code-level verdict: **30 of 31 are co-refuted, one is
 unreachable, and none is a gap**. Deriving that roster found six real coverage
 gaps; each now has a regression harness. Later modules extend the live roster to
-80 entries: all 75 executable patches are killed and five are unreachable.
+85 entries: 79 of the 80 executable patches are killed, one is a measured gap,
+and five are unreachable.
 
 The applet batch — the 24 seam, retry-lattice and policy mutants — was added
 because the roster had a measurable skew: 31 of its first 43 patches sat in

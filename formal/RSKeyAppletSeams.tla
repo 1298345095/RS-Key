@@ -84,7 +84,30 @@ CONSTANTS
     \* exemption fires exactly when ~oathCodeSet, which the removal itself sets,
     \* so no state the removal produces can ever trip it. Closing it needed a
     \* recorder at the STEP, not a change to the exemption.
-    BugRemoveCodeUnvalidated
+    BugRemoveCodeUnvalidated,
+    \* THE OATH DEFAULT-OPEN FAMILY. `validated = !code_set`
+    \* (crates/rsk-oath/src/lib.rs:214-215) is restated in five places below, and
+    \* each of these widens ONE of them the single way a state predicate can see:
+    \* a PROVISIONED applet left open. The other direction -- a code-less OATH
+    \* that LOCKS -- is refuted by nothing here and is recorded as owed.
+    \*
+    \* A fresh card handing out the OTP PIN as well, which is `Session::new()`
+    \* defaulting both of OATH's flags from the one default-open rule.
+    BugFreshCardOpensOtpPin,
+    \* A deselect that leaves a provisioned OATH unlocked
+    \* (crates/rsk-oath/src/lib.rs:1224-1228 ignoring `code_set`).
+    BugDeselectKeepsOathUnlock,
+    \* The same fact one path over: a card reset or a power cycle that rebuilds
+    \* the applet with the unlock still standing.
+    BugResetKeepsOathUnlock,
+    \* `Fs::factory_wipe` WITHOUT the reboot both callers queue after it: the
+    \* flash is defaulted and every in-RAM status stands over the new verifiers.
+    \* The model folds wipe and reboot into one step; this is that fold undone.
+    BugWipeWithoutItsReboot,
+    \* The exemption INSIDE the invariant, removed. The shipped tree goes red
+    \* under it, which is what says the exemption is reached and load-bearing
+    \* rather than a clause nothing branches on.
+    BugCodelessOathIsAStatus
 
 \* The three CCID applets that carry an in-RAM security status. `NoApplet` is
 \* `Dispatcher::current = None` (crates/rsk-sdk/src/applet.rs:145): nothing
@@ -164,7 +187,8 @@ TypeOK ==
 \* default-OPEN, unlike the other two (crates/rsk-oath/src/lib.rs:214-215).
 Init ==
     /\ sel   = NoApplet
-    /\ held  = [r \in Refs |-> r = "oathCode"]
+    /\ held  = [r \in Refs |-> r = "oathCode"
+                                \/ (BugFreshCardOpensOtpPin /\ RefOwner(r) = Oath)]
     /\ fresh = FALSE
     /\ pfresh = FALSE
     /\ oneShotSig = FALSE
@@ -179,9 +203,12 @@ Init ==
 \* (crates/rsk-oath/src/lib.rs:1224-1228) -- three functions, one meaning.
 ClearedFor(h, a) ==
     [r \in Refs |-> IF RefOwner(r) = a
-                      THEN (r = "oathCode" /\ ~oathCodeSet) ELSE h[r]]
+                      THEN (r = "oathCode"
+                              /\ (~oathCodeSet \/ BugDeselectKeepsOathUnlock))
+                      ELSE h[r]]
 
-AllCleared == [r \in Refs |-> r = "oathCode" /\ ~oathCodeSet]
+AllCleared ==
+    [r \in Refs |-> r = "oathCode" /\ (~oathCodeSet \/ BugResetKeepsOathUnlock)]
 
 (***************************************************************************)
 (* SELECT. crates/rsk-sdk/src/applet.rs:374-390 -- the ONE place that       *)
@@ -543,7 +570,8 @@ FidoReset == UNCHANGED vars
 \* ever separates them.
 FactoryWipe ==
     /\ sel' = NoApplet
-    /\ held' = [r \in Refs |-> r = "oathCode"]
+    /\ held' = [r \in Refs |-> r = "oathCode"
+                                 \/ (BugWipeWithoutItsReboot /\ held[r])]
     /\ fresh' = FALSE
     /\ pfresh' = FALSE
     /\ psig' = FALSE
@@ -583,7 +611,8 @@ Spec == Init /\ [][Next]_vars
 \* code-less applet is not a status anybody authenticated for.
 NoStatusOutsideItsSelection ==
     \A r \in Refs :
-        (held[r] /\ ~(r = "oathCode" /\ ~oathCodeSet)) => sel = RefOwner(r)
+        (held[r] /\ ~(   r = "oathCode" /\ ~oathCodeSet
+                      /\ ~BugCodelessOathIsAStatus)) => sel = RefOwner(r)
 
 \* A reference whose authentication was just REFUSED is not authenticated.
 \*

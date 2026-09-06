@@ -414,7 +414,7 @@ def test_a_green_row_floored_under_the_minimum_is_rejected():
 
 
 def test_a_red_row_given_a_floor_is_rejected():
-    """One finding, not fourteen: `SeamMut_*.cfg` decides fourteen configurations
+    """One finding, not nineteen: `SeamMut_*.cfg` decides nineteen configurations
     and a mistyped column says the same thing about all of them.
 
     The `== problems` half alone was `[] == []` when the rule was removed — the

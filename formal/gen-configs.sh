@@ -446,7 +446,10 @@ SEAM_BUGS=(BugSelectKeepsOtherApplet BugReselectResetsStatus
            BugSigPinNotSpent
            BugUserStatusOpensAdmin BugRefusedValidateGrants
            BugPwStatusIgnoresAdmin BugPivChangeResetsStatus
-           BugRefusedValidateDropsUnlock BugRemoveCodeUnvalidated)
+           BugRefusedValidateDropsUnlock BugRemoveCodeUnvalidated
+           BugFreshCardOpensOtpPin BugDeselectKeepsOathUnlock
+           BugResetKeepsOathUnlock BugWipeWithoutItsReboot
+           BugCodelessOathIsAStatus)
 
 seam_target() {
   case "$1" in
@@ -464,6 +467,14 @@ seam_target() {
     BugPivChangeResetsStatus)   echo ExemptRefusalPreservesStatus ;;
     BugRefusedValidateDropsUnlock) echo ExemptRefusalPreservesStatus ;;
     BugRemoveCodeUnvalidated)   echo AccessCodeRemovalNeedsTheCode ;;
+    # The OATH default-open family. Every one of them is a status held outside
+    # the selection that bought it, which is the seam invariant itself -- none
+    # of the five needs a new one.
+    BugFreshCardOpensOtpPin)    echo NoStatusOutsideItsSelection ;;
+    BugDeselectKeepsOathUnlock) echo NoStatusOutsideItsSelection ;;
+    BugResetKeepsOathUnlock)    echo NoStatusOutsideItsSelection ;;
+    BugWipeWithoutItsReboot)    echo NoStatusOutsideItsSelection ;;
+    BugCodelessOathIsAStatus)   echo NoStatusOutsideItsSelection ;;
   esac
 }
 SEAM_INV=(NoStatusOutsideItsSelection NoStatusAfterARefusedAuth

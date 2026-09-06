@@ -1796,8 +1796,8 @@ so the kill measured a defence in depth rather than the modelled defect. It now
 widens both layers, and `put_data_c4_refuses_a_user_status` drives the command
 so the outer gate is asserted too.
 
-The live roster is **80 entries: 75 executable patches killed, five unreachable
-with recorded evidence, zero gaps.**
+The live roster is **85 entries: 79 executable patches killed, one measured gap,
+five unreachable with recorded evidence.**
 
 ## The sixth module — `RSKeyAdminSurface.tla`
 
@@ -2630,7 +2630,7 @@ describes. Falsified through the row itself, exit codes taken with no pipe:
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `219 generated configuration(s) reproduce byte-for-byte, 1 hand-written` | 0 |
+| the tree as it stands | `229 generated configuration(s) reproduce byte-for-byte, 1 hand-written` | 0 |
 | one `BootCarryMut_*.cfg` deleted | `… writes it and formal/ does not have it` | **1** |
 | `MaxWeak = 2` → `1` inside one generated file | `differs … line 5: generator writes '    MaxWeak = 2', the tree has '    MaxWeak = 1'` | **1** |
 | the same edit made in the *generator* instead | 13 rows `differs …` — every `Boot*` configuration | **1** |
@@ -2742,10 +2742,10 @@ to itself.
 
 | Mutation | What the row said | Exit |
 |---|---|---|
-| the tree as it stands | `219 configuration(s) held to 66 entries (25 wildcard families covering 178), 6 ratchets, 1 exempt, 1 counterfactual repair(s)` | 0 |
+| the tree as it stands | `229 configuration(s) held to 66 entries (25 wildcard families covering 188), 6 ratchets, 1 exempt, 1 counterfactual repair(s)` | 0 |
 | `SeamMut_*.cfg` `RED` → `GREEN` | `… requires GREEN, but the configuration switches BugAdminOpensKeyOps on and so owes RED` | **1** |
 | the `SeamSolo_*.cfg` row deleted | `no verdict entry in formal/floors.txt and no registered exemption` | **1** |
-| a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 14 configuration(s) first `` | **1** |
+| a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 19 configuration(s) first `` | **1** |
 | a second, disagreeing `Shipped.cfg` row | `both match it and disagree (('RED', None, None) against ('GREEN', 25854624, None))` | **1** |
 | `Mut_*.cfg` given a floor | `RED with a floor of 5000 — a counterexample search halts at the first violation` | **1** |
 | a RED naming an invariant its configuration does not check | `expects RED at NoOrphanedMetadata, which the configuration does not check` | **1** |
@@ -2906,7 +2906,7 @@ evidence columns and validated cross-model support edges below on every gate run
 | `SEC-TRACE-001` | `R4aRawRefinesB` | MODELLED-ONLY | `TraceSecurity` | — | 0 | 0 | 0 | 0 | 0 | 0 |
 | `SEC-TRACE-002` | `R4bAlphaMatchesGamma` | MODELLED-ONLY | `TraceSecurity` | — | 0 | 0 | 0 | 0 | 0 | 0 |
 | `SEC-TRACE-004` | `R4cGateAnswers` | MODELLED-ONLY | `TraceSecurity` | — | 0 | 0 | 0 | 0 | 0 | 0 |
-| `SEC-SEAM-001` | `NoStatusOutsideItsSelection` | MODELLED-ONLY | `RSKeyAppletSeams` | — | 1 | 2 | 1 | 0 | 0 | 0 |
+| `SEC-SEAM-001` | `NoStatusOutsideItsSelection` | MODELLED-ONLY | `RSKeyAppletSeams` | — | 1 | 7 | 5 | 0 | 0 | 0 |
 | `SEC-SEAM-002` | `NoStatusAfterARefusedAuth` | MODELLED-ONLY | `RSKeyAppletSeams` | — | 1 | 2 | 2 | 0 | 0 | 0 |
 | `SEC-SEAM-003` | `NoKeyOpOnTheAdminStatus` | MODELLED-ONLY | `RSKeyAppletSeams` | — | 1 | 6 | 5 | 0 | 0 | 0 |
 | `SEC-SEAM-004` | `ReselectPreservesAccessStatus` | MODELLED-ONLY | `RSKeyAppletSeams` | — | 1 | 1 | 1 | 0 | 0 | 0 |

@@ -580,8 +580,8 @@ def check_verdicts(configs, first, repaired, problems):
 def check_row_shape(rows, reads, problems):
     """The rules that are about a ROW rather than about a configuration.
 
-    Reported once per row on purpose: `SeamMut_*.cfg` decides fourteen
-    configurations, and one mistyped column that says the same thing fourteen
+    Reported once per row on purpose: `SeamMut_*.cfg` decides nineteen
+    configurations, and one mistyped column that says the same thing nineteen
     times is a report a reader stops reading.
     """
     for row in rows:

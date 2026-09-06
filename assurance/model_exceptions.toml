@@ -48,9 +48,9 @@
 #               one that would, and THAT file must not exist — pay the debt and
 #               the row goes red until it claims what it paid
 #
-# READ THE `owed` COLUMN AS DEBT, NOT AS A PLAN. All but one row owes a mutant
-# and the price is why they still do. A narrowing in the seam family costs one
-# switch in RSKeyAppletSeams.tla's CONSTANTS and in gen-configs.sh's `SEAM_BUGS`,
+# READ THE `owed` COLUMN AS DEBT, NOT AS A PLAN. Most rows still owe a mutant
+# and the price below is why. A narrowing in the seam family costs one switch in
+# RSKeyAppletSeams.tla's CONSTANTS and in gen-configs.sh's `SEAM_BUGS`,
 # one arm in `seam_target`, a requirement-side statement for the clause to
 # violate — the ones that have none cost an invariant in `SEAM_INV` and a
 # `[[property]]` in assurance/properties.toml with it — two generated
@@ -61,9 +61,23 @@
 # are too. What it does cost is a re-record of the whole TLC tier, because
 # formal/runs.toml stores that matrix row by row and every published run-count is
 # counted out of it. The configurations themselves run in about a second each —
-# it is the re-record that costs 103 minutes, and it is the maintainer's to
-# schedule, which is why this file states the debt instead of quietly paying part
-# of it.
+# it is the re-record that costs 103 minutes, and it is paid ONCE however many
+# rows a wave clears, which is why the OATH default-open family was paid in one
+# wave rather than a row at a time.
+#
+# AND WHAT A SWITCH CANNOT PAY, so the next wave does not re-derive it. The seam
+# invariant sees a status HELD outside the selection that bought it and nothing
+# else, so a narrowing whose defect makes a status go FALSE — a code-less OATH
+# that LOCKS, a policy that spends freshness it never established — reddens no
+# configuration at all. Those rows owe a requirement-side statement first, and
+# an invariant is not free here: it is a `[[property]]` in
+# assurance/properties.toml, which is the registry the matrix, the evidence
+# bundles and the generated pages all read. MX-SEAM-004/005 are out for a reason
+# of their own, and their rows state it: the two clauses cannot switch apart.
+#
+# The other price a seam switch pays is a code twin: formal/comutants.toml is
+# closed-world over `SeamMut_*`, so a switch with no host-testable twin cannot
+# land — `pending` is floored at zero and the floor may only go down.
 #
 # How many rows are in each state is DERIVED: scripts/model_exception_gate.py
 # prints it on every green run. A count typed into this paragraph is the column
@@ -72,7 +86,7 @@
 [[exception]]
 id = "MX-SEAM-001"
 module = "RSKeyAppletSeams.tla"
-line = 102
+line = 125
 shape = "set"
 site = "Refs"
 clause = "Refs"
@@ -92,7 +106,7 @@ owed = "SeamSolo_BugRecoveryRefHoldsStatus.cfg"
 [[exception]]
 id = "MX-SEAM-002"
 module = "RSKeyAppletSeams.tla"
-line = 182
+line = 206
 shape = "clause"
 site = "ClearedFor"
 clause = 'r = "oathCode"'
@@ -101,18 +115,20 @@ production = "OATH is default-OPEN: `validated = !code_set` (crates/rsk-oath/src
 why = '''
 Every other reference falls to FALSE when its applet loses the selection; this
 one falls to "unlocked unless a code is provisioned". Without the exception the
-shipped tree would be red at `ClearedFor`; with it, a defect that locks a
-code-less OATH — or unlocks a provisioned one — is invisible here, because the
-clause decides both directions and nothing drives it the other way.
+shipped tree would be red at `ClearedFor`; with it, the clause decides both
+directions at once, and only one of them is a run. `BugDeselectKeepsOathUnlock`
+drives that one — a deselect that leaves a PROVISIONED OATH unlocked, refused at
+the first SELECT away. The other, a code-less OATH that LOCKS, is refuted by
+nothing here and cannot be: a status that is FALSE is never one held outside its
+selection, so it owes a requirement-side statement rather than a switch.
 '''
-mutant = "owes"
-owed = "SeamSolo_BugCodelessOathLocksOnDeselect.cfg"
+mutant = "SeamSolo_BugDeselectKeepsOathUnlock.cfg"
 carried_by = "NAR-OATH-REMOVAL"
 
 [[exception]]
 id = "MX-SEAM-003"
 module = "RSKeyAppletSeams.tla"
-line = 184
+line = 211
 shape = "clause"
 site = "AllCleared"
 clause = 'r = "oathCode"'
@@ -124,16 +140,18 @@ Its own row rather than a share of MX-SEAM-002, for the reason
 requirement in a different function, and the two paths have already diverged once
 — `CardReset` was pinned to a no-op by an `UNCHANGED` naming a variable its own
 ELSE branch assigned, so the reset path was not modelled at all while the
-deselect path was.
+deselect path was. `BugResetKeepsOathUnlock` drives it through `CardReset`, and
+the trace is not MX-SEAM-002's: the reset selects NOTHING, so the status stands
+outside every selection rather than inside the wrong one. The locking direction
+is unrefutable here for the reason it is there.
 '''
-mutant = "owes"
-owed = "SeamSolo_BugCodelessOathLocksOnReset.cfg"
+mutant = "SeamSolo_BugResetKeepsOathUnlock.cfg"
 carried_by = "NAR-OATH-REMOVAL"
 
 [[exception]]
 id = "MX-SEAM-004"
 module = "RSKeyAppletSeams.tla"
-line = 200
+line = 227
 shape = "clause"
 site = "Reselect"
 clause = "a = Oath"
@@ -153,7 +171,7 @@ owed = "SeamSolo_BugOathReselectKeepsStatus.cfg"
 [[exception]]
 id = "MX-SEAM-005"
 module = "RSKeyAppletSeams.tla"
-line = 210
+line = 237
 shape = "clause"
 site = "Reselect"
 clause = "a = Oath"
@@ -172,7 +190,7 @@ owed = "SeamSolo_BugOathReselectUnrecorded.cfg"
 [[exception]]
 id = "MX-SEAM-006"
 module = "RSKeyAppletSeams.tla"
-line = 419
+line = 446
 shape = "clause"
 site = "PgpKeyOp"
 clause = 'r = "pw1"'
@@ -191,7 +209,7 @@ carried_by = "NAR-ASSIGNMENT-HOLES"
 [[exception]]
 id = "MX-SEAM-007"
 module = "RSKeyAppletSeams.tla"
-line = 421
+line = 448
 shape = "clause"
 site = "PgpKeyOp"
 clause = 'r = "pw1"'
@@ -211,7 +229,7 @@ carried_by = "NAR-ASSIGNMENT-HOLES"
 [[exception]]
 id = "MX-SEAM-008"
 module = "RSKeyAppletSeams.tla"
-line = 586
+line = 614
 shape = "clause"
 site = "NoStatusOutsideItsSelection"
 clause = 'r = "oathCode"'
@@ -222,17 +240,19 @@ The exemption inside the invariant, and the tree has already paid for it once:
 an unauthenticated access-code REMOVAL is DEFINITIONALLY invisible here, because
 this clause fires exactly when `~oathCodeSet` and the removal itself sets that.
 The repair was a recorder at the step (`AccessCodeRemovalNeedsTheCode`), not a
-change to the exemption — so the exemption stands, unrefuted, and the reason it
-is safe is an argument about which states can reach it rather than a run.
+change to the exemption. `BugCodelessOathIsAStatus` takes the exemption out and
+the shipped tree is red at the INITIAL state, which is what says the clause is
+reached and load-bearing rather than one nothing branches on. One direction
+only: a WIDER exemption weakens the invariant, so no configuration can make that
+half fail, and it stays an argument about which states can reach it.
 '''
-mutant = "owes"
-owed = "SeamSolo_BugCodelessOathIsAStatus.cfg"
+mutant = "SeamSolo_BugCodelessOathIsAStatus.cfg"
 carried_by = "NAR-OATH-REMOVAL"
 
 [[exception]]
 id = "MX-SEAM-009"
 module = "RSKeyAppletSeams.tla"
-line = 167
+line = 190
 shape = "clause"
 site = "Init"
 clause = 'r = "oathCode"'
@@ -243,16 +263,18 @@ The same default-OPEN fact as MX-SEAM-002/003, in the one place it has no
 connective to hang off — the initial predicate builds the characteristic function
 of a single reference. Its own row because it is the one that decides where every
 trace STARTS: a defect here does not lose a status, it hands out one the model
-then treats as legitimate for the whole run.
+then treats as legitimate for the whole run. `BugFreshCardOpensOtpPin` is that
+defect — OATH's OTP PIN handed out by the same default-open rule as its access
+code — and the initial state is already outside every selection, so the run is
+refused before a step is taken.
 '''
-mutant = "owes"
-owed = "SeamSolo_BugFreshCardLocksOath.cfg"
+mutant = "SeamSolo_BugFreshCardOpensOtpPin.cfg"
 carried_by = "NAR-OATH-REMOVAL"
 
 [[exception]]
 id = "MX-SEAM-010"
 module = "RSKeyAppletSeams.tla"
-line = 546
+line = 573
 shape = "clause"
 site = "FactoryWipe"
 clause = 'r = "oathCode"'
@@ -263,11 +285,13 @@ Not a share of MX-SEAM-009, because the two differ in what they leave standing:
 the wipe is FLASH-only and never sees an applet, so every in-RAM status here
 stands over freshly-defaulted verifiers until the reboot both callers queue. The
 model folds the wipe and that reboot into one step, and this clause is what makes
-the folded step agree with the initial one. Separate the two and this is the
-first clause to re-examine.
+the folded step agree with the initial one. `BugWipeWithoutItsReboot` separates
+them, and it is the fold itself that the run measures: the wipe alone leaves a
+PIV status standing over freshly-defaulted verifiers at `sel = NoApplet`, which
+is the seam invariant's own shape. So what is owed here is no longer a mutant
+but the split — a wipe and a reboot as two steps, with the window between them.
 '''
-mutant = "owes"
-owed = "SeamSolo_BugWipedCardLocksOath.cfg"
+mutant = "SeamSolo_BugWipeWithoutItsReboot.cfg"
 carried_by = "NAR-OATH-REMOVAL"
 
 [[exception]]
@@ -372,6 +396,16 @@ direction the module argues — a NEVER slot has nothing to spend — and unfals
 in the other: nothing drives a NEVER slot that DOES spend, so a firmware that
 started clearing `pin_fresh` at an unauthenticated slot would be a behaviour
 change this model cannot see.
+
+And a switch alone will not buy it — measured, not argued. Built as
+`BugNeverSlotSpendsFreshness` and run at `Policies.cfg`'s constants against all
+six invariants, the mutant is GREEN over a state space IDENTICAL to the shipped
+one, 9 200 521 states and 331 776 distinct in both arms: spending at a NEVER
+slot reaches no state the other policies do not already reach, so only the EDGES
+differ and no state predicate can be written that sees it. The debt is a
+recorder at the STEP, and here that is an invariant, which is a `[[property]]`
+row and the registries that read it. `owed` names the configuration, not the
+work.
 '''
 mutant = "owes"
 owed = "PolicySolo_BugNeverSlotSpendsFreshness.cfg"
