@@ -61,6 +61,13 @@ struct SharedMock {
     /// skips that one). It stands for a chip or bus fault, which `Fs` must not
     /// memoise as absence.
     fail_reads: Rc<Cell<bool>>,
+    /// Reads overlapping this window fail while every other address answers
+    /// normally: ONE unreadable page, the fault `fail_reads` cannot pose and the
+    /// only one that tells this fork from upstream 8.0.0 (patch item 2).
+    fail_reads_in: Rc<RefCell<Option<Range<u32>>>>,
+    /// Where that window refused its first read, so a test can say WHICH read the
+    /// walk died on — the page's own state probe, or an item inside the page.
+    refused_at: Rc<Cell<Option<u32>>>,
     written: Rc<Cell<u64>>,
 }
 
@@ -69,8 +76,31 @@ impl SharedMock {
         Self {
             bytes: Rc::new(RefCell::new(vec![0xFF; COUNTER.end as usize])),
             fail_reads: Rc::new(Cell::new(false)),
+            fail_reads_in: Rc::new(RefCell::new(None)),
+            refused_at: Rc::new(Cell::new(None)),
             written: Rc::new(Cell::new(0)),
         }
+    }
+
+    /// Fail every read of the one page starting at `page_addr` — a single bad
+    /// sector, which is what a walk meets at a page boundary mid-enumeration;
+    /// `fail_reads` is the whole-chip fault, which it meets on its first read.
+    fn fail_reads_on_page(&self, page_addr: u32) {
+        *self.fail_reads_in.borrow_mut() = Some(page_addr..page_addr + SECTOR as u32);
+    }
+
+    /// Whether a read of `len` bytes at `offset` touches the faulted page.
+    fn reads_faulted(&self, offset: u32, len: usize) -> bool {
+        self.fail_reads_in
+            .borrow()
+            .as_ref()
+            .is_some_and(|w| offset < w.end && w.start < offset + len as u32)
+    }
+
+    /// Address of the first read the faulted page refused; `None` if it never
+    /// fired, which is a fixture that armed nothing.
+    fn refused_at(&self) -> Option<u32> {
+        self.refused_at.get()
     }
 
     /// A copy of one flash window, for asserting a region was left alone.
@@ -99,6 +129,10 @@ impl ReadNorFlash for SharedMock {
     const READ_SIZE: usize = 1;
     async fn read(&mut self, offset: u32, bytes: &mut [u8]) -> Result2<()> {
         if self.fail_reads.get() {
+            return Err(FlashFault);
+        }
+        if self.reads_faulted(offset, bytes.len()) {
+            self.refused_at.set(self.refused_at.get().or(Some(offset)));
             return Err(FlashFault);
         }
         let src = self.bytes.borrow();
@@ -368,6 +402,58 @@ fn a_faulted_walk_reports_itself_incomplete() {
     flash.fail_reads.set(true);
     let (_, complete) = keys(&mut store);
     assert!(!complete);
+}
+
+/// The one page the walk below cannot read: page 5 of the eight-page main ring,
+/// which the fixture leaves closed, holding live items, and reached by a
+/// page-state probe rather than by the first-page search that precedes the walk.
+const FAULTED_PAGE: u32 = MAIN.start + 5 * SECTOR as u32;
+
+#[test]
+fn a_walk_over_one_unreadable_page_reports_itself_incomplete() {
+    // The shape the unconditional fault above cannot pose, and the one that tells
+    // this fork from upstream 8.0.0: upstream's page-advance loop swallowed a
+    // page-state `Err` (`_ => continue`), so a SKIPPED page still reached the
+    // `None` terminator and the walk called itself complete (patch item 2).
+    let flash = SharedMock::new();
+    let mut store = mount(&flash);
+    // Three 1 KiB values fit in a page, so 28 of them over six slots outgrow the
+    // eight-page ring: the head wraps and reclaims, which is what leaves the
+    // frontier on a low page with live items on the higher ones.
+    for i in 0..28u16 {
+        store.write(CRED + i % 6, &vec![i as u8; 1024]).unwrap();
+    }
+    drop(store);
+
+    // The caches are RAM, so the walk `Fs::scan` runs at boot meets a cold mount —
+    // which is what leaves the faulted page's state to be read from flash rather
+    // than answered from the cache.
+    let mut store = mount(&flash);
+    let (whole, complete) = keys(&mut store);
+    assert!(complete, "precondition: an unfaulted walk finishes");
+    drop(store);
+
+    let mut store = mount(&flash);
+    flash.fail_reads_on_page(FAULTED_PAGE);
+    let (truncated, complete) = keys(&mut store);
+
+    assert_eq!(
+        flash.refused_at(),
+        Some(FAULTED_PAGE),
+        "the walk must die on the faulted page's STATE probe, at the page's own \
+         address; a fault first met inside the page's items aborts upstream too"
+    );
+    assert!(
+        !truncated.is_empty() && truncated.len() < whole.len(),
+        "the walk must be TRUNCATED, not refused outright: {} of {} items",
+        truncated.len(),
+        whole.len()
+    );
+    assert!(
+        !complete,
+        "a walk that skipped a page and answered complete is what makes \
+         `Fs::scan` fill `decided` and read every un-yielded FID as absent"
+    );
 }
 
 // --- the partition split ---------------------------------------------------
