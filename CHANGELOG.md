@@ -45,6 +45,73 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The counter/main partition table is derived from the applet crates now, and
+  every hand-written copy of it is held to what they say.**
+  `rsk_store::is_counter_fid` decides which partition a record is written to and
+  read back from, and it is a `matches!` over four bare literals whose named
+  homes are in three other crates: `EF_COUNTER` and `EF_CRED_CTR` in `rsk-fido`,
+  `EF_SIG_COUNT` in `rsk-openpgp`, `COUNTER_FID` in `rsk-vendor`. Nothing linked
+  a literal to its constant, so the table and the constants drifted with no
+  compile error — and the set has already moved twice in copies nothing derived:
+  `EF_CRED_CTR` joined the table at `0x0821`, after `0x081D` had been writing
+  that FID to the main partition, and `fuzz/fuzz_targets/power_cut.rs`'s mirror
+  listed three of the four while its selector was `& 7` over nine entries, so
+  the ninth — `0xCC01` — could never be written by any input while the sweep
+  asserted it absent on every one. A record on the wrong side reads absent from
+  the partition it is fetched from while its old value stays live in the other
+  ring, and every `for_each_key` yields a copy nothing can delete.
+
+  `scripts/partition_routing_gate.py` reads the constant NAMES out of the doc
+  comment over `is_counter_fid` and resolves each to a `const … : u16` in a
+  crate that is **not** `rsk-store`, then holds all four copies to the values
+  that come back: that doc comment's own numbers, the `matches!` arms read out
+  of `is_counter_fid`'s own body, the two loops in
+  `crates/rsk-store/src/tests.rs` — found by what they assert rather than by the
+  test's name, which spells a cardinal of its own — and the fuzz mirror's
+  `FIDS`, a superset there, plus the rule that every index into it ENDS in
+  `% FIDS.len()`, which is the half a list check cannot see. An arm the reader
+  cannot parse is reported rather than skipped, and a doc comment naming fewer
+  than three constants trips a floor, because a derivation that resolves nothing
+  compares an empty set to an empty set. The one tree change it needed is that
+  comment: the vendor counter was described and not named, so `COUNTER_FID` is
+  spelled there now.
+
+  Driven through the `check.sh` row, exit taken with no pipe: a literal changed
+  in each of the four copies, a copy dropping a member, a fifth constant named
+  over the table and listed nowhere, a constant renamed at its home, the
+  selector masked back to `& 7`, and a member slid into the "must stay in main"
+  loop — each `rc 1` naming that copy and that direction, each restored
+  byte-exact, and the clean tree `rc 0`; run under `check.sh`'s own
+  `set -euo pipefail` and `run()`, the red row stops the script before the next
+  one.
+
+  An adversarial review then found **six ways past the first version**, three of
+  them the guard's own subject: the reduction was a SUBSTRING test, so
+  `((b >> 3) as usize % FIDS.len()) & 7` reintroduced the exact defect the row
+  exists for at `rc 0`, as did `% FIDS.len() / 2`; the `matches!` and the `FIDS`
+  array were each read by the FIRST match in their file, so a decoy above either
+  one let the real copy misroute `0xCC01` at `rc 0`; and one reduced `let`
+  vouched for every `FIDS[index]` in the file. It also measured four false reds
+  whose message stated something untrue — an `#[inline]` between the doc comment
+  and the function read as "has no doc comment", a `pub(crate)` or
+  `= SIG_BASE` home as "no crate defines it", an inlined reduced index as "never
+  indexes `FIDS`", and the drift story's own `0x0821` — written directly above
+  `is_counter_fid`, which is where it belongs — as "the table and the applet
+  crates have drifted". All ten redden or go green correctly now, and three
+  clauses that survived their own mutation table (`matches!` missing, `FIDS`
+  missing, a loop missing) have cases. The table is
+  `scripts/test_partition_routing_gate.py`, 34 cases, six of them controls that
+  must stay GREEN.
+
+  What the row deliberately does not decide is whether a FID *belongs* in the
+  counter partition — that is `rsk-store`'s judgement, and dropping a member
+  from the doc comment and every copy in one edit is green — and the ROSTER is
+  that doc comment, so a hot record declared at its home and named nowhere over
+  the table derives nothing. It is the derivation `assurance/platform.toml`'s
+  `PLAT-STORE-004` asks for, and that row's `discharge` says so instead of "no
+  script does"; its `status` stays `pending`, since both limits above are what
+  its statement is about and an `evidence_commit` cannot name a commit yet.
+
 - **The real-power HIL run asks the board whether the reset had started, and
   refuses to call a cut a tear until it answers.** `PLAT-FLASH-001`'s discharge
   is "a recorded PASS of `tests/29_reset_power_cut.py`", and `main` asserted
