@@ -639,6 +639,18 @@ run "toolchain TCB registry"   python scripts/toolchain_gate.py
 # the day it was typed, which is what the registry above exists to prevent.
 run "11C decision measurements" python scripts/level11c_gate.py
 run "one embassy for all"      embassy_revs_match
+# The same rule one library in, and the case `embassy_revs_match` names in its
+# own comment: the vendored `sequential-storage` fork reaches a build only
+# through `[patch.crates-io]`, wired in three manifests, so a workspace that
+# lost its copy links upstream 8.0.0 — whose walk reports a page it could not
+# read as a COMPLETE enumeration, and whose torn remove leaves an older copy
+# live. The subject is the LOCK and not the stanza: a patched dependency is
+# recorded with no `source` and no `checksum`, which is the half that cannot be
+# talked round. Driven through THIS row, exit taken with no pipe: each of the
+# three stanzas deleted in turn -> rc 1 naming that manifest; a lock entry given
+# a registry `source` -> rc 1 naming that lock. The table is
+# scripts/test_vendored_fork_gate.py.
+run "vendored fork linked"     python scripts/vendored_fork_gate.py
 # No `--ignore`: the tree carries no vulnerability advisory. RUSTSEC-2023-0071
 # (the `rsa` crate, no fixed release) was the last one and left with the crate.
 run "cargo-audit (SCA)"        cargo audit
