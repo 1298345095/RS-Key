@@ -45,6 +45,29 @@ and to the statuses it quotes.
 
 ### Added
 
+- **The PRF round trip a password manager depends on had no test.**
+  `hmac-secret-mc` (CTAP 2.2 §12.5) lets a platform read the PRF value at
+  registration time; the follow-up assertion reads it again, and a vault key is
+  those two being equal. They travel different code paths — makeCredential's
+  key-derivation input is the credential box or the resident id it has just
+  minted, getAssertion's is whatever the lookup found — and §12.5 selects a
+  different half of `cred_random` off the response's UV bit, so both ceremonies
+  have to agree on both. Nothing held them to it: `hmacsecret_tests.rs` pins the
+  UV split inside `eval`, and `tests/24_extensions.py` drives an assertion with
+  no PIN at all, so the pair was never compared. Two conformance cases drive it
+  through `process_cbor` now — the value read back on the assertion is the one
+  registration returned, and a UV registration does **not** share a `CredRandom`
+  with an unverified assertion, which is what stops the first case holding
+  vacuously.
+
+  Written while looking for
+  [#109](https://github.com/TheMaxMur/RS-Key/issues/109), which they do not
+  reproduce: the shipped answers agree across pinUvAuthProtocol 1 and 2, one and
+  two salts, `allowList` and discoverable, and credProtect 0/2/3. One thing the
+  new case did surface, and it is behaviour rather than a defect — registration
+  spends the pinUvAuthToken it rode in on (GHSA-wqjm-653g-hgw3), so the follow-up
+  read needs a fresh one, which is what a platform's second PIN prompt is.
+
 - **The counter/main partition table is derived from the applet crates now, and
   every hand-written copy of it is held to what they say.**
   `rsk_store::is_counter_fid` decides which partition a record is written to and
