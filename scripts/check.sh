@@ -596,6 +596,7 @@ run "partition table fences the store (16M)" partition_table_fences_the_store
 # `covered`: this compiles the shipped image, and their EVIDENCE is still
 # produced at 4 MB.
 run "build firmware (display)" env LED_KIND=none FLASH_SIZE=16M cargo build --release -p firmware --features display
+run "firmware stack floor (display)" display_stack_floor
 # Machine-checked "no size cost for keys without a screen": the display UI crate
 # and its driver stack must be absent from the DEFAULT firmware dependency tree, so
 # a standard key can not pull any of the screen code in.
@@ -679,6 +680,7 @@ run "gate-union (device wipe)" python scripts/gate_union.py
 # CI skips jobs on these rules, and a wrong one skips a job silently — the one
 # failure direction nothing else would report.
 run "ci scope rules"           ./scripts/ci-scope.sh --self-test
+run "preview publisher"        node --test .github/scripts/publish-preview.test.mjs
 # Deep-checks runs this nightly, which is where it kept being discovered — twice
 # now the tree went red for a hotspot that had been sitting in a commit for hours.
 # It costs ~7 s and needs nothing the shell has not already fetched.
