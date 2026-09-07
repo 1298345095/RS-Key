@@ -990,9 +990,13 @@ and to the statuses it quotes.
   flash lookup table. RLE checkpoints and a vertical command index skip work
   from earlier bands. Narrow rectangles use the full fixed DMA buffer, semantic
   damage skips unused tile hashing, and hold progress paints only its new strip.
-  The DMA buffers use the active stack, not permanent RAM, and the gate checks
-  the display build's stack reserve. A scene overflow or display transfer error
-  now stops input instead of leaving an active prompt with incomplete pixels.
+  The DMA buffers use the active stack, not permanent RAM. A scene overflow or
+  display transfer error stops input instead of leaving an active prompt with
+  incomplete pixels — by halting, so the retained stream is sized to make that
+  unreachable rather than survivable (see the capacity fix below). That flavor
+  also runs `clk_sys` at 160 MHz, past the RP2350's rated 150, because the PIO
+  transport takes its wire rate from `clk_sys / 2`; the trade it makes and what
+  it does not cover are in [limitations.md](docs/limitations.md).
 - **The display build's stack has its own gate row, and one retained frame has a
   compile-time ceiling.** The existing row measures the space left *over* after
   `.data`/`.bss`, which is the wrong instrument for this change: moving a 4 KiB
@@ -1018,6 +1022,17 @@ and to the statuses it quotes.
   hand-picked `(index * 37) % 94` label and so certified a ceiling it never
   reached, and it sweeps all 95 glyphs against every full-frame renderer now,
   naming the renderer and the glyph when it goes red. **bcdDevice → 0x09C7.**
+
+- **A display build without an explicit `BOARD=` asserted itself dead at boot.**
+  The PIO transport takes the panel clock from `clk_sys / 2` and sets no divider,
+  so it asserts `clk_sys == spi_freq_hz * 2` in its constructor. The board file
+  moved to 80 MHz with the transport; `firmware/build.rs`'s fallback — which
+  exists to mirror that same board — stayed at the pre-PIO 62.5 MHz, so every
+  display build that did not name a board, including the one `check.sh` compiles,
+  would have panicked in `PioDisplayTx::new` on the first boot. The fallback
+  tracks the board file again, and the ratio is a `const _: () = assert!` in
+  `firmware/src/main.rs` now, so a board file that moves one half of it fails the
+  build instead of the device. **bcdDevice → 0x09C8.**
 
 - **The trusted display's paint-side oracle went blind in the merge.** The
   scrambled-PIN-pad test proves the pad the owner *reads* is the pad the hit-test

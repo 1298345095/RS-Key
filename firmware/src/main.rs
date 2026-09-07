@@ -216,6 +216,20 @@ const _: () = assert!(
 // Override via BOARD=<name> or individual PK_DISPLAY_* env vars.
 #[cfg(feature = "display")]
 const BUILD_DISPLAY_SPI_FREQ_HZ: u32 = env_u32(env!("PK_DISPLAY_SPI_FREQ_HZ"));
+/// The display build's system clock. The panel's PIO program spends two instructions
+/// per serial bit, so `clk_sys` has to be exactly twice `display.spi_freq_hz` for the
+/// divider to be 1 — which is what puts this above the RP2350's rated 150 MHz. The
+/// trade is written down in docs/limitations.md; the const assert below is what stops
+/// a board file from moving one half of it without the other.
+#[cfg(feature = "display")]
+const BUILD_DISPLAY_SYS_CLOCK_HZ: u32 = 160_000_000;
+
+#[cfg(feature = "display")]
+const _: () = assert!(
+    BUILD_DISPLAY_SYS_CLOCK_HZ == BUILD_DISPLAY_SPI_FREQ_HZ * 2,
+    "display.spi_freq_hz must be exactly half the system clock: the PIO emits one bit \
+     per two cycles, and any other ratio needs a divider the transport does not set"
+);
 #[cfg(feature = "display")]
 const BUILD_DISPLAY_CS: u8 = env_u16(env!("PK_DISPLAY_CS")) as u8;
 #[cfg(feature = "display")]
@@ -510,9 +524,8 @@ async fn main(spawner: Spawner) {
     let mut config = embassy_rp::config::Config::default();
     #[cfg(feature = "display")]
     {
-        // The display PIO emits one SPI bit per two system-clock cycles.
-        config.clocks = embassy_rp::clocks::ClockConfig::system_freq(160_000_000)
-            .expect("160 MHz display clock must have valid PLL parameters");
+        config.clocks = embassy_rp::clocks::ClockConfig::system_freq(BUILD_DISPLAY_SYS_CLOCK_HZ)
+            .expect("the display system clock must have valid PLL parameters");
     }
     if let Some(xosc) = config.clocks.xosc.as_mut() {
         xosc.delay_multiplier = XOSC_DELAY_MULT;
@@ -701,7 +714,7 @@ async fn main(spawner: Spawner) {
     config.max_power = 100;
     config.max_packet_size_0 = 64;
     // bcdDevice build counter; also surfaced on the trusted-display Firmware screen.
-    let device_release: u16 = 0x09C7;
+    let device_release: u16 = 0x09C8;
     config.device_release = device_release;
 
     let mut builder = Builder::new(
