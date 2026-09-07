@@ -369,9 +369,10 @@ disposition = "equivalent"
 basis = "same-cargo-features"
 why = """
 Identical cargo-feature closure — the gate re-derives it — so the delta is the \
-knobs listed above, all of them flash geometry, LED wiring or the presence pin. \
-These six statements are about in-RAM state only: the applet security status \
-that lives for the duration of a selection, and the CTAPHID reassembly buffer. \
+knobs listed above: flash geometry, LED wiring, the presence pin, and the panel's \
+serial link. These six statements are about in-RAM state only: the applet \
+security status that lives for the duration of a selection, and the CTAPHID \
+reassembly buffer. \
 Neither reads `PK_FLASH_SIZE`/`PK_KVMAIN_LEN`: inside the firmware image \
 `firmware/src/flash_storage.rs` is their only consumer. Not in the tree — \
 `rsk-wipe/src/main.rs` reads `PK_FLASH_SIZE` too, from its own `build.rs`, \
@@ -385,7 +386,18 @@ wipe. Those rebuilds mean something only because of the row beside them, \
 links with no board at all — it used to fall back to 4 MB at EXIT=0, so the \
 per-board loop passed whether or not `BOARD` was reaching it. Cited with the \
 `check.sh:` prefix because that label carries no parentheses, and the shape \
-rule alone sees 52% of the row namespace."""
+rule alone sees 52% of the row namespace.
+
+Re-decided when `display.spi_freq_hz` moved 62.5 -> 80 MHz with the PIO panel \
+transport, because that knob is no longer only a panel knob: the transport takes \
+its wire rate from `clk_sys / 2`, so this column now runs the whole part at \
+160 MHz where every other one runs 150. That is a real difference and it is \
+recorded in `docs/limitations.md`, but it does not reach these six. They are \
+statements about which state survives a selection and how a reassembly buffer is \
+bounded — no clause in `RSKeyAppletSeams` or `RSKeyTransport` quantifies over \
+time, a rate, or a deadline, so a core that retires instructions faster cannot \
+make one of them true or false. A property that DID depend on timing would owe a \
+`conditional` here instead, and none of the six is one."""
 
 [[cell]]
 properties = [
@@ -533,7 +545,7 @@ same_as = "firmware"
 knob_delta = [
   "display.bl_pin=16", "display.bl_pwm_channel=A", "display.bl_pwm_slice=0",
   "display.cs=13", "display.dc=14", "display.rst=15",
-  "display.spi_freq_hz=62500000", "display.tp_rst=17",
+  "display.spi_freq_hz=80000000", "display.tp_rst=17",
   "display.wake_active_high=False", "display.wake_pin=25",
   "flash.kvmain_kb=1408", "flash.size_mb=16", "led.kind=none",
   "presence.source=bootsel", "usb.vidpid=RSKey",

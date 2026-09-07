@@ -180,6 +180,7 @@ CLAIM_ROWS=(
   "^\\./formal/[a-z_0-9-]+\\.sh|gate|"
   "^actionlint |gate|"
   "^gitleaks |gate|"
+  "^node --test |gate|"
   "^sh -c |gate|"
   "^[a-z_][a-z_0-9]*\$|gate|"
 )
