@@ -162,6 +162,11 @@ impl rsk_ui::scene::FrameTarget for Panel {
     }
 
     fn present_scene(&mut self, scene: &rsk_ui::scene::Scene) -> bool {
+        // The frame boundary moved here with the retained compositor: a scene replays
+        // its background as a `fill_solid`, so `clear` — where a finished frame used to
+        // be fingerprinted — never fires on this path. Without this push `grids` stays
+        // empty and `pin_pads_painted` sees only the last screen of a whole flow.
+        self.grids.push(self.pin_cell_hashes());
         self.frames += 1;
         scene.replay(self).is_ok()
     }

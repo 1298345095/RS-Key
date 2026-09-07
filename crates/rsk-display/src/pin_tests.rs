@@ -379,6 +379,17 @@ fn a_pin_typed_on_the_scrambled_pad_is_the_pin_that_gets_stored() {
     // will read, so a pad painted from one order and tapped through another agrees with
     // itself all the way to the store — the owner's eyes are the only witness left.
     let painted = ui.panel.pin_pads_painted();
+    // `zip` stops at the shorter side, so a paint-side oracle that reads back fewer
+    // pads than the flow drew would compare the ones it has and pass on the rest.
+    // That is not hypothetical: the retained compositor replays its background as a
+    // `fill_solid` instead of a `clear`, which is where a finished frame gets
+    // fingerprinted, and it left this list holding one pad for a three-entry flow.
+    assert!(
+        painted.len() >= laid.len(),
+        "the paint-side oracle went blind: {} pads read off the glass for {} entries",
+        painted.len(),
+        laid.len()
+    );
     for (step, (shown, layout)) in painted.iter().zip(&laid).enumerate() {
         assert_eq!(
             shown,

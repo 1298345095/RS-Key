@@ -1019,6 +1019,16 @@ and to the statuses it quotes.
   reached, and it sweeps all 95 glyphs against every full-frame renderer now,
   naming the renderer and the glyph when it goes red. **bcdDevice → 0x09C7.**
 
+- **The trusted display's paint-side oracle went blind in the merge.** The
+  scrambled-PIN-pad test proves the pad the owner *reads* is the pad the hit-test
+  takes, by fingerprinting each finished frame off the recorded pixels. A frame
+  used to end at `DrawTarget::clear`; the retained compositor replays its
+  background as a `fill_solid` instead, so the fingerprint never ran and
+  `pin_pads_painted` returned one pad for a three-entry flow. `zip` compared the
+  one it had and would have passed on the rest. The boundary moved to
+  `present_scene` where the frame now ends, and the test refuses a readback
+  shorter than the flow it scripted.
+
 - **`gpg`'s `kdf-setup` locked the owner out of both OpenPGP references
   ([#104](https://github.com/TheMaxMur/RS-Key/issues/104)).** DO `C0`'s byte 1
   announces KDF-DO support, so `gpg` offers `kdf-setup`; the DO itself (`00F9`)
