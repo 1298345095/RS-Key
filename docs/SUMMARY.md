@@ -23,6 +23,7 @@
 - [Git: signing + auth](guides/git.md)
 - [OpenPGP card](guides/openpgp.md)
 - [PIV](guides/piv.md)
+- [`age` encryption + secretspec](guides/age.md)
 - [OATH — TOTP / HOTP](guides/oath.md)
 - [OTP slots](guides/otp.md)
 - [Seed backup](guides/seed-backup.md)

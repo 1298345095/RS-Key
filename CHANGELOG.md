@@ -45,6 +45,28 @@ and to the statuses it quotes.
 
 ### Added
 
+- **`age` encryption has a route that needs no smart card, and now a guide that
+  says so ([`docs/guides/age.md`](docs/guides/age.md)).** The only `age` story
+  the docs told was the PIV one, and it comes with a caveat that has nothing to
+  do with the card: `age-plugin-yubikey` matches on the "Yubico YubiKey" reader
+  name, so the stock RS-Key build needs `opensc-pkcs11.so` or the opt-in
+  `VIDPID=Yubikey5` image before it is even seen. `age-plugin-fido2-hmac` goes
+  over CTAPHID and asks only for the `hmac-secret` extension, which every
+  shipped build advertises — no PKCS#11, no reader name, no PIV slot spent, and
+  the credential it mints is non-discoverable, so the credential store is
+  untouched. The page carries the `secretspec` layer on top of it, and the
+  trade the FIDO2 route makes in exchange: `hmac-secret` unwraps an `age`
+  identity into host memory, where PIV keeps the private key on the card, so
+  this one gates access rather than confining the key.
+  Measured against `tools/emu` by reproducing the plugin's CTAP exchange
+  call-for-call from its source: the `getInfo` filter it applies passes, its
+  `makeCredential` is served for `es256` and `eddsa` and refused for `rs256`
+  (RS-Key advertises no RSA), and its `getAssertion` returns the deterministic
+  32-byte output it checks for. `secretspec`'s `age` provider was driven
+  through `set`/`get`/`run` and does spawn the plugin for a plugin identity.
+  Not measured, and the page says so: the plugin against a real board —
+  `libfido2` wants a USB HID device and the emulator is a socket.
+
 - **A downgrade-fix release says so in a form a flasher can read
   ([#100](https://github.com/TheMaxMur/RS-Key/issues/100)).**
   [`docs/anti-rollback.md`](docs/anti-rollback.md) already made this the

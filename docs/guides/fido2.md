@@ -189,6 +189,9 @@ getInfo advertises seven extensions:
 | `minPinLength` | the device hands its PIN-length policy to the RP | |
 | `thirdPartyPayment` | the secure-payment-confirmation marker | |
 
+`hmac-secret` has a use outside the browser: it is what lets `age` encrypt to
+this device with no smart card involved. See [age.md](age.md).
+
 Enterprise attestation is supported but off until enabled. The `ep` option flips
 to true once an org key is installed. See [attestation.md](attestation.md).
 
