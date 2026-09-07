@@ -254,7 +254,7 @@ answer = "read"
 class = "secret-or-gate"
 metadata = "none"
 disposition = "must-read"
-why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared. The folded answer is kept deliberately (reviewed 0x0989): the record half here is only ever the shared blob being unreadable, but that is equally true of vendor.rs:426/428 and crates/rsk-openpgp/src/putdata.rs:159/165, and splitting the halves for this caller alone would re-open the swallowed drop 0x0987 closed. One-shot commands lose the command, not a sweep's range."
+why = "resetPersistentPinUvAuthToken revokes a capability (SEC-FIDO-003); all four callers map the error to CTAP2_ERR_OTHER rather than report a token cleared. The folded answer is kept deliberately (reviewed 0x0989): the record half here is only ever the shared blob being unreadable, but that is equally true of vendor.rs:426/428 and crates/rsk-openpgp/src/putdata.rs:161/167, and splitting the halves for this caller alone would re-open the swallowed drop 0x0987 closed. One-shot commands lose the command, not a sweep's range."
 
 [[site]]
 file = "crates/rsk-fido/src/vendor.rs"
@@ -357,7 +357,7 @@ why = "the DEK half of the same idempotent repair, retried on the next boot rath
 
 [[site]]
 file = "crates/rsk-openpgp/src/lib.rs"
-line = 285
+line = 287
 call = "let _ = fs.delete(stor);"
 verb = "delete"
 answer = "discarded"
@@ -368,7 +368,7 @@ why = "one instance of the cardholder certificate: a public data object the host
 
 [[site]]
 file = "crates/rsk-openpgp/src/pin.rs"
-line = 399
+line = 413
 call = "let _ = fs.delete_key(stage);"
 verb = "delete_key"
 answer = "discarded"
@@ -379,7 +379,7 @@ why = "load_dek re-runs this retirement on every PIN use, so a failed one is ret
 
 [[site]]
 file = "crates/rsk-openpgp/src/pin.rs"
-line = 472
+line = 486
 call = "let _ = fs.delete_key(stage);"
 verb = "delete_key"
 answer = "discarded"
@@ -390,7 +390,7 @@ why = "the same retirement after a recovered update commits; the same next-load_
 
 [[site]]
 file = "crates/rsk-openpgp/src/pin.rs"
-line = 532
+line = 546
 call = "let _ = fs.delete_key(stage);"
 verb = "delete_key"
 answer = "discarded"
@@ -401,7 +401,7 @@ why = "and after an ordinary staged commit. All three are the one record load_de
 
 [[site]]
 file = "crates/rsk-openpgp/src/pin.rs"
-line = 906
+line = 609
 call = "let verifier = fs.delete(EF_RC).is_ok();"
 verb = "delete"
 answer = "read"
@@ -412,7 +412,7 @@ why = "the RC verifier is what RESET RETRY P1=0 walks in through, and init's rep
 
 [[site]]
 file = "crates/rsk-openpgp/src/pin.rs"
-line = 907
+line = 610
 call = "let dek = fs.delete_key(EF_DEK_RC).is_ok();"
 verb = "delete_key"
 answer = "read"
@@ -423,7 +423,7 @@ why = "the DEK sealed under that reset code. A survivor of either half leaves th
 
 [[site]]
 file = "crates/rsk-openpgp/src/putdata.rs"
-line = 159
+line = 161
 call = "Ok(true) if fs.force_delete(slot.get()).is_err() => return Sw::MEMORY_FAILURE,"
 verb = "force_delete"
 answer = "read"
@@ -434,7 +434,7 @@ why = "SEC-POL-003: changing a slot's algorithm attribute invalidates its key, a
 
 [[site]]
 file = "crates/rsk-openpgp/src/putdata.rs"
-line = 165
+line = 167
 call = "Ok(true) if fs.force_delete(public).is_err() => return Sw::MEMORY_FAILURE,"
 verb = "force_delete"
 answer = "read"
@@ -445,7 +445,7 @@ why = "the public half of the same invalidation — a point still served for a k
 
 [[site]]
 file = "crates/rsk-openpgp/src/putdata.rs"
-line = 215
+line = 217
 call = "let _ = fs.delete(target);"
 verb = "delete"
 answer = "discarded"

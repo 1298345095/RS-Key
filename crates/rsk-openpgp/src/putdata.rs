@@ -104,9 +104,11 @@ pub fn put_data<S: Storage>(fs: &mut Fs<S>, sess: &Session, fid: u16, data: &[u8
     }
 
     let target = match fid {
-        // Routed away by the dispatch (put_reset_code / put_pw_status); rejected
-        // here so a direct call cannot write them as raw DOs.
-        EF_RESET_CODE | EF_PW_STATUS => return Sw::CONDITIONS_NOT_SATISFIED,
+        // Routed away by the dispatch (put_reset_code / put_pw_status / put_kdf);
+        // rejected here so a direct call cannot write them as raw DOs. `EF_KDF` is
+        // the one that used to fall through: stored as an opaque DO, it left the
+        // PW1/PW3 verifiers holding values `gpg` had already stopped sending (#104).
+        EF_RESET_CODE | EF_PW_STATUS | EF_KDF => return Sw::CONDITIONS_NOT_SATISFIED,
         // OpenPGP 3.4, "Access conditions for Data Objects": the DS-Counter is
         // WRITE = *Never*, reset only internally by generating or importing a new
         // signature key. It is the card's only evidence that the key was used while

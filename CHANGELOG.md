@@ -918,6 +918,78 @@ and to the statuses it quotes.
 
 ### Fixed
 
+- **`gpg`'s `kdf-setup` locked the owner out of both OpenPGP references
+  ([#104](https://github.com/TheMaxMur/RS-Key/issues/104)).** DO `C0`'s byte 1
+  announces KDF-DO support, so `gpg` offers `kdf-setup`; the DO itself (`00F9`)
+  went down the *generic* PUT DATA arm and was stored as opaque bytes. From that
+  write on, `gpg` sends the KDF **output** as the password on every VERIFY and
+  issues no `CHANGE REFERENCE DATA` of its own (`g10/card-util.c::kdf_setup`) —
+  so the card is the only party that can move the references, and the DO's tags
+  `87`/`88` carry the hashes of the two factory passwords for exactly that
+  purpose. Ours never read them: measured on the reporter's sequence, `PUT DATA
+  F9` answered `9000`, `VERIFY 83` with the `88` hash `63C2`, `VERIFY 81` with
+  the `87` hash `63C2`, and `CHANGE 83` with `hash(old) ‖ hash(new)` `63C2` —
+  `change_pin` splits at the *stored* length, so it was comparing the first 8
+  bytes of a 32-byte hash. Both counters then ran down to blocked, and the only
+  way back was another factory reset.
+
+  `crates/rsk-openpgp/src/kdf.rs` owns the tag now: it validates the three bodies
+  `gpg` produces — `81 01 00` ("off"), the 90-byte `kdf-setup single` and the
+  110-byte bare `kdf-setup` — against a table of
+  offsets, then makes the two hashes the PW1/PW3 reference values, re-sealing
+  each PIN's DEK copy under the new value and giving both retry counters their
+  budget back. Turning KDF off is the same move in reverse, to `123456` /
+  `12345678`, since that is what `gpg` starts sending again. The DO is still
+  stored verbatim — the host reads back the salt and iteration count it needs.
+
+  **Every one of those answers was then measured against a real YubiKey 5.7.4**,
+  one question set run against both cards: `9000` and a verbatim read-back for
+  both of `gpg`'s layouts, `9000` for `kdf-setup off` with the raw defaults back
+  on both references, `6A80` for an empty body and for 109, 111 and a corrupted
+  tag `87`, and `6985` with a key on the card — in both directions, on and off.
+  **Sixteen questions, sixteen identical answers.** The one that started out
+  different is the access status: this cleared all three afterwards, as Gnuk does
+  and as `gpg`'s own cache clear (`do_setattr`, special 4) suggests, while a
+  YubiKey keeps them — `PUT DATA 5E` straight after `PUT DATA F9` with no
+  re-VERIFY is `9000` there. Ours keeps them now too, but it could not simply
+  stop clearing: the session key a VERIFY derived is what opens the DEK, and the
+  re-seal has just sealed it under a different password, so `reseed_pin` returns
+  the new session key and `Session::adopt_reseeded` installs it. The status
+  survives *and* still works. A failed write still drops all three, because which
+  password each standing key opens is then exactly what is unknown.
+
+  Two places it stays deliberately apart from the oracle, both in the direction
+  that keeps a promise rather than breaks one. A **corrupted length byte** inside
+  an otherwise well-formed DO is `9000` on a YubiKey and `6A80` here — the tag is
+  checked on both, the width only here. And an existing **Reset Code** is
+  deactivated here rather than left standing: the DO carries a salt for the RC
+  (tag `85`) but no initial hash, so there is nothing to migrate it to, and a
+  YubiKey's kept code is measurably dead — `RESET RETRY` P1=0 answers `6A80` to
+  the raw code and to the KDF'd one alike, spending no retry, while `C4` goes on
+  advertising three tries for it. Deactivating makes the counter honest.
+
+  An **empty** body is refused with `6A80`, which is stricter than Gnuk: it takes
+  one as the DO's delete and drops the keystrings, so an empty PUT DATA `F9`
+  silently returns both references to `123456` / `12345678`. `gpg` never sends
+  one — `kdf-setup off` is the three explicit bytes — so refusing it costs no
+  host and takes a PIN reset out of reach of a DO-clearing loop. The gate found
+  that arm, not review: the whole-16-bit-space PUT DATA walk sends an empty body
+  to every tag, and the re-seed it triggered at `F9` dropped the admin session
+  under the rest of the walk.
+
+  Order is the tear budget: the DO lands first, then PW3, then PW1, then the RC.
+  No order avoids a window where the DO and the verifiers disagree — a host reads
+  the DO to learn which of the two passwords to send — but PW3 leading the
+  references keeps it one append wide, because once the DO and PW3 agree the
+  admin can re-run the command and the rest heals. Seventeen hand mutations, each
+  killed by a test that names the defect rather than its inverse: no PW3 re-seed,
+  no PW1 re-seed, the key guard removed, the length gate removed, the tag and the
+  length byte each dropped from the field check, "off" leaving the PINs alone,
+  an empty body taken as "off", the RC left live, the PW3 gate removed, the DO
+  not stored, the retries not restored, the DEK not re-sealed, the generic writer
+  taking `F9` again, the session keys not adopted, the statuses dropped anyway,
+  and PW1's session left stale while PW3's followed. **bcdDevice → 0x09C6.**
+
 - **A registration that failed part-way left an RP entry that nothing ever
   reclaimed, and its discoverable-credential slot with it.** `credential_store`
   writes an EF_RP entry before the credential so a truncated sequence leaves the

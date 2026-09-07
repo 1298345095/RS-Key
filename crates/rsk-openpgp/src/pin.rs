@@ -62,6 +62,20 @@ impl Session {
         }
     }
 
+    /// Re-point the standing PW1/PW3 sessions at reference values that were just
+    /// re-seeded underneath them ([`crate::kdf::put_kdf`]).
+    ///
+    /// The access statuses are deliberately left alone — a YubiKey 5.7.4 keeps
+    /// them across a KDF-DO write (measured: `PUT DATA 5E` straight after
+    /// `PUT DATA F9`, no re-VERIFY, answers `9000`). Ours cannot simply keep them
+    /// too: the session key a VERIFY derived is the one that opens the DEK, and
+    /// the re-seed has just sealed it under a different password. So the status
+    /// survives and the key it carries is replaced.
+    pub(crate) fn adopt_reseeded(&mut self, pw1: [u8; 32], pw3: [u8; 32]) {
+        self.session_pw1 = pw1;
+        self.session_pw3 = pw3;
+    }
+
     /// Clear all auth state (applet deselect) and restore the default MSE key
     /// slots.
     pub fn reset(&mut self) {
@@ -539,6 +553,69 @@ fn pw_fid(p2: u8) -> u16 {
     0x1000 | p2 as u16
 }
 
+/// Make `new` the reference value of PW1 or PW3, re-sealing that PIN's DEK copy
+/// under it and giving the counter its retries back. `dek` is the plaintext a
+/// prior [`load_dek`] produced, so a caller re-seeding BOTH references opens the
+/// DEK once — the two copies hold the same key. Returns the session key `new`
+/// now derives, for a caller keeping its access status ([`Session::adopt_reseeded`]).
+///
+/// The authority is the caller's: unlike [`change_pin`] this compares no old
+/// value, so it may only be reached from a path that has already established one
+/// ([`crate::kdf::put_kdf`] runs under PW3). Stage / verifier / commit and their
+/// tear behaviour are [`stage_dek`]'s.
+pub(crate) fn reseed_pin<S: Storage>(
+    dev: &Device,
+    fs: &mut Fs<S>,
+    rng: &mut dyn Rng,
+    fid: u16,
+    new: &[u8],
+    dek: &[u8; DEK_SIZE],
+) -> Result<[u8; 32], Sw> {
+    let dek_fid = match fid {
+        EF_PW1 => EF_DEK_PW1,
+        EF_PW3 => EF_DEK_PW3,
+        _ => return Err(Sw::EXEC_ERROR),
+    };
+    check_pin_len(fid, new.len())?;
+    let session = stage_dek(dev, fs, rng, dek_fid, new, dek)?;
+    put_verifier(dev, fs, fid, new)?;
+    commit_staged_dek(fs, dek_fid)?;
+    pin_reset_retries(fs, fid, true)?;
+    Ok(session)
+}
+
+/// Deactivate the resetting code: drop its verifier, the DEK copy sealed under
+/// it, and its retry budget — the three together are what RESET RETRY P1=0 walks
+/// in through, so an `Ok` over a survivor revokes a credential only on paper.
+/// `init`'s repair pass reaches the FACTORY reset code alone, so nothing else on
+/// the card clears a set one.
+///
+/// The third is not a delete, and folding its other two failures into `6581` is
+/// deliberate: `set_pin_retry_counter`'s REFERENCE_NOT_FOUND would name
+/// EF_PW_PRIV, a record neither caller ever mentions. Neither is reachable
+/// anyway — every writer puts back `&pw[..n]` or the whole default, so the record
+/// cannot shorten past the RC index. The half of that a test can hold is in
+/// `pin_tests.rs`.
+pub(crate) fn clear_reset_code<S: Storage>(fs: &mut Fs<S>, sess: &mut Session) -> Result<(), Sw> {
+    // Ahead of everything below because it holds on every exit, the refused re-arm
+    // included: the session must not keep a reset code answered for here.
+    sess.has_rc = false;
+    // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_RC migrates only
+    // through its own verify, so both records tombstoned below can still be keyed
+    // under the pre-OTP arm — and clearing the code does not rotate the DEK. Ahead
+    // of the tombstones, which are appends of their own, and gating them: a reset
+    // between them and a trailing re-arm would leave the marker standing over both.
+    rsk_fs::request_rescrub(fs).map_err(|_| Sw::MEMORY_FAILURE)?;
+    let verifier = fs.delete(EF_RC).is_ok();
+    let dek = fs.delete_key(EF_DEK_RC).is_ok();
+    let counter = set_pin_retry_counter(fs, EF_RC, 0).is_ok();
+    if verifier && dek && counter {
+        Ok(())
+    } else {
+        Err(Sw::MEMORY_FAILURE)
+    }
+}
+
 /// VERIFY (INS 0x20).
 pub fn verify<S: Storage>(
     dev: &Device,
@@ -879,37 +956,9 @@ pub fn put_reset_code<S: Storage>(
         return Sw::SECURITY_STATUS_NOT_SATISFIED;
     }
     if data.is_empty() {
-        // All three answered, not discarded: the verifier and the DEK sealed under
-        // it are what RESET RETRY P1=0 walks in through, so a `9000` over a survivor
-        // revokes a credential only on paper. `init`'s repair pass reaches the
-        // FACTORY reset code alone, so nothing else on the card clears a set one.
-        //
-        // The third is not a delete, and folding its other two failures into `6581`
-        // is deliberate: `set_pin_retry_counter`'s REFERENCE_NOT_FOUND would name
-        // EF_PW_PRIV, a record PUT DATA `0xD3` never mentions.
-        //
-        // Neither is reachable anyway — every writer puts back `&pw[..n]` or the
-        // whole default, so the record cannot shorten past the RC index. The half
-        // of that a test can hold is in `pin_tests.rs`.
-        // Ahead of everything below because it holds on every exit, the refused
-        // re-arm included: the session must not keep a reset code answered for here.
-        sess.has_rc = false;
-        // Re-arm the one-shot at-rest lap (rsk-fs `EF_HARDENED`): EF_RC migrates only
-        // through its own verify, so both records tombstoned below can still be keyed
-        // under the pre-OTP arm — and clearing the code does not rotate the DEK.
-        // Ahead of the tombstones, which are appends of their own, and gating them:
-        // a reset between them and a trailing re-arm would leave the marker standing
-        // over both, and a refused re-arm does it without the reset.
-        if rsk_fs::request_rescrub(fs).is_err() {
-            return Sw::MEMORY_FAILURE;
-        }
-        let verifier = fs.delete(EF_RC).is_ok();
-        let dek = fs.delete_key(EF_DEK_RC).is_ok();
-        let counter = set_pin_retry_counter(fs, EF_RC, 0).is_ok();
-        return if verifier && dek && counter {
-            Sw::OK
-        } else {
-            Sw::MEMORY_FAILURE
+        return match clear_reset_code(fs, sess) {
+            Ok(()) => Sw::OK,
+            Err(sw) => sw,
         };
     }
     sess.has_rc = false;

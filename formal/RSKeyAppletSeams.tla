@@ -199,7 +199,7 @@ Init ==
 
 \* Every status an applet owns, gone. This is `Session::reset`
 \* (crates/rsk-piv/src/lib.rs:199-203), `pin::Session::reset`
-\* (crates/rsk-openpgp/src/pin.rs:67-80) and OATH's `deselect`
+\* (crates/rsk-openpgp/src/pin.rs:81-94) and OATH's `deselect`
 \* (crates/rsk-oath/src/lib.rs:1224-1228) -- three functions, one meaning.
 ClearedFor(h, a) ==
     [r \in Refs |-> IF RefOwner(r) = a
@@ -303,7 +303,7 @@ PivChangeRefused ==
     /\ UNCHANGED << sel, oneShotSig, psig, oathCodeSet, refused >>
 
 \* OpenPGP clears EXACTLY the addressed reference, and it keys the clear on the
-\* FID it compared rather than on P2 (crates/rsk-openpgp/src/pin.rs:176-188):
+\* FID it compared rather than on P2 (crates/rsk-openpgp/src/pin.rs:190-202):
 \* RESET RETRY COUNTER compares EF_RC while passing p2 = 0x81, so a wrong
 \* resetting code must leave PW1.81 standing.
 PgpVerify(r, ok) ==
@@ -315,7 +315,7 @@ PgpVerify(r, ok) ==
     /\ UNCHANGED << sel, fresh, pfresh, oneShotSig, oathCodeSet, viol >>
 
 \* A refused CHANGE clears the addressed reference too -- the same writer
-\* (crates/rsk-openpgp/src/pin.rs:253-255), which is where OpenPGP and PIV part
+\* (crates/rsk-openpgp/src/pin.rs:267-269), which is where OpenPGP and PIV part
 \* company.
 PgpChangeRefused(r) ==
     /\ sel = Pgp
@@ -451,7 +451,7 @@ PgpKeyOp(r) ==
 \* PUT DATA C4 -- the PW status byte that makes PW1.81 one-shot -- is an
 \* ADMINISTRATIVE write, gated on PW3 by `write_authorized`
 \* (crates/rsk-openpgp/src/putdata.rs:59-65, called at
-\* crates/rsk-openpgp/src/lib.rs:257-259), and it is the only writer of that
+\* crates/rsk-openpgp/src/lib.rs:259-261), and it is the only writer of that
 \* status. The gate was `held["pw3"]` and nothing else: an enabling conjunct with
 \* no Policy, in the family this module's sibling README spends four sections on.
 \* Removing it left the reachable space BIT-IDENTICAL at 666 distinct states,
