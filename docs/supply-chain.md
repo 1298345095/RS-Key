@@ -236,7 +236,8 @@ awk -v v="$ver" '
 $0 ~ "^## \\[" v "\\]" { f = 1; print; next }
 /^## \[/ { if (f) exit }
 f { print }
-' CHANGELOG.md > release-notes.md
+' CHANGELOG.md > release-notes-full.md
+cp release-notes-full.md release-notes.md
 if [ ! -s release-notes.md ]; then
 echo "RS-Key ${{ steps.tag.outputs.tag }}" > release-notes.md
 fi
@@ -263,6 +264,12 @@ echo
 echo "_Shortened to fit GitHub's release-body limit._"
 echo "_Every entry is in [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ steps.tag.outputs.tag }}/CHANGELOG.md) at this tag._"
 } >> release-notes.md
+fi
+if grep -qE '<!-- @increase-anti-rollback-epoch([^>]*)-->' release-notes-full.md; then
+marker="$(grep -oE '<!-- @increase-anti-rollback-epoch([^>]*)-->' release-notes-full.md | head -n1)"
+if ! grep -qF "$marker" release-notes.md; then
+printf '\n%s\n' "$marker" >> release-notes.md
+fi
 fi
 {
 echo
@@ -321,7 +328,7 @@ The files that decide what a release is. A digest here covers the parts the tabl
 | File | sha256 |
 |---|---|
 | `.github/workflows/release.yml` | `943eae75595831de403c51f1468be0d255b182a20fb155ab9a9eca956c54270f` |
-| `.github/workflows/release-build.yml` | `dfe384f50e635617a8f35124d3869a57d0141a8fd8e4eecab5b8abf7ab9b4e86` |
+| `.github/workflows/release-build.yml` | `0d4ee2b9b09d475c52531644e1e35122851fc7f466c307685b0db2914c303549` |
 | `nix/firmware.nix` | `b932c5fb999f4bbb326b09be9fba5b9f473eb56c6e79f123d1439f3754196938` |
 | `scripts/pt.sh` | `c55ba6255421a664c13ba8b1e3b05b01af842d3ba8e95cd986a7a46005c877ed` |
 

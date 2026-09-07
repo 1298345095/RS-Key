@@ -45,6 +45,44 @@ and to the statuses it quotes.
 
 ### Added
 
+- **A downgrade-fix release says so in a form a flasher can read
+  ([#100](https://github.com/TheMaxMur/RS-Key/issues/100)).**
+  [`docs/anti-rollback.md`](docs/anti-rollback.md) already made this the
+  project's one job — there are no project-signed images, every owner signs and
+  picks their own floor, so all the project can do is flag which releases fix a
+  downgrade-exploitable bug — but the flag was a sentence in a changelog. It is
+  now also a one-line HTML comment in the release body, named
+  `increase-anti-rollback-epoch` and optionally carrying a `reason` for the
+  owner; [`docs/anti-rollback.md`](docs/anti-rollback.md) spells both forms, and
+  they are deliberately **not** spelled here — the release step greps this file's
+  section as plain text, so an example written to explain the format would flag
+  whatever release the entry sits in. Absence is the answer, not "unknown": a
+  release without it is not a downgrade-fix. It stays a recommendation to raise
+  *your* floor by one — the project assigns no epochs and a tool must burn
+  nothing on its own.
+
+  It is written in this file, inside the released version's section, and
+  `release-build.yml` copies it into the body. **Lifted out of the FULL section,
+  not left to survive the shortening path**: a section over GitHub's 125000-char
+  body limit is cut back to its TL;DR, so a marker written at the end of a long
+  release — the release most likely to have one — would have been dropped exactly
+  when it mattered. A test runs the workflow's own shell over a fixture past the
+  limit and reads the marker out of the result; deleting the lift turns that one
+  case red and leaves the short-section cases green, which is the shape of the
+  behaviour it is measuring.
+
+  `scripts/rollback_marker_gate.py` is a new `check.sh` row, because a marker is
+  invisible when it is wrong — an HTML comment renders as nothing whether or not
+  a tool can parse it, so a typo here, a drifted grep in the workflow and a doc
+  example the parser would reject all fail the same silent way, on a release,
+  after the tag is pushed. It parses every marker in this file, reports a
+  near-miss rather than skipping it (a space before the metadata, a `reason` that
+  is not a string, an unknown key), holds the workflow's pattern to the same
+  spelling, and requires both documented forms to appear in the docs and to
+  parse. Twenty-two mutations in its table, and the parser is deliberately
+  STRICTER than the readers: the workflow's grep and a third-party tool are
+  lenient, and what the project must not do is publish a second spelling.
+
 - **The PRF round trip a password manager depends on had no test.**
   `hmac-secret-mc` (CTAP 2.2 §12.5) lets a platform read the PRF value at
   registration time; the follow-up assertion reads it again, and a vault key is

@@ -724,6 +724,7 @@ run "IBM Plex font data"       python scripts/generate_ui_fonts.py --check
 # model's ~175 `file.rs:line` citations were checked once, by hand, and a model
 # pointing at a line that has moved reads as authoritative while being wrong.
 run "bcd bump + CHANGELOG"     python scripts/bcd_gate.py
+run "anti-rollback marker"     python scripts/rollback_marker_gate.py
 run "SPDX headers"             python scripts/spdx_gate.py
 # The same shape one sentence in: a docstring that spells how many bullets are
 # under it, over a list that has since grown or shrunk. Three shipped that way --
