@@ -202,6 +202,20 @@ covers the security boundary. This page covers feature and hardware gaps.
 - **No image encryption**: pointless for open-source code (no secrets in
   the image; secrets live sealed in flash), and the RP2350 has no
   transparent XIP decryption anyway. *Status: never.*
+- **The trusted-display build runs the RP2350 above its rated clock.** That
+  flavor sets `clk_sys` to 160 MHz where the part is specified to 150, because
+  the panel's PIO transport spends two instructions per serial bit and takes the
+  wire rate straight from `clk_sys / 2` — 80 MHz, and a 15.36 ms full frame
+  against 16.38 at the stock 150. The panel link is out of spec on its own side
+  too: 80 MHz is past the 62.5 MHz this project had previously recorded as the
+  ST7789's write ceiling, and the transport is write-only, so a frame the panel
+  garbles at that rate is not detectable in software. What that buys is 1 ms per
+  full repaint. What it costs is that XIP timing, TRNG sampling and every
+  constant-time measurement in this repo were taken at 150 MHz and do not cover
+  this flavor, which no other build shares. The standard key without a screen is
+  unaffected — it never sets a clock. *Status: accepted deliberately for the
+  display flavor; the ratio is held by a const assert in `firmware/src/main.rs`
+  so a board file cannot move one half of it alone.*
 
 ## Protocol / compatibility
 
