@@ -993,8 +993,31 @@ and to the statuses it quotes.
   The DMA buffers use the active stack, not permanent RAM, and the gate checks
   the display build's stack reserve. A scene overflow or display transfer error
   now stops input instead of leaving an active prompt with incomplete pixels.
+- **The display build's stack has its own gate row, and one retained frame has a
+  compile-time ceiling.** The existing row measures the space left *over* after
+  `.data`/`.bss`, which is the wrong instrument for this change: moving a 4 KiB
+  static pixel buffer onto the stack improves that number while the peak grows by
+  ~26 KiB. `rsk_ui::scene::RETAINED_FRAME_STACK_BYTES` bounds the half the linker
+  cannot see — `size_of::<Scene>()` plus the two DMA bands plus the tag array — at
+  32 KiB, held by a const assert, and `display_stack_floor` spends it against the
+  171 KiB that build has.
 
 ### Fixed
+
+- **A relying party could pick a name that halted the trusted display.** The
+  retained scene records a frame as RLE'd drawing commands in a 12 KiB buffer, and
+  a passkey list draws the rp id and user name a registration chose. How many
+  commands that costs is a property of the *glyphs*, not of the byte values: 48
+  copies of `'j'` cost `render_service` 14630 bytes where the mixed-ASCII label the
+  capacity census used costs 10683. Two of the 95 printable glyphs `Label::clamp`
+  passes were already over the line, and the far side of it is
+  `Frame::drop`'s `expect` — an unauthenticated `makeCredential` away from a panic
+  on the screen whose whole job is to be trustworthy. The buffer is 16 KiB now,
+  sized to the measured worst glyph with a 1 KiB reserve the census asserts
+  separately. The census itself is the other half of the fix: it swept one
+  hand-picked `(index * 37) % 94` label and so certified a ceiling it never
+  reached, and it sweeps all 95 glyphs against every full-frame renderer now,
+  naming the renderer and the glyph when it goes red. **bcdDevice → 0x09C7.**
 
 - **`gpg`'s `kdf-setup` locked the owner out of both OpenPGP references
   ([#104](https://github.com/TheMaxMur/RS-Key/issues/104)).** DO `C0`'s byte 1

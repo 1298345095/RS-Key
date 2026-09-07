@@ -167,6 +167,31 @@ firmware_stack_floor() {
   fi
 }
 
+# The display flavor's floor. Two things share that stack and the linker can see
+# neither: the same ML-DSA-65 keygen peak as above, and one retained display frame
+# — `rsk_ui::scene::RETAINED_FRAME_STACK_BYTES`, 32 KiB, held there by a const
+# assert over `size_of::<Scene>()` plus the DMA bands. 114 + 32 = 146 KiB if they
+# ever nest, against the 171 KiB this build has.
+#
+# It needs its own row because the plain floor above CANNOT see the regression that
+# matters here: the retained compositor deleted a 4 KiB static pixel buffer and put
+# ~26 KiB on the stack instead, which moves `_stack_start - _stack_end` the RIGHT
+# way while the peak grows. A shared row would have reported an improvement.
+DISPLAY_STACK_FLOOR_KIB=168
+display_stack_floor() {
+  local elf="target/thumbv8m.main-none-eabihf/release/firmware"
+  local top bot kib
+  top=$(arm-none-eabi-nm "$elf" | awk '$3 == "_stack_start" { print $1 }')
+  bot=$(arm-none-eabi-nm "$elf" | awk '$3 == "_stack_end" { print $1 }')
+  kib=$(( (0x$top - 0x$bot) / 1024 ))
+  echo "display stack ${kib} KiB / ${DISPLAY_STACK_FLOOR_KIB} KiB floor; ML-DSA-65 makeCredential near 114 KiB + a retained frame under 32 KiB"
+  if [ "$kib" -lt "$DISPLAY_STACK_FLOOR_KIB" ]; then
+    echo "FAIL: the display build has only ${kib} KiB of stack, under the ${DISPLAY_STACK_FLOOR_KIB} KiB floor." >&2
+    echo "      It carries a retained frame on top of the crypto peak the default build has." >&2
+    exit 1
+  fi
+}
+
 # `assurance-trace` exposes α and generated proof domains to host tooling only.
 # Build two clean default images in one throwaway source tree, poisoning every
 # assurance-only module before the second. The poison must break a feature build
