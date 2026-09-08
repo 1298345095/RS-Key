@@ -172,6 +172,46 @@ fn no_authorization_bypass_begin_mac_is_the_flag() {
     kani::cover!(forged);
 }
 
+/// A stand-in for HMAC-SHA-256 in the two call-site harnesses, and the first
+/// `kani::stub` in this tree. It abstracts the primitive under
+/// `pinproto::authenticate` and `pinproto::verify`, so both keep their real
+/// bodies — `mac_len`, the length gate, `ct_eq` — and only the compression
+/// function goes.
+///
+/// It takes nothing away, because those two never read `verify_token`'s answer:
+/// they compute `authorized` from `forged`, treating the MAC as an oracle, and
+/// D3 above is the harness that earns that treatment against the real thing.
+/// What they need of a MAC is that a flipped tag byte compares unequal and an
+/// untouched one compares equal, which this gives by folding key and message
+/// into byte 0.
+///
+/// The number that made it necessary: two real evaluations per Begin killed a
+/// hosted runner 11 minutes into this harness, twice (2026-09-08), at 35 min of
+/// a 90 min job with no cap firing and 66 of 67 harnesses already verified. The
+/// D3 note above measured a THIRD evaluation at 14.5 GiB and split it out for
+/// exactly this reason; the split was not enough.
+#[cfg(kani)]
+fn stub_hmac_sha256(key: &[u8], msg: &[u8]) -> [u8; 32] {
+    // A BOUNDED fold, and the bound is the point: the first version walked the
+    // whole of `key` and `msg`, and CBMC unwound that 1699 times — more than the
+    // primitive it replaces. Sixteen bytes from the END, because a CTAP
+    // pinUvAuth message opens with 32 bytes of 0xff pad and the command and its
+    // parameters sit after it.
+    let mut acc: u8 = 0x9e ^ (msg.len() as u8) ^ key.first().copied().unwrap_or(0);
+    let start = msg.len().saturating_sub(16);
+    let mut i = 0usize;
+    while i < 16 {
+        if let Some(&b) = msg.get(start + i) {
+            acc = acc.wrapping_mul(31).wrapping_add(b);
+        }
+        i += 1;
+    }
+    let mut out = [0u8; 32];
+    out[0] = acc;
+    out[1] = msg.len() as u8;
+    out
+}
+
 /// What the Begin under test decided, and what the walk it opened looks like.
 struct Begin {
     /// The gate's answer — the real one, from the real functions.
@@ -335,6 +375,7 @@ fn check_begin(st: &FidoState, begin: &Begin, rps: bool) {
 /// and the MAC is exercised on one concrete payload, so it says nothing about
 /// `pinproto::verify` as a MAC.
 #[kani::proof]
+#[kani::stub(rsk_crypto::hmac_sha256, stub_hmac_sha256)]
 fn no_authorization_bypass_rps_begin_at_call_site() {
     let mut rng = StepRng(0xC7);
     let mut st = FidoState::new();
@@ -405,6 +446,7 @@ fn no_authorization_bypass_rps_begin_at_call_site() {
 ///
 /// Same limits as its sibling.
 #[kani::proof]
+#[kani::stub(rsk_crypto::hmac_sha256, stub_hmac_sha256)]
 fn no_authorization_bypass_creds_begin_at_call_site() {
     let mut rng = StepRng(0xC8);
     let mut st = FidoState::new();

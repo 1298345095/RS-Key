@@ -316,7 +316,10 @@ echo "== kani ($tier): $(echo "$crates" | xargs | tr ' ' ',') =="
 # (set above) keeps cargo-kani's own failure the pipeline's, so a real property
 # violation ends the run here and never reaches the floor check below.
 # shellcheck disable=SC2086 # $packages is our own list, word-splitting intended
-cargo kani $packages -Z unstable-options --harness-timeout "$timeout" "$@" 2>&1 | tee "$log"
+# `-Z stubbing` for `credmgmt_kani.rs`'s HMAC stand-in, which is what keeps the
+# two call-site harnesses inside a hosted runner's memory; the harness that
+# proves the MAC itself does not carry the stub.
+cargo kani $packages -Z unstable-options -Z stubbing --harness-timeout "$timeout" "$@" 2>&1 | tee "$log"
 
 # Kani's own count, off its summary line: "Complete - N successfully verified
 # harnesses, 0 failures, N total."
