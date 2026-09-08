@@ -336,7 +336,7 @@ name = "cargo-kani"
 version = "0.67.0"
 provenance = "NOT in flake.lock — not packaged in nixpkgs. Installed with `cargo install --locked kani-verifier --version $KANI_VERSION`, and KANI_VERSION is a workflow variable in .github/workflows/ci.yml and deep-checks.yml. It is the one tool on any path in this tree OUTSIDE the hermetic shell — which is not the same as unpinned, and reading it that way is what let the real gap sit unnamed: the version is pinned and scripts/kani_gate.py holds it; what nothing records is the fetched solver bundle (PLAT-TOOL-003)"
 invocation = "cargo kani -p rsk-device --features kani-soft -Z unstable-options --harness-timeout 5m"
-environment = "nix develop, with RUSTFLAGS='--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft' — scripts/kani.sh:299's own export, carried by hand because this run selected one crate rather than a tier"
+environment = "nix develop, with RUSTFLAGS='--cfg sha2_backend=\"soft\" --cfg poly1305_force_soft --cfg sha1_force_soft' — scripts/kani.sh:307's own export, carried by hand because this run selected one crate rather than a tier"
 
 [[tool]]
 name = "cbmc"
