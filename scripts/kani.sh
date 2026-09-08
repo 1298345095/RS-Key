@@ -171,7 +171,15 @@ DEAD_COVER_COPIES_MAX=1
 # non-convergent proof rather than the tier — but the run then exits 1, `pipefail`
 # ends this script at the `tee`, and none of the checks below is reached (measured).
 TIMEOUT_pr=5m
-TIMEOUT_state=30m
+# 30m until 2026-09-08, when it fired for the first time and cost the row its
+# floors exactly as the `all` note below predicts. What tripped it is not a slow
+# proof but a hosted runner: `credmgmt::no_authorization_bypass_rps_begin_at_call_site`
+# verifies in 262 s on an M5 Pro and did not converge in 30m there, so the factor
+# is past 7x where the phy round-trip's is 4.3x. 60m keeps the cap BELOW the job's
+# 90m so a non-convergent proof is still named rather than the job being cut
+# blind mid-harness, which is how this one was found. What it costs on the runner
+# is still unmeasured; the next run is what measures it.
+TIMEOUT_state=60m
 # The runner's own ceiling, deliberately, because on this tier a cap that fires is
 # worse than no cap: the run exits 1, `pipefail` ends the script at the `tee`, and
 # `FLOOR_all` and `COVERS_all` go unread — the row reports nothing rather than
