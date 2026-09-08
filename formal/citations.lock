@@ -399,8 +399,8 @@ assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/config.rs	243-245	if !ctx
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/conformance/mod.rs	165-165	self.state.begin_using_token(false, self.clock);	self.state.begin_using_token(false, self.clock);
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/credmgmt_kani.rs	77-77	st.begin_using_token(false, 1_000);	st.begin_using_token(false, 1_000);
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/credmgmt_kani.rs	158-158	st.begin_using_token(false, NOW);	st.begin_using_token(false, NOW);
-assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/credmgmt_kani.rs	348-348	st.begin_using_token(false, NOW);	st.begin_using_token(false, NOW);
-assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/credmgmt_kani.rs	416-416	st.begin_using_token(false, NOW);	st.begin_using_token(false, NOW);
+assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/credmgmt_kani.rs	389-389	st.begin_using_token(false, NOW);	st.begin_using_token(false, NOW);
+assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/credmgmt_kani.rs	458-458	st.begin_using_token(false, NOW);	st.begin_using_token(false, NOW);
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/reset.rs	104-104	ctx.state.reset();	ctx.state.reset();
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/reset.rs	121-121	orphaned |= sweep(ctx, is_fido_gate_fid)?;	orphaned |= sweep(ctx, is_fido_gate_fid)?;
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/reset.rs	180-180	/// `Fs::factory_wipe` bypasses [`reset`] and needs the same rule — it is the only	/// `Fs::factory_wipe` bypasses [`reset`] and needs the same rule — it is the only
