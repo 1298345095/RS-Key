@@ -145,7 +145,7 @@ If you read nothing else:
   recording a bump from a file that merely moved, and three shipped builds went
   through that hole.
 
-Everything else is grouped below in the usual sections, security last — 294
+Everything else is grouped below in the usual sections, security last — 296
 entries, most of them in `Fixed` and `Security`, because the sweep above is
 written out site by site. The `Internal` one is where the instruments that could
 not fail are written down, each with what it missed.
@@ -6047,6 +6047,39 @@ the release carries the flag, the decision stays yours
   which is what feeding a different feature set to `-C metadata` looks like.
 
 ### Internal
+
+- **The seam mutants moved the model, and every published count was of a state
+  space that had gone.** Five applet-seam mutants and a moved `gen-configs.sh`
+  left ten configurations the safety tier lists in no recorded run at all, and 43
+  of the tier's inputs changed since the commit the last run was recorded
+  against — so `published run-counts`, a `check.sh` row, had been red on a state
+  nothing could have merged through CI. Both tiers re-run on the machine the last
+  record was taken on, at the same default `WORKERS=2`: safety **5994 s over 224
+  configurations**, liveness **2116 s over 4**, **228 of 228 observed**, no row
+  short of its floor. It reconciles against the last record rather than replacing
+  it — 25 GREEN and 189 RED become 25 and 199 with the ten new mutants, all RED,
+  and no other verdict moved. Where the model did not change the state space is
+  byte-identical (`Shipped.cfg` at 986 836 197 / 77 563 872 / depth 58, and
+  `AlwaysUv`, `PermWide`, `ForceChange`, `Fairness` likewise), while the seam
+  mutants' spaces did move — `Historical_E77` 1 646 545 → 1 725 880 states. That
+  difference is the point: the stale record was not merely old, it was wrong
+  about the numbers it published.
+
+- **A carve-out no code path can reach sent the card two commands the reference
+  device never gets.** The vendored OpenPGP suite follows `PUT DATA F9` with
+  `CHANGE REFERENCE DATA` unless the card moves the references itself, and picks
+  `81 01 00` over an empty body on the same condition — `is_gnuk` and
+  `is_yubikey`. Neither is ever assigned `True` anywhere in the vendored tree,
+  so both carve-outs are unreachable and the suite fails against a real YubiKey
+  exactly as it fails here. Measured on one: a YubiKey 5.7.4 answers `9000` to
+  `PUT DATA F9` with the suite's own `KDF_FULL`, `6982` to the CHANGE carrying the
+  raw old password — PW1 retries 3 → 2, so the try is spent — `9000` to `VERIFY
+  81` with the DO's own hash, and `6A80` to an empty body. RS-Key answers the same
+  on all three, so this is a harness defect and is fixed as one: a
+  `kdf_moves_references` flag carries the one thing those two were saying about
+  KDF, and `is_yubikey` is left alone because it also gates the Le on GET DATA,
+  `skip_tag_if_any` and the private-key template. Driven both ways against a
+  recording reader — flag off still emits the two CHANGEs, flag on emits none.
 
 - **The recording apparatus had no finger.** `tests/*.py` reach the device over
   CTAPHID and nothing else, so no suite could answer a prompt the trusted display
