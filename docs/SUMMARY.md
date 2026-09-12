@@ -48,6 +48,7 @@
 # Security
 
 - [Threat model](threat-model.md)
+- [Assurance case](assurance-case.md)
 - [Limitations](limitations.md)
 - [`unsafe` audit](unsafe.md)
 - [Constant-time audit](ct-audit.md)
