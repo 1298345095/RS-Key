@@ -72,6 +72,7 @@
 - [Interop matrix](interop.md)
 - [Versions](versioning.md)
 - [Motivation](motivation.md)
+- [Roadmap](roadmap.md)
 
 <!-- The governance files (CONTRIBUTING, SECURITY, COMPLIANCE) live at the repo
      root and are linked from the Introduction page. They are intentionally not
