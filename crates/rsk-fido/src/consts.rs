@@ -187,7 +187,7 @@ const fn hex_nibble(c: u8) -> u8 {
 }
 
 /// firmwareVersion reported by getInfo (CTAP `0x0E`): the shared
-/// [`rsk_sdk::FIRMWARE_VERSION`] (default 5.7.4, `FW_VERSION`-overridable) in
+/// [`rsk_sdk::FIRMWARE_VERSION`] (default 5.8.0, `FW_VERSION`-overridable) in
 /// Yubico's `(major << 16) | (minor << 8) | patch` form, so FIDO tooling
 /// (`ykman` / Yubico Authenticator) reads a current YubiKey 5 version
 /// consistent with the default YubiKey 5 VID/PID.

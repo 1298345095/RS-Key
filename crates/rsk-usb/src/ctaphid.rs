@@ -108,7 +108,7 @@ pub const CAPFLAG_LOCK: u8 = 0x02;
 pub const CAPFLAG_CBOR: u8 = 0x04;
 
 // Device version reported in CTAPHID_INIT / CTAPHID_VERSION — the shared firmware
-// version (default 5.7.4). ykman/yubikit read these three bytes from the INIT
+// version (default 5.8.0). ykman/yubikit read these three bytes from the INIT
 // response as the device firmware version and require >= 4.1.0 before they will
 // read the YubiKey Management DeviceInfo over the FIDO interface.
 const VERSION_MAJOR: u8 = rsk_sdk::FIRMWARE_VERSION.0;

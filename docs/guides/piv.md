@@ -21,7 +21,7 @@ fighting over the reader. Check the card is visible (the `ykman` commands here
 assume the opt-in `VIDPID=Yubikey5` build):
 
 ```sh
-ykman piv info            # PIV version 5.7.4, slot + PIN/PUK/mgmt-key state
+ykman piv info            # PIV version 5.8.0, slot + PIN/PUK/mgmt-key state
 ```
 
 ## Defaults

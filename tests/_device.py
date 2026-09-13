@@ -64,7 +64,7 @@ FIDO_USAGE_PAGE_ITEM = b"\x06\xd0\xf1"
 RSK_MARKERS = ("RSK", "RS-Key")
 # The firmware version every applet reports, and the build var that changes it
 # (crates/rsk-sdk/build.rs, docs/build.md).
-FW_VERSION_DEFAULT = "5.7.4"
+FW_VERSION_DEFAULT = "5.8.0"
 ENV_FW_VERSION = "FW_VERSION"
 
 _announced = None  # last announced path: poll loops call find() every 50 ms

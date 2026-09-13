@@ -338,14 +338,14 @@ fn select_status_and_config_seq() {
     let mut app = OtpApplet::new(SERIAL, SERIAL_HASH, None, &rng, &presence);
     let (sw, body) = select(&mut app, &mut fs);
     assert_eq!(sw, Sw::OK);
-    // Empty device: 6-byte YubiKey status — version 5.7.4, seq 0, no valid/touch.
-    assert_eq!(body, [5, 7, 4, 0, 0, 0]);
+    // Empty device: 6-byte YubiKey status — version 5.8.0, seq 0, no valid/touch.
+    assert_eq!(body, [5, 8, 0, 0, 0, 0]);
 
     // Program slot 1 (HMAC chalresp, no touch): VALID without TOUCH.
     let cfgd = chalresp_config(&[0xAA; 20], &[0; 6], 0);
     let (sw, body) = configure(&mut app, &mut fs, 0x01, 0, &cfgd, &[0; 6]);
     assert_eq!(sw, Sw::OK);
-    assert_eq!(&body[..4], &[5, 7, 4, 1]); // seq bumped
+    assert_eq!(&body[..4], &[5, 8, 0, 1]); // seq bumped
     assert_eq!(body[4], CONFIG1_VALID);
 
     // Re-SELECT: seq resets to 1 (slots present).

@@ -15,7 +15,7 @@ and libfido2 bind the FIDO HID usage page, not the VID/PID, so everything on thi
 page works regardless of USB identity. The one exception is `ykman`, which gates
 on a "Yubico YubiKey" reader name and so needs the opt-in
 `VIDPID=Yubikey5` interop build ([build.md](../build.md)). The reported firmware
-version is `5.7.4`, which is what FIDO tooling reads back. It is a build constant,
+version is `5.8.0`, which is what FIDO tooling reads back. It is a build constant,
 not the RS-Key release.
 
 ## Touch is always required

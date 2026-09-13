@@ -719,7 +719,7 @@ nix develop -c python tests/75_seed_backup.py --pin <your PIN>
   a real YubiKey would answer just as well (`51` probes Yubico's own management AID).
   Those five refuse an unmarked reader rather than accept a lone stranger, so a build
   whose `USB_PRODUCT` drops the marker has to name its reader with `RSK_TEST_READER`.
-- Version assertions follow `FW_VERSION` (default 5.7.4, [build.md](build.md)). An
+- Version assertions follow `FW_VERSION` (default 5.8.0, [build.md](build.md)). An
   image built with an override needs the same value in the test environment:
   `FW_VERSION=1.4.0 python tests/31_openpgp_select.py`.
 - Numbering: `0x` transport smoke, `1x` FIDO basics, `2x` FIDO full,

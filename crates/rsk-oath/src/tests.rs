@@ -322,7 +322,7 @@ fn select_reports_version_and_serial() {
     let mut app = OathApplet::new(SERIAL, [0x22; 32], None, &rng, &touch);
     let (sw, body) = select(&mut app, &mut fs);
     assert_eq!(sw, Sw::OK);
-    assert_eq!(&body[..5], &[TAG_T_VERSION, 3, 5, 7, 4]);
+    assert_eq!(&body[..5], &[TAG_T_VERSION, 3, 5, 8, 0]);
     assert_eq!(body[5], TAG_NAME);
     assert_eq!(body[6], 8);
     // The device id is an opaque one-way hash of serial_hash, NOT the raw serial

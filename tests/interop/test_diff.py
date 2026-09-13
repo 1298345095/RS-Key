@@ -88,7 +88,7 @@ def test_certifications_absent_on_rsk_is_allowed():
 # ── diff.compare over synthetic snapshots ────────────────────────────────────
 
 def _snap(label, parsed):
-    return {"meta": {"label": label, "ykman_serial": label, "fw": "5.7.4"},
+    return {"meta": {"label": label, "ykman_serial": label, "fw": "5.8.0"},
             "cells": {"c": {"parsed": parsed}}}
 
 
@@ -139,7 +139,7 @@ def test_fido_getinfo_cbor_normalizes_key_fields():
         0x04: {"rk": True, "alwaysUv": True, "clientPin": True},
         0x05: 7609,
         0x0A: [{"alg": -7, "type": "public-key"}, {"alg": -8, "type": "public-key"}],
-        0x0E: 0x050704,
+        0x0E: 0x050800,
     }
     out = nz.fido_getinfo(cbor)
     assert out["fido.getinfo.aaguid"] == "2479c7bf-6b30-5683-9ec8-0e8171a918b7"
@@ -153,13 +153,13 @@ def test_mgmt_deviceinfo_tlv():
     # total-len byte, then TLVs: usbSupported=0x023b, serial=12345678, formFactor=1, version=5.7.4
     serial = (12345678).to_bytes(4, "big")
     body = (bytes([0x01, 0x02, 0x02, 0x3B]) + bytes([0x02, 0x04]) + serial
-            + bytes([0x04, 0x01, 0x01]) + bytes([0x05, 0x03, 5, 7, 4]))
+            + bytes([0x04, 0x01, 0x01]) + bytes([0x05, 0x03, 5, 8, 0]))
     blob = bytes([len(body)]) + body
     out = nz.mgmt_deviceinfo(blob)
     assert out["mgmt.usbSupported"] == 0x023B
     assert out["mgmt.serial"] == 12345678
     assert out["mgmt.formFactor"] == 1
-    assert out["mgmt.version"] == "5.7.4"
+    assert out["mgmt.version"] == "5.8.0"
 
 
 def test_kv_lines_scrapes_prose():

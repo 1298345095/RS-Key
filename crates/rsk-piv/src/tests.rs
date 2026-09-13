@@ -563,7 +563,7 @@ fn version_and_serial() {
     select(&mut app, &mut fs);
     let (sw, v) = run(&mut app, &mut fs, INS_VERSION, 0, 0, &[]);
     assert_eq!(sw, Sw::OK);
-    assert_eq!(v, vec![5, 7, 4]);
+    assert_eq!(v, vec![5, 8, 0]);
     let (sw, s) = run(&mut app, &mut fs, INS_YK_SERIAL, 0, 0, &[]);
     assert_eq!(sw, Sw::OK);
     assert_eq!(s, rsk_sdk::serial4(SERIAL).to_vec());

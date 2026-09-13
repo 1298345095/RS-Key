@@ -3,14 +3,14 @@
 
 //! Resolve the reported device firmware version (management DeviceInfo, FIDO
 //! getInfo 0x0E, OATH/OTP/PIV version fields). `FW_VERSION=X.Y.Z` overrides the
-//! default 5.7.4; emitted as `PK_FW_VERSION_{MAJOR,MINOR,PATCH}` for `env!`.
+//! default 5.8.0; emitted as `PK_FW_VERSION_{MAJOR,MINOR,PATCH}` for `env!`.
 use std::env;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=FW_VERSION");
     println!("cargo:rerun-if-changed=build.rs");
 
-    let raw = env::var("FW_VERSION").unwrap_or_else(|_| "5.7.4".into());
+    let raw = env::var("FW_VERSION").unwrap_or_else(|_| "5.8.0".into());
     let parts: Vec<&str> = raw.trim().split('.').collect();
     assert!(
         (1..=3).contains(&parts.len()),

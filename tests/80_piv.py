@@ -312,9 +312,9 @@ def main():
 
     ver, _ = piv.apdu(INS_VERSION, 0, 0, le=True)
     if bytes(ver) != b"\x05\x07\x04":
-        fail(f"version {bytes(ver).hex()} != 050704")
+        fail(f"version {bytes(ver).hex()} != 050800")
     serial, _ = piv.apdu(INS_YK_SERIAL, 0, 0, le=True)
-    print(f"  version 5.7.4, serial {int.from_bytes(serial, 'big')}")
+    print(f"  version 5.8.0, serial {int.from_bytes(serial, 'big')}")
 
     # Retry counter on a fresh applet (default PIN, 3 tries).
     _, sw = piv.verify_pin(b"", want=None)

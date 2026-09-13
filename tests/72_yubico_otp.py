@@ -130,7 +130,7 @@ def main():
     # keyboard frame protocol, and dropping it here is what makes SELECT answer
     # byte-for-byte like a real YubiKey's (`00c7232`, issue #44). This asserted
     # seven until 2026-08-08, three weeks after that landed.
-    if len(status) != 6 or list(status[:3]) != [5, 7, 4]:
+    if len(status) != 6 or list(status[:3]) != [5, 8, 0]:
         fail(f"status record {list(status)} not a 5.7.4 6-byte record")
     otp.delete_slot(0x01)
     otp.delete_slot(0x03)

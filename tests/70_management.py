@@ -27,7 +27,7 @@ SELECT = [0x00, 0xA4, 0x04, 0x00, len(MGMT_AID)] + MGMT_AID
 READ_CONFIG = [0x00, 0x1D, 0x00, 0x00, 0x00]  # case 2 (Le = 0 → 256)
 
 # Expected reported version (Yubico-encoded 5.7.4, matches getInfo 0x0E).
-WANT_VERSION = [5, 7, 4]
+WANT_VERSION = [5, 8, 0]
 
 # Management config tags / capability bits.
 TAG_USB_SUPPORTED, TAG_SERIAL, TAG_FORM_FACTOR, TAG_VERSION = 0x01, 0x02, 0x04, 0x05
@@ -63,7 +63,7 @@ def main():
     print("SELECT mgmt AID -> %r %02X%02X" % (ver_str, sw1, sw2))
     if (sw1, sw2) != (0x90, 0x00):
         fail(f"SELECT not 9000 (got {sw1:02X}{sw2:02X})")
-    if ver_str != "5.7.4":
+    if ver_str != "5.8.0":
         fail(f"SELECT version string {ver_str!r} != '5.7.4'")
 
     data, sw1, sw2 = conn.transmit(READ_CONFIG)

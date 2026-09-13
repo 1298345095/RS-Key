@@ -9,7 +9,7 @@ versioned with [SemVer](https://semver.org/).
 
 Two other version numbers live in the firmware and are deliberately **not** this
 tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
-`FW_VERSION` — the YubiKey-compatibility version reported to host tools (5.7.4).
+`FW_VERSION` — the YubiKey-compatibility version reported to host tools (5.8.0).
 
 > ## ⚠️ Upgrading a 16 MB key provisioned before 0.4.8 wipes it
 >
@@ -39,6 +39,16 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 ## [Unreleased]
 
 ### Changed
+
+- The version reported to host tools moves from **5.7.4 to 5.8.0**. It is one
+  default in `crates/rsk-sdk/build.rs` (`FW_VERSION` still overrides it) and every
+  applet derives from it, so CTAP getInfo 0x0E, the management DeviceInfo TLV,
+  PIV, OATH, OTP, OpenPGP and the CTAPHID INIT bytes all move together. The
+  reference key this project is measured against is a YubiKey 5.8.0 now, and the
+  CTAP 2.2/2.3 surface it gained is the surface RS-Key already implements.
+  `ykman` reads the newer DeviceInfo fields through defaults rather than version
+  gates, so nothing on the host requires the tags RS-Key does not emit.
+  **bcdDevice → 0x09CC.**
 
 - getInfo publishes `encIdentifier` (0x19) and `encCredStoreState` (0x1E) from
   provisioning, not from the first `pcmr` request. Both are sealed under the

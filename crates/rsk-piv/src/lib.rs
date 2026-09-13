@@ -50,7 +50,7 @@ pub const PIV_AID: &[u8] = &[
 ];
 
 /// Reported PIV application version — the shared [`rsk_sdk::FIRMWARE_VERSION`]
-/// (default 5.7.4, `FW_VERSION`-overridable).
+/// (default 5.8.0, `FW_VERSION`-overridable).
 pub const VERSION: (u8, u8, u8) = rsk_sdk::FIRMWARE_VERSION;
 
 /// The status word each [`RsaError`] answers with. This table **is** wire

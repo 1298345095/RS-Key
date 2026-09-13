@@ -136,8 +136,8 @@ def main():
     ver = tlv_get(body, TAG_T_VERSION)
     name8 = tlv_get(body, TAG_NAME)
     print(f"SELECT -> version {list(ver)}, id {name8!r}")
-    if list(ver) != [5, 7, 4]:
-        fail(f"version TLV {list(ver)} != [5, 7, 4]")
+    if list(ver) != [5, 8, 0]:
+        fail(f"version TLV {list(ver)} != [5, 8, 0]")
     if len(name8) != 8:
         fail("device-id TLV not 8 bytes")
     oath.apdu(INS_RESET, 0xDE, 0xAD)
