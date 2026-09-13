@@ -102,19 +102,32 @@ project*. Merging changes, triaging issues, receiving private vulnerability
 reports, publishing a release, and the Pages deployment that follows from the
 repository.
 
-**The live mechanism.** A second person holds `admin` on the repository. They
-can merge pull requests, close issues, publish a release and read the security
-advisories from day one — no legal process, no password handover, nothing to
-unseal first. That is what makes continuity a standing property rather than a
-plan: the rights are already in place before they are needed. The second admin
-is named in the maintainer's will rather than here, because publishing the name
-makes that person a target and tells a reader nothing they can act on.
+**The live mechanism.** A second person holds write access to the repository.
+They can merge pull requests, triage and close issues, and tag and publish a
+release — which is the whole of what continuing this project requires — from day
+one, with no legal process, no password handover and nothing to unseal first.
+That is what makes continuity a standing property rather than a plan: the rights
+are in place before anyone needs them.
+
+**Write, and deliberately not admin.** An administrator can change settings,
+grant access to others and remove the maintainer; write access is enough to
+continue the project and not enough to take it over, and that asymmetry is the
+point of choosing it. What write does not reach — repository settings, granting
+access, and the private security advisories — stays with the maintainer and
+passes with the estate. The cost is real and is stated rather than hidden: a
+vulnerability reported privately while the maintainer is unreachable waits for
+the account to change hands, and a reporter who needs an answer sooner than that
+should open a public issue saying only that they are waiting.
+
+The second person is named in the maintainer's will rather than here, because
+publishing the name makes them a target and tells a reader nothing they can act
+on.
 
 **The legal half.** Ownership of the account, and the right to transfer the
 repository and its name, pass through the maintainer's estate; the recovery
 credentials live with those documents. They are kept apart from the second
-admin's access on purpose — one half restores the project quickly, the other
-settles who owns it, and neither half alone is enough to quietly take it over.
+person's access on purpose — one half keeps the project moving, the other settles
+who owns it, and neither half alone is enough to quietly take it over.
 
 **The honest limit.** This restores the ability to *act*, not the accumulated
 context: the bus factor for knowledge stays at one, and no amount of repository
