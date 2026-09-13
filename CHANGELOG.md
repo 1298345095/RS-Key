@@ -40,6 +40,23 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- The scrambled PIN pad no longer draws its digit order from the shared DRBG, so a
+  host-raised PIN ceremony cannot panic the trusted display. A CTAP command holds
+  the store, the DRBG, the presence backend and the FIDO state borrowed for its
+  whole dispatch and then calls the panel through them, so the pad's
+  `rng.borrow_mut()` was a `BorrowMutError` — under `panic-halt`, a key that
+  answers nothing until it is unplugged. It needed built-in UV, `scramble_pin` on
+  and a display build, which is the other half of
+  ([#107](https://github.com/TheMaxMur/RS-Key/issues/107)): dropping the probe's
+  `uv` stopped the pad being raised by `ssh-keygen`, and any client that asks for
+  built-in UV deliberately still raised it. The order comes from a per-panel seed
+  drawn once at construction and an HMAC-SHA256 counter now, so it is still
+  unpredictable across entries and no longer reads a cell somebody else is
+  holding. The comment that should have caught this existed and said `fs`; a new
+  `check.sh` row derives the held cells from the dispatch and the reachable
+  surface from the handle, so the rule is no longer a sentence.
+  **bcdDevice → 0x09CE.**
+
 - A silent `up:false` getAssertion carrying a token-less `uv: true` no longer opens
   the trusted display's PIN pad. That pair is what OpenSSH's `key_lookup` sends
   before enrolling a resident key, so `ssh-keygen -t ed25519-sk -O resident` — and

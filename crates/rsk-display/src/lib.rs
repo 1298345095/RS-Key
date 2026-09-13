@@ -420,7 +420,18 @@ where
     /// The shared DRBG — the same `RefCell` the worker uses. Borrowed only to draw the
     /// randomness an on-device SLIP-39 split needs (the share identifier + Shamir random
     /// shares); the worker is parked while this thread-executor task runs, so no race.
+    ///
+    /// ⚠️ That parking is true of the DEVICE's own screens and false of a host ceremony:
+    /// `Ctx` holds this very cell borrowed for the whole CBOR/APDU dispatch and calls the
+    /// panel through `UserPresence`. Anything reachable from `collect_pin` or `request`
+    /// must not touch it — see [`Ui::shuffle_entropy`].
     rng: &'a RefCell<R>,
+    /// Seed for [`Ui::shuffle_entropy`], drawn once at construction where the shared DRBG
+    /// is provably free. The scrambled PIN pad is raised from host ceremonies too, and
+    /// borrowing `rng` there is a BorrowMutError — a panic, which on `panic-halt` is a
+    /// dead board (issue #107).
+    shuffle_seed: [u8; 32],
+    shuffle_ctr: u32,
     /// Four-bit scratch for the flicker-free PIN-title marquee blit ([`BandCoverage`]).
     marquee_coverage: [u8; MARQUEE_COVERAGE_BYTES],
     /// Cached Home status-card facts (device-PIN-set + resident passkey count), refreshed
@@ -481,6 +492,11 @@ where
         // `EF_DISPLAY`, so it's a one-time first-run offer). Mutually exclusive with `locked`.
         let onboarding = !locked && !dcfg.pin_declined;
 
+        // Drawn here and nowhere else: construction is boot, the one moment the shared
+        // DRBG is provably unborrowed. Every later draw is a host ceremony away.
+        let mut shuffle_seed = [0u8; 32];
+        rng.borrow_mut().fill(&mut shuffle_seed);
+
         Ui {
             panel,
             touch,
@@ -497,6 +513,8 @@ where
             fs,
             keys,
             rng,
+            shuffle_seed,
+            shuffle_ctr: 0,
             marquee_coverage: [0; MARQUEE_COVERAGE_BYTES],
             // Seeded from the cheap PIN bit (== `locked`); the count is filled by the first
             // `refresh_home_stats` before Home is ever painted.

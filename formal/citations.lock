@@ -387,8 +387,8 @@ assurance/bundle/SEC-FIDO-007.toml	scripts/comutate.py	328-356	def solo_index(ro
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-device/src/ccid.rs	311-311	pub fn factory_wipe(&mut self) -> bool {	pub fn factory_wipe(&mut self) -> bool {
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-device/src/ctap.rs	221-221	keydev_ram_raw: st.keydev_dec.is_some(),	keydev_ram_raw: st.keydev_dec.is_some(),
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-display/src/gates.rs	11-11	/// shared; the backing record (`EF_DEVICE_PIN` vs `EF_PIN`) and the floor differ, and so	/// shared; the backing record (`EF_DEVICE_PIN` vs `EF_PIN`) and the floor differ, and so
-assurance/bundle/SEC-FIDO-008.toml	crates/rsk-display/src/pin.rs	708-708	.factory_wipe(	.factory_wipe(
-assurance/bundle/SEC-FIDO-008.toml	crates/rsk-display/src/pin.rs	743-743	/// floor); the **FIDO** PIN goes to `EF_PIN` as the same verifier the host	/// floor); the **FIDO** PIN goes to `EF_PIN` as the same verifier the host
+assurance/bundle/SEC-FIDO-008.toml	crates/rsk-display/src/pin.rs	717-717	.factory_wipe(	.factory_wipe(
+assurance/bundle/SEC-FIDO-008.toml	crates/rsk-display/src/pin.rs	752-752	/// floor); the **FIDO** PIN goes to `EF_PIN` as the same verifier the host	/// floor); the **FIDO** PIN goes to `EF_PIN` as the same verifier the host
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/clientpin.rs	345-345	pin_set_and_unblocked(ctx)?;	pin_set_and_unblocked(ctx)?;
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/clientpin.rs	404-404	/// Refines `RSKeySecurityState!NoLiveTokenWithoutPinRecord` — SEC-FIDO-008.	/// Refines `RSKeySecurityState!NoLiveTokenWithoutPinRecord` — SEC-FIDO-008.
 assurance/bundle/SEC-FIDO-008.toml	crates/rsk-fido/src/clientpin.rs	425-425	ctx.state.begin_using_token(false, ctx.now_ms);	ctx.state.begin_using_token(false, ctx.now_ms);
@@ -433,9 +433,9 @@ assurance/platform.toml	crates/rsk-device/src/presence_kani.rs	158-158	arb.set_c
 assurance/platform.toml	crates/rsk-display/src/backup.rs	47-47	can_reveal: st.has_seed && st.exportable && !st.sealed && !st.locked && device_pin_set,	can_reveal: st.has_seed && st.exportable && !st.sealed && !st.locked && device_pin_set,
 assurance/platform.toml	crates/rsk-display/src/gates.rs	11-11	/// shared; the backing record (`EF_DEVICE_PIN` vs `EF_PIN`) and the floor differ, and so	/// shared; the backing record (`EF_DEVICE_PIN` vs `EF_PIN`) and the floor differ, and so
 assurance/platform.toml	crates/rsk-display/src/lib.rs	131-134	fn set_up_pending(&mut self, _pending: bool) {}	false
-assurance/platform.toml	crates/rsk-display/src/pin.rs	307-307	self.hooks.set_cancel_requested(false);	self.hooks.set_cancel_requested(false);
-assurance/platform.toml	crates/rsk-display/src/pin.rs	708-708	.factory_wipe(	.factory_wipe(
-assurance/platform.toml	crates/rsk-display/src/pin.rs	743-743	/// floor); the **FIDO** PIN goes to `EF_PIN` as the same verifier the host	/// floor); the **FIDO** PIN goes to `EF_PIN` as the same verifier the host
+assurance/platform.toml	crates/rsk-display/src/pin.rs	317-317	self.hooks.set_cancel_requested(false);	self.hooks.set_cancel_requested(false);
+assurance/platform.toml	crates/rsk-display/src/pin.rs	717-717	.factory_wipe(	.factory_wipe(
+assurance/platform.toml	crates/rsk-display/src/pin.rs	752-752	/// floor); the **FIDO** PIN goes to `EF_PIN` as the same verifier the host	/// floor); the **FIDO** PIN goes to `EF_PIN` as the same verifier the host
 assurance/platform.toml	crates/rsk-display/src/presence.rs	45-48	let saved = self.hooks.led_status();	self.hooks.set_up_pending(true);
 assurance/platform.toml	crates/rsk-display/src/presence.rs	47-47	self.hooks.set_cancel_requested(false);	self.hooks.set_cancel_requested(false);
 assurance/platform.toml	crates/rsk-fido/src/clientpin.rs	294-303	if force_change_pending(ctx) {	}
@@ -841,7 +841,7 @@ formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ccid.rs	91-109	pub struct Ccid
 formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ccid.rs	310-319	#[cfg(not(feature = "strict-config"))]	.is_ok()
 formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ccid.rs	354-369	/// Drop the selected applet's security status on an ICC power transition, so a	self.disp.reset_card(&mut applets, &mut *fsb);
 formal/RSKeyAppletSeams.tla	crates/rsk-device/src/ctap.rs	177-181	EF_PIN, EF_RP, MAX_RESIDENT_CREDENTIALS,	let pin_size = fs.size(EF_PIN).and_then(|n| u8::try_from(n).ok());
-formal/RSKeyAppletSeams.tla	crates/rsk-display/src/pin.rs	704-712	let _ = rsk_ui::render_erasing(&mut self.frame());	)
+formal/RSKeyAppletSeams.tla	crates/rsk-display/src/pin.rs	713-721	let _ = rsk_ui::render_erasing(&mut self.frame());	)
 formal/RSKeyAppletSeams.tla	crates/rsk-fido/src/reset.rs	263-305	/// Whether `fid` is cleared by `authenticatorReset` — every FIDO-owned flash file plus	}
 formal/RSKeyAppletSeams.tla	crates/rsk-fs/src/fs.rs	462-513	/// that is still live and, for PIV, not PIN-bound at rest — or, for OATH, leaves	return Err(Error::MemoryFatal);
 formal/RSKeyAppletSeams.tla	crates/rsk-oath/src/lib.rs	183-191	/// allowed); with a code set, SELECT resets it and VALIDATE/VERIFY PIN	otp_pin_verified: bool,

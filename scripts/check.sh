@@ -785,6 +785,14 @@ run "threat-model traceability" python scripts/threat_gate.py
 # wrote them found `force_delete` hiding a faulted metadata drop on the reset
 # path, behind a doc sentence that named the wrong caller as the only one.
 run "delete-caller dispositions" python scripts/deleter_gate.py
+# A dispatch holds four RefCells across the whole CBOR command and then calls the
+# trusted display through them, so a `borrow_mut()` anywhere a host ceremony can
+# reach is a BorrowMutError -- under `panic-halt`, a key that answers nothing
+# until it is unplugged, from one unauthenticated command (issue #107). The
+# comment that would have stopped it existed and said `fs`; the pad drew from
+# `rng`. Cells derived from the dispatch, roots from the handle, reach by call
+# walk. The table is scripts/test_display_borrow_gate.py, driven through THIS row.
+run "display borrows vs dispatch" python scripts/display_borrow_gate.py
 # The same question about RAM rather than flash, and it had no register at all.
 # The threat model has always said key-grade material is wiped "at end of scope
 # including error paths" and nothing held that sentence: 300 of the 444 wipes in
