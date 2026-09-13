@@ -40,6 +40,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- getInfo's `transports` (0x09) and `transportsForReset` (0x1A) now say
+  `["usb", "smart-card"]`. They said `["usb"]` on the reading that the FIDO applet
+  lives on USB-HID only, and it does not: the FIDO AID is routed onto CCID, and
+  `rsk_device::ccid_fido` forwards every CTAP2 command to the same `process_cbor`
+  the HID transport calls, with no per-command filter. Measured on hardware —
+  `SELECT A0000006472F0001` over PC/SC answers `U2F_V2`, `NFCCTAP_MSG` carrying
+  `authenticatorGetInfo` returns the whole map, and `authenticatorReset` reaches
+  the applet there too (it answers `CTAP2_ERR_NOT_ALLOWED` for the closed reset
+  window, which is the applet's own answer rather than a transport refusal).
+  `transportsForReset` exists to tell a platform where a reset can be driven, so
+  the old value denied a path the device accepts. `docs/threat-model.md` and
+  `docs/protocol.md` §5.2 had both described the CCID route all along. Still no
+  `nfc`: this device has no radio. **bcdDevice → 0x09D1.**
+
 - `hmac-secret` / `hmac-secret-mc` no longer treat *any* non-map value as an
   absent extension. The rule that an empty value asks for no evaluation was
   measured on a **boolean** and written down as "a non-map", which is wider than

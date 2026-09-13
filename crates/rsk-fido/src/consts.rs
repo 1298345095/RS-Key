@@ -210,8 +210,12 @@ pub const PUBLIC_KEY_TYPE: &str = "public-key";
 
 /// The `AuthenticatorTransport` values the FIDO applet answers on: getInfo's
 /// `transports` (0x09) and `transportsForReset` (0x1A) are the same list, because a
-/// reset is reachable exactly where the applet is. No FIDO AID is routed onto CCID.
-pub const TRANSPORTS: [&str; 1] = ["usb"];
+/// reset is reachable exactly where the applet is — and it is reachable on both.
+/// [`FIDO_AID`] IS routed onto CCID (`rsk_device::ccid_fido`), which forwards every
+/// CTAP2 command to the same entry point the HID transport calls, so a platform
+/// reading 0x1A was being told a reset it can perform there is unavailable.
+/// No `nfc`: this device has no radio.
+pub const TRANSPORTS: [&str; 2] = ["usb", "smart-card"];
 
 /// The version string U2F 1.2 §3.1.1 fixes: the answer to the CTAP1 VERSION command
 /// and to a SELECT of [`FIDO_AID`]. A host reads it as "CTAP1 is served here" —

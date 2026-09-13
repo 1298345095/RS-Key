@@ -205,9 +205,10 @@ fn write_info<W: Write>(
     // 0x08 maxCredentialIdLength
     enc.u8(0x08)?.u64(MAX_CRED_ID_LENGTH)?;
 
-    // 0x09 transports — the FIDO interface is reachable over USB-HID only. (The
-    // device also presents a PC/SC smartcard interface, but the FIDO applet is on
-    // HID, so the FIDO transport list is just "usb".)
+    // 0x09 transports — USB-HID and the device's own PC/SC interface. That second
+    // one was omitted on the reading that the FIDO applet lives on HID; it does not.
+    // Measured on this build: `SELECT A0000006472F0001` over PC/SC answers `U2F_V2`
+    // and `80 10 00 00 01 04` (NFCCTAP_MSG getInfo) returns the whole map.
     enc.u8(0x09)?;
     transports(enc)?;
 

@@ -429,10 +429,10 @@ needs only the identifiers above. RS-Key implements:
   from the *Begin* if it stalls. The same 30 s applies **between the fragments of a
   `largeBlobs` set**; there an abandoned transfer answers `CTAP2_ERR_INVALID_SEQ`
   and the previously stored array is left intact. `maxMsgSize` = `7609`.
-  `transportsForReset` (`0x1A`) is `["usb"]` — identical to `transports`
-  (`0x09`), because the FIDO applet is on USB-HID only and a reset is reachable
-  exactly where the applet is; it is an array of `AuthenticatorTransport`
-  strings, not a bit field. `pinComplexityPolicy` (`0x1B`) is `true` only on a
+  `transportsForReset` (`0x1A`) is `["usb", "smart-card"]` — identical to
+  `transports` (`0x09`), because a reset is reachable exactly where the applet is,
+  and §5.2 routes the FIDO AID onto CCID as well as CTAPHID. It is an array of
+  `AuthenticatorTransport` strings, not a bit field. There is no `nfc`: no radio. `pinComplexityPolicy` (`0x1B`) is `true` only on a
   build that refuses a PIN beyond the length floor — the `strong-pin` and
   `fips-profile` images block a repeated code point and a ±1 run; the default
   build answers `false`, and the optional `pinComplexityPolicyURL` (`0x1C`) is

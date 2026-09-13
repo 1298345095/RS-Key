@@ -212,8 +212,10 @@ RULES = [
     ("fido.getinfo.extensions", Superset("RS-Key extension set is a superset")),
     ("fido.getinfo.algorithms", Superset("RS-Key advertises a superset (ES384/512/256K, +ML-DSA)")),
     ("fido.getinfo.attestationFormats", Superset("attestation-format set; order-insensitive")),
+    # Both keys route the FIDO AID onto CCID, so both list `smart-card`; the radio is
+    # the only difference left. `_scalar` sorts, hence `smart-card,usb`.
     ("fido.getinfo.transports",
-     ExpectDiff(r"nfc", r"^usb$", "RS-Key is USB-only; a real 5C NFC also lists nfc")),
+     ExpectDiff(r"nfc", r"^smart-card,usb$", "RS-Key has no radio; a real key also lists nfc")),
     ("fido.getinfo.certifications",
      ExpectDiff(None, r"(?i)<missing>", "RS-Key advertises no FIDO/FIPS certification levels")),
 

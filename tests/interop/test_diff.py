@@ -73,9 +73,20 @@ def test_extensions_superset_ok_when_rsk_richer():
     assert r["bucket"] == dv.ALLOWED
 
 
-def test_transports_usb_only_is_allowed():
-    r = dv.classify("fido.getinfo.transports", ["nfc", "usb"], ["usb"])
+def test_only_the_radio_separates_the_transport_lists():
+    r = dv.classify(
+        "fido.getinfo.transports",
+        ["nfc", "usb", "smart-card"],
+        ["usb", "smart-card"],
+    )
     assert r["bucket"] == dv.ALLOWED
+
+
+def test_dropping_smart_card_from_the_transports_violates_the_rule():
+    """The rule has to notice the list it is about: `usb` alone was ALLOWED under
+    the old pin, and it is what getInfo said while the FIDO AID answered on CCID."""
+    r = dv.classify("fido.getinfo.transports", ["nfc", "usb", "smart-card"], ["usb"])
+    assert r["bucket"] == dv.RULE_VIOLATION
 
 
 def test_certifications_absent_on_rsk_is_allowed():
