@@ -38,6 +38,21 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+### Fixed
+
+- A silent `up:false` getAssertion carrying a token-less `uv: true` no longer opens
+  the trusted display's PIN pad. That pair is what OpenSSH's `key_lookup` sends
+  before enrolling a resident key, so `ssh-keygen -t ed25519-sk -O resident` — and
+  any browser registering a discoverable credential — turned a probe the user never
+  sees into a modal ceremony: libfido2 gave up with `FIDO_ERR_RX`, and a display
+  board sat on its screen until it was physically reset
+  ([#107](https://github.com/TheMaxMur/RS-Key/issues/107)). `uv` is dropped rather
+  than refused, because `sk_enroll` continues only when that probe answers
+  `NO_CREDENTIALS`; refusing it would have swapped a wedge for a fast failure and
+  left `-O resident` broken. The response's UV flag stays 0, and a client gets the
+  same answer today by simply omitting `uv`. Screenless builds are unchanged — they
+  do not advertise `uv`, so no client asks them for it. **bcdDevice → 0x09CD.**
+
 ### Changed
 
 - The version reported to host tools moves from **5.7.4 to 5.8.0**. It is one

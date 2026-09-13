@@ -292,6 +292,12 @@ pub fn get_assertion<S: Storage, R: Rng>(
     if req.uv && !builtin_uv_enabled(ctx) {
         return Err(CtapError::InvalidOption);
     }
+    // …and moot on an `up:false` probe: built-in UV is a modal PIN entry, so one
+    // here turns a silent probe into a ceremony nobody asked for (#107). Dropped,
+    // not refused — omitting `uv` already gets this answer, and the UV flag stays 0.
+    if !req.up {
+        req.uv = false;
+    }
     // §6.2.2 step 2 ahead of every check below — where the oracle puts it: a
     // present-but-unsupported protocol outranks `options.rk`, an hmac-secret
     // missing its salts and the selection gesture. An absent one is

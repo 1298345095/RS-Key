@@ -807,6 +807,86 @@ fn uv_option_without_builtin_uv_is_invalid_option() {
     );
 }
 
+/// A presence backend whose PIN pad must never be reached: built-in UV exists,
+/// and opening it is the defect under test.
+struct UvPadNeverOpened;
+impl crate::UserPresence for UvPadNeverOpened {
+    fn request(&mut self, _c: crate::Confirm<'_>) -> crate::Presence {
+        crate::Presence::Confirmed
+    }
+    fn uv_available(&self) -> bool {
+        true
+    }
+    fn collect_pin(&mut self, _min: usize, _out: &mut [u8]) -> crate::PinEntry {
+        panic!("a silent up:false pre-flight opened the on-screen PIN pad");
+    }
+}
+
+/// `options: {up: false, uv: true}` with no token — a silent pre-flight. With no
+/// `allowList`, this is byte-for-byte what OpenSSH's `key_lookup` sends.
+fn ga_request_up_false_uv(allow: Option<&[u8]>) -> std::vec::Vec<u8> {
+    let mut buf = [0u8; 512];
+    let n = {
+        let mut e = Encoder::new(Cursor::new(&mut buf[..]));
+        e.map(if allow.is_some() { 4 } else { 3 }).unwrap();
+        e.u8(1).unwrap().str("example.com").unwrap();
+        e.u8(2).unwrap().bytes(&CDH).unwrap();
+        if let Some(id) = allow {
+            e.u8(3).unwrap().array(1).unwrap().map(2).unwrap();
+            e.str("type").unwrap().str("public-key").unwrap();
+            e.str("id").unwrap().bytes(id).unwrap();
+        }
+        // Canonical order: both keys are two bytes, and "up" sorts before "uv".
+        e.u8(5).unwrap().map(2).unwrap();
+        e.str("up").unwrap().bool(false).unwrap();
+        e.str("uv").unwrap().bool(true).unwrap();
+        e.writer().position()
+    };
+    buf[..n].to_vec()
+}
+
+/// Issue #107. `up:false` is how a client asks whether a credential exists without
+/// involving the user; built-in UV here is a modal PIN entry on the panel. Running
+/// one for the other turned a silent probe into a ceremony nobody asked for:
+/// OpenSSH's `key_lookup` sends exactly this pair before enrolling a resident key,
+/// so `ssh-keygen -t ed25519-sk -O resident` opened the pad, libfido2 gave up with
+/// FIDO_ERR_RX, and a display board sat on its screen until it was reset.
+///
+/// The answer it must get is NO_CREDENTIALS: `sk_enroll` continues only for that
+/// one value (`sk-usbhid.c`), so refusing the pair instead would have swapped a
+/// wedge for a fast failure and left `-O resident` broken.
+#[test]
+fn a_silent_preflight_never_opens_the_builtin_uv_pad() {
+    let (mut fs, mut rng) = setup();
+    let cred_id = register_non_resident(&mut fs, &mut rng);
+    let mut state = crate::FidoState::new();
+    arm_pin(&mut fs, &mut state);
+    let mut out = [0u8; 1024];
+    let mut presence = UvPadNeverOpened;
+    let mut ctx = Ctx {
+        presence: &mut presence,
+        dev: dev(),
+        fs: &mut fs,
+        rng: &mut rng,
+        state: &mut state,
+        now_ms: 0,
+    };
+    // OpenSSH's shape: no allowList, and this rp holds no discoverable credential.
+    assert_eq!(
+        get_assertion(&mut ctx, &ga_request_up_false_uv(None), &mut out).unwrap_err(),
+        CtapError::NoCredentials,
+    );
+    // And where the probe DOES find one, it is served without user verification —
+    // the flag says so, which is the part that must not lie.
+    let n = get_assertion(&mut ctx, &ga_request_up_false_uv(Some(&cred_id)), &mut out).unwrap();
+    let ad = assertion_auth_data(&out[..n]);
+    assert_eq!(
+        ad[32] & FLAG_UV,
+        0,
+        "no UV was performed, so the flag must be 0"
+    );
+}
+
 #[test]
 fn uv_option_runs_builtin_uv_and_supplies_user_presence() {
     let (mut fs, mut rng) = setup();
