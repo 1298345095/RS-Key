@@ -38,6 +38,19 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+### Changed
+
+- getInfo publishes `encIdentifier` (0x19) and `encCredStoreState` (0x1E) from
+  provisioning, not from the first `pcmr` request. Both are sealed under the
+  persistent pinUvAuthToken, so a platform without that token could never decrypt
+  either — withholding them bought no privacy and hid them from the CTAP 2.3
+  conformance runner, which reads getInfo before it is in a position to ask for a
+  token. A YubiKey 5.8.0 publishes both on a key with no PIN set at all. The grant
+  is now minted where the seed it accompanies is, so a completed
+  `authenticatorReset` *rotates* it instead of leaving the record absent — which is
+  what closes an old holder out — and it authorizes nothing until a PIN exists
+  (`credmgmt::authorized_by_ppuat`). **bcdDevice → 0x09CB.**
+
 ### Fixed
 
 - An `hmac-secret` / `hmac-secret-mc` value carrying no sub-fields — an empty map,

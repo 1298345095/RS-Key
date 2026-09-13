@@ -465,7 +465,7 @@ Every one of the 11 is a `p0-launch` row of `assurance/configurations.toml`, all
 |---|---|---|
 | `bound_patch_hunks` | `1` | any defect the single hunk cannot express. The patch reverts one commit in the shipped file, so what is driven is that defect and not the class it belongs to |
 | `bound_patched_files` | `1` | a defect that has to span two files |
-| `bound_tests_fallen` | `3` | which assertion is load-bearing. Three tests fall and the count says the mutant died, not that any one of the three was written for this property |
+| `bound_tests_fallen` | `1` | which assertion is load-bearing. One test falls now and the count says the mutant died, not that the test was written for this property — it reads the gate set, which is what the patch edits. It was three before provisioning began minting the grant; see retired_owners_of_the_kill for why the two torn-wipe tests no longer reach the state |
 | `bound_slice_crates` | `1` | any test outside the one crate the slice runs. A kill by a test in another crate would not be observed by this row |
 
 > **Row note (`shipped_relation`).** the patch puts `\|\| fid == EF_PAUTHTOKEN.get()` back on is_fido_gate_record (formal/comutants.toml:395-414) — eab4b5c reverted, in the shipped file, not a model edit — and it is the ONE co-refutation in this tree whose patch site is a function this property's own tag sits on. Driven here rather than transcribed: a throwaway worktree at 31c21a7, the anchor asserted to resolve exactly once, `cargo test -p rsk-fido --target aarch64-apple-darwin` against the main build cache. `expect = "killed"` in that file is a RECORDED verdict per its own status vocabulary (:19-21), and this run is the second observation of it

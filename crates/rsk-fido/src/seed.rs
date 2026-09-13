@@ -622,6 +622,11 @@ pub fn ensure_seed<S: Storage>(dev: &Device, fs: &mut Fs<S>, rng: &mut impl Rng)
         let r = rebuild_att_cert(fs, rng, &seed);
         seed.zeroize();
         r?;
+        // getInfo 0x19/0x1E are sealed under this grant, so a device never asked for
+        // one published neither — and a conformance runner reads getInfo before it
+        // can ask. The reference device publishes both from the factory.
+        let mut tok = ensure_ppuat(dev, fs, rng)?;
+        tok.zeroize();
     }
     Ok(())
 }

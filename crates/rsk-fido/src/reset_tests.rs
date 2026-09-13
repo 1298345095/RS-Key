@@ -1085,9 +1085,15 @@ fn provisioned_with_a_grant() -> TearAfter {
 /// wipe defers, its absence is the RESTRICTIVE state. Batched with `EF_PIN` it made
 /// both wipes producers of the torn state E77 closes at the consumer: a cut between
 /// the two leaves a live `pcmr` grant with no PIN behind it, and the holder goes on
-/// reading the credential directory of everything registered afterwards. `credmgmt`
-/// refusing it is one `if` on one build; no prefix of a wipe should be able to
-/// produce the state at all.
+/// reading the credential directory of everything registered afterwards.
+///
+/// The subject is the grant a platform was ISSUED. Provisioning now mints one at the
+/// end of a completed reset so getInfo can publish 0x19/0x1E, and that value has been
+/// handed to nobody — it is a *rotation*, which is what closes the old holder out,
+/// and it authorizes nothing until a PIN exists anyway
+/// (`credmgmt::authorized_by_ppuat`, held by
+/// `a_persistent_grant_does_not_outlive_its_pin`). So the tear points below compare
+/// against the original value rather than merely counting records.
 fn no_wipe_prefix_leaves_a_grant_without_its_pin(
     mut wipe: impl FnMut(&mut Fs<TearAfter>) -> bool,
     what: &str,
@@ -1096,6 +1102,13 @@ fn no_wipe_prefix_leaves_a_grant_without_its_pin(
 
     let base = provisioned_with_a_grant();
     let live = base.items.len();
+    // The value a platform holds. Anything else in that record afterwards is a
+    // fresh mint, which is the rotation itself and grants nobody anything.
+    let issued = {
+        let mut f = Fs::new(base.clone());
+        f.scan();
+        crate::seed::load_ppuat(&dev(), &mut f).expect("the harness provisioned a grant")
+    };
 
     let mut saw_grant = false;
     // `reset`'s lead phase force-deletes both seed shapes whether or not they are
@@ -1111,13 +1124,16 @@ fn no_wipe_prefix_leaves_a_grant_without_its_pin(
         if !fs.has_data(EF_PAUTHTOKEN.get()) {
             continue;
         }
+        if crate::seed::load_ppuat(&dev(), &mut fs) != Some(issued) {
+            continue; // rotated: the holder's value is gone, which is the point
+        }
         // Only a prefix that got as far as the lead delete counts as a tear point:
         // budget 0 leaves the store untouched and would satisfy the guard below
         // without proving the loop ever reached a partial wipe.
         saw_grant |= !fs.has_data(EF_KEY_DEV.get());
         assert!(
             fs.has_data(EF_PIN),
-            "{what}: tear at {budget} left a credMgmt grant standing over a deleted PIN"
+            "{what}: tear at {budget} left the ISSUED credMgmt grant over a deleted PIN"
         );
     }
     assert!(
@@ -1135,9 +1151,10 @@ fn no_wipe_prefix_leaves_a_grant_without_its_pin(
     fs.scan();
     assert!(wipe(&mut fs), "the control run did not report success");
     assert!(!fs.has_data(EF_CRED), "the control run kept a credential");
-    assert!(
-        !fs.has_data(EF_PAUTHTOKEN.get()),
-        "the control run kept the grant"
+    assert_ne!(
+        crate::seed::load_ppuat(&dev(), &mut fs),
+        Some(issued),
+        "the control run kept the issued grant"
     );
     assert!(!fs.has_data(EF_PIN), "the control run never reached a gate");
 }

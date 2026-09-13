@@ -93,9 +93,19 @@ owners_co_refuted = ["crates/rsk-fido/src/reset.rs"]
 # derived column: the `rust` axis drops filenames containing `tests`, and the
 # `test` axis reads only `tests/**/*.py`.
 owner_of_the_kill = [
-  "crates/rsk-fido/src/reset_tests.rs:1146 a_torn_reset_never_leaves_a_grant_without_its_pin",
-  "crates/rsk-fido/src/reset_tests.rs:1167 a_torn_device_wide_wipe_never_leaves_a_grant_without_its_pin",
   "crates/rsk-fido/src/reset_tests.rs:626 the_gate_set_defers_every_record_whose_absence_is_permissive",
+]
+# It used to be these three. The two torn-wipe tests stopped owning this kill when
+# provisioning began minting the grant (bcdDevice 0x09CB): `ensure_seed` runs at the
+# end of `reset`, so the record the mutant defers is deleted and re-minted anyway and
+# the state those tests watch for — the ISSUED value standing over a deleted PIN —
+# is no longer reachable through them. Measured, not argued: under the patch the one
+# tear point that loses the PIN reports `grant_is_issued=false`, and the suite falls
+# from three tests to one. The survivor is the structural test that reads the gate
+# set itself, which is what the patch actually changes.
+retired_owners_of_the_kill = [
+  "crates/rsk-fido/src/reset_tests.rs:1163 a_torn_reset_never_leaves_a_grant_without_its_pin",
+  "crates/rsk-fido/src/reset_tests.rs:1184 a_torn_device_wide_wipe_never_leaves_a_grant_without_its_pin",
 ]
 # AND THE SECOND FINDING. Five configurations report this invariant RED. Every
 # one of them falls on clause 3.
@@ -223,8 +233,8 @@ bound_patch_hunks = 1
 stops_patch_hunks = "any defect the single hunk cannot express. The patch reverts one commit in the shipped file, so what is driven is that defect and not the class it belongs to"
 bound_patched_files = 1
 stops_patched_files = "a defect that has to span two files"
-bound_tests_fallen = 3
-stops_tests_fallen = "which assertion is load-bearing. Three tests fall and the count says the mutant died, not that any one of the three was written for this property"
+bound_tests_fallen = 1
+stops_tests_fallen = "which assertion is load-bearing. One test falls now and the count says the mutant died, not that the test was written for this property — it reads the gate set, which is what the patch edits. It was three before provisioning began minting the grant; see retired_owners_of_the_kill for why the two torn-wipe tests no longer reach the state"
 bound_slice_crates = 1
 stops_slice_crates = "any test outside the one crate the slice runs. A kill by a test in another crate would not be observed by this row"
 shipped_relation = "the patch puts `|| fid == EF_PAUTHTOKEN.get()` back on is_fido_gate_record (formal/comutants.toml:395-414) — eab4b5c reverted, in the shipped file, not a model edit — and it is the ONE co-refutation in this tree whose patch site is a function this property's own tag sits on. Driven here rather than transcribed: a throwaway worktree at 31c21a7, the anchor asserted to resolve exactly once, `cargo test -p rsk-fido --target aarch64-apple-darwin` against the main build cache. `expect = \"killed\"` in that file is a RECORDED verdict per its own status vocabulary (:19-21), and this run is the second observation of it"

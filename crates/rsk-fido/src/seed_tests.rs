@@ -445,8 +445,16 @@ fn enc_identifier_needs_both_a_token_and_a_readable_seed() {
     let (d, mut f, mut rng) = (dev(), fs(), SeqRng(7));
     ensure_seed(&d, &mut f, &mut rng).unwrap();
     assert!(
+        enc_identifier(&d, &mut f, &mut rng).is_some(),
+        "provisioning mints the grant, so the member is published from the start"
+    );
+
+    // The no-token state is still reachable — a PIN change revokes the grant — and
+    // it is still an absence rather than an error.
+    clear_ppuat(&mut f).unwrap();
+    assert!(
         enc_identifier(&d, &mut f, &mut rng).is_none(),
-        "no persistent token yet — nothing to key it with"
+        "no persistent token — nothing to key it with"
     );
 
     ensure_ppuat(&d, &mut f, &mut rng).unwrap();
@@ -507,8 +515,14 @@ fn enc_cred_store_state_needs_a_token_but_not_the_seed() {
     let (d, mut f, mut rng) = (dev(), fs(), SeqRng(17));
     ensure_seed(&d, &mut f, &mut rng).unwrap();
     assert!(
+        enc_cred_store_state(&d, &mut f, &mut rng).is_some(),
+        "provisioning mints the grant, so the member is published from the start"
+    );
+
+    clear_ppuat(&mut f).unwrap();
+    assert!(
         enc_cred_store_state(&d, &mut f, &mut rng).is_none(),
-        "no persistent token yet — nothing to key it with"
+        "no persistent token — nothing to key it with"
     );
 
     ensure_ppuat(&d, &mut f, &mut rng).unwrap();
