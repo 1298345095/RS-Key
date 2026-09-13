@@ -31,10 +31,10 @@ EXTENDS Naturals, FiniteSets, TLC
 CONSTANTS
     RPs,                \* relying parties (>= 2 to exercise rpId binding)
     Channels,           \* CTAPHID channel ids (>= 2 to exercise walk ownership)
-    MaxRetries,         \* models MAX_PIN_RETRIES = 8   (consts.rs:364)
-    MismatchLimit,      \* models PIN_MISMATCH_LIMIT = 3 (consts.rs:368)
+    MaxRetries,         \* models MAX_PIN_RETRIES = 8   (consts.rs:368)
+    MismatchLimit,      \* models PIN_MISMATCH_LIMIT = 3 (consts.rs:372)
     MaxClock,           \* coarse tick ceiling
-    ResetWindow,        \* models RESET_WINDOW_MS = 10_000 (consts.rs:397)
+    ResetWindow,        \* models RESET_WINDOW_MS = 10_000 (consts.rs:401)
     \* A BUILD FACT, not a defect switch and not a scope: `--features always-uv`
     \* decides what the device comes up on and what a reset restores. Registered
     \* in assurance/assumptions.toml as AS-AUTH-2, and assigned both ways -- FALSE
@@ -90,8 +90,8 @@ CONSTANTS
     \* The two halves of the token-less carve-out, one switch each, so a RED
     \* names which half was load-bearing -- the split TraceSecurity's own
     \* MutateUvNotRqd / MutateAlwaysUvArm already make one layer out.
-    BugUvNotRqdIgnoresRk,         \* makecredential.rs:548-550 makeCredUvNotRqd
-    BugTokenlessIgnoresAlwaysUv,  \* makecredential.rs:542-544 the alwaysUv arm
+    BugUvNotRqdIgnoresRk,         \* makecredential.rs:571-573 makeCredUvNotRqd
+    BugTokenlessIgnoresAlwaysUv,  \* makecredential.rs:565-567 the alwaysUv arm
     BugForceChangeIgnored         \* clientpin.rs:380-386
 
 (* Mutation switches for the LIVENESS properties. Kept apart from the set above *)
@@ -514,8 +514,8 @@ OtpCancelWait ==
 (***************************************************************************)
 
 \* THE FOUR CALL SITES DO NOT TEST THE SAME THING, and the difference is
-\* load-bearing. makeCredential (makecredential.rs:518-521) and getAssertion
-\* (getassertion.rs:384-387) test the MAC, `user_verified()` -- which is
+\* load-bearing. makeCredential (makecredential.rs:541-544) and getAssertion
+\* (getassertion.rs:397-400) test the MAC, `user_verified()` -- which is
 \* `in_use && user_verified` (state.rs:666-668) -- the permission bit and the
 \* rpId binding. authenticatorConfig (config.rs:243-245) and
 \* credentialManagement (credmgmt.rs:278) test the MAC and the permission bit
@@ -530,7 +530,7 @@ TokenGuardUv(p, rp) ==
     /\ plat.held /\ plat.verifies
     /\ tok.live                            \* user_verified(): in_use && uv
     /\ p \in tok.perms
-    /\ (tok.rp = NoRp \/ tok.rp = rp)      \* getassertion.rs:387 rpId binding
+    /\ (tok.rp = NoRp \/ tok.rp = rp)      \* getassertion.rs:400 rpId binding
 
 \* config.rs:243-245 / credmgmt.rs:278 -- no `in_use` conjunct exists here.
 TokenGuardBare(p, rp) ==
@@ -547,19 +547,19 @@ TokenPolicy(p, rp) ==
     /\ (tok.rp = NoRp \/ tok.rp = rp)
 
 \* UV is required when a clientPIN exists or alwaysUv is on; otherwise a touch
-\* alone authorizes (getassertion.rs:385 `if uv_required`).
+\* alone authorizes (getassertion.rs:398 `if uv_required`).
 UvRequired == pin.set \/ gate.alwaysUv
 
 OpGuard(p, rp)  == IF UvRequired THEN TokenGuardUv(p, rp) ELSE TRUE
 OpPolicy(p, rp) == IF UvRequired THEN TokenPolicy(p, rp) ELSE TRUE
 
-\* THE TOKEN-LESS CARVE-OUT -- makecredential.rs:532-551, the `None` arm of
+\* THE TOKEN-LESS CARVE-OUT -- makecredential.rs:555-574, the `None` arm of
 \* `enforce_pin`, which `assurance/token_refinement.toml` owns as the `UseMc`
 \* volatile writer and outcome producer. `disc` is the request's `rk`, an INPUT
 \* and not state, which is why the two arms below are a function of it:
-\*   makecredential.rs:542-544 -- CTAP 2.1 6.1.2 steps 6.2/6.4: alwaysUv with no
+\*   makecredential.rs:565-567 -- CTAP 2.1 6.1.2 steps 6.2/6.4: alwaysUv with no
 \*     way to verify refuses whatever `rk` says;
-\*   makecredential.rs:548-550 -- steps 7/10, makeCredUvNotRqd: with a PIN set a
+\*   makecredential.rs:571-573 -- steps 7/10, makeCredUvNotRqd: with a PIN set a
 \*     DISCOVERABLE credential still needs a token, a non-discoverable one does
 \*     not (issue #51).
 \* Step 6.3's third arm -- a pad UPGRADES a token-less request to built-in UV
@@ -620,8 +620,8 @@ ConsumedTok ==
              ELSE [tok EXCEPT !.perms = {}]
 
 \* makeCredential/getAssertion bind an unbound pinUvAuthToken to the request's
-\* rpId before consuming its permissions (makecredential.rs:526-528,
-\* getassertion.rs:394-396).
+\* rpId before consuming its permissions (makecredential.rs:549-551,
+\* getassertion.rs:407-409).
 BoundConsumedTok(r) ==
     LET consumed == ConsumedTok IN
       IF tok.live /\ tok.rp = NoRp
@@ -923,7 +923,7 @@ StopUsingToken ==
 (* makeCredential / getAssertion.                                          *)
 (***************************************************************************)
 
-\* makecredential.rs:516-524. Needs PERM_MC and a touch.
+\* makecredential.rs:539-547. Needs PERM_MC and a touch.
 RegisterStart(r, t) ==
     /\ Idle
     /\ ButtonFreeGuard
@@ -938,7 +938,7 @@ RegisterStart(r, t) ==
     \* buys the shipped tree no state at all. It exists to be MUTATED --
     \* BugUvNotRqdIgnoresRk drops the `disc` conjunct and a discoverable
     \* registration is then served with a PIN set and no token, which is the
-    \* defect deleting makecredential.rs:548-550 makes.
+    \* defect deleting makecredential.rs:571-573 makes.
     /\ (OpGuard("mc", r) \/ McTokenlessGuard(TRUE))
     /\ viol' = (IF OpPolicy("mc", r) \/ McTokenlessPolicy(TRUE)
                   THEN viol ELSE viol \cup TokenBypass)
@@ -1000,8 +1000,8 @@ RegisterWriteB ==
                     viol, ram >>
 
 \* THE NON-DISCOVERABLE REGISTRATION, and the reason it is not `RegisterStart`
-\* with a flag: it writes NOTHING. makecredential.rs:782-783 stores only under
-\* `req.rk`, and makecredential.rs:757-759 says why -- "a non-discoverable
+\* with a flag: it writes NOTHING. makecredential.rs:805-806 stores only under
+\* `req.rk`, and makecredential.rs:780-782 says why -- "a non-discoverable
 \* credential keeps no on-device state at all". So there is no `rp` to carry
 \* either: `store` is exactly what it observes per relying party, and a
 \* credential the device does not record is one it cannot tell apart from
@@ -1047,7 +1047,7 @@ RegisterNdRefused ==
     /\ UNCHANGED << pin, gate, store, lock, tok, plat, walk, sys, snap,
                     upSpent, viol, ram >>
 
-\* getassertion.rs:388-396. Needs PERM_GA, the rpId binding, and a touch.
+\* getassertion.rs:401-409. Needs PERM_GA, the rpId binding, and a touch.
 AssertStart(r, t) ==
     /\ Idle
     /\ ButtonFreeGuard
