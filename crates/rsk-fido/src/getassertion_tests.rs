@@ -3784,8 +3784,168 @@ fn maximal_box_creates_and_asserts() {
     verify_assertion(&ga, &x, &y);
 }
 
-// An rpId or user.id past its ceiling is rejected explicitly (InvalidLength),
-// not by a downstream box overflow that would surface as a vague Other.
+// The whole malformed-mandatory-parameter matrix, both commands, pinned against a
+// real YubiKey 5.8.0. Nothing asserted the present-but-unusable shapes before this
+// — the split that closed them was invisible to 686 tests — and the ABSENT rows are
+// half the point: they must keep answering `MissingParameter`, which is what says
+// the split narrowed the guard rather than moved it.
+#[test]
+fn a_present_but_unusable_parameter_is_not_a_missing_one() {
+    let (mut fs, mut rng) = setup();
+    let ga = |rp: &str, cdh: &[u8], keys: u64| {
+        let mut buf = [0u8; 256];
+        let n = {
+            let mut e = Encoder::new(Cursor::new(&mut buf[..]));
+            e.map(keys).unwrap();
+            if keys >= 1 {
+                e.u8(1).unwrap().str(rp).unwrap();
+            }
+            if keys >= 2 {
+                e.u8(2).unwrap().bytes(cdh).unwrap();
+            }
+            e.writer().position()
+        };
+        buf[..n].to_vec()
+    };
+    let mc = |rp: &str, cdh: &[u8], uid: &[u8]| {
+        let mut buf = [0u8; 256];
+        let n = {
+            let mut e = Encoder::new(Cursor::new(&mut buf[..]));
+            e.map(4).unwrap();
+            e.u8(1).unwrap().bytes(cdh).unwrap();
+            e.u8(2).unwrap().map(1).unwrap();
+            e.str("id").unwrap().str(rp).unwrap();
+            e.u8(3).unwrap().map(1).unwrap();
+            e.str("id").unwrap().bytes(uid).unwrap();
+            e.u8(4).unwrap().array(1).unwrap().map(2).unwrap();
+            e.str("alg").unwrap().i64(ALG_ES256).unwrap();
+            e.str("type").unwrap().str("public-key").unwrap();
+            e.writer().position()
+        };
+        buf[..n].to_vec()
+    };
+
+    // The same request truncated after `keys` mandatory keys.
+    let mc_trunc = |keys: u64| {
+        let mut buf = [0u8; 256];
+        let n = {
+            let mut e = Encoder::new(Cursor::new(&mut buf[..]));
+            e.map(keys).unwrap();
+            if keys >= 1 {
+                e.u8(1).unwrap().bytes(&CDH).unwrap();
+            }
+            if keys >= 2 {
+                e.u8(2).unwrap().map(1).unwrap();
+                e.str("id").unwrap().str("ok.com").unwrap();
+            }
+            e.writer().position()
+        };
+        buf[..n].to_vec()
+    };
+
+    let short = [0x42u8; 31];
+    let ok_uid = [1u8, 2, 3, 4];
+    let cases: std::vec::Vec<(&str, std::vec::Vec<u8>, bool, CtapError)> = std::vec![
+        // getAssertion: present and unusable -> by length.
+        (
+            "GA rpId empty",
+            ga("", &CDH, 2),
+            false,
+            CtapError::InvalidLength
+        ),
+        (
+            "GA cdh short",
+            ga("ok.com", &short, 2),
+            false,
+            CtapError::InvalidLength
+        ),
+        (
+            "GA cdh empty",
+            ga("ok.com", &[], 2),
+            false,
+            CtapError::InvalidLength
+        ),
+        // getAssertion: genuinely absent -> unchanged.
+        (
+            "GA cdh absent",
+            ga("ok.com", &CDH, 1),
+            false,
+            CtapError::MissingParameter
+        ),
+        (
+            "GA all absent",
+            ga("ok.com", &CDH, 0),
+            false,
+            CtapError::MissingParameter
+        ),
+        // makeCredential: the fixed-size fields by length, the user entity by content.
+        (
+            "MC rpId empty",
+            mc("", &CDH, &ok_uid),
+            true,
+            CtapError::InvalidLength
+        ),
+        (
+            "MC cdh short",
+            mc("ok.com", &short, &ok_uid),
+            true,
+            CtapError::InvalidLength
+        ),
+        (
+            "MC userId empty",
+            mc("ok.com", &CDH, &[]),
+            true,
+            CtapError::InvalidParameter
+        ),
+        // And the truncations, which the ordered-key check could not see: each of
+        // these ends BEFORE a mandatory key, so nothing later arrives to compare
+        // against. Measured on a YubiKey 5.8.0: `0x14` for every one.
+        (
+            "MC empty map",
+            mc_trunc(0),
+            true,
+            CtapError::MissingParameter
+        ),
+        (
+            "MC {1} only",
+            mc_trunc(1),
+            true,
+            CtapError::MissingParameter
+        ),
+        (
+            "MC {1,2} only",
+            mc_trunc(2),
+            true,
+            CtapError::MissingParameter
+        ),
+    ];
+
+    for (label, req, is_mc, expected) in cases {
+        let mut out = [0u8; 512];
+        let mut state = crate::FidoState::new();
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs: &mut fs,
+            rng: &mut rng,
+            state: &mut state,
+            now_ms: 10,
+        };
+        let got = if is_mc {
+            make_credential(&mut ctx, &req, &mut out)
+        } else {
+            get_assertion(&mut ctx, &req, &mut out)
+        };
+        assert_eq!(got, Err(expected), "{label}");
+    }
+}
+
+// An rpId or user.id past its ceiling is rejected explicitly, not by a downstream
+// box overflow that would surface as a vague Other — and each by the code the
+// reference uses for THAT field: an rpId answers by length, a user.id by content
+// (measured on a YubiKey 5.8.0, which answers `0x02` to a 65-byte user.id). The
+// pairing is the point: one shared code here hid that split for both fields.
 #[test]
 fn overlong_rpid_or_userid_rejected() {
     let (mut fs, mut rng) = setup();
@@ -3807,7 +3967,10 @@ fn overlong_rpid_or_userid_rejected() {
         };
         buf[..n].to_vec()
     };
-    for req in [mk(&over_rp, &[1, 2, 3, 4]), mk("ok.com", &[0u8; 65])] {
+    for (req, expected) in [
+        (mk(&over_rp, &[1, 2, 3, 4]), CtapError::InvalidLength),
+        (mk("ok.com", &[0u8; 65]), CtapError::InvalidParameter),
+    ] {
         let mut out = [0u8; 512];
         let mut state = crate::FidoState::new();
         let mut presence = crate::AlwaysConfirm;
@@ -3819,10 +3982,7 @@ fn overlong_rpid_or_userid_rejected() {
             state: &mut state,
             now_ms: 10,
         };
-        assert_eq!(
-            make_credential(&mut ctx, &req, &mut out),
-            Err(CtapError::InvalidLength)
-        );
+        assert_eq!(make_credential(&mut ctx, &req, &mut out), Err(expected));
     }
 }
 

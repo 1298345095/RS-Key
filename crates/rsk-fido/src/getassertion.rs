@@ -121,6 +121,15 @@ fn parse(data: &[u8]) -> Result<Request<'_>, CtapError> {
             _ => skip_value(&mut d)?,
         }
     }
+    // The ordered check above only fires when a LATER key arrives to be compared,
+    // so a request that simply STOPS before a mandatory one walked out of the loop
+    // unjudged — `{1: rpId}` with no key 2 at all. It reached the caller's guard and
+    // was answered there by the empty value it left behind, which read as the right
+    // answer only while that guard also said `MissingParameter`. It is the absence
+    // that is missing, not the length, so it is named here.
+    if expected <= 2 {
+        return Err(CtapError::MissingParameter);
+    }
     Ok(req)
 }
 
@@ -268,8 +277,12 @@ pub fn get_assertion<S: Storage, R: Rng>(
     out: &mut [u8],
 ) -> CtapResult {
     let mut req = parse(data)?;
+    // Present but unusable — the twin of `make_credential`'s guard, and the same
+    // measured rule: an ABSENT key 1 or 2 is `MissingParameter` from `parse`'s
+    // ordered-key check above, so everything reaching here carries a value the
+    // fixed sizes reject. A YubiKey 5.8.0 answers `0x03` to all four shapes.
     if req.rp_id.is_empty() || req.client_data_hash.len() != 32 {
-        return Err(CtapError::MissingParameter);
+        return Err(CtapError::InvalidLength);
     }
     // Same rule as `make_credential`: whitespace paints no ink on the trusted
     // display, so it cannot be allowed to reach a ceremony (audit run-36). No

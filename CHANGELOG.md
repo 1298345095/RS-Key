@@ -40,6 +40,23 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- A mandatory parameter that is *present but unusable* no longer answers
+  `CTAP2_ERR_MISSING_PARAMETER`. Measured against a YubiKey 5.8.0, the reference
+  splits those by field: a `clientDataHash` that is not 32 bytes and an empty
+  `rpId` are `CTAP1_ERR_INVALID_LENGTH`, while an empty or over-long `user.id` is
+  `CTAP1_ERR_INVALID_PARAMETER`. One guard per command answered all of them with
+  "missing", which is the one thing they are not — the key was sent. Splitting
+  them exposed a second defect underneath: the ordered-key check in both parsers
+  only fires when a LATER key arrives to compare against, so a request that simply
+  stops before a mandatory key (`{}`, `{1}`, `{1,2}`) walked out unjudged and was
+  answered downstream by the empty value it left behind. That read as the right
+  answer only while the guard also said "missing"; both parsers now judge a
+  truncated map themselves. Absent keys still answer
+  `CTAP2_ERR_MISSING_PARAMETER` on both keys, which is what says the guard was
+  narrowed rather than moved. `RP_ID_MAX` is deliberately KEPT even though the
+  reference accepts a 300-character `rpId`: that is the reference being looser,
+  where parity earns no change. **bcdDevice → 0x09CF.**
+
 - The scrambled PIN pad no longer draws its digit order from the shared DRBG, so a
   host-raised PIN ceremony cannot panic the trusted display. A CTAP command holds
   the store, the DRBG, the presence backend and the FIDO state borrowed for its

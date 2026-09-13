@@ -224,6 +224,14 @@ fn parse(data: &[u8]) -> Result<Request<'_>, CtapError> {
             _ => skip_value(&mut d)?,
         }
     }
+    // The twin of `get_assertion`'s: the ordered check needs a LATER key to compare
+    // against, so `{}`, `{1}`, `{1,2}` and `{1,2,3}` all walked out unjudged and were
+    // answered downstream by the empty values they left. Those answers happened to
+    // read `MissingParameter` too, which is why nothing showed — until the guard
+    // below stopped saying it for every shape at once.
+    if expected <= 4 {
+        return Err(CtapError::MissingParameter);
+    }
     Ok(req)
 }
 
@@ -360,15 +368,30 @@ pub fn make_credential<S: Storage, R: Rng>(
     out: &mut [u8],
 ) -> CtapResult {
     let mut req = parse(data)?;
-    if req.client_data_hash.len() != 32 || req.rp_id.is_empty() || req.user_id.is_empty() {
-        return Err(CtapError::MissingParameter);
+    // Present but unusable, which is NOT missing: an absent mandatory key is already
+    // `MissingParameter` from `parse`'s ordered-key check, and measuring both sides
+    // shows the reference splits what is left by WHICH field — the fixed-size ones
+    // answer by length, the user entity answers by content (YubiKey 5.8.0: a 0/31/33
+    // byte clientDataHash and an empty rpId are `0x03`, an empty or 65-byte user.id
+    // is `0x02`; absent keys are `0x14` on both keys already).
+    if req.client_data_hash.len() != 32 || req.rp_id.is_empty() {
+        return Err(CtapError::InvalidLength);
+    }
+    if req.user_id.is_empty() {
+        return Err(CtapError::InvalidParameter);
     }
     // rpId (a domain) and user.id have hard maxima; reject an over-long one
     // explicitly rather than let the sealed box overflow into a vague
     // `CtapError::Other`. Together with the name truncation below this makes
-    // `CRED_BOX_MAX` a true ceiling for every accepted request.
-    if req.rp_id.len() > RP_ID_MAX || req.user_id.len() > USER_ID_MAX {
+    // `CRED_BOX_MAX` a true ceiling for every accepted request. Split by the same
+    // rule as above — and `RP_ID_MAX` is KEPT despite the reference accepting a
+    // 300-char rpId (it answers `0x27` after a ceremony): that is the reference
+    // being looser, where parity does not earn a change.
+    if req.rp_id.len() > RP_ID_MAX {
         return Err(CtapError::InvalidLength);
+    }
+    if req.user_id.len() > USER_ID_MAX {
+        return Err(CtapError::InvalidParameter);
     }
     // No valid WebAuthn rpId contains whitespace — the spec requires a valid domain
     // string, and U+0020 is a forbidden host code point, so no browser can send one.
