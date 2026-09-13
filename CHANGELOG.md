@@ -40,6 +40,19 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- getAssertion now type-checks `credProtect`, `minPinLength` and `hmac-secret-mc`
+  as well. The rule the previous entry states is narrower than the reference's
+  actual one: a YubiKey 5.8.0 type-checks the value of every extension it
+  *advertises*, on every command — including the three that do nothing on
+  getAssertion — and ignores an unknown name whatever it carries. Measured over
+  both, `credProtect` takes a uint, `minPinLength` a bool, `hmac-secret-mc` a map
+  or a boolean, and each answers `CTAP2_ERR_CBOR_UNEXPECTED_TYPE` to anything
+  else, while an unregistered name is ignored as an int, a string or an array.
+  Four of the seven advertised names were checked and three were skipped, so a
+  malformed request completed as though it had asked for nothing. The unknown-name
+  half is pinned by a test too: tightening into it would refuse requests other
+  authenticators accept. **bcdDevice → 0x09D2.**
+
 - getInfo's `transports` (0x09) and `transportsForReset` (0x1A) now say
   `["usb", "smart-card"]`. They said `["usb"]` on the reading that the FIDO applet
   lives on USB-HID only, and it does not: the FIDO AID is routed onto CCID, and

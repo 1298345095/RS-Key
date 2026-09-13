@@ -515,7 +515,7 @@ OtpCancelWait ==
 
 \* THE FOUR CALL SITES DO NOT TEST THE SAME THING, and the difference is
 \* load-bearing. makeCredential (makecredential.rs:541-544) and getAssertion
-\* (getassertion.rs:397-400) test the MAC, `user_verified()` -- which is
+\* (getassertion.rs:414-417) test the MAC, `user_verified()` -- which is
 \* `in_use && user_verified` (state.rs:666-668) -- the permission bit and the
 \* rpId binding. authenticatorConfig (config.rs:243-245) and
 \* credentialManagement (credmgmt.rs:278) test the MAC and the permission bit
@@ -530,7 +530,7 @@ TokenGuardUv(p, rp) ==
     /\ plat.held /\ plat.verifies
     /\ tok.live                            \* user_verified(): in_use && uv
     /\ p \in tok.perms
-    /\ (tok.rp = NoRp \/ tok.rp = rp)      \* getassertion.rs:400 rpId binding
+    /\ (tok.rp = NoRp \/ tok.rp = rp)      \* getassertion.rs:417 rpId binding
 
 \* config.rs:243-245 / credmgmt.rs:278 -- no `in_use` conjunct exists here.
 TokenGuardBare(p, rp) ==
@@ -547,7 +547,7 @@ TokenPolicy(p, rp) ==
     /\ (tok.rp = NoRp \/ tok.rp = rp)
 
 \* UV is required when a clientPIN exists or alwaysUv is on; otherwise a touch
-\* alone authorizes (getassertion.rs:398 `if uv_required`).
+\* alone authorizes (getassertion.rs:415 `if uv_required`).
 UvRequired == pin.set \/ gate.alwaysUv
 
 OpGuard(p, rp)  == IF UvRequired THEN TokenGuardUv(p, rp) ELSE TRUE
@@ -621,7 +621,7 @@ ConsumedTok ==
 
 \* makeCredential/getAssertion bind an unbound pinUvAuthToken to the request's
 \* rpId before consuming its permissions (makecredential.rs:549-551,
-\* getassertion.rs:407-409).
+\* getassertion.rs:424-426).
 BoundConsumedTok(r) ==
     LET consumed == ConsumedTok IN
       IF tok.live /\ tok.rp = NoRp
@@ -1047,7 +1047,7 @@ RegisterNdRefused ==
     /\ UNCHANGED << pin, gate, store, lock, tok, plat, walk, sys, snap,
                     upSpent, viol, ram >>
 
-\* getassertion.rs:401-409. Needs PERM_GA, the rpId binding, and a touch.
+\* getassertion.rs:418-426. Needs PERM_GA, the rpId binding, and a touch.
 AssertStart(r, t) ==
     /\ Idle
     /\ ButtonFreeGuard

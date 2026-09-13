@@ -573,7 +573,7 @@ crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	497-499	if 
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	501-501	let mut seed = ctx.load_keydev().ok_or(CtapError::NotAllowed)?;	let mut seed = ctx.load_keydev().ok_or(CtapError::NotAllowed)?;
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	506-509	if begin {	}
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/credmgmt.rs	508-508	ctx.state.cm.rp_id_hash = *rp_id_hash;	ctx.state.cm.rp_id_hash = *rp_id_hash;
-crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/getassertion.rs	403-403	if !ctx.state.verify_token(proto, req.client_data_hash, param)	if !ctx.state.verify_token(proto, req.client_data_hash, param)
+crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/getassertion.rs	420-420	if !ctx.state.verify_token(proto, req.client_data_hash, param)	if !ctx.state.verify_token(proto, req.client_data_hash, param)
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/makecredential.rs	541-541	if !ctx.state.verify_token(proto, req.client_data_hash, param)	if !ctx.state.verify_token(proto, req.client_data_hash, param)
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/state.rs	523-535	/// The CTAP 2.1 §6.5.5.7 post-user-presence triad — `clearUserPresentFlag()`,	}
 crates/rsk-fido/src/credmgmt_kani.rs	crates/rsk-fido/src/state.rs	547-562	/// `stopUsingPinUvAuthToken` — drop the in-use state, permissions, and	}
@@ -591,7 +591,7 @@ crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/credmgmt.rs	386-393	if beg
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/credmgmt.rs	389-393	ctx.state.cm.rp_counter = target.saturating_add(1);	ctx.state.cm.last_leg_ms = ctx.now_ms;
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/credmgmt.rs	426-430	if begin {	ctx.state.cm.cred_next_slot = 0;
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/credmgmt.rs	506-511	if begin {	ctx.state.cm.last_leg_ms = ctx.now_ms;
-crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/getassertion.rs	403-406	if !ctx.state.verify_token(proto, req.client_data_hash, param)	|| (ctx.state.paut.has_rp_id && ctx.state.paut.rp_id_hash != *rp_id_hash)
+crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/getassertion.rs	420-423	if !ctx.state.verify_token(proto, req.client_data_hash, param)	|| (ctx.state.paut.has_rp_id && ctx.state.paut.rp_id_hash != *rp_id_hash)
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/lib.rs	128-128	ctx.state.expire_stale_token(ctx.now_ms);	ctx.state.expire_stale_token(ctx.now_ms);
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/lib.rs	128-135	ctx.state.expire_stale_token(ctx.now_ms);	ctx.state.retire_sequences_except(cmd);
 crates/rsk-fido/src/state_kani.rs	crates/rsk-fido/src/lib.rs	135-135	ctx.state.retire_sequences_except(cmd);	ctx.state.retire_sequences_except(cmd);
@@ -679,9 +679,9 @@ formal/README.md	crates/rsk-fido/src/credmgmt.rs	278-278	fn verify_cm_token(	fn 
 formal/README.md	crates/rsk-fido/src/credmgmt.rs	339-339	) -> CtapResult {	) -> CtapResult {
 formal/README.md	crates/rsk-fido/src/credmgmt.rs	658-713	return Some((i, rp_id_hash));	fs.put(EF_RP + j, &rp[..m])
 formal/README.md	crates/rsk-fido/src/credmgmt.rs	665-673	/// its EF_RP record. Replies with only the status byte.	.delete(EF_CRED + slot)
-formal/README.md	crates/rsk-fido/src/getassertion.rs	403-406	if !ctx.state.verify_token(proto, req.client_data_hash, param)	|| (ctx.state.paut.has_rp_id && ctx.state.paut.rp_id_hash != *rp_id_hash)
-formal/README.md	crates/rsk-fido/src/getassertion.rs	404-404	|| !ctx.state.user_verified()	|| !ctx.state.user_verified()
-formal/README.md	crates/rsk-fido/src/getassertion.rs	635-636	// below is the only thing that names the rp, and the PIN pad cannot ([`needs_confirm`]).	let want_up = want_up(req) && verified.needs_confirm(ctx.presence.shows_confirm());
+formal/README.md	crates/rsk-fido/src/getassertion.rs	420-423	if !ctx.state.verify_token(proto, req.client_data_hash, param)	|| (ctx.state.paut.has_rp_id && ctx.state.paut.rp_id_hash != *rp_id_hash)
+formal/README.md	crates/rsk-fido/src/getassertion.rs	421-421	|| !ctx.state.user_verified()	|| !ctx.state.user_verified()
+formal/README.md	crates/rsk-fido/src/getassertion.rs	652-653	// below is the only thing that names the rp, and the PIN pad cannot ([`needs_confirm`]).	let want_up = want_up(req) && verified.needs_confirm(ctx.presence.shows_confirm());
 formal/README.md	crates/rsk-fido/src/lib.rs	104-108	pub fn load_keydev(&mut self) -> Option<[u8; 32]> {	}
 formal/README.md	crates/rsk-fido/src/makecredential.rs	541-544	if !ctx.state.verify_token(proto, req.client_data_hash, param)	|| !ctx.state.user_verified()
 formal/README.md	crates/rsk-fido/src/makecredential.rs	544-544	|| !ctx.state.user_verified()	|| !ctx.state.user_verified()
@@ -974,11 +974,11 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/credmgmt.rs	328-340	.and_then(
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/credmgmt.rs	658-714	return Some((i, rp_id_hash));	.map_err(|_| CtapError::NotAllowed)?;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/credmgmt.rs	665-667	/// its EF_RP record. Replies with only the status byte.	ctx: &mut Ctx<S, R>,
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/credmgmt.rs	665-673	/// its EF_RP record. Replies with only the status byte.	.delete(EF_CRED + slot)
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	397-400	} else {	}
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	398-398	CtapError::PinNotSet	CtapError::PinNotSet
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	400-400	}	}
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	401-409	Some(param) => {	}
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	407-409	{	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	414-417	} else {	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	415-415	CtapError::PinNotSet	CtapError::PinNotSet
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	417-417	}	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	418-426	Some(param) => {	}
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/getassertion.rs	424-426	{	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/lib.rs	104-108	pub fn load_keydev(&mut self) -> Option<[u8; 32]> {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	539-547	Some(param) => {	}
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/makecredential.rs	541-544	if !ctx.state.verify_token(proto, req.client_data_hash, param)	|| !ctx.state.user_verified()
@@ -1085,7 +1085,7 @@ formal/RSKeyTrustedDisplay.tla	crates/rsk-display/src/presence.rs	91-91	/// Refi
 formal/RSKeyTrustedDisplay.tla	crates/rsk-display/src/presence.rs	120-124	let mut last_num: u16 = 0;	// no signature is ever produced without the deliberate on-screen hold.
 formal/RSKeyTrustedDisplay.tla	crates/rsk-display/src/presence.rs	198-198	// a release wait a finger already down approves the card in the same	// a release wait a finger already down approves the card in the same
 formal/RSKeyTrustedDisplay.tla	crates/rsk-fido/src/clientpin.rs	539-540	pub fn needs_confirm(self, shows_confirm: bool) -> bool {	!self.up_collected || shows_confirm
-formal/RSKeyTrustedDisplay.tla	crates/rsk-fido/src/getassertion.rs	635-636	// below is the only thing that names the rp, and the PIN pad cannot ([`needs_confirm`]).	let want_up = want_up(req) && verified.needs_confirm(ctx.presence.shows_confirm());
+formal/RSKeyTrustedDisplay.tla	crates/rsk-fido/src/getassertion.rs	652-653	// below is the only thing that names the rp, and the PIN pad cannot ([`needs_confirm`]).	let want_up = want_up(req) && verified.needs_confirm(ctx.presence.shows_confirm());
 formal/RSKeyTrustedDisplay.tla	crates/rsk-fido/src/makecredential.rs	688-689	// naming the rp being registered ([`needs_confirm`]).	if verified.needs_confirm(ctx.presence.shows_confirm()) {
 formal/RSKeyTrustedDisplay.tla	crates/rsk-fido/src/u2f.rs	94-94	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());	crate::clientpin::UvOutcome::BUILTIN.needs_confirm(ctx.presence.shows_confirm());
 formal/RSKeyTrustedDisplay.tla	crates/rsk-ui/src/lib.rs	252-260	/// Refines `RSKeyTrustedDisplay!OnlyAllowConfirms` — SEC-DISP-003.	}

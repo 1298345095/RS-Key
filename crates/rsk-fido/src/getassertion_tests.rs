@@ -3784,6 +3784,108 @@ fn maximal_box_creates_and_asserts() {
     verify_assertion(&ga, &x, &y);
 }
 
+// The reference type-checks the value of every extension it ADVERTISES, on every
+// command, including the ones that do nothing there — and ignores an unknown name
+// whatever its value. Measured on a YubiKey 5.8.0 over getAssertion: `credProtect`
+// takes a uint, `minPinLength` a bool, `hmac-secret`/`hmac-secret-mc` a map or a
+// boolean, and each answers CBOR_UNEXPECTED_TYPE to anything else, while `zz-nope`
+// is ignored as an int, a string and an array. We checked four of the seven names
+// and skipped the other three, so a malformed request completed as if it had asked
+// for nothing. The unknown half is pinned too: tightening into it would refuse
+// requests every other authenticator accepts.
+/// One extension value, written straight into the request encoder. Named because
+/// the closure type is otherwise `clippy::type_complexity`'s business.
+type ExtValue<'a> = &'a dyn Fn(&mut Encoder<Cursor<&mut [u8]>>);
+
+#[test]
+fn an_advertised_extension_name_is_type_checked_wherever_it_appears() {
+    let (mut fs, mut rng) = setup();
+    // `req` writes the extensions map with one entry whose value `write` encodes.
+    let req = |name: &str, write: ExtValue| {
+        let mut buf = [0u8; 256];
+        let n = {
+            let mut e = Encoder::new(Cursor::new(&mut buf[..]));
+            e.map(4).unwrap();
+            e.u8(1).unwrap().str("ok.com").unwrap();
+            e.u8(2).unwrap().bytes(&CDH).unwrap();
+            e.u8(4).unwrap().map(1).unwrap();
+            e.str(name).unwrap();
+            write(&mut e);
+            e.u8(5).unwrap().map(1).unwrap();
+            e.str("up").unwrap().bool(false).unwrap();
+            e.writer().position()
+        };
+        buf[..n].to_vec()
+    };
+    let int = |e: &mut Encoder<Cursor<&mut [u8]>>| {
+        e.u8(1).unwrap();
+    };
+    let text = |e: &mut Encoder<Cursor<&mut [u8]>>| {
+        e.str("x").unwrap();
+    };
+    let boolean = |e: &mut Encoder<Cursor<&mut [u8]>>| {
+        e.bool(true).unwrap();
+    };
+    let list = |e: &mut Encoder<Cursor<&mut [u8]>>| {
+        e.array(1).unwrap().u8(1).unwrap();
+    };
+
+    let run = |fs: &mut _, rng: &mut _, body: &[u8]| {
+        let mut out = [0u8; 512];
+        let mut state = crate::FidoState::new();
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs,
+            rng,
+            state: &mut state,
+            now_ms: 10,
+        };
+        get_assertion(&mut ctx, body, &mut out)
+    };
+
+    // Every advertised name, with a value of the wrong CBOR type for it.
+    let wrong: [(&str, ExtValue); 5] = [
+        ("credProtect", &text),
+        ("minPinLength", &int),
+        ("hmac-secret", &int),
+        ("hmac-secret-mc", &int),
+        ("credBlob", &int),
+    ];
+    for (name, write) in wrong {
+        assert_eq!(
+            run(&mut fs, &mut rng, &req(name, write)),
+            Err(CtapError::CborUnexpectedType),
+            "`{name}` carries a value of the wrong type and must be refused as one"
+        );
+    }
+    // The same names at the type the reference accepts: never that error.
+    let right: [(&str, ExtValue); 5] = [
+        ("credProtect", &int),
+        ("minPinLength", &boolean),
+        ("hmac-secret", &boolean),
+        ("hmac-secret-mc", &boolean),
+        ("credBlob", &boolean),
+    ];
+    for (name, write) in right {
+        assert_ne!(
+            run(&mut fs, &mut rng, &req(name, write)),
+            Err(CtapError::CborUnexpectedType),
+            "`{name}` at its own type must not be refused"
+        );
+    }
+    // And the other half of the rule: an unknown name is ignored at ANY type.
+    let unknown: [ExtValue; 3] = [&int, &text, &list];
+    for write in unknown {
+        assert_ne!(
+            run(&mut fs, &mut rng, &req("zz-not-a-thing", write)),
+            Err(CtapError::CborUnexpectedType),
+            "an unknown extension must be ignored whatever it carries"
+        );
+    }
+}
+
 // The whole malformed-mandatory-parameter matrix, both commands, pinned against a
 // real YubiKey 5.8.0. Nothing asserted the present-but-unusable shapes before this
 // — the split that closed them was invisible to 686 tests — and the ABSENT rows are

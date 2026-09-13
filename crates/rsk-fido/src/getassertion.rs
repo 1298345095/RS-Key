@@ -146,6 +146,23 @@ fn parse_extensions<'a>(d: &mut Decoder<'a>, req: &mut Request<'a>) -> Result<()
             "largeBlobKey" if !LARGE_BLOB_EXT => req.ext_large_blob_key = Some(cbor(d.bool())?),
             "largeBlob" if LARGE_BLOB_EXT => req.ext_large_blob = largeblobext::parse_ga(d)?,
             "hmac-secret" => req.hmac_secret = hmacsecret::parse(d)?,
+            // A name this device ADVERTISES is type-checked wherever it appears,
+            // including on the command it does not apply to; an unknown name is
+            // ignored at any type. That is the reference's rule, measured on a
+            // YubiKey 5.8.0 over both: `credProtect` takes a uint, `minPinLength` a
+            // bool and `hmac-secret-mc` a map or a boolean on getAssertion too, and
+            // each answers CBOR_UNEXPECTED_TYPE to anything else, while `zz-nope`
+            // is ignored as an int, a string or an array. Read for the type and
+            // dropped — none of the three decides anything here.
+            "credProtect" => {
+                let _: u32 = cbor(d.u32())?;
+            }
+            "minPinLength" => {
+                let _: bool = cbor(d.bool())?;
+            }
+            "hmac-secret-mc" => {
+                let _ = hmacsecret::parse(d)?;
+            }
             _ => skip_value(d)?,
         }
     }
