@@ -5,6 +5,10 @@
 /fuzz/coverage
 **/*.rs.bk
 *.uf2
+# The other firmware output: a linked ELF, and what `scripts/pt.sh` writes beside
+# it. Build output is not the tree — the guards read it through `git ls-files
+# --others --exclude-standard`, so an unnamed one stops `spdx_gate.py` dead.
+*.elf
 __pycache__/
 .direnv/
 result
