@@ -180,6 +180,29 @@ fn ga_hmac_up_false(ecdh: &Ecdh, salt: &[u8]) -> Vec<u8> {
     buf[..n].to_vec()
 }
 
+/// [`ga_hmac_up_false`] with the extension value replaced by one carrying no
+/// sub-fields — an empty map, or a value that is not a map at all.
+fn ga_degenerate_up_false(empty_map: bool) -> Vec<u8> {
+    let mut buf = [0u8; 256];
+    let n = {
+        let mut e = Encoder::new(Cursor::new(&mut buf[..]));
+        e.map(4).unwrap();
+        e.u8(1).unwrap().str(RP_ID).unwrap();
+        e.u8(2).unwrap().bytes(&CDH).unwrap();
+        e.u8(4).unwrap().map(1).unwrap();
+        e.str("hmac-secret").unwrap();
+        if empty_map {
+            e.map(0).unwrap();
+        } else {
+            e.bool(true).unwrap();
+        }
+        e.u8(5).unwrap().map(1).unwrap();
+        e.str("up").unwrap().bool(false).unwrap();
+        e.writer().position()
+    };
+    buf[..n].to_vec()
+}
+
 /// The (still-encrypted) hmac-secret output from a getAssertion authData.
 fn hmac_output(body: &[u8]) -> Vec<u8> {
     let mut d = field_at(body, 2).expect("authData (0x02) present");
@@ -252,6 +275,30 @@ fn hmac_secret_is_refused_on_an_up_false_probe() {
         "hmac-secret must be refused with 0x3b on an up:false request"
     );
     assert!(g.body.is_empty(), "a refused probe returns no assertion");
+}
+
+/// The other half of that rule, and the line between them: an hmac-secret value
+/// with no sub-fields in it is not a present extension, so it is not what the
+/// refusal above is about. A YubiKey 5.8.0 answers `0x00` to the silent
+/// pre-flight for both shapes — an empty map and a boolean — where a real
+/// request in the same position is `UP_REQUIRED`. Ours used to answer
+/// MISSING_PARAMETER to the first and INVALID_CBOR to the second, and a platform
+/// that sends either got no assertion at all.
+#[test]
+fn a_degenerate_hmac_secret_is_not_a_present_extension() {
+    let mut a = Authr::fresh();
+    assert_ok(&a.send(CTAP_MAKE_CREDENTIAL, &mc_hmac()));
+    for empty_map in [true, false] {
+        let g = a.send(CTAP_GET_ASSERTION, &ga_degenerate_up_false(empty_map));
+        assert_eq!(
+            g.status, 0,
+            "a value with no sub-fields must not refuse the ceremony (empty_map={empty_map})"
+        );
+        assert!(
+            !g.body.is_empty(),
+            "the assertion is served (empty_map={empty_map})"
+        );
+    }
 }
 
 /// A UV makeCredential evaluating hmac-secret at registration time

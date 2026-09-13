@@ -38,6 +38,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+### Fixed
+
+- An `hmac-secret` / `hmac-secret-mc` value carrying no sub-fields — an empty map,
+  or a value that is not a map — is read as if the extension had not been sent,
+  instead of ending the ceremony. It used to be `MISSING_PARAMETER` for the empty
+  map and `INVALID_CBOR` for the non-map, so a platform that sent either got no
+  assertion and no credential; a YubiKey 5.8.0 completes both, on `getAssertion`
+  and `makeCredential` alike, and does so even on an `up:false` request where a
+  *present* extension is refused. An absent `keyAgreement` inside a map that does
+  carry other fields is now `MISSING_PARAMETER` rather than the ECDH's
+  `INVALID_PARAMETER`, matching the same device. An indefinite-length map is
+  unchanged — it is a map, and still `INVALID_CBOR`. Relevant to
+  [#109](https://github.com/TheMaxMur/RS-Key/issues/109). **bcdDevice → 0x09CA.**
+
 ### Changed
 
 - `hmac-secret` on an `up:false` getAssertion is refused with

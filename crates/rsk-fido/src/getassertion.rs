@@ -996,6 +996,10 @@ fn next_assertion_response<S: Storage, R: Rng>(
         salt_auth[..sa].copy_from_slice(&g.hmac_salt_auth[..sa]);
         let req = HmacSecretReq {
             present: true,
+            // The replay only exists because the first assertion got past `eval`,
+            // which refuses an absent keyAgreement — so the stored coordinates are
+            // the ones that worked, not the zero default.
+            peer_present: true,
             proto: g.hmac_proto,
             peer_x: g.hmac_peer_x,
             peer_y: g.hmac_peer_y,

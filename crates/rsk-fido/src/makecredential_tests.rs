@@ -930,11 +930,27 @@ fn credprotect_out_of_range_rejected() {
     }
 }
 
-#[test]
-fn hmac_secret_mc_empty_salt_rejected() {
-    // hmac-secret-mc present (with the required hmac-secret flag) but carrying
-    // no salt must be rejected up front (MissingParameter), matching the
-    // getAssertion hmac-secret empty-salt guard.
+/// An `hmac-secret-mc` value with no sub-fields in it is not a request to
+/// evaluate anything, and the oracle treats it as if the extension had not been
+/// sent: a YubiKey 5.8.0 registers the credential (and does so even without the
+/// `hmac-secret` flag beside it, which a present one would demand). A map that
+/// carries SOME of the fields is a different thing and still owes the rest —
+/// that card answers MISSING_PARAMETER to one missing `saltEnc`. This test used
+/// to assert the first case was MissingParameter too, which no client sends and
+/// the reference does not do.
+/// The `hmac-secret-mc` value shapes this test distinguishes.
+enum McHmacShape {
+    /// No sub-fields: `{}`.
+    EmptyMap,
+    /// Not a map at all.
+    Boolean,
+    /// Some fields, salts missing.
+    PartialMap,
+}
+
+/// A makeCredential whose `hmac-secret-mc` takes `shape`, with the `hmac-secret`
+/// flag beside it or not.
+fn mc_request_hmac_mc(shape: &McHmacShape, flag: bool) -> std::vec::Vec<u8> {
     let mut buf = [0u8; 256];
     let n = {
         let mut e = Encoder::new(Cursor::new(&mut buf[..]));
@@ -948,14 +964,62 @@ fn hmac_secret_mc_empty_salt_rejected() {
         e.u8(4).unwrap().array(1).unwrap().map(2).unwrap();
         e.str("alg").unwrap().i64(ALG_ES256).unwrap();
         e.str("type").unwrap().str("public-key").unwrap();
-        e.u8(6).unwrap().map(2).unwrap();
-        e.str("hmac-secret").unwrap().bool(true).unwrap();
-        e.str("hmac-secret-mc").unwrap().map(0).unwrap(); // no salt fields
+        e.u8(6).unwrap().map(if flag { 2 } else { 1 }).unwrap();
+        if flag {
+            e.str("hmac-secret").unwrap().bool(true).unwrap();
+        }
+        e.str("hmac-secret-mc").unwrap();
+        match shape {
+            McHmacShape::EmptyMap => {
+                e.map(0).unwrap();
+            }
+            McHmacShape::Boolean => {
+                e.bool(true).unwrap();
+            }
+            McHmacShape::PartialMap => {
+                e.map(1).unwrap();
+                e.u8(4).unwrap().u8(2).unwrap();
+            }
+        }
         e.u8(7).unwrap().map(1).unwrap();
         e.str("rk").unwrap().bool(true).unwrap();
         e.writer().position()
     };
-    assert_eq!(run_err(&buf[..n]), CtapError::MissingParameter);
+    buf[..n].to_vec()
+}
+
+/// An `hmac-secret-mc` value with no sub-fields in it is not a request to
+/// evaluate anything, and the oracle reads it as if the extension had not been
+/// sent: a YubiKey 5.8.0 registers the credential, and does so even without the
+/// `hmac-secret` flag beside it — which a *present* one would demand. A map that
+/// carries SOME of the fields is a different thing and still owes the rest; that
+/// card answers MISSING_PARAMETER to one missing its salts. This test used to
+/// assert the first case was MissingParameter too, which no client sends and the
+/// reference does not do.
+#[test]
+fn hmac_secret_mc_with_no_subfields_is_absent_a_partial_one_is_not() {
+    assert!(
+        !run(&mc_request_hmac_mc(&McHmacShape::EmptyMap, true))
+            .0
+            .is_empty(),
+        "an empty hmac-secret-mc map must register"
+    );
+    assert!(
+        !run(&mc_request_hmac_mc(&McHmacShape::Boolean, true))
+            .0
+            .is_empty(),
+        "a non-map hmac-secret-mc must register"
+    );
+    assert!(
+        !run(&mc_request_hmac_mc(&McHmacShape::EmptyMap, false))
+            .0
+            .is_empty(),
+        "an absent one does not owe the hmac-secret flag"
+    );
+    assert_eq!(
+        run_err(&mc_request_hmac_mc(&McHmacShape::PartialMap, true)),
+        CtapError::MissingParameter
+    );
 }
 
 #[test]
