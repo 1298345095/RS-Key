@@ -38,6 +38,17 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+### Changed
+
+- `hmac-secret` on an `up:false` getAssertion is refused with
+  `CTAP2_ERR_UP_REQUIRED` instead of `CTAP2_ERR_UNSUPPORTED_OPTION`. The refusal
+  itself is unchanged — a silent probe still never receives PRF material. CTAP 2.1
+  §12.5 names the latter, but a YubiKey 5.8.0 answers the former in every shape
+  measured (allowList with and without a token, and a discoverable walk), and a
+  client can act on "retry with user presence" where "unsupported option" invites
+  it to abandon the extension. Relevant to
+  [#109](https://github.com/TheMaxMur/RS-Key/issues/109). **bcdDevice → 0x09C9.**
+
 ## [0.4.11] - 2026-09-08
 
 The catch-up release, and the one where the instruments were audited harder than

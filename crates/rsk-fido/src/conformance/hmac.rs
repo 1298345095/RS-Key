@@ -232,10 +232,12 @@ fn hmac_secret_is_deterministic_per_salt() {
     assert_ne!(out1, other, "a different salt yields a different output");
 }
 
-/// CTAP 2.1 §12.5: "If 'up' is set to false, authenticator returns
-/// CTAP2_ERR_UNSUPPORTED_OPTION." The `up:false` probe skips the presence gate, so
-/// serving the extension there hands out per-credential PRF material with no touch
-/// and no PIN — and does so on the always-uv build too (audit run-32).
+/// The `up:false` probe skips the presence gate, so serving the extension there
+/// hands out per-credential PRF material with no touch and no PIN — and does so on
+/// the always-uv build too (audit run-32). The refusal is the invariant; its code
+/// follows the reference device: §12.5 writes CTAP2_ERR_UNSUPPORTED_OPTION, a
+/// YubiKey 5.8.0 answers CTAP2_ERR_UP_REQUIRED — measured in all three shapes
+/// (allowList with a token, without one, and a discoverable walk), issue #109.
 #[test]
 fn hmac_secret_is_refused_on_an_up_false_probe() {
     let mut a = Authr::fresh();
@@ -246,8 +248,8 @@ fn hmac_secret_is_refused_on_an_up_false_probe() {
     let g = a.send(CTAP_GET_ASSERTION, &ga_hmac_up_false(&ecdh, &SALT));
     assert_eq!(
         g.status,
-        crate::error::CtapError::UnsupportedOption as u8,
-        "hmac-secret must be refused with 0x2b on an up:false request"
+        crate::error::CtapError::UpRequired as u8,
+        "hmac-secret must be refused with 0x3b on an up:false request"
     );
     assert!(g.body.is_empty(), "a refused probe returns no assertion");
 }

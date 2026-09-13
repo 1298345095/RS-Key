@@ -312,11 +312,11 @@ pub fn get_assertion<S: Storage, R: Rng>(
     {
         return Err(CtapError::MissingParameter);
     }
-    // CTAP 2.1 §12.5: hmac-secret is never served on an `up:false` probe. The
-    // output is per-credential secret material and the probe has no consent —
-    // `want_up` would skip the touch while `eval` still ran (audit run-32).
+    // hmac-secret is never served on an `up:false` probe — the output is
+    // per-credential secret material and the probe has no consent (audit run-32).
+    // §12.5 names UNSUPPORTED_OPTION; a YubiKey 5.8.0 answers UP_REQUIRED.
     if req.hmac_secret.present && !req.up {
-        return Err(CtapError::UnsupportedOption);
+        return Err(CtapError::UpRequired);
     }
 
     let rp_id_hash = sha256(req.rp_id.as_bytes());
