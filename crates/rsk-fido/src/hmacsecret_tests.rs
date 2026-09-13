@@ -200,18 +200,21 @@ fn bad_salt_length_rejected() {
 
 /// A value with no sub-fields in it asks for no evaluation, and the oracle reads
 /// it as if the extension had not been sent at all: a YubiKey 5.8.0 completes the
-/// ceremony for an empty map and for a value that is not a map, on `getAssertion`
-/// and `makeCredential` alike, and even on an `up:false` request — where a
-/// *present* extension is refused. Ours used to answer MISSING_PARAMETER to the
-/// empty map and INVALID_CBOR to the boolean, both of which end the ceremony.
+/// ceremony for an empty map and for a boolean, on `getAssertion` and
+/// `makeCredential` alike, and even on an `up:false` request — where a *present*
+/// extension is refused. Ours used to answer MISSING_PARAMETER to the empty map and
+/// INVALID_CBOR to the boolean, both of which end the ceremony.
+///
+/// The refused half is the correction: this was measured on a BOOLEAN and written
+/// as "not a map", which is wider than the reference. Sweeping the value shapes
+/// against a real 5.8.0 gives a map or a boolean accepted and every other CBOR type
+/// refused with CBOR_UNEXPECTED_TYPE — the same for both extensions.
 #[test]
-fn a_value_with_no_subfields_is_not_a_request() {
+fn only_a_map_or_a_boolean_is_a_value_with_no_subfields() {
     for (label, bytes) in [
         ("empty map", &[0xA0u8][..]),
         ("boolean true", &[0xF5u8][..]),
         ("boolean false", &[0xF4u8][..]),
-        ("text string", &[0x61u8, b'x'][..]),
-        ("array", &[0x80u8][..]),
     ] {
         // Matched, not unwrapped: deriving Debug/PartialEq on a struct that holds
         // salt ciphertext just to let a test print it is the wrong trade.
@@ -219,6 +222,21 @@ fn a_value_with_no_subfields_is_not_a_request() {
             Ok(req) => assert!(!req.present, "{label} must read as absent"),
             Err(_) => panic!("{label} must parse, not fail"),
         }
+    }
+    for (label, bytes) in [
+        ("uint 1", &[0x01u8][..]),
+        ("uint 0", &[0x00u8][..]),
+        ("nint -1", &[0x20u8][..]),
+        ("text string", &[0x61u8, b'x'][..]),
+        ("byte string", &[0x41u8, b'x'][..]),
+        ("empty array", &[0x80u8][..]),
+        ("array [1]", &[0x81u8, 0x01][..]),
+    ] {
+        assert!(
+            matches!(parse_bytes(bytes), Err(CtapError::CborUnexpectedType)),
+            "{label} is the wrong CBOR type for this extension and must be refused \
+             as one — reading it as absent is the over-wide rule this replaces"
+        );
     }
 }
 

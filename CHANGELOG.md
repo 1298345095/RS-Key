@@ -40,6 +40,17 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- `hmac-secret` / `hmac-secret-mc` no longer treat *any* non-map value as an
+  absent extension. The rule that an empty value asks for no evaluation was
+  measured on a **boolean** and written down as "a non-map", which is wider than
+  the reference: sweeping the CBOR value shapes against a YubiKey 5.8.0 gives a
+  map or a boolean accepted, and an unsigned int, a negative int, a text string, a
+  byte string or an array answered `CTAP2_ERR_CBOR_UNEXPECTED_TYPE` — identically
+  for both extensions, fourteen cells in all. Ignoring a value of the wrong type
+  let a malformed PRF request complete as though the extension had not been sent,
+  where the reference refuses it. An indefinite-length map is a third case and
+  stays `INVALID_CBOR`. **bcdDevice → 0x09D0.**
+
 - A mandatory parameter that is *present but unusable* no longer answers
   `CTAP2_ERR_MISSING_PARAMETER`. Measured against a YubiKey 5.8.0, the reference
   splits those by field: a `clientDataHash` that is not 32 bytes and an empty

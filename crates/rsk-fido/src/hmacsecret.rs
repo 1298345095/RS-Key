@@ -87,15 +87,21 @@ pub fn parse<'a>(d: &mut Decoder<'a>) -> Result<HmacSecretReq<'a>, CtapError> {
         present: true,
         ..Default::default()
     };
-    // A value with no sub-fields in it — a non-map, or an empty map — asks for no
-    // evaluation, and the oracle treats it as if the extension had not been sent:
-    // no missing-parameter, no up-refusal, the ceremony completes (YubiKey 5.8.0,
-    // both `hmac-secret` and `hmac-secret-mc`). An INDEFINITE-length map is not
-    // that case and stays `def_map`'s INVALID_CBOR.
-    let dt = cbor(d.datatype())?;
-    if dt != minicbor::data::Type::Map && dt != minicbor::data::Type::MapIndef {
-        skip_value(d)?;
-        return Ok(HmacSecretReq::default());
+    // A value with no sub-fields in it asks for no evaluation, and the oracle treats
+    // it as if the extension had not been sent: no missing-parameter, no up-refusal,
+    // the ceremony completes. That was measured on a BOOLEAN and written here as
+    // "a non-map", which is wider than the reference: a YubiKey 5.8.0 accepts only a
+    // map or a boolean and answers CBOR_UNEXPECTED_TYPE to an int, a negative int, a
+    // text string, a byte string or an array — identically for `hmac-secret` and
+    // `hmac-secret-mc`. An INDEFINITE-length map is a third case and stays
+    // `def_map`'s INVALID_CBOR.
+    match cbor(d.datatype())? {
+        minicbor::data::Type::Bool => {
+            skip_value(d)?;
+            return Ok(HmacSecretReq::default());
+        }
+        minicbor::data::Type::Map | minicbor::data::Type::MapIndef => {}
+        _ => return Err(CtapError::CborUnexpectedType),
     }
     let m = def_map(d)?;
     if m == 0 {
