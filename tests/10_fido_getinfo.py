@@ -76,9 +76,8 @@ def _decode(b, i):
     elif info == 26:
         val, i = int.from_bytes(b[i : i + 4], "big"), i + 4
     elif info == 27:
-        # 8-byte uints reach getInfo through `vendorPrototypeConfigCommands`
-        # (0x15), whose vendorCommandIds are u64. Omitting this arm made the
-        # decoder reject the device's own response the day that member appeared.
+        # getInfo carried 8-byte uints in 0x15 until 0x09D5, and they are legal
+        # CBOR: without this arm the decoder rejected the device's own response.
         val, i = int.from_bytes(b[i : i + 8], "big"), i + 8
     else:
         raise ValueError(f"unsupported additional info {info}")

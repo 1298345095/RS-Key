@@ -40,6 +40,17 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- getInfo publishes `vendorPrototypeConfigCommands` (`0x15`) empty, so Yubico
+  Authenticator for Android can read it again. Its CBOR decoder takes no integer
+  above 2³¹−1 and failed the whole response on the seven 64-bit vendorCommandIds,
+  which left its Passkeys section dead on a Yubico-identity key (issue #111).
+  §6.11.3 still gets what it requires, the member present beside `0xFF` in
+  `authenticatorConfigCommands`, and §6.4 lets the list be empty; only the SHOULD
+  to list the ids is given up. The arm answers the same ids, and
+  `docs/protocol.md` lists them. A host test walks the whole response through the
+  subset of CBOR that decoder accepts.
+  **bcdDevice → 0x09D5.**
+
 - OATH and OTP select by their full 8-byte instance AIDs again, the form Yubico's
   Android SDK sends: Yubico Authenticator for Android got `6A82` for OATH on every
   connection (issue #111). Since `0x088C` a SELECT must name a prefix of a

@@ -89,6 +89,15 @@ def test_dropping_smart_card_from_the_transports_violates_the_rule():
     assert r["bucket"] == dv.RULE_VIOLATION
 
 
+def test_vendor_prototype_ids_are_allowed_only_as_an_empty_list():
+    """Issue #111: a 64-bit id in getInfo fails Yubico's Android SDK outright, so the
+    pin has to refuse the seven ids RS-Key used to list, not just any difference."""
+    key = "fido.getinfo.vendorPrototypeConfigCommands"
+    assert dv.classify(key, None, [])["bucket"] == dv.ALLOWED
+    listed = [0x03E43F56B34285E2, 0x1831A40F04A25ED9]
+    assert dv.classify(key, None, listed)["bucket"] == dv.RULE_VIOLATION
+
+
 def test_certifications_absent_on_rsk_is_allowed():
     # A real YubiKey advertises FIDO/FIPS certification levels; RS-Key does not,
     # so the whole field is missing on the rsk side — an expected divergence.

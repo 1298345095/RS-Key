@@ -1240,15 +1240,16 @@ SET     00 10 40 11        # P1=0x40 brightness, P2 = color 1 | status 1<<4 = 0x
    hardware-config path. Send `authenticatorConfig` (CTAP `0x0D`) with subCommand
    `vendorPrototype` (`0xFF`) and subCommandParams `{1: vendorCommandId(u64),
    3: value(uint)}`, gated by an `acfg` pinUvAuthToken (no touch). getInfo's
-   `authenticatorConfigCommands` (`0x1F`) lists `0xFF` and
-   `vendorPrototypeConfigCommands` (`0x15`) enumerates the IDs below, so the arm
-   and its commands are both detectable without probing — §6.11.3 ties the two,
-   so a build that hides one hides both. That array is the whole vendor arm, not
-   only its hardware half — `0x0e6841934e719be7` is the enterprise-attestation RP
-   list (§5), which takes an rpId array at key 4 and writes no hardware; treat an
-   unrecognised id as one you do not drive. The phy IDs, the ones PicoForge
-   writes, set the phy record and take effect on the
-   next boot: `PhysicalVidPid 0x6fcb19b0cbe3acfa` (value `(vid<<16)|pid`),
+   `authenticatorConfigCommands` (`0x1F`) lists `0xFF`, and
+   `vendorPrototypeConfigCommands` (`0x15`) is present, so the arm is detectable
+   without probing — §6.11.3 ties the two, so a build that hides one hides both.
+   From `0x09D5` that array is **empty**: the IDs are 64-bit, and Yubico's Android
+   SDK rejects a getInfo carrying one (issue #111), so they are listed here instead.
+   The arm is more than its hardware half: `0x03e43f56b34285e2` / `0x1831a40f04a25ed9`
+   enable and disable the soft-lock, and `0x0e6841934e719be7` is the
+   enterprise-attestation RP list (§5), which takes an rpId array at key 4 and
+   writes no hardware. The phy IDs, the ones PicoForge writes, set the phy record
+   and take effect on the next boot: `PhysicalVidPid 0x6fcb19b0cbe3acfa` (value `(vid<<16)|pid`),
    `PhysicalLedGpio 0x7b392a394de9f948`, `PhysicalLedBrightness 0x76a85945985d02fd`,
    `PhysicalOptions 0x269f3b09eceb805f` (bitmask `0x2` dimmable / `0x4`
    disable-power-reset / `0x8` led-steady — all three are honoured: dimmable gates

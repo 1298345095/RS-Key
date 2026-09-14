@@ -210,9 +210,9 @@ def part_b(stmt):
         "maxCredentialCountInList": m[0x07],
         "maxCredentialIdLength": m[0x08],
         "algorithms": [{"alg": a["alg"], "type": a["type"]} for a in m[0x0A]],
-        # 0x0B and 0x15 are profile-dependent: a `largeblob-ext` build withdraws the
-        # first with the command it describes, so read both leniently and decide
-        # below rather than dying on a KeyError.
+        # 0x0B is profile-dependent: a `largeblob-ext` build withdraws it with the
+        # command it describes, so read it leniently and decide below rather than
+        # dying on a KeyError.
         "maxSerializedLargeBlobArray": m.get(0x0B),
         "forcePINChange": m[0x0C],
         "minPINLength": m[0x0D],
@@ -221,9 +221,8 @@ def part_b(stmt):
         "transports": m[0x09],
         "maxRPIDsForSetMinPINLength": m[0x10],
         "remainingDiscoverableCredentials": m[0x14],
-        # 0x15 is u64-valued; `10_fido_getinfo`'s decoder needs its 8-byte-uint
-        # arm for this to parse at all. A member missing from THIS map reads as a
-        # drift against the statement, not as an oversight — add both together.
+        # A member missing from THIS map reads as a drift against the statement,
+        # not as an oversight — add both together.
         "vendorPrototypeConfigCommands": m[0x15],
         "attestationFormats": m[0x16],
         # 0x19 encIdentifier and 0x1E encCredStoreState are deliberately NOT
