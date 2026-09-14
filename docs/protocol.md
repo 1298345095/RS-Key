@@ -122,30 +122,32 @@ Authenticator send. A host that stops at the first frame still sees a valid
 (shorter) list.
 
 Seven OATH rules a host has to expect, all matching a YubiKey 5.7.4. `PUT`
-(`0x01`) is strict about the credential body — KEY TLV 16..=66 bytes, digits
-6/7/8, type `0x10`/`0x20`, algorithm 1/2/3, name 1..=64 bytes, the initial moving
-factor on HOTP only and exactly 4 bytes, the PROPERTY byte as the bare `78 vv`
-pair, the four YKOATH tags in that order, no duplicate, no unknown tag and no
-trailing byte. Anything else is `6A80` with **nothing stored**, so a rejected
-`PUT` leaves an existing credential of that name working. (RS-Key also stores the
-password-safe fields `0x83`/`0x84`/`0x85`, ≤255 bytes each, which may sit
-anywhere in the body.) `SET CODE` (`0x03`) holds its key to the same measured
-rule: the `73` TLV is one algorithm byte plus **14..=64 bytes** of key material,
-or empty to remove the access code — anything else is `6A80` and whatever code
-was installed is left exactly as it was. Its proof travels over an **exactly
-8-byte** `74` challenge (`os.urandom(8)`, as ykman sends it); any other width is
-`6A80`, and removing a code needs no challenge at all. `VALIDATE` (`0xA3`) then
-refuses a proof that does not match with `6A80` as well; `6984` from it means
-something else entirely — no access code is installed to match against. And
-PROPERTIES bit 0, *only increasing*, is enforced: a TOTP credential carrying it
-computes only for a challenge strictly greater than the highest one it has served,
-comparing the raw challenge bytes zero-extended on the right — plain numeric `>`
-for the usual 8-byte counter. A challenge at or below that mark is `6A80`, and
-in `CALCULATE ALL` one such credential fails the whole command with an empty
-body. The one exception is a credential a build before this rule stored: its
-body can leave no room for the mark, and `CALCULATE ALL` then reports it with
-`77` (no response) and computes the rest of the store rather than failing — its
-own `CALCULATE` still answers `6A80`.
+(`0x01`) is strict about the credential body — KEY TLV 16..=66 bytes (a secret
+shorter than 14 bytes is refused, not padded: zero-pad it first, as ykman does,
+and the codes do not change), digits 6/7/8, type `0x10`/`0x20`, algorithm 1/2/3,
+name 1..=64 bytes, the initial moving factor on HOTP only and exactly 4 bytes,
+the PROPERTY byte as the bare `78 vv` pair, the four YKOATH tags in that order,
+no duplicate, no unknown tag and no trailing byte. Anything else is `6A80` with
+**nothing stored**, so a rejected `PUT` leaves an existing credential of that
+name working. (RS-Key also stores the password-safe fields `0x83`/`0x84`/`0x85`,
+≤255 bytes each, which may sit anywhere in the body.) `SET CODE` (`0x03`) holds
+its key to the same measured rule: the `73` TLV is one algorithm byte plus
+**14..=64 bytes** of key material, or empty to remove the access code — anything
+else is `6A80` and whatever code was installed is left exactly as it was. Its
+proof travels over an **exactly 8-byte** `74` challenge (`os.urandom(8)`, as
+ykman sends it); any other width is `6A80`, and removing a code needs no
+challenge at all. `VALIDATE` (`0xA3`) then refuses a proof that does not match
+with `6A80` as well; `6984` from it means something else entirely — no access
+code is installed to match against. And PROPERTIES bit 0, *only increasing*, is
+enforced: a TOTP credential carrying it computes only for a challenge strictly
+greater than the highest one it has served, comparing the raw challenge bytes
+zero-extended on the right — plain numeric `>` for the usual 8-byte counter. A
+challenge at or below that mark is `6A80`, and in `CALCULATE ALL` one such
+credential fails the whole command with an empty body. The one exception is a
+credential a build before this rule stored: its body can leave no room for the
+mark, and `CALCULATE ALL` then reports it with `77` (no response) and computes
+the rest of the store rather than failing — its own `CALCULATE` still answers
+`6A80`.
 
 The fourth is the challenge itself. `CALCULATE` (`0xA2`) and `CALCULATE ALL`
 (`0xA4`) take an opaque byte string of **0..=64 bytes** in the `74` TLV and HMAC

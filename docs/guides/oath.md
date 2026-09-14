@@ -210,8 +210,8 @@ wipe the whole key instead, see `rsk offboard`.
   **nothing is stored** — in particular, a rejected `add` over an existing
   account leaves that account working instead of replacing it with one that can
   never produce a code. `ykman` and Yubico Authenticator stay inside these
-  bounds; a client that does not was writing an account no authenticator app
-  could ever use.
+  bounds, and zero-pad a secret shorter than 14 bytes before sending it; that
+  changes no code, because HMAC pads its key with zeros anyway.
 - OATH interop (add → list → calculate → delete, plus TOTP crypto-verified
   against RFC vectors, via both `ykman oath` and Yubico Authenticator) is
   tracked in [interop.md](../interop.md#oath--otp).
@@ -222,6 +222,15 @@ wipe the whole key instead, see `rsk offboard`.
   always `scdaemon` holding the CCID interface after a `gpg` call. Apply the
   `disable-ccid` line from [linux.md](../linux.md) and run
   `gpgconf --kill scdaemon`, then retry.
+- **Adding an account fails with `6A80` ("incorrect parameters in the command
+  data"):** the client sent something the enrollment rules above refuse, most
+  often a secret shorter than 14 bytes that it did not pad. A 16-character
+  base32 secret, which many sites hand out, is 10 bytes, and a YubiKey refuses
+  it the same way. Use a client that pads (`ykman` does), or pad a 16-character
+  secret yourself: remove the spaces and append `AAAAAAA`. That is the same key
+  zero-padded to 14 bytes, so the codes do not change. A client that sends the
+  touch property as `78 01 02` instead of the bare `78 02` pair gets the same
+  error.
 - **Codes are rejected by the site:** TOTP depends on the host clock. The card
   has no battery-backed time and trusts the timestamp `ykman`/the GUI sends.
   Fix the host's clock (NTP) and re-read. For HOTP, a code is rejected once the
