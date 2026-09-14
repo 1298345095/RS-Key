@@ -22,7 +22,7 @@ the USB `bcdDevice`.
 | FIDO / CTAPHID | getInfo `versions` = `U2F_V2`, `FIDO_2_0`, `FIDO_2_1`, `FIDO_2_3`; device version `5.7.4` | CTAP2 (FIDO2) + CTAP1 (U2F) |
 | OpenPGP card | `3.4` | OpenPGP Smart Card Application 3.4 |
 | PIV | `5.7.4` | NIST SP 800-73-4 (command subset) |
-| OATH | SELECT version `5.7.4` | YKOATH (Yubico OATH over CCID), AID `A0 00 00 05 27 21 01` |
+| OATH | SELECT version `5.7.4` | YKOATH (Yubico OATH over CCID), AID `A0 00 00 05 27 21 01 01` |
 | Management | `DeviceInfo` version `5.7.4` | YubiKey Management over the FIDO / CCID transports |
 | USB `bcdDevice` | a four-digit hex counter (current value: the top of [the changelog](https://github.com/TheMaxMur/RS-Key/blob/main/CHANGELOG.md)) | internal build counter — bumped on every behaviour change, **not** a protocol version |
 

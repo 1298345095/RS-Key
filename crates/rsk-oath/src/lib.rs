@@ -20,8 +20,8 @@ pub use rsk_sdk::{AlwaysConfirm, Confirm, Presence, Rng, UserPresence};
 use rsk_sdk::{Apdu, Applet, ResBuf, Sw};
 use zeroize::Zeroize;
 
-/// YKOATH applet AID.
-pub const OATH_AID: &[u8] = &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x21, 0x01];
+/// YKOATH instance AID, all 8 bytes: YubiKit selects by the whole of it, ykman by 7.
+pub const OATH_AID: &[u8] = &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x21, 0x01, 0x01];
 
 /// Version reported in the SELECT response — the shared
 /// [`rsk_sdk::FIRMWARE_VERSION`]. ykman gates protocol features (rename, touch)

@@ -364,7 +364,10 @@ planning for: OpenPGP is selected by the 6-byte AID below, **not** by the 16-byt
 value it reports in DO `4F` (that one carries the device serial and is longer, so
 it is not a prefix — a real YubiKey refuses it too); and a prefix short enough to
 match several applets resolves by registration order, which is the order of the
-table below, so probe with the full AID unless you mean to.
+table below, so probe with the full AID unless you mean to. OATH and OTP are
+registered by their full 8-byte instance AIDs, as a YubiKey registers them:
+Yubico's Android SDK selects by all 8 bytes, while ykman sends the 7-byte prefix,
+and both select (`0x09D4`+; from `0x088C` to `0x09D3` only the 7-byte form did).
 
 **Where that SELECT works.** The recipe above is CCID's (§1.1), and two of the ten
 rows below are not CCID applets: **the FIDO2 backup id and the standalone U2F AID
@@ -384,8 +387,8 @@ all ten AIDs, and recorded in the **Transport** column.
 | FIDO2 (backup id) | `B0 00 00 06 47 2F 00 01` | none — unregistered | RS-Key | — |
 | U2F (standalone id) | `A0 00 00 05 27 10 02` | none — unregistered; U2F rides the FIDO2 AID | Standard (CTAP1/U2F) | — |
 | **Management** | `A0 00 00 05 27 47 11 17` | CCID | Yubico-compatible | **yes — §6** |
-| OATH | `A0 00 00 05 27 21 01` | CCID | Yubico OATH | data only |
-| OTP | `A0 00 00 05 27 20 01` | CCID | Yubico OTP | data only |
+| OATH | `A0 00 00 05 27 21 01 01` | CCID | Yubico OATH | data only |
+| OTP | `A0 00 00 05 27 20 01 01` | CCID | Yubico OTP | data only |
 | PIV | `A0 00 00 03 08 00 00 10 00 01 00` | CCID | NIST SP 800-73 | data only |
 | OpenPGP | `D2 76 00 01 24 01` | CCID | OpenPGP card 3.x | data only |
 | **Rescue** | `A0 58 3F C1 9B 7E 4F 21` | CCID | **RS-Key-specific** | **yes — §7** |

@@ -40,6 +40,16 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- OATH and OTP select by their full 8-byte instance AIDs again, the form Yubico's
+  Android SDK sends: Yubico Authenticator for Android got `6A82` for OATH on every
+  connection (issue #111). Since `0x088C` a SELECT must name a prefix of a
+  registered AID, and both applets were registered by the 7-byte prefix ykman
+  sends, so the whole AID stopped matching; that change lengthened PIV's
+  registration and not these two. A YubiKey 5.8.0 selects both forms and refuses
+  `…01 00` and a ninth byte, and so does this build; the 7-byte form every RS-Key
+  host tool sends still selects.
+  **bcdDevice → 0x09D4.**
+
 - makeCredential answers `CTAP2_ERR_MISSING_PARAMETER` again when `rp` or `user`
   is sent without its `id` sub-field. Splitting the mandatory-parameter guard by
   field regressed those two: an absent sub-field leaves exactly the empty value a

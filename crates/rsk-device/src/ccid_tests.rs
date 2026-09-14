@@ -819,3 +819,59 @@ fn disabling_both_fido_applications_removes_the_aid() {
         "with neither application enabled the applet is not there at all"
     );
 }
+
+/// Issue #111: YubiKit selects OATH and OTP by the whole 8-byte instance AID, ykman
+/// by a 7-byte prefix of it. A YubiKey 5.8.0 answers both and refuses anything past
+/// or beside those 8 bytes — the same cells, measured there, are pinned here.
+#[test]
+fn oath_and_otp_select_by_the_aids_yubikit_and_ykman_send() {
+    const OK: rsk_sdk::Sw = rsk_sdk::Sw::OK;
+    const NOT_FOUND: rsk_sdk::Sw = rsk_sdk::Sw::FILE_NOT_FOUND;
+    let env = Env::new();
+    let mut ccid = env.ccid();
+    for (who, aid, want) in [
+        (
+            "YubiKit OATH",
+            &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x21, 0x01, 0x01][..],
+            OK,
+        ),
+        (
+            "ykman OATH",
+            &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x21, 0x01][..],
+            OK,
+        ),
+        (
+            "YubiKit OTP",
+            &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x20, 0x01, 0x01][..],
+            OK,
+        ),
+        (
+            "ykman OTP",
+            &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x20, 0x01][..],
+            OK,
+        ),
+        (
+            "OATH, last byte wrong",
+            &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x21, 0x01, 0x00][..],
+            NOT_FOUND,
+        ),
+        (
+            "OATH, one byte past",
+            &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x21, 0x01, 0x01, 0x00][..],
+            NOT_FOUND,
+        ),
+        (
+            "OTP, last byte wrong",
+            &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x20, 0x01, 0x00][..],
+            NOT_FOUND,
+        ),
+        (
+            "OTP, one byte past",
+            &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x20, 0x01, 0x01, 0x00][..],
+            NOT_FOUND,
+        ),
+    ] {
+        let res = ccid.handle_apdu(&select(aid), 0).to_vec();
+        assert_eq!(sw(&res), want, "{who}");
+    }
+}

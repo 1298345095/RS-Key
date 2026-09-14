@@ -26,8 +26,8 @@ pub mod ticket;
 #[cfg(test)]
 mod tests_support;
 
-/// OTP applet AID.
-pub const OTP_AID: &[u8] = &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x20, 0x01];
+/// OTP instance AID, all 8 bytes: YubiKit selects by the whole of it, ykman by 7.
+pub const OTP_AID: &[u8] = &[0xA0, 0x00, 0x00, 0x05, 0x27, 0x20, 0x01, 0x01];
 
 /// Version reported in the status record — the shared
 /// [`rsk_sdk::FIRMWARE_VERSION`].
