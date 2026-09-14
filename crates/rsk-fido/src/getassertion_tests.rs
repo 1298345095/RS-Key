@@ -3927,6 +3927,34 @@ fn a_present_but_unusable_parameter_is_not_a_missing_one() {
         buf[..n].to_vec()
     };
 
+    // The `id` sub-field ABSENT from the rp / user map, which is a third thing
+    // again: the key IS sent, its `id` is not. `which` picks the entity to gut.
+    let mc_no_id = |which: u8| {
+        let mut buf = [0u8; 256];
+        let n = {
+            let mut e = Encoder::new(Cursor::new(&mut buf[..]));
+            e.map(4).unwrap();
+            e.u8(1).unwrap().bytes(&CDH).unwrap();
+            e.u8(2).unwrap().map(1).unwrap();
+            if which == 2 {
+                e.str("name").unwrap().str("ex").unwrap();
+            } else {
+                e.str("id").unwrap().str("ok.com").unwrap();
+            }
+            e.u8(3).unwrap().map(1).unwrap();
+            if which == 3 {
+                e.str("name").unwrap().str("a").unwrap();
+            } else {
+                e.str("id").unwrap().bytes(&[1u8, 2, 3, 4]).unwrap();
+            }
+            e.u8(4).unwrap().array(1).unwrap().map(2).unwrap();
+            e.str("alg").unwrap().i64(ALG_ES256).unwrap();
+            e.str("type").unwrap().str("public-key").unwrap();
+            e.writer().position()
+        };
+        buf[..n].to_vec()
+    };
+
     // The same request truncated after `keys` mandatory keys.
     let mc_trunc = |keys: u64| {
         let mut buf = [0u8; 256];
@@ -4017,6 +4045,24 @@ fn a_present_but_unusable_parameter_is_not_a_missing_one() {
         (
             "MC {1,2} only",
             mc_trunc(2),
+            true,
+            CtapError::MissingParameter
+        ),
+        // An `id` missing from INSIDE the entity map. The value it leaves behind
+        // is the same empty one a present-but-empty `id` leaves, so the shape
+        // checks below cannot tell them apart — and the reference does: it calls
+        // this absence `MissingParameter` and the empty value a length error.
+        // Both of these regressed to the shape codes on the first split, and only
+        // the two-key hardware differential caught it.
+        (
+            "MC rp map has no id",
+            mc_no_id(2),
+            true,
+            CtapError::MissingParameter
+        ),
+        (
+            "MC user map has no id",
+            mc_no_id(3),
             true,
             CtapError::MissingParameter
         ),

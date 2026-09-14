@@ -40,6 +40,17 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- makeCredential answers `CTAP2_ERR_MISSING_PARAMETER` again when `rp` or `user`
+  is sent without its `id` sub-field. Splitting the mandatory-parameter guard by
+  field regressed those two: an absent sub-field leaves exactly the empty value a
+  present-but-empty one leaves, so the shape checks read the absence as a length
+  or parameter error. A YubiKey 5.8.0 calls it missing, which it is — the key was
+  sent, the `id` inside it was not. The parser records whether each `id` was sent,
+  the way `hmacsecret` already records `peer_present`, and absence is judged before
+  shape. Found by the two-key hardware differential; the host tests and the
+  emulator run both agreed at the time because neither asked.
+  **bcdDevice → 0x09D3.**
+
 - getAssertion now type-checks `credProtect`, `minPinLength` and `hmac-secret-mc`
   as well. The rule the previous entry states is narrower than the reference's
   actual one: a YubiKey 5.8.0 type-checks the value of every extension it

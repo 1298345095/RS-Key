@@ -120,7 +120,14 @@ fn alg_to_curve(alg: i64) -> Option<(i64, u8)> {
 struct Request<'a> {
     client_data_hash: &'a [u8],
     rp_id: &'a str,
+    /// Whether `rp.id` / `user.id` were sent AT ALL. The value alone cannot say:
+    /// an absent sub-field and a present empty one both leave the default, and the
+    /// reference answers them differently — `MissingParameter` for the absence,
+    /// a length/parameter error for the empty value. The top-level keys need no
+    /// such flag; `parse`'s ordered-key check sees those.
+    rp_id_present: bool,
     user_id: &'a [u8],
+    user_id_present: bool,
     user_name: &'a str,
     user_display_name: &'a str,
     has_pubkey_param: bool,
@@ -172,7 +179,9 @@ fn parse(data: &[u8]) -> Result<Request<'_>, CtapError> {
     let mut req = Request {
         client_data_hash: &[],
         rp_id: "",
+        rp_id_present: false,
         user_id: &[],
+        user_id_present: false,
         user_name: "",
         user_display_name: "",
         has_pubkey_param: false,
@@ -259,7 +268,10 @@ fn parse_rp_entity<'a>(d: &mut Decoder<'a>, req: &mut Request<'a>) -> Result<(),
     let m = def_map(d)?;
     for _ in 0..m {
         match cbor(d.str())? {
-            "id" => req.rp_id = cbor(d.str())?,
+            "id" => {
+                req.rp_id_present = true;
+                req.rp_id = cbor(d.str())?;
+            }
             // rp.name must be a text string when present (conformance
             // MakeCredential Req-2 F-2); read-as-text so a non-text value
             // surfaces as CBOR_UNEXPECTED_TYPE.
@@ -277,7 +289,10 @@ fn parse_user_entity<'a>(d: &mut Decoder<'a>, req: &mut Request<'a>) -> Result<(
     let m = def_map(d)?;
     for _ in 0..m {
         match cbor(d.str())? {
-            "id" => req.user_id = cbor(d.bytes())?,
+            "id" => {
+                req.user_id_present = true;
+                req.user_id = cbor(d.bytes())?;
+            }
             "name" => req.user_name = cbor(d.str())?,
             "displayName" => req.user_display_name = cbor(d.str())?,
             _ => skip_value(d)?,
@@ -374,6 +389,9 @@ pub fn make_credential<S: Storage, R: Rng>(
     // answer by length, the user entity answers by content (YubiKey 5.8.0: a 0/31/33
     // byte clientDataHash and an empty rpId are `0x03`, an empty or 65-byte user.id
     // is `0x02`; absent keys are `0x14` on both keys already).
+    if !req.rp_id_present || !req.user_id_present {
+        return Err(CtapError::MissingParameter);
+    }
     if req.client_data_hash.len() != 32 || req.rp_id.is_empty() {
         return Err(CtapError::InvalidLength);
     }
