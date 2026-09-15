@@ -38,187 +38,6 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
-### Fixed
-
-- The published metadata statements mirror getInfo again. Three firmware changes
-  had moved the device without them: `transports` and `transportsForReset` gained
-  `smart-card` once getInfo reported the FIDO AID's CCID route (`0x09D1`),
-  `firmwareVersion` became 5.8.0 (`0x09CC`), and `encIdentifier` and
-  `encCredStoreState` are published from provisioning (`0x09CB`). Both statements
-  now say `smart-card`, carry `329728` in `firmwareVersion` and
-  `authenticatorVersion`, and hold the empty placeholders MDS3 takes for the two
-  encrypted members, whose value changes on every call.
-  `tests/62_metadata_statement.py` requires a placeholder for each member the device
-  sends; `tests/17_cred_store_state.py` and `tests/19_enc_identifier.py`, which
-  still expected both absent after a reset, expect them published, and the pico-fido
-  case listed as failing for that reason is no longer listed. Metadata and tests
-  only; no firmware change.
-
-- getInfo publishes `vendorPrototypeConfigCommands` (`0x15`) empty, so Yubico
-  Authenticator for Android can read it again. Its CBOR decoder takes no integer
-  above 2³¹−1 and failed the whole response on the seven 64-bit vendorCommandIds,
-  which left its Passkeys section dead on a Yubico-identity key (issue #111).
-  §6.11.3 still gets what it requires, the member present beside `0xFF` in
-  `authenticatorConfigCommands`, and §6.4 lets the list be empty; only the SHOULD
-  to list the ids is given up. The arm answers the same ids, and
-  `docs/protocol.md` lists them. A host test walks the whole response through the
-  subset of CBOR that decoder accepts.
-  **bcdDevice → 0x09D5.**
-
-- OATH and OTP select by their full 8-byte instance AIDs again, the form Yubico's
-  Android SDK sends: Yubico Authenticator for Android got `6A82` for OATH on every
-  connection (issue #111). Since `0x088C` a SELECT must name a prefix of a
-  registered AID, and both applets were registered by the 7-byte prefix ykman
-  sends, so the whole AID stopped matching; that change lengthened PIV's
-  registration and not these two. A YubiKey 5.8.0 selects both forms and refuses
-  `…01 00` and a ninth byte, and so does this build; the 7-byte form every RS-Key
-  host tool sends still selects.
-  **bcdDevice → 0x09D4.**
-
-- makeCredential answers `CTAP2_ERR_MISSING_PARAMETER` again when `rp` or `user`
-  is sent without its `id` sub-field. Splitting the mandatory-parameter guard by
-  field regressed those two: an absent sub-field leaves exactly the empty value a
-  present-but-empty one leaves, so the shape checks read the absence as a length
-  or parameter error. A YubiKey 5.8.0 calls it missing, which it is — the key was
-  sent, the `id` inside it was not. The parser records whether each `id` was sent,
-  the way `hmacsecret` already records `peer_present`, and absence is judged before
-  shape. Found by the two-key hardware differential; the host tests and the
-  emulator run both agreed at the time because neither asked.
-  **bcdDevice → 0x09D3.**
-
-- getAssertion now type-checks `credProtect`, `minPinLength` and `hmac-secret-mc`
-  as well. The rule the previous entry states is narrower than the reference's
-  actual one: a YubiKey 5.8.0 type-checks the value of every extension it
-  *advertises*, on every command — including the three that do nothing on
-  getAssertion — and ignores an unknown name whatever it carries. Measured over
-  both, `credProtect` takes a uint, `minPinLength` a bool, `hmac-secret-mc` a map
-  or a boolean, and each answers `CTAP2_ERR_CBOR_UNEXPECTED_TYPE` to anything
-  else, while an unregistered name is ignored as an int, a string or an array.
-  Four of the seven advertised names were checked and three were skipped, so a
-  malformed request completed as though it had asked for nothing. The unknown-name
-  half is pinned by a test too: tightening into it would refuse requests other
-  authenticators accept. **bcdDevice → 0x09D2.**
-
-- getInfo's `transports` (0x09) and `transportsForReset` (0x1A) now say
-  `["usb", "smart-card"]`. They said `["usb"]` on the reading that the FIDO applet
-  lives on USB-HID only, and it does not: the FIDO AID is routed onto CCID, and
-  `rsk_device::ccid_fido` forwards every CTAP2 command to the same `process_cbor`
-  the HID transport calls, with no per-command filter. Measured on hardware —
-  `SELECT A0000006472F0001` over PC/SC answers `U2F_V2`, `NFCCTAP_MSG` carrying
-  `authenticatorGetInfo` returns the whole map, and `authenticatorReset` reaches
-  the applet there too (it answers `CTAP2_ERR_NOT_ALLOWED` for the closed reset
-  window, which is the applet's own answer rather than a transport refusal).
-  `transportsForReset` exists to tell a platform where a reset can be driven, so
-  the old value denied a path the device accepts. `docs/threat-model.md` and
-  `docs/protocol.md` §5.2 had both described the CCID route all along. Still no
-  `nfc`: this device has no radio. **bcdDevice → 0x09D1.**
-
-- `hmac-secret` / `hmac-secret-mc` no longer treat *any* non-map value as an
-  absent extension. The rule that an empty value asks for no evaluation was
-  measured on a **boolean** and written down as "a non-map", which is wider than
-  the reference: sweeping the CBOR value shapes against a YubiKey 5.8.0 gives a
-  map or a boolean accepted, and an unsigned int, a negative int, a text string, a
-  byte string or an array answered `CTAP2_ERR_CBOR_UNEXPECTED_TYPE` — identically
-  for both extensions, fourteen cells in all. Ignoring a value of the wrong type
-  let a malformed PRF request complete as though the extension had not been sent,
-  where the reference refuses it. An indefinite-length map is a third case and
-  stays `INVALID_CBOR`. **bcdDevice → 0x09D0.**
-
-- A mandatory parameter that is *present but unusable* no longer answers
-  `CTAP2_ERR_MISSING_PARAMETER`. Measured against a YubiKey 5.8.0, the reference
-  splits those by field: a `clientDataHash` that is not 32 bytes and an empty
-  `rpId` are `CTAP1_ERR_INVALID_LENGTH`, while an empty or over-long `user.id` is
-  `CTAP1_ERR_INVALID_PARAMETER`. One guard per command answered all of them with
-  "missing", which is the one thing they are not — the key was sent. Splitting
-  them exposed a second defect underneath: the ordered-key check in both parsers
-  only fires when a LATER key arrives to compare against, so a request that simply
-  stops before a mandatory key (`{}`, `{1}`, `{1,2}`) walked out unjudged and was
-  answered downstream by the empty value it left behind. That read as the right
-  answer only while the guard also said "missing"; both parsers now judge a
-  truncated map themselves. Absent keys still answer
-  `CTAP2_ERR_MISSING_PARAMETER` on both keys, which is what says the guard was
-  narrowed rather than moved. `RP_ID_MAX` is deliberately KEPT even though the
-  reference accepts a 300-character `rpId`: that is the reference being looser,
-  where parity earns no change. **bcdDevice → 0x09CF.**
-
-- The scrambled PIN pad no longer draws its digit order from the shared DRBG, so a
-  host-raised PIN ceremony cannot panic the trusted display. A CTAP command holds
-  the store, the DRBG, the presence backend and the FIDO state borrowed for its
-  whole dispatch and then calls the panel through them, so the pad's
-  `rng.borrow_mut()` was a `BorrowMutError` — under `panic-halt`, a key that
-  answers nothing until it is unplugged. It needed built-in UV, `scramble_pin` on
-  and a display build, which is the other half of
-  ([#107](https://github.com/TheMaxMur/RS-Key/issues/107)): dropping the probe's
-  `uv` stopped the pad being raised by `ssh-keygen`, and any client that asks for
-  built-in UV deliberately still raised it. The order comes from a per-panel seed
-  drawn once at construction and an HMAC-SHA256 counter now, so it is still
-  unpredictable across entries and no longer reads a cell somebody else is
-  holding. The comment that should have caught this existed and said `fs`; a new
-  `check.sh` row derives the held cells from the dispatch and the reachable
-  surface from the handle, so the rule is no longer a sentence.
-  **bcdDevice → 0x09CE.**
-
-- A silent `up:false` getAssertion carrying a token-less `uv: true` no longer opens
-  the trusted display's PIN pad. That pair is what OpenSSH's `key_lookup` sends
-  before enrolling a resident key, so `ssh-keygen -t ed25519-sk -O resident` — and
-  any browser registering a discoverable credential — turned a probe the user never
-  sees into a modal ceremony: libfido2 gave up with `FIDO_ERR_RX`, and a display
-  board sat on its screen until it was physically reset
-  ([#107](https://github.com/TheMaxMur/RS-Key/issues/107)). `uv` is dropped rather
-  than refused, because `sk_enroll` continues only when that probe answers
-  `NO_CREDENTIALS`; refusing it would have swapped a wedge for a fast failure and
-  left `-O resident` broken. The response's UV flag stays 0, and a client gets the
-  same answer today by simply omitting `uv`. Screenless builds are unchanged — they
-  do not advertise `uv`, so no client asks them for it. **bcdDevice → 0x09CD.**
-
-### Changed
-
-- The version reported to host tools moves from **5.7.4 to 5.8.0**. It is one
-  default in `crates/rsk-sdk/build.rs` (`FW_VERSION` still overrides it) and every
-  applet derives from it, so CTAP getInfo 0x0E, the management DeviceInfo TLV,
-  PIV, OATH, OTP, OpenPGP and the CTAPHID INIT bytes all move together. The
-  reference key this project is measured against is a YubiKey 5.8.0 now, and the
-  CTAP 2.2/2.3 surface it gained is the surface RS-Key already implements.
-  `ykman` reads the newer DeviceInfo fields through defaults rather than version
-  gates, so nothing on the host requires the tags RS-Key does not emit.
-  **bcdDevice → 0x09CC.**
-
-- getInfo publishes `encIdentifier` (0x19) and `encCredStoreState` (0x1E) from
-  provisioning, not from the first `pcmr` request. Both are sealed under the
-  persistent pinUvAuthToken, so a platform without that token could never decrypt
-  either — withholding them bought no privacy and hid them from the CTAP 2.3
-  conformance runner, which reads getInfo before it is in a position to ask for a
-  token. A YubiKey 5.8.0 publishes both on a key with no PIN set at all. The grant
-  is now minted where the seed it accompanies is, so a completed
-  `authenticatorReset` *rotates* it instead of leaving the record absent — which is
-  what closes an old holder out — and it authorizes nothing until a PIN exists
-  (`credmgmt::authorized_by_ppuat`). **bcdDevice → 0x09CB.**
-
-### Fixed
-
-- An `hmac-secret` / `hmac-secret-mc` value carrying no sub-fields — an empty map,
-  or a value that is not a map — is read as if the extension had not been sent,
-  instead of ending the ceremony. It used to be `MISSING_PARAMETER` for the empty
-  map and `INVALID_CBOR` for the non-map, so a platform that sent either got no
-  assertion and no credential; a YubiKey 5.8.0 completes both, on `getAssertion`
-  and `makeCredential` alike, and does so even on an `up:false` request where a
-  *present* extension is refused. An absent `keyAgreement` inside a map that does
-  carry other fields is now `MISSING_PARAMETER` rather than the ECDH's
-  `INVALID_PARAMETER`, matching the same device. An indefinite-length map is
-  unchanged — it is a map, and still `INVALID_CBOR`. Relevant to
-  [#109](https://github.com/TheMaxMur/RS-Key/issues/109). **bcdDevice → 0x09CA.**
-
-### Changed
-
-- `hmac-secret` on an `up:false` getAssertion is refused with
-  `CTAP2_ERR_UP_REQUIRED` instead of `CTAP2_ERR_UNSUPPORTED_OPTION`. The refusal
-  itself is unchanged — a silent probe still never receives PRF material. CTAP 2.1
-  §12.5 names the latter, but a YubiKey 5.8.0 answers the former in every shape
-  measured (allowList with and without a token, and a discoverable walk), and a
-  client can act on "retry with user presence" where "unsupported option" invites
-  it to abandon the extension. Relevant to
-  [#109](https://github.com/TheMaxMur/RS-Key/issues/109). **bcdDevice → 0x09C9.**
-
 ## [0.4.11] - 2026-09-08
 
 The catch-up release, and the one where the instruments were audited harder than
@@ -261,6 +80,14 @@ If you read nothing else:
   `attestationFormatsPreference`, `encCredStoreState` with conditional mediation,
   and an enterprise-attestation RP-ID list you can actually aim. Two members are
   deliberately absent and say why at the skip.
+- **Host tools read firmware `5.8.0` now, not `5.7.4`.** One default in
+  `crates/rsk-sdk/build.rs` feeds getInfo, CTAPHID `INIT`, the management
+  `DeviceInfo`, the PIV, OATH and OTP applets and OpenPGP's vendor `VERSION`
+  command, so they move together; `FW_VERSION` still overrides it. The reference
+  key RS-Key is measured against is a YubiKey 5.8.0 now, and `ykman` reads the
+  newer `DeviceInfo` fields through defaults rather than version gates, so it
+  needs no tag RS-Key does not emit. It is a compatibility constant, not a build
+  identity — that is `bcdDevice`, below.
 - **FIDO now answers on the card interface too.** CTAP 2.x as ISO 7816 APDUs over
   CCID, so tools that never learned CTAPHID reach the same authenticator.
 - **`gpg`'s `kdf-setup` ran both OpenPGP references down to blocked
@@ -270,6 +97,17 @@ If you read nothing else:
   `gpg` issues no `CHANGE REFERENCE DATA` of its own, so the card was the only
   party that could move them. The only way back was a factory reset. Sixteen
   questions run against a real YubiKey 5.7.4, sixteen identical answers.
+- **Two defects broke OATH and Passkeys in Yubico Authenticator for Android
+  ([#111](https://github.com/TheMaxMur/RS-Key/issues/111)).** On a
+  Yubico-identity key, OATH answered `6A82` on every connection: Yubico's
+  Android SDK selects by the full 8-byte instance AID, and since 0.4.10 a SELECT
+  must name a prefix of a registered AID, while OATH and OTP were registered by
+  the 7-byte form `ykman` sends. Passkeys never loaded either: the SDK's CBOR
+  decoder takes no integer above 2³¹−1, so the 64-bit ids 0.4.10 put in
+  getInfo's `vendorPrototypeConfigCommands` failed the whole response. Both
+  applets take either form now, as a YubiKey 5.8.0 does. getInfo sends that
+  member empty, where a YubiKey omits it; the ids still work. Checked against
+  YubiKit's own AIDs and CBOR decoder, not yet on a phone.
 - **ML-DSA-87 (COSE `-50`)** joins -65 and -44, byte-exact against the ACVP
   vectors. Still not advertised by default: shipping Firefoxes reject a getInfo
   carrying an unknown COSE id, and that is measured, not assumed.
@@ -292,6 +130,14 @@ If you read nothing else:
   trustworthy. The buffer is sized to the measured worst glyph now, and the census
   sweeps all 95 against every full-frame renderer instead of the one hand-picked
   label that let it certify a ceiling it never reached.
+- **`ssh-keygen -O resident` no longer opens a PIN pad on a display board
+  ([#107](https://github.com/TheMaxMur/RS-Key/issues/107)).** Before enrolling,
+  OpenSSH looks for an existing credential with a silent `up:false` probe,
+  adding `uv: true` when it was given no PIN and the key advertises `uv`. On a
+  display board with a PIN that ran built-in UV — a modal PIN pad inside a probe
+  the user never sees — and libfido2 gave up with `FIDO_ERR_RX`, so `ssh-keygen`
+  stopped there. `uv` is dropped on such a probe now rather than refused:
+  OpenSSH's `sk_enroll` goes on only when the probe answers `NO_CREDENTIALS`.
 - **Every applet reset re-arms the at-rest scrub now; none did before.** FIDO,
   PIV, OATH and OpenPGP — five wipe-sweep sites, measured at zero — so a factory
   reset could tombstone a verifier still rooted in the public chip serial and
@@ -321,15 +167,15 @@ If you read nothing else:
   machine-readable line in the release body now, spelled in
   [`docs/anti-rollback.md`](docs/anti-rollback.md) and held by a gate. Absence is
   the answer, not "unknown".
-- **`bcdDevice` is `0x09C8`.** A firmware-behaviour change bumps it; the counter
+- **`bcdDevice` is `0x09D5`.** A firmware-behaviour change bumps it; the counter
   counts builds, not features. The row that holds it could not tell an entry
   recording a bump from a file that merely moved, and three shipped builds went
   through that hole.
 
-Everything else is grouped below in the usual sections, security last — 296
-entries, most of them in `Fixed` and `Security`, because the sweep above is
-written out site by site. The `Internal` one is where the instruments that could
-not fail are written down, each with what it missed.
+Everything else is grouped below in the usual sections, `Security` and
+`Internal` last — 310 entries, most of them in `Fixed` and `Security`, because
+the sweep above is written out site by site. The `Internal` one is where the
+instruments that could not fail are written down, each with what it missed.
 
 **This release is a downgrade-fix, and carries the marker that says so.** Every
 image the project has published before it reads a flash probe that *failed* as a
@@ -2003,6 +1849,36 @@ the release carries the flag, the decision stays yours
 
 ### Changed
 
+- The version reported to host tools moves from **5.7.4 to 5.8.0**. It is one
+  default in `crates/rsk-sdk/build.rs` (`FW_VERSION` still overrides it) and every
+  applet derives from it, so CTAP getInfo 0x0E, the management DeviceInfo TLV,
+  PIV, OATH, OTP, OpenPGP and the CTAPHID INIT bytes all move together. The
+  reference key this project is measured against is a YubiKey 5.8.0 now, and the
+  CTAP 2.2/2.3 surface it gained is the surface RS-Key already implements.
+  `ykman` reads the newer DeviceInfo fields through defaults rather than version
+  gates, so nothing on the host requires the tags RS-Key does not emit.
+  **bcdDevice → 0x09CC.**
+
+- getInfo publishes `encIdentifier` (0x19) and `encCredStoreState` (0x1E) from
+  provisioning, not from the first `pcmr` request. Both are sealed under the
+  persistent pinUvAuthToken, so a platform without that token could never decrypt
+  either — withholding them bought no privacy and hid them from the CTAP 2.3
+  conformance runner, which reads getInfo before it is in a position to ask for a
+  token. A YubiKey 5.8.0 publishes both on a key with no PIN set at all. The grant
+  is now minted where the seed it accompanies is, so a completed
+  `authenticatorReset` *rotates* it instead of leaving the record absent — which is
+  what closes an old holder out — and it authorizes nothing until a PIN exists
+  (`credmgmt::authorized_by_ppuat`). **bcdDevice → 0x09CB.**
+
+- `hmac-secret` on an `up:false` getAssertion is refused with
+  `CTAP2_ERR_UP_REQUIRED` instead of `CTAP2_ERR_UNSUPPORTED_OPTION`. The refusal
+  itself is unchanged — a silent probe still never receives PRF material. CTAP 2.1
+  §12.5 names the latter, but a YubiKey 5.8.0 answers the former in every shape
+  measured (allowList with and without a token, and a discoverable walk), and a
+  client can act on "retry with user presence" where "unsupported option" invites
+  it to abandon the extension. Relevant to
+  [#109](https://github.com/TheMaxMur/RS-Key/issues/109). **bcdDevice → 0x09C9.**
+
 - **Trusted-display page changes now use a retained, framebuffer-less DMA
   compositor.** One scene build records the laid-out frame. Per-boot keyed
   128-bit tags keep unchanged 32×32 visual-state tiles on the panel. Typed UI
@@ -2344,6 +2220,149 @@ the release carries the flag, the decision stays yours
   because the eight new events broke eleven cases that indexed by number.
 
 ### Fixed
+
+- The published metadata statements mirror getInfo again. Three firmware changes
+  had moved the device without them: `transports` and `transportsForReset` gained
+  `smart-card` once getInfo reported the FIDO AID's CCID route (`0x09D1`),
+  `firmwareVersion` became 5.8.0 (`0x09CC`), and `encIdentifier` and
+  `encCredStoreState` are published from provisioning (`0x09CB`). Both statements
+  now say `smart-card`, carry `329728` in `firmwareVersion` and
+  `authenticatorVersion`, and hold the empty placeholders MDS3 takes for the two
+  encrypted members, whose value changes on every call.
+  `tests/62_metadata_statement.py` requires a placeholder for each member the device
+  sends; `tests/17_cred_store_state.py` and `tests/19_enc_identifier.py`, which
+  still expected both absent after a reset, expect them published, and the pico-fido
+  case listed as failing for that reason is no longer listed. Metadata and tests
+  only; no firmware change.
+
+- getInfo publishes `vendorPrototypeConfigCommands` (`0x15`) empty, so Yubico
+  Authenticator for Android can read it again. Its CBOR decoder takes no integer
+  above 2³¹−1 and failed the whole response on the seven 64-bit vendorCommandIds,
+  which left its Passkeys section dead on a Yubico-identity key (issue #111).
+  §6.11.3 still gets what it requires, the member present beside `0xFF` in
+  `authenticatorConfigCommands`, and §6.4 lets the list be empty; only the SHOULD
+  to list the ids is given up. The arm answers the same ids, and
+  `docs/protocol.md` lists them. A host test walks the whole response through the
+  subset of CBOR that decoder accepts.
+  **bcdDevice → 0x09D5.**
+
+- OATH and OTP select by their full 8-byte instance AIDs again, the form Yubico's
+  Android SDK sends: Yubico Authenticator for Android got `6A82` for OATH on every
+  connection (issue #111). Since `0x088C` a SELECT must name a prefix of a
+  registered AID, and both applets were registered by the 7-byte prefix ykman
+  sends, so the whole AID stopped matching; that change lengthened PIV's
+  registration and not these two. A YubiKey 5.8.0 selects both forms and refuses
+  `…01 00` and a ninth byte, and so does this build; the 7-byte form every RS-Key
+  host tool sends still selects.
+  **bcdDevice → 0x09D4.**
+
+- makeCredential answers `CTAP2_ERR_MISSING_PARAMETER` again when `rp` or `user`
+  is sent without its `id` sub-field. Splitting the mandatory-parameter guard by
+  field regressed those two: an absent sub-field leaves exactly the empty value a
+  present-but-empty one leaves, so the shape checks read the absence as a length
+  or parameter error. A YubiKey 5.8.0 calls it missing, which it is — the key was
+  sent, the `id` inside it was not. The parser records whether each `id` was sent,
+  the way `hmacsecret` already records `peer_present`, and absence is judged before
+  shape. Found by the two-key hardware differential; the host tests and the
+  emulator run both agreed at the time because neither asked.
+  **bcdDevice → 0x09D3.**
+
+- getAssertion now type-checks `credProtect`, `minPinLength` and `hmac-secret-mc`
+  as well. The rule the previous entry states is narrower than the reference's
+  actual one: a YubiKey 5.8.0 type-checks the value of every extension it
+  *advertises*, on every command — including the three that do nothing on
+  getAssertion — and ignores an unknown name whatever it carries. Measured over
+  both, `credProtect` takes a uint, `minPinLength` a bool, `hmac-secret-mc` a map
+  or a boolean, and each answers `CTAP2_ERR_CBOR_UNEXPECTED_TYPE` to anything
+  else, while an unregistered name is ignored as an int, a string or an array.
+  Four of the seven advertised names were checked and three were skipped, so a
+  malformed request completed as though it had asked for nothing. The unknown-name
+  half is pinned by a test too: tightening into it would refuse requests other
+  authenticators accept. **bcdDevice → 0x09D2.**
+
+- getInfo's `transports` (0x09) and `transportsForReset` (0x1A) now say
+  `["usb", "smart-card"]`. They said `["usb"]` on the reading that the FIDO applet
+  lives on USB-HID only, and it does not: the FIDO AID is routed onto CCID, and
+  `rsk_device::ccid_fido` forwards every CTAP2 command to the same `process_cbor`
+  the HID transport calls, with no per-command filter. Measured on hardware —
+  `SELECT A0000006472F0001` over PC/SC answers `U2F_V2`, `NFCCTAP_MSG` carrying
+  `authenticatorGetInfo` returns the whole map, and `authenticatorReset` reaches
+  the applet there too (it answers `CTAP2_ERR_NOT_ALLOWED` for the closed reset
+  window, which is the applet's own answer rather than a transport refusal).
+  `transportsForReset` exists to tell a platform where a reset can be driven, so
+  the old value denied a path the device accepts. `docs/threat-model.md` and
+  `docs/protocol.md` §5.2 had both described the CCID route all along. Still no
+  `nfc`: this device has no radio. **bcdDevice → 0x09D1.**
+
+- `hmac-secret` / `hmac-secret-mc` no longer treat *any* non-map value as an
+  absent extension. The rule that an empty value asks for no evaluation was
+  measured on a **boolean** and written down as "a non-map", which is wider than
+  the reference: sweeping the CBOR value shapes against a YubiKey 5.8.0 gives a
+  map or a boolean accepted, and an unsigned int, a negative int, a text string, a
+  byte string or an array answered `CTAP2_ERR_CBOR_UNEXPECTED_TYPE` — identically
+  for both extensions, fourteen cells in all. Ignoring a value of the wrong type
+  let a malformed PRF request complete as though the extension had not been sent,
+  where the reference refuses it. An indefinite-length map is a third case and
+  stays `INVALID_CBOR`. **bcdDevice → 0x09D0.**
+
+- A mandatory parameter that is *present but unusable* no longer answers
+  `CTAP2_ERR_MISSING_PARAMETER`. Measured against a YubiKey 5.8.0, the reference
+  splits those by field: a `clientDataHash` that is not 32 bytes and an empty
+  `rpId` are `CTAP1_ERR_INVALID_LENGTH`, while an empty or over-long `user.id` is
+  `CTAP1_ERR_INVALID_PARAMETER`. One guard per command answered all of them with
+  "missing", which is the one thing they are not — the key was sent. Splitting
+  them exposed a second defect underneath: the ordered-key check in both parsers
+  only fires when a LATER key arrives to compare against, so a request that simply
+  stops before a mandatory key (`{}`, `{1}`, `{1,2}`) walked out unjudged and was
+  answered downstream by the empty value it left behind. That read as the right
+  answer only while the guard also said "missing"; both parsers now judge a
+  truncated map themselves. Absent keys still answer
+  `CTAP2_ERR_MISSING_PARAMETER` on both keys, which is what says the guard was
+  narrowed rather than moved. `RP_ID_MAX` is deliberately KEPT even though the
+  reference accepts a 300-character `rpId`: that is the reference being looser,
+  where parity earns no change. **bcdDevice → 0x09CF.**
+
+- The scrambled PIN pad no longer draws its digit order from the shared DRBG, so a
+  host-raised PIN ceremony cannot panic the trusted display. A CTAP command holds
+  the store, the DRBG, the presence backend and the FIDO state borrowed for its
+  whole dispatch and then calls the panel through them, so the pad's
+  `rng.borrow_mut()` was a `BorrowMutError` — under `panic-halt`, a key that
+  answers nothing until it is unplugged. It needed built-in UV, `scramble_pin` on
+  and a display build, which is the other half of
+  ([#107](https://github.com/TheMaxMur/RS-Key/issues/107)): dropping the probe's
+  `uv` stopped the pad being raised by `ssh-keygen`, and any client that asks for
+  built-in UV deliberately still raised it. The order comes from a per-panel seed
+  drawn once at construction and an HMAC-SHA256 counter now, so it is still
+  unpredictable across entries and no longer reads a cell somebody else is
+  holding. The comment that should have caught this existed and said `fs`; a new
+  `check.sh` row derives the held cells from the dispatch and the reachable
+  surface from the handle, so the rule is no longer a sentence.
+  **bcdDevice → 0x09CE.**
+
+- A silent `up:false` getAssertion carrying a token-less `uv: true` no longer opens
+  the trusted display's PIN pad. That pair is what OpenSSH's `key_lookup` sends
+  before enrolling a resident key, so `ssh-keygen -t ed25519-sk -O resident` — and
+  any browser registering a discoverable credential — turned a probe the user never
+  sees into a modal ceremony: libfido2 gave up with `FIDO_ERR_RX`, and a display
+  board sat on its screen until it was physically reset
+  ([#107](https://github.com/TheMaxMur/RS-Key/issues/107)). `uv` is dropped rather
+  than refused, because `sk_enroll` continues only when that probe answers
+  `NO_CREDENTIALS`; refusing it would have swapped a wedge for a fast failure and
+  left `-O resident` broken. The response's UV flag stays 0, and a client gets the
+  same answer today by simply omitting `uv`. Screenless builds are unchanged — they
+  do not advertise `uv`, so no client asks them for it. **bcdDevice → 0x09CD.**
+
+- An `hmac-secret` / `hmac-secret-mc` value carrying no sub-fields — an empty map,
+  or a value that is not a map — is read as if the extension had not been sent,
+  instead of ending the ceremony. It used to be `MISSING_PARAMETER` for the empty
+  map and `INVALID_CBOR` for the non-map, so a platform that sent either got no
+  assertion and no credential; a YubiKey 5.8.0 completes both, on `getAssertion`
+  and `makeCredential` alike, and does so even on an `up:false` request where a
+  *present* extension is refused. An absent `keyAgreement` inside a map that does
+  carry other fields is now `MISSING_PARAMETER` rather than the ECDH's
+  `INVALID_PARAMETER`, matching the same device. An indefinite-length map is
+  unchanged — it is a map, and still `INVALID_CBOR`. Relevant to
+  [#109](https://github.com/TheMaxMur/RS-Key/issues/109). **bcdDevice → 0x09CA.**
 
 - **A relying party could pick a name that halted the trusted display.** The
   retained scene records a frame as RLE'd drawing commands in a 12 KiB buffer, and
