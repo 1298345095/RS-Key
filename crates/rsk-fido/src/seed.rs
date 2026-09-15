@@ -296,7 +296,7 @@ pub fn store_att_key<S: Storage>(dev: &Device, fs: &mut Fs<S>, key: &[u8; 32]) -
 }
 
 /// The persistent pinUvAuthToken (CTAP 2.2 §6.5.2.2), sealed exactly like the
-/// seed. `None` means no platform holds a `pcmr` grant. Presence is necessary but
+/// seed; `None` if never minted or a PIN change dropped it. Presence is necessary but
 /// NOT sufficient — a build whose wipe deferred this record could leave it behind
 /// its PIN, so [`crate::credmgmt`] owns the grant test, not this reader.
 pub fn load_ppuat<S: Storage>(dev: &Device, fs: &mut Fs<S>) -> Option<[u8; 32]> {
@@ -353,17 +353,17 @@ pub fn clear_ppuat<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
 /// stops being linkable to its pre-reset self. Deriving it from the silicon root
 /// instead would have survived the reset and defeated that.
 ///
-/// `None` when no persistent token has been issued yet, or the seed is unreadable
-/// behind a soft lock. The member is optional, and a placeholder built from some
-/// other value would be a claim no platform could detect as false.
+/// `None` while the grant record is absent (a PIN change dropped it and nothing has
+/// minted it again) or the seed is unreadable behind a soft lock: a placeholder built
+/// from some other value would be a claim no platform could detect as false.
 pub fn enc_identifier<S: Storage>(
     dev: &Device,
     fs: &mut Fs<S>,
     rng: &mut impl Rng,
 ) -> Option<[u8; ENC_GETINFO_MEMBER_LEN]> {
-    // The token is the gate, so it is read FIRST: a device that has never issued one
-    // is the common case, and opening the seal on the seed only to discard it would
-    // be a ChaCha20-Poly1305 open on every getInfo for nothing.
+    // The token is the gate, so it is read FIRST: while a PIN change has the grant
+    // dropped, opening the seal on the seed only to discard it would be a
+    // ChaCha20-Poly1305 open on every getInfo for nothing.
     let mut token = load_ppuat(dev, fs)?;
     let mut key = [0u8; 16];
     let derived = hkdf_sha256(&ENCID_SALT, &token, INFO_ENCID, &mut key);
@@ -400,8 +400,8 @@ pub fn enc_identifier<S: Storage>(
 /// the token is sealed under the device root rather than the seed. So unlike
 /// [`enc_identifier`] this member survives a soft lock.
 ///
-/// `None` when no persistent token has been issued yet: the member is optional, and
-/// a value under a key nobody holds says nothing to anyone. `None` too when the tag
+/// `None` while the grant record is absent (a PIN change dropped it and nothing has
+/// minted it again): there is no key to seal under. `None` too when the tag
 /// itself cannot be read — an absent member equals no tag a platform is holding, so
 /// it re-enumerates, where the collapsed zero is exactly the tag a fresh device
 /// publishes and would tell one its cache is still good.

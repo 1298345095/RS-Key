@@ -125,7 +125,7 @@ assurance/bundle/SEC-FIDO-003.toml	scripts/kani.sh	307-307	export RUSTFLAGS="${R
 assurance/bundle/SEC-FIDO-003.toml	scripts/platform_gate.py	1890-1918	def check_bundles(root, ids, findings):	)
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-device/src/ctap.rs	201-201	persistent_grant_record: fs.has_key(EF_PAUTHTOKEN),	persistent_grant_record: fs.has_key(EF_PAUTHTOKEN),
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-device/src/ctap.rs	236-236	persistent_grant: fs.has_key(EF_PAUTHTOKEN),	persistent_grant: fs.has_key(EF_PAUTHTOKEN),
-assurance/bundle/SEC-FIDO-004.toml	crates/rsk-fido/src/clientpin.rs	413-416	// §6.5.5.7.2 step 12 / .3 step 11: a `pcmr` request is answered with the	// exists only while some platform holds the grant (`EF_PAUTHTOKEN`).
+assurance/bundle/SEC-FIDO-004.toml	crates/rsk-fido/src/clientpin.rs	413-416	// §6.5.5.7.2 step 12 / .3 step 11: a `pcmr` request is answered with the	// minted at provisioning, and `ensure_ppuat` re-mints one a PIN change dropped.
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-fido/src/clientpin.rs	414-419	// persistent token and stops there — it neither mints nor begins using a	} else {
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-fido/src/clientpin.rs	418-418	ensure_ppuat(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?	ensure_ppuat(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?
 assurance/bundle/SEC-FIDO-004.toml	crates/rsk-fido/src/consts.rs	368-368	pub const MAX_PIN_RETRIES: u8 = 8;	pub const MAX_PIN_RETRIES: u8 = 8;

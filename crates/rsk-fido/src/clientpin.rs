@@ -412,8 +412,8 @@ fn issue_token<S: Storage, R: Rng>(
 ) -> CtapResult {
     // §6.5.5.7.2 step 12 / .3 step 11: a `pcmr` request is answered with the
     // persistent token and stops there — it neither mints nor begins using a
-    // session token. Minting it here *is* the permission assignment: the record
-    // exists only while some platform holds the grant (`EF_PAUTHTOKEN`).
+    // session token. Handing it over *is* the permission assignment; the record is
+    // minted at provisioning, and `ensure_ppuat` re-mints one a PIN change dropped.
     let mut pdata = if permissions & PERM_PCMR != 0 {
         ensure_ppuat(&ctx.dev, ctx.fs, ctx.rng).map_err(|_| CtapError::Other)?
     } else {
