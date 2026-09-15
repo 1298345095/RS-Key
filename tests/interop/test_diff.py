@@ -8,6 +8,8 @@ Exercises the allow-list classification (`divergences`), the snapshot compare
 
     nix develop -c python -m pytest tests/interop/test_diff.py -q
 """
+import pytest
+
 import divergences as dv
 import diff
 import normalize as nz
@@ -103,6 +105,56 @@ def test_certifications_absent_on_rsk_is_allowed():
     # so the whole field is missing on the rsk side — an expected divergence.
     top = dv.classify("fido.getinfo.certifications", "{...}", dv.MISSING)
     assert top["bucket"] == dv.ALLOWED
+
+
+# The labels the capture's tools print, ykman 5.9.1's (`ykman/piv.py`, `_cli/oath.py`,
+# `openpgp.py`) and gpg-card 2.5's `Card firmware`, turned into paths by `kv_lines`: the
+# rules are held to the paths the capture really produces.
+TOOL_VERSION_LINES = [("piv", "PIV version: {}"), ("oath", "OATH version: {}"),
+                      ("openpgp", "Application version: {}"),
+                      ("openpgp.gpg", "Card firmware ....: {}")]
+
+
+@pytest.mark.parametrize("ns, line", TOOL_VERSION_LINES)
+def test_a_firmware_version_skew_on_a_tool_surface_is_allowed(ns, line):
+    """RS-Key reports FW_VERSION there; a reference on other firmware, or a
+    `FW_VERSION=X.Y.Z` build, differs without being a fidelity gap."""
+    [(path, real)] = nz.kv_lines(line.format("5.8.0"), ns).items()
+    [(_, rsk)] = nz.kv_lines(line.format("5.8.1"), ns).items()
+    assert dv.classify(path, real, rsk)["bucket"] == dv.ALLOWED
+
+
+@pytest.mark.parametrize("path, real, rsk", [
+    ("mgmt.version", "5.8.0", "5.8.1"),
+    ("fido.getinfo.firmwareVersion", 0x050800, 0x050801),
+])
+def test_a_firmware_version_skew_on_a_raw_surface_is_allowed(path, real, rsk):
+    assert dv.classify(path, real, rsk)["bucket"] == dv.ALLOWED
+
+
+# Every surface RS-Key reports FW_VERSION on, with a well-formed reference value.
+VERSION_SURFACES = [
+    ("fido.getinfo.firmwareVersion", 0x050800),
+    ("mgmt.version", "5.8.0"),
+    ("piv.piv_version", "5.8.0"),
+    ("oath.oath_version", "5.8.0"),
+    ("openpgp.application_version", "5.8.0"),
+    ("openpgp.gpg.card_firmware", "5.8.0"),
+]
+
+
+@pytest.mark.parametrize("path, real", VERSION_SURFACES)
+def test_a_firmware_version_missing_on_one_side_violates_the_rule(path, real):
+    """The value may skew, the field may not vanish: a surface that stops reporting a
+    version has regressed, and a `Tolerance` would have filed that as ALLOWED."""
+    assert dv.classify(path, real, dv.MISSING)["bucket"] == dv.RULE_VIOLATION
+
+
+@pytest.mark.parametrize("path, real", VERSION_SURFACES)
+def test_a_value_that_is_not_a_version_violates_the_rule(path, real):
+    """The shape is the whole pin, so its anchors matter: pico-openpgp's two-part `4.6`,
+    which the old rule wanted on the RS-Key side, is not a firmware version."""
+    assert dv.classify(path, real, "4.6")["bucket"] == dv.RULE_VIOLATION
 
 
 # ── diff.compare over synthetic snapshots ────────────────────────────────────
