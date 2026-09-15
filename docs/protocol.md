@@ -342,11 +342,11 @@ YubiKey's reader name. Reference: `RSK_READER_TOKENS` in
 
 | Field | Value | Where |
 |---|---|---|
-| firmwareVersion | `5.7.4` → `0x00050704` | CTAP getInfo `0x0E`; Management/OTP DeviceInfo `TAG_VERSION`; Management SELECT (`"5.7.4"` ASCII) |
+| firmwareVersion | `5.8.0` → `0x00050800` | CTAP getInfo `0x0E`; Management/OTP DeviceInfo `TAG_VERSION`; Management SELECT (`"5.8.0"` ASCII) |
 | `bcdDevice` | `0x0780` (build counter, increments per firmware change) | USB device descriptor (`firmware/src/main.rs` `device_release`) |
 | AAGUID | `2479c7bf-6b30-5683-9ec8-0e8171a918b7` | CTAP getInfo `0x03`; one value across every VID/PID flavor of a build, overridable at build time with `AAGUID=<uuid>` |
 
-The firmware version is overridable at build time (`FW_VERSION=X.Y.Z`); `5.7.4`
+The firmware version is overridable at build time (`FW_VERSION=X.Y.Z`); `5.8.0`
 mirrors a current YubiKey 5 so Yubico tooling is satisfied under the Yubico VID.
 
 ---
@@ -623,8 +623,8 @@ applications are enabled. Source: `crates/rsk-mgmt/src/lib.rs` for the command
 surface, `crates/rsk-devconf/src/lib.rs` for the `EF_DEV_CONF` record it reads
 and writes.
 
-**SELECT** returns the firmware version as an ASCII string, e.g. `35 2E 37 2E 34`
-(`"5.7.4"`).
+**SELECT** returns the firmware version as an ASCII string, e.g. `35 2E 38 2E 30`
+(`"5.8.0"`).
 
 | INS | Name | Request | Response |
 |---|---|---|---|
@@ -724,7 +724,7 @@ attestation key, and the one-way OTP fuses. Source:
 
 **SELECT response** (identity): `MCU(1) | PRODUCT(1) | SDK_MAJOR(1) | SDK_MINOR(1) | serial(8)`
 = `01 02 08 06 <8-byte chip serial>`. (`MCU 1` = RP2350, `PRODUCT 2` = FIDO,
-`SDK 8.6` is the applet SDK version, distinct from the `5.7.4` firmware version.)
+`SDK 8.6` is the applet SDK version, distinct from the `5.8.0` firmware version.)
 Use this as the **capability/version handshake**: a non-`9000` here means the
 firmware predates the rescue applet.
 
@@ -1201,7 +1201,7 @@ All bytes hex; `→` shows the response (status word omitted when `9000`).
 ```
 SELECT  00 A4 04 00 08 A0 00 00 05 27 47 11 17 00
 READ    00 1D 00 00 00
-→  <len> 01 02 023B 02 04 <serial> 04 01 01 05 03 050704 03 02 023B 08 01 80 0A 01 00
+→  <len> 01 02 023B 02 04 <serial> 04 01 01 05 03 050800 03 02 023B 08 01 80 0A 01 00
 ```
 
 **Read the phy record (Rescue):**

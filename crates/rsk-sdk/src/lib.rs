@@ -46,7 +46,7 @@ const fn env_u8(s: &str) -> u8 {
 
 /// Reported device firmware version `(major, minor, patch)` — the single source
 /// for the management DeviceInfo, FIDO getInfo (0x0E) and the OATH/OTP/PIV
-/// version fields. Defaults to 5.7.4 (a current YubiKey 5); override at build
+/// version fields. Defaults to 5.8.0 (a current YubiKey 5); override at build
 /// time with `FW_VERSION=X.Y.Z`. The OpenPGP card/applet versions are separate
 /// protocol numbers and are unaffected.
 pub const FIRMWARE_VERSION: (u8, u8, u8) = (
