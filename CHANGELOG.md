@@ -40,6 +40,20 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- The published metadata statements mirror getInfo again. Three firmware changes
+  had moved the device without them: `transports` and `transportsForReset` gained
+  `smart-card` once getInfo reported the FIDO AID's CCID route (`0x09D1`),
+  `firmwareVersion` became 5.8.0 (`0x09CC`), and `encIdentifier` and
+  `encCredStoreState` are published from provisioning (`0x09CB`). Both statements
+  now say `smart-card`, carry `329728` in `firmwareVersion` and
+  `authenticatorVersion`, and hold the empty placeholders MDS3 takes for the two
+  encrypted members, whose value changes on every call.
+  `tests/62_metadata_statement.py` requires a placeholder for each member the device
+  sends; `tests/17_cred_store_state.py` and `tests/19_enc_identifier.py`, which
+  still expected both absent after a reset, expect them published, and the pico-fido
+  case listed as failing for that reason is no longer listed. Metadata and tests
+  only; no firmware change.
+
 - getInfo publishes `vendorPrototypeConfigCommands` (`0x15`) empty, so Yubico
   Authenticator for Android can read it again. Its CBOR decoder takes no integer
   above 2³¹−1 and failed the whole response on the seven 64-bit vendorCommandIds,

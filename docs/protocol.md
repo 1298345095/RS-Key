@@ -444,7 +444,10 @@ needs only the identifiers above. RS-Key implements:
   never emitted. `longTouchForReset` (`0x18`) is `false`: a reset takes the same
   touch as any other presence check — CTAP 2.3 cut the long-touch hold from 2.2's
   10 s to 5 s, and RS-Key implements neither gesture. `encIdentifier` (`0x19`) is
-  present **only once a persistent pinUvAuthToken has been issued**, and carries
+  present **from provisioning** — boot, `authenticatorReset` and a seed
+  `BACKUP_LOAD` mint the persistent pinUvAuthToken it is keyed by; setting or
+  changing the PIN, or forcing a change, revokes that grant until the next boot or
+  `pcmr` request, and a soft-locked key omits it — and carries
   `iv ‖ AES-128-CBC(k, id)` — 32 bytes — where `id` is a 128-bit device identifier
   and `k = HKDF-SHA-256(salt = 32 zero bytes, IKM = that token, info =
   "encIdentifier", L = 16)`. **The IV is regenerated on every getInfo**, so the

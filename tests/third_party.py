@@ -141,14 +141,6 @@ DIVERGENCES: dict[str, dict[str, str]] = {
         # listed for the challenge TLV and now fail one step earlier.
         "test_070_oath.py::test_rename_prefix_extension": "enrolls a 7-byte OATH secret; a YubiKey refuses a KEY TLV under 16 bytes",
         "test_070_oath.py::test_delete": "enrolls a 9-byte OATH secret; a YubiKey refuses a KEY TLV under 16 bytes",
-        # encCredStoreState (0x1E) and encIdentifier (0x19) are implemented now, and
-        # the sibling entry that used to sit here was REMOVED because it started
-        # passing — a strict xfail is how this list refuses to describe a
-        # divergence that got closed. What is left is conditionality, not absence:
-        # 0x1E is served only once a PERSISTENT pinUvAuthToken has been issued (a
-        # value under a key nobody holds says nothing), and this case reads getInfo
-        # without minting one.
-        "test_000_getinfo.py::test_get_info_ctap_23_fields_are_well_formed": "encCredStoreState (0x1E) is served only to a holder of the persistent token, which this case never mints",
         # pinComplexityPolicy (0x1B) IS advertised. What this case asks for is
         # SETTING it through setMinPINLength, which is a different surface: RS-Key's
         # policy is the build's, not a host-writable flag.
