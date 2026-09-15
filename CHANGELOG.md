@@ -167,13 +167,13 @@ If you read nothing else:
   machine-readable line in the release body now, spelled in
   [`docs/anti-rollback.md`](docs/anti-rollback.md) and held by a gate. Absence is
   the answer, not "unknown".
-- **`bcdDevice` is `0x09D5`.** A firmware-behaviour change bumps it; the counter
+- **`bcdDevice` is `0x09D6`.** A firmware-behaviour change bumps it; the counter
   counts builds, not features. The row that holds it could not tell an entry
   recording a bump from a file that merely moved, and three shipped builds went
   through that hole.
 
 Everything else is grouped below in the usual sections, `Security` and
-`Internal` last — 310 entries, most of them in `Fixed` and `Security`, because
+`Internal` last — 311 entries, most of them in `Fixed` and `Security`, because
 the sweep above is written out site by site. The `Internal` one is where the
 instruments that could not fail are written down, each with what it missed.
 
@@ -2220,6 +2220,16 @@ the release carries the flag, the decision stays yours
   because the eight new events broke eleven cases that indexed by number.
 
 ### Fixed
+
+- The OTP keyboard interface reports the firmware version from its first poll.
+  Until the worker seeds the real status record, the frame protocol answers a
+  placeholder, and that placeholder still said 5.7.4. USB is already serving by
+  then, and a display build blocks for at least ~370 ms on panel and touch init
+  before the worker starts, so a host polling that early could read a version no
+  other interface reports. Found by reading the boot order, not measured on a
+  board. The placeholder takes `rsk_otp::VERSION` now and a host test pins it;
+  its program sequence and slot bits still wait for the worker.
+  **bcdDevice → 0x09D6.**
 
 - The published metadata statements mirror getInfo again. Three firmware changes
   had moved the device without them: `transports` and `transportsForReset` gained

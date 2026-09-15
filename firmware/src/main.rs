@@ -714,7 +714,7 @@ async fn main(spawner: Spawner) {
     config.max_power = 100;
     config.max_packet_size_0 = 64;
     // bcdDevice build counter; also surfaced on the trusted-display Firmware screen.
-    let device_release: u16 = 0x09D5;
+    let device_release: u16 = 0x09D6;
     config.device_release = device_release;
 
     let mut builder = Builder::new(
@@ -1026,7 +1026,7 @@ async fn main(spawner: Spawner) {
 
     // Trusted display (the `display` build — always `LED_KIND=none` per the guard
     // above, so the LED block compiled out and PIO0/I2C1/GPIO16 are free). Build the
-    // panel + touch here, after the USB task is spawned, so its ~200 ms reset runs
+    // panel + touch here, after the USB task is spawned, so its ~370 ms reset runs
     // while the interrupt executor enumerates — never delaying it. `status_task`
     // mirrors the device status; the `TouchPresence` backend (the `presence::Presence`
     // below) paints the confirm prompt. Both share the panel via the `UI` cell on the
