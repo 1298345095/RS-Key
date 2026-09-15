@@ -203,7 +203,9 @@ wipe the whole key instead, see `rsk offboard`.
   it is stored.
 - HOTP counters are persisted across reboots and continue from where they were.
   Touch-required HOTP accounts only advance the counter *after* the touch, so
-  there are no drive-by increments.
+  there are no drive-by increments. The advance is written before the code is
+  sent: if the store refuses the write, the command fails and no code leaves the
+  device, so the same code is never handed out twice.
 - Enrollment is checked before anything is written, the way a YubiKey checks it:
   the secret is 14–64 bytes, the name 1–64, the code 6/7/8 digits, the hash one
   of SHA1/SHA256/SHA512. A client that sends anything else gets `6A80` and

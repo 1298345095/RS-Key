@@ -43,6 +43,10 @@ mod grammar_tests;
 #[path = "removal_tests.rs"]
 mod removal_tests;
 
+/// What CALCULATE answers when the medium refuses to advance an HOTP counter.
+#[path = "counter_tests.rs"]
+mod counter_tests;
+
 /// RFC 6238 reference secrets.
 const SECRET_SHA1: &[u8] = b"12345678901234567890";
 const SECRET_SHA256: &[u8] = b"12345678901234567890123456789012";

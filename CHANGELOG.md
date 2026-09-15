@@ -2221,6 +2221,22 @@ the release carries the flag, the decision stays yours
 
 ### Fixed
 
+- An HOTP code is no longer sent when the store refuses to advance its counter,
+  and U2F no longer signs a counter it could not advance. OATH `CALCULATE` built
+  the code into the response before writing the bumped counter, and the response
+  goes out whatever the status word says: a refused write sent the code with
+  `6581`, and the next `CALCULATE` sent it again. The counter is now written
+  first, as the `only increasing` mark already was, and a refused write sends no
+  code. U2F `AUTHENTICATE` dropped a refused counter bump under `9000`, so the
+  next sign-in signed the same counter, which a relying party reads as a cloned
+  key. It now advances the counter before signing and answers `6581` when it
+  cannot read or advance it; the read fault answered `6400` until now. Checked
+  for the same shape and already in order: the OTP keyboard stores its use counter
+  and HOTP factor before typing, and CTAP2 signCount and the OpenPGP signature
+  counter send no body when their write fails. Host tests drive both commands
+  over a medium that refuses the write; not reproduced on a board.
+  **bcdDevice → 0x09D7.**
+
 - The OTP keyboard interface reports the firmware version from its first poll.
   Until the worker seeds the real status record, the frame protocol answers a
   placeholder, and that placeholder still said 5.7.4. USB is already serving by

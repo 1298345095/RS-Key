@@ -622,17 +622,9 @@ impl<'a> OathApplet<'a> {
                 return Sw::MEMORY_FAILURE;
             }
         }
-        res.push(TAG_RESPONSE + apdu.p2);
-        let chal_eff = match &imf {
-            Some(r) => &scratch[r.start..r.start + 8],
-            None => chal,
-        };
-        if calculate(apdu.p2 == 0x01, &scratch[key_at], chal_eff, res).is_none() {
-            return Sw::EXEC_ERROR;
-        }
-        if let Some(r) = imf {
-            // Bump the counter and persist the updated blob.
-            let mut counter = [0u8; 8];
+        // HOTP's counter is the same kind of mark: its advance lands before the code.
+        let mut counter = [0u8; 8];
+        if let Some(r) = &imf {
             counter.copy_from_slice(&scratch[r.start..r.start + 8]);
             let v = u64::from_be_bytes(counter).wrapping_add(1);
             scratch[r.start..r.start + 8].copy_from_slice(&v.to_be_bytes());
@@ -645,6 +637,14 @@ impl<'a> OathApplet<'a> {
             ) {
                 return Sw::MEMORY_FAILURE;
             }
+        }
+        res.push(TAG_RESPONSE + apdu.p2);
+        let chal_eff = match imf {
+            Some(_) => &counter[..],
+            None => chal,
+        };
+        if calculate(apdu.p2 == 0x01, &scratch[key_at], chal_eff, res).is_none() {
+            return Sw::EXEC_ERROR;
         }
         Sw::OK
     }

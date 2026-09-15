@@ -125,7 +125,8 @@ keeps the single monotonic counter that protocol expects.
 
 A counter the flash cannot serve is refused rather than reported as 0: an assertion
 the device could not count is not one it signs, so a read fault costs you the login
-instead of the tripwire.
+instead of the tripwire. So is a counter the flash cannot advance: the login fails
+instead of signing a number the next one would repeat.
 
 Upgrading an existing key is forward-safe for passkeys: each seeds its counter from
 the old global value on first use, so the reported number never counts backwards.

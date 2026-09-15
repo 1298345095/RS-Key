@@ -832,7 +832,7 @@ fn a_faulted_counter_probe_does_not_sign_a_fabricated_u2f_counter() {
     assert_eq!(n, 0, "and returned a body built on a counter it never read");
     assert_eq!(
         sw,
-        Sw::EXEC_ERROR,
+        Sw::MEMORY_FAILURE,
         "an AUTHENTICATE that could not read its counter must refuse"
     );
 
@@ -842,5 +842,79 @@ fn a_faulted_counter_probe_does_not_sign_a_fabricated_u2f_counter() {
     assert_eq!(
         u32::from_be_bytes([out2[1], out2[2], out2[3], out2[4]]),
         500
+    );
+}
+
+/// The write half of the same counter. A bump the flash refuses must stop the
+/// signature: otherwise the next AUTHENTICATE signs the same counter again, and a
+/// counter that does not increase is what a cloned key looks like to the RP.
+#[test]
+fn a_refused_counter_advance_signs_nothing() {
+    use crate::consts::EF_COUNTER;
+    let (backend, medium) = rsk_fs::storage::faults::Cut::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+
+    let authenticate = |fs: &mut Fs<rsk_fs::storage::faults::Cut>,
+                        rng: &mut SeqRng,
+                        apdu: &Apdu,
+                        out: &mut [u8]| {
+        let mut state = crate::FidoState::new();
+        let mut presence = crate::AlwaysConfirm;
+        let mut ctx = Ctx {
+            presence: &mut presence,
+            dev: dev(),
+            fs,
+            rng,
+            state: &mut state,
+            now_ms: 0,
+        };
+        process_u2f(&mut ctx, apdu, out)
+    };
+    let mut data = std::vec::Vec::new();
+    data.extend_from_slice(&CHAL);
+    data.extend_from_slice(&APP);
+    let reg_apdu_bytes = ext_apdu(CTAP_REGISTER, 0, &data);
+    let mut out = [0u8; 1024];
+    let (sw, _) = authenticate(
+        &mut fs,
+        &mut rng,
+        &Apdu::parse(&reg_apdu_bytes).unwrap(),
+        &mut out,
+    );
+    assert_eq!(sw, Sw::OK);
+    let mut ad = std::vec::Vec::new();
+    ad.extend_from_slice(&CHAL);
+    ad.extend_from_slice(&APP);
+    ad.push(KEY_HANDLE_LEN as u8);
+    ad.extend_from_slice(&out[67..67 + KEY_HANDLE_LEN]);
+    let auth_bytes = ext_apdu(CTAP_AUTHENTICATE, U2F_AUTH_ENFORCE, &ad);
+    let auth_apdu = Apdu::parse(&auth_bytes).unwrap();
+    fs.put(EF_COUNTER, &500u32.to_le_bytes()).unwrap();
+
+    // Each answer as the RP sees it: the status, and the counter a body carried.
+    let mut signed = |fs: &mut Fs<rsk_fs::storage::faults::Cut>| {
+        let mut out = [0u8; 256];
+        let (sw, n) = authenticate(fs, &mut rng, &auth_apdu, &mut out);
+        (
+            sw,
+            (n > 0).then(|| u32::from_be_bytes([out[1], out[2], out[3], out[4]])),
+        )
+    };
+    medium.arm(0);
+    let refused = signed(&mut fs);
+    medium.arm(u32::MAX);
+    let answers = [refused, signed(&mut fs), signed(&mut fs)];
+
+    assert_eq!(
+        answers,
+        [
+            (Sw::MEMORY_FAILURE, None),
+            (Sw::OK, Some(500)),
+            (Sw::OK, Some(501))
+        ],
+        "a refused advance must sign nothing, and the counter must not repeat"
     );
 }
