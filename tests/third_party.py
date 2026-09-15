@@ -237,12 +237,12 @@ DIVERGENCES: dict[str, dict[str, str]] = {
         # because a YubiKey 5.7.4 does — measured, 3 runs. RS-Key answers 6B00 for
         # OpenPGP's 82 and 84 alike.
         "::test_openpgp_reset_code_and_pw_status": "§7.2.3 defines P2 81/83 only, so 82 is 6B00 (wrong P1-P2), not 6A88",
-        # Reported firmware version. RS-Key defaults to 5.7.4 (a current YubiKey 5,
-        # `FW_VERSION=X.Y.Z` at build time); the suite hardcodes its own device's
-        # 5.7.0. One number, read through the Management DeviceInfo TLV and through
-        # PIV GET VERSION.
-        "::test_management_applet_config": "the suite hardcodes its own 5.7.0; RS-Key reports FW_VERSION (5.7.4)",
-        "::test_piv_basic_version_serial_and_object_round_trip": "the suite hardcodes its own 5.7.0; RS-Key reports FW_VERSION (5.7.4)",
+        # Reported firmware version. RS-Key reports `FW_VERSION` — a current YubiKey 5's
+        # by default, `FW_VERSION=X.Y.Z` at build time — and the suite hardcodes its own
+        # device's 5.7.0. One number, read through the Management DeviceInfo TLV and
+        # through PIV GET VERSION.
+        "::test_management_applet_config": "the suite hardcodes its own 5.7.0; RS-Key reports FW_VERSION",
+        "::test_piv_basic_version_serial_and_object_round_trip": "the suite hardcodes its own 5.7.0; RS-Key reports FW_VERSION",
         # Replaying a single-auth challenge as a mutual-auth witness. RS-Key
         # refuses it a step earlier than the suite expects — on the challenge
         # *kind* (`ChallengeKind::MutualWitness`, audit run-34), so it never

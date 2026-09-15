@@ -235,10 +235,10 @@ The other arguments:
 - `secure_boot_key.pem`: your signing key. It signs the image.
 - `--major` / `--minor`: an **image version** (`major.minor`) stamped into the
   RP2350 boot metadata. It is a plain version label, distinct from the firmware
-  version RS-Key reports (`5.7.x`, [build.md](build.md)) and from the rollback
-  version. The bootrom can use it to prefer the newer of two images in an A/B
-  setup. RS-Key ships a single image, so here it is effectively a label. Keep
-  `1 0`.
+  version RS-Key reports (`5.8.0` by default, [build.md](build.md)) and from the
+  rollback version. The bootrom can use it to prefer the newer of two images in
+  an A/B setup. RS-Key ships a single image, so here it is effectively a label.
+  Keep `1 0`.
 - `--rollback`: the **anti-rollback version**, a separate counter (*not* the
   image version). It is harmless before anti-rollback is enabled, and having a
   version in every sealed image from day one makes that stage cheap. What it

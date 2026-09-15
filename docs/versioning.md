@@ -12,10 +12,11 @@ against real host software is in the [Interop matrix](interop.md).
 
 `5.8.0` (`rsk_sdk::FIRMWARE_VERSION`) is reported everywhere a tool reads a device
 firmware version: FIDO getInfo and CTAPHID `INIT`, the YubiKey Management
-`DeviceInfo` (`ykman info`), and the OATH / OTP / PIV version fields. It mimics a
-current YubiKey 5 so Yubico tooling unlocks its feature gates. Override it with
-the `FW_VERSION` build variable. It is **not** the OpenPGP card version and **not**
-the USB `bcdDevice`.
+`DeviceInfo` (`ykman info`), the OATH / OTP / PIV version fields, and OpenPGP's
+vendor `VERSION` command (INS 0xF1). It mimics a current YubiKey 5 so Yubico
+tooling unlocks its feature gates. Override it with the `FW_VERSION` build
+variable. It is **not** the OpenPGP card version and **not** the USB
+`bcdDevice`.
 
 | Surface | Advertised version | Spec implemented |
 |---|---|---|

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 RS-Key contributors
 
-//! Resolve the reported device firmware version (management DeviceInfo, FIDO
-//! getInfo 0x0E, OATH/OTP/PIV version fields). `FW_VERSION=X.Y.Z` overrides the
-//! default 5.8.0; emitted as `PK_FW_VERSION_{MAJOR,MINOR,PATCH}` for `env!`.
+//! Resolve the reported device firmware version (its consumers are listed on
+//! `rsk_sdk::FIRMWARE_VERSION`). `FW_VERSION=X.Y.Z` overrides the default
+//! 5.8.0; emitted as `PK_FW_VERSION_{MAJOR,MINOR,PATCH}` for `env!`.
 use std::env;
 
 fn main() {

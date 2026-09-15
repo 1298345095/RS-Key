@@ -170,7 +170,7 @@ def test_fido_getinfo_cbor_normalizes_key_fields():
 
 
 def test_mgmt_deviceinfo_tlv():
-    # total-len byte, then TLVs: usbSupported=0x023b, serial=12345678, formFactor=1, version=5.7.4
+    # total-len byte, then TLVs: usbSupported=0x023b, serial=12345678, formFactor=1, version=5.8.0
     serial = (12345678).to_bytes(4, "big")
     body = (bytes([0x01, 0x02, 0x02, 0x3B]) + bytes([0x02, 0x04]) + serial
             + bytes([0x04, 0x01, 0x01]) + bytes([0x05, 0x03, 5, 8, 0]))
