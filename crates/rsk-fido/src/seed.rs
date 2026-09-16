@@ -491,16 +491,21 @@ fn put_sealed32<S: Storage>(
     r
 }
 
-/// Boot-pass migration for the seed and the attestation key: bring each to the
-/// current ChaCha form under the current kbase arm — upgrading a legacy CBC
-/// record (removing the fixed-IV / no-MAC weakness) and re-sealing a pre-OTP
-/// blob under the OTP arm once the fuse key is present. A PIN-wrapped (0x03/0x13)
-/// seed is left untouched — that migrates at the first PIN verify
-/// ([`migrate_keydev_pin`]). Idempotent and crash-safe: each re-seal is one
-/// atomic record write, and a torn write leaves the prior record intact.
+/// Boot-pass migration for the seed, the attestation key and the persistent
+/// grant: bring each to the current ChaCha form under the current kbase arm —
+/// upgrading a legacy CBC record (removing the fixed-IV / no-MAC weakness) and
+/// re-sealing a pre-OTP blob under the OTP arm once the fuse key is present. A
+/// PIN-wrapped (0x03/0x13) seed is left untouched — that migrates at the first
+/// PIN verify ([`migrate_keydev_pin`]). Idempotent and crash-safe: each re-seal
+/// is one atomic record write, and a torn write leaves the prior record intact.
+///
+/// The grant is here because provisioning mints it ([`ensure_seed`]) and a device
+/// is burned after its first boot, so the record a `pcmr` holder and getInfo's
+/// encIdentifier hang off would otherwise stay under the chip-serial arm for life.
 pub fn migrate_keydev_boot<S: Storage>(dev: &Device, fs: &mut Fs<S>) -> Result<()> {
     migrate_slot(dev, fs, EF_KEY_DEV)?;
-    migrate_slot(dev, fs, EF_ATT_KEY)
+    migrate_slot(dev, fs, EF_ATT_KEY)?;
+    migrate_slot(dev, fs, EF_PAUTHTOKEN)
 }
 
 /// Re-seal one slot forward if it is not already current-arm ChaCha. Absent

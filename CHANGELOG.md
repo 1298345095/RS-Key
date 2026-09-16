@@ -2221,6 +2221,24 @@ the release carries the flag, the decision stays yours
 
 ### Fixed
 
+- The OTP burn now re-seals the persistent pinUvAuthToken too. The boot pass that
+  moves a device's secrets from the chip-serial root to the fused one carried the
+  seed and the attestation key; the `pcmr` grant record was not on that list.
+  Provisioning has minted that record at the first boot since 0x09CB, and the burn
+  comes after a first boot, so on every device whose grant predates its burn the
+  record stayed sealed under a root the public serial alone derives — and whoever
+  opens it from a flash dump holds the grant: the credential directory over `pcmr`
+  reads, and getInfo's `encIdentifier`.
+  It now rides the same helper as the other two, which re-arms the at-rest scrub lap
+  before it supersedes the weaker copy and refuses the re-seal if that re-arm cannot
+  land. The token value does not change, so a platform holding the grant keeps it.
+  An already-burned key upgrading to this build therefore laps once more on the boot
+  that moves its grant — the same multi-second stall before USB the first post-burn
+  boot runs, and once. It also settles a second thing: `clear_ppuat` re-arms nothing,
+  which is right only over a record already sealed under the fused root. Host tests
+  cover the re-seal, its idempotence and the lap ordering; not reproduced on a board.
+  **bcdDevice → 0x09D9.**
+
 - A flash read that fails at boot no longer replaces the persistent
   pinUvAuthToken. Since 0x09CB the boot of every unlocked key ends provisioning by
   making sure the `pcmr` grant exists, and a read of that record that failed

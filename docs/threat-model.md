@@ -299,12 +299,14 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   re-sealing or deleting a secret leaves the old copy on flash until its page
   is reclaimed. Two cases differ in how much that matters:
   - The **OTP-burn migration** supersedes the *pre-OTP* seed, which was sealed
-    under the chip-serial-only root (no fuse secret). Left alone, a flash dump
-    plus the chip id would recover it, bypassing the burn. So it is **not**
-    left to lazy healing: the first boot after provisioning runs a one-shot
-    compaction (`Fs::compact`, gated by the `EF_HARDENED` marker, crash-safe)
-    that drives a full GC lap over the credential partition and physically
-    erases every superseded pre-OTP record before the device re-attaches to USB.
+    under the chip-serial-only root (no fuse secret), and the persistent `pcmr`
+    grant, which provisioning mints at the first boot under that same root. Left
+    alone, a flash dump plus the chip id would recover them, bypassing the burn.
+    So it is **not** left to lazy healing: the first boot after provisioning runs
+    a one-shot compaction (`Fs::compact`, gated by the `EF_HARDENED` marker,
+    crash-safe) that drives a full GC lap over the credential partition and
+    physically erases every superseded pre-OTP record before the device
+    re-attaches to USB.
   - The **soft-lock** transition leaves the same kind of lingering record, but
     on a provisioned device it is already sealed under the fused root (moot
     against anything short of a fused-key compromise), so soft-lock's at-rest

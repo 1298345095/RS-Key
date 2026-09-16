@@ -84,8 +84,9 @@ Every burning command takes `--dry-run` and a typed confirmation.
 What it does: writes a random DEVK (device attestation key) and MKEK (master
 sealing key) plus anti-imaging chaff into OTP page 58, ECC-verified, then
 locks the page. On the next boot the firmware notices the provisioned key and
-**migrates everything already on the device** (FIDO seed, PIV keys, OpenPGP
-key wraps, PIN verifiers) under the new root. Your enrolled credentials
+**migrates everything already on the device** (FIDO seed, attestation key,
+the persistent `pcmr` grant, PIV keys, OpenPGP key wraps, PIN verifiers) under
+the new root. Your enrolled credentials
 survive. That is the point of the migration layer.
 
 > **At-rest hardening pass.** The migration re-seals each secret under the new

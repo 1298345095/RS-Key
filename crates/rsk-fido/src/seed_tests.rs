@@ -267,6 +267,36 @@ fn boot_migration_reseals_plain_seed_to_otp_kbase() {
     assert_eq!(load_keydev(&otp_dev(), &mut fs), Some(seed));
 }
 
+/// The grant rides the same pass, and it has to: provisioning mints it and the burn
+/// comes after the first boot, so a record left at 0x02 is one a flash dump plus the
+/// public serial opens — the `pcmr` reads and getInfo's encIdentifier with it.
+#[test]
+fn boot_migration_reseals_the_grant_record_to_otp_kbase() {
+    let mut fs = fs();
+    let token = ensure_ppuat(&dev(), &mut fs, &mut SeqRng(3)).unwrap();
+    let mut raw = [0u8; KEYDEV_G1_LEN];
+    fs.read(EF_PAUTHTOKEN.get(), &mut raw).unwrap();
+    assert_eq!(raw[0], FORMAT_G1, "fixture: minted before the burn");
+
+    migrate_keydev_boot(&otp_dev(), &mut fs).unwrap();
+    fs.read(EF_PAUTHTOKEN.get(), &mut raw).unwrap();
+    assert_eq!(raw[0], FORMAT_G1_OTP, "the burn must move the grant too");
+    assert_eq!(
+        load_ppuat(&otp_dev(), &mut fs),
+        Some(token),
+        "and the platform holding it keeps the token it was handed"
+    );
+    assert_eq!(
+        load_ppuat(&dev(), &mut fs),
+        None,
+        "the chip-serial arm no longer opens the record"
+    );
+
+    // Idempotent: a second pass is a no-op (tag already 0x12).
+    migrate_keydev_boot(&otp_dev(), &mut fs).unwrap();
+    assert_eq!(load_ppuat(&otp_dev(), &mut fs), Some(token));
+}
+
 #[test]
 fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_seed() {
     // Standing before `run_at_rest_lap` in `firmware/src/main.rs` is not the same as
@@ -344,6 +374,22 @@ fn the_boot_pass_re_arms_the_lap_before_it_supersedes_a_pre_otp_seed() {
         "migrate_keydev_boot's 0x01 arm",
     );
     assert_eq!(load_att_key(&otp_dev(), &mut fs), Some(seed));
+
+    // And the grant slot, which the same helper carries: its pre-OTP copy is
+    // chip-serial-rooted like the seed's, so it owes the re-arm on the same terms.
+    let (cut, medium) = Cut::new();
+    let mut fs = Fs::new(cut);
+    fs.scan();
+    let token = ensure_ppuat(&dev(), &mut fs, &mut SeqRng(5)).unwrap();
+    fs.put(rsk_fs::EF_HARDENED, &[1]).unwrap();
+    medium.clear_ops();
+    migrate_keydev_boot(&otp_dev(), &mut fs).unwrap();
+    medium.assert_re_armed_before(
+        EF_PAUTHTOKEN.get(),
+        |_| false,
+        "migrate_keydev_boot's grant arm",
+    );
+    assert_eq!(load_ppuat(&otp_dev(), &mut fs), Some(token));
 }
 
 #[test]
