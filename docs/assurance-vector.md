@@ -234,6 +234,7 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-BUILD-003` | The `display` build implements the one-hold-one-ceremony latch SOMEWHE |
 | platform | `PLAT-BUILD-004` | On the four `no-touch` images no presence DECISION is produced at all  |
 | platform | `PLAT-THREAT-001` | A CTAPHID channel id is a routing label the sender writes, so channel  |
+| platform | `PLAT-THREAT-002` | A PIN-derived record stays rooted in the public chip serial until its  |
 | platform | `PLAT-MODEL-001` | `PermSets`'s five subsets are a SCOPE and not a description: a host ca |
 | platform | `PLAT-MODEL-009` | `EF_MINPINLEN`'s FLOOR (byte 0) and its RP-id disclosure list (bytes 2 |
 | platform | `PLAT-MODEL-011` | `EF_DEVICE_PIN` is outside `RSKeySecurityState` because the SURFACE it |

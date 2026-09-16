@@ -6310,6 +6310,27 @@ the release carries the flag, the decision stays yours
 
 ### Internal
 
+- **A PIN-derived record stays on the pre-burn root until its own reference is
+  presented**, and that is now written down instead of assumed away. Every record
+  sealed under the key base alone moves to the fused root at a boot pass; re-keying
+  a PIN-derived one needs the secret, so it happens at that reference's next
+  VERIFY. Ordinary use presents PW1, PW3 gates the admin surface only, and an
+  OpenPGP resetting code may never be presented at all — and until one is, a flash
+  dump plus the public chip serial opens the DEK copy behind it, which is every
+  OpenPGP private key and the AES key with them. A PW3 still on its published
+  default needs no search at all, and PIV's PUK has the same shape without a DEK
+  behind it. The card cannot retire what it cannot recognise: a verifier is an
+  opaque hash, so a record written before the burn and one written after are
+  indistinguishable. Registered as `PLAT-THREAT-002` with the three routes out —
+  the operator presenting the references, an arm byte in the verifier record, or
+  the DEK copies under an outer device-rooted seal a boot pass can move — named in
+  `docs/limitations.md` and in the threat model's own OTP clause, with
+  `docs/production.md` corrected: the burn migrates what it can reach, and the
+  operator is told to verify PW3 and re-set the resetting code afterwards. A host
+  test drives both halves: the code and its DEK copy are still chip-serial-rooted
+  after the burn boot and a PW1 verify, and the RESET RETRY that presents the code
+  is what moves it.
+
 - **The roster that refuses an unowned writer of the grant record could not see
   one that goes through a free function.** `scripts/token_refinement_gate.py`
   recognised a write by its receiver — `fs.put_key(fid, ..)` — and reached one hop

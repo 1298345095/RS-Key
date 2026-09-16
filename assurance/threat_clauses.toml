@@ -237,6 +237,10 @@ where = "- All key material is sealed in flash: FIDO seed, PIV keys and OATH rec
 id = "TM-THIEF-OTP-ROOT"
 kind = "defence"
 where = "- **OTP master key** ([production.md](production.md) stage 1): with the MKEK"
+rests_on = ["""
+for every record a boot pass can re-root. A PIN-derived one cannot be re-rooted \
+without its secret, so it waits for its own reference to be presented; see \
+[limitations](limitations.md) and `PLAT-THREAT-002`."""]
 
 [[clause]]
 id = "TM-THIEF-SEAL-FORGERY"

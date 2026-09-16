@@ -282,7 +282,10 @@ bulk stream, ISO-7816 APDUs, CTAP2 CBOR. Defenses:
   fused and page-58 hard-locked, a flash dump (even with BOOTSEL access and
   the chip id) does not reproduce the sealing key. Without the burn, the
   sealing key derives from on-chip state an attacker with full flash + chip
-  access could reconstruct. The burn is what makes at-rest real.
+  access could reconstruct. The burn is what makes at-rest real — for every
+  record a boot pass can re-root. A PIN-derived one cannot be re-rooted without
+  its secret, so it waits for its own reference to be presented; see
+  [limitations](limitations.md) and `PLAT-THREAT-002`.
 - **The seals give confidentiality, not authenticity.** Records written before
   the burn are keyed from the public chip serial alone, and those pre-OTP arms
   stay readable afterwards so a provisioned device keeps working across the

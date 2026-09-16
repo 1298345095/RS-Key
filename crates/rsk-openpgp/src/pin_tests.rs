@@ -723,6 +723,118 @@ fn put_reset_code_then_reset_retry_via_rc() {
     load_dek(&d, &mut fs, &sess, &mut dek).unwrap();
 }
 
+/// The one secret the burn cannot move, and the shape of the residual. Both other
+/// verifiers migrate at their first use; `migrate_pin_kbase` runs from `check_pin`'s
+/// fallback, so it needs the secret in hand — and nothing presents a resetting code
+/// except a RESET RETRY that may never come. Until one does, the RC verifier and the
+/// DEK copy behind it stay rooted in the PUBLIC chip serial, where a flash dump
+/// brute-forces the one and opens the other. The card cannot retire them on its own:
+/// a verifier is an opaque hash of a secret it does not hold, so a pre-burn code and
+/// one set afterwards are indistinguishable. Registered in docs/limitations.md and
+/// as `PLAT-THREAT-002`; the last third of this case is the cure the card does have.
+#[test]
+fn a_reset_code_set_before_the_burn_stays_on_the_chip_serial_root() {
+    let mut fs = setup();
+    let mut sess = Session::new();
+    let mut rng = CountRng(7);
+    let pre = dev();
+    assert_eq!(
+        verify(
+            &pre,
+            &mut fs,
+            &mut sess,
+            &mut rng,
+            0x00,
+            PW3_MODE83,
+            PW3_DEFAULT
+        ),
+        Sw::OK
+    );
+    assert_eq!(
+        put_reset_code(&pre, &mut fs, &mut sess, &mut rng, b"resetme0"),
+        Sw::OK
+    );
+    sess.reset();
+
+    // The burn, the boot pass it runs, and the PW1 verify that migrates PW1.
+    let d = otp_dev();
+    scan_files(&d, &mut fs, &mut rng).unwrap();
+    assert_eq!(
+        verify(
+            &d,
+            &mut fs,
+            &mut sess,
+            &mut rng,
+            0x00,
+            PW1_MODE81,
+            PW1_DEFAULT
+        ),
+        Sw::OK
+    );
+    let mut rec = [0u8; 64];
+    fs.read(EF_PW1, &mut rec).unwrap();
+    assert!(
+        ct_eq(&rec[2..34], &d.pin_derive_verifier(PW1_DEFAULT)),
+        "fixture: PW1 moved to the fused root at its first verify"
+    );
+    assert!(
+        !ct_eq(&rec[2..34], &pre.pin_derive_verifier(PW1_DEFAULT)),
+        "fixture: the two arms really do derive different verifiers"
+    );
+    fs.read(EF_RC, &mut rec).unwrap();
+    assert!(
+        ct_eq(&rec[2..34], &pre.pin_derive_verifier(b"resetme0")),
+        "the resetting code is still rooted in the public chip serial"
+    );
+    // And PW3 with it — the likelier member of the same class, since ordinary use
+    // presents PW1 and the admin surface may not be touched again after the burn.
+    fs.read(EF_PW3, &mut rec).unwrap();
+    assert!(
+        ct_eq(&rec[2..34], &pre.pin_derive_verifier(PW3_DEFAULT)),
+        "PW3 has not been presented since the burn, so it has not moved either"
+    );
+
+    // And the prize behind it: the DEK copy opens under the pre-burn session, so a
+    // dump plus the public serial yields every key the DEK seals.
+    let mut blob = [0u8; DEK_FILE_SIZE];
+    let n = fs.read_key(EF_DEK_RC, &mut blob).unwrap().min(blob.len());
+    let session = pre.pin_derive_session(b"resetme0");
+    let mut from_flash = [0u8; DEK_SIZE];
+    pre.decrypt_with_aad(&session, &blob[1..n], PinKdf::V2, &mut from_flash)
+        .expect("the DEK copy behind the resetting code is on the pre-burn root");
+    let mut sess_pw1 = Session::new();
+    assert_eq!(
+        verify(
+            &d,
+            &mut fs,
+            &mut sess_pw1,
+            &mut rng,
+            0x00,
+            PW1_MODE81,
+            PW1_DEFAULT
+        ),
+        Sw::OK
+    );
+    let mut live = [0u8; DEK_SIZE];
+    load_dek(&d, &mut fs, &sess_pw1, &mut live).unwrap();
+    assert_eq!(from_flash, live, "and it is the same DEK the card uses");
+
+    // And the cure the card has: USING the code is what re-keys it, both records.
+    sess.reset();
+    let mut data = [0u8; 14];
+    data[..8].copy_from_slice(b"resetme0");
+    data[8..].copy_from_slice(b"222222");
+    assert_eq!(
+        reset_retry(&d, &mut fs, &mut sess, &mut rng, 0x00, PW1_MODE81, &data),
+        Sw::OK
+    );
+    fs.read(EF_RC, &mut rec).unwrap();
+    assert!(
+        ct_eq(&rec[2..34], &d.pin_derive_verifier(b"resetme0")),
+        "the RESET RETRY that presented the code is what moves it to the fused root"
+    );
+}
+
 #[test]
 fn put_reset_code_requires_pw3() {
     let mut fs = setup();

@@ -15,7 +15,8 @@ offline. The production path closes that in two independent stages:
 1. **OTP master key (MKEK)**: fuse a random 32-byte key into RP2350 OTP
    page 58 and re-root all at-rest sealing in it, then hard-lock the page so
    neither BOOTSEL nor non-secure code can ever read it. A flash dump alone
-   is now worthless.
+   is then worthless — for every record the burn actually re-roots; a
+   PIN-derived one waits for its own reference to be presented (stage 1).
 2. **Secure boot**: fuse your public-key fingerprint and the
    `SECURE_BOOT_ENABLE` bit so the bootrom runs *only* images you signed.
    Attacker-flashed firmware (the remaining way to read the OTP key) no
@@ -84,9 +85,14 @@ Every burning command takes `--dry-run` and a typed confirmation.
 What it does: writes a random DEVK (device attestation key) and MKEK (master
 sealing key) plus anti-imaging chaff into OTP page 58, ECC-verified, then
 locks the page. On the next boot the firmware notices the provisioned key and
-**migrates everything already on the device** (FIDO seed, attestation key,
-the persistent `pcmr` grant, PIV keys, OpenPGP key wraps, PIN verifiers) under
-the new root. Your enrolled credentials
+**migrates what it can reach** (FIDO seed, attestation key, the persistent
+`pcmr` grant, PIV keys) under the new root. Anything keyed by a PIN is the
+exception — re-keying it needs the secret — so each PIN verifier and the DEK copy
+behind it moves at that reference's own next VERIFY. OpenPGP's private keys are
+sealed under that DEK and never move. **After the burn, verify PW3 once and set
+your OpenPGP resetting code again**: those are the two references ordinary use
+does not present, and until they are presented they stay on the pre-burn root
+([limitations](limitations.md)). Your enrolled credentials
 survive. That is the point of the migration layer.
 
 > **At-rest hardening pass.** The migration re-seals each secret under the new

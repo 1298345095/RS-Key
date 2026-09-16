@@ -474,6 +474,7 @@ assurance/platform.toml	crates/rsk-fido/src/reset_refinement_kani.rs	133-138	kan
 assurance/platform.toml	crates/rsk-fido/src/seed.rs	300-304	/// Presence is necessary but NOT sufficient — provisioning mints it before any PIN	}
 assurance/platform.toml	crates/rsk-fido/src/seed.rs	323-324	r.map(|()| tok)	}
 assurance/platform.toml	crates/rsk-fido/src/seed.rs	337-337	pub fn clear_ppuat<S: Storage>(fs: &mut Fs<S>) -> Result<()> {	pub fn clear_ppuat<S: Storage>(fs: &mut Fs<S>) -> Result<()> {
+assurance/platform.toml	crates/rsk-fido/src/seed.rs	535-535	let weak = matches!(buf[0], FORMAT_F1 | FORMAT_G1) && dev.otp_key.is_some();	let weak = matches!(buf[0], FORMAT_F1 | FORMAT_G1) && dev.otp_key.is_some();
 assurance/platform.toml	crates/rsk-fido/src/state.rs	300-304	/// Cached `getKeyAgreement` public key `d·G` for the current `ephemeral`	ephemeral_pub: ([u8; 32], [u8; 32]),
 assurance/platform.toml	crates/rsk-fido/src/state.rs	305-309	pub paut: PinUvAuthToken,	pub(crate) new_pin_mismatches: u8,
 assurance/platform.toml	crates/rsk-fido/src/state.rs	547-562	/// `stopUsingPinUvAuthToken` — drop the in-use state, permissions, and	}
@@ -485,6 +486,12 @@ assurance/platform.toml	crates/rsk-fido/src/vendor.rs	1045-1045	fs.try_has_data(
 assurance/platform.toml	crates/rsk-fs/src/fs.rs	100-106	/// `for_each_key` returning *complete* means it enumerated every live key (its	/// Authority bit for [`present`](Self#structfield.present): set iff `fid`'s
 assurance/platform.toml	crates/rsk-fs/src/fs.rs	295-302	});	// (`complete == false`); then leave the un-yielded FIDs *undecided* so
 assurance/platform.toml	crates/rsk-fs/src/fs.rs	477-477	pub fn factory_wipe(	pub fn factory_wipe(
+assurance/platform.toml	crates/rsk-oath/src/seal.rs	42-42	pub fn seal_put<S: Storage>(	pub fn seal_put<S: Storage>(
+assurance/platform.toml	crates/rsk-openpgp/src/pin.rs	277-277	if let Err(sw) = migrate_pin_kbase(dev, fs, rng, fid, data) {	if let Err(sw) = migrate_pin_kbase(dev, fs, rng, fid, data) {
+assurance/platform.toml	crates/rsk-openpgp/src/pin.rs	333-333	if n < 1 || blob[0] != DEK_FORMAT_V3 {	if n < 1 || blob[0] != DEK_FORMAT_V3 {
+assurance/platform.toml	crates/rsk-openpgp/src/pin.rs	762-762	rec[1] = PIN_FORMAT_V1;	rec[1] = PIN_FORMAT_V1;
+assurance/platform.toml	crates/rsk-otp/src/seal.rs	55-55	pub fn seal_put<S: Storage>(	pub fn seal_put<S: Storage>(
+assurance/platform.toml	crates/rsk-piv/src/lib.rs	1328-1328	// kbase-migration fallback: the correct PIN against a verifier stored	// kbase-migration fallback: the correct PIN against a verifier stored
 assurance/platform.toml	crates/rsk-store/src/lib.rs	88-88	matches!(fid, 0xC000 | 0xC001 | 0x0093 | 0xCC01)	matches!(fid, 0xC000 | 0xC001 | 0x0093 | 0xCC01)
 assurance/platform.toml	crates/rsk-store/src/lib.rs	145-152	/// Removes from BOTH partitions, not just the one [`is_counter_fid`] routes to.	/// the second call finds nothing and costs one ring walk.
 assurance/platform.toml	crates/rsk-store/src/lib.rs	179-181	let main_done = for_each_in(&mut self.main, &mut self.buf, f);	main_done && counter_done

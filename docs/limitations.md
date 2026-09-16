@@ -151,6 +151,21 @@ covers the security boundary. This page covers feature and hardware gaps.
   *Status: needs a fuse-rooted latch that closes the migration window once the
   device is provisioned; the analysis is audit run-27 #8, the decision is the
   maintainer's because it makes `lock-page58` load-bearing for boot correctness.*
+- **A PIN-derived record stays on the weaker root until its own reference is
+  presented after the burn.** Every record sealed under the key base alone is
+  moved to the fused root by a boot pass, but re-keying a PIN-derived one needs
+  the secret, so it happens at that reference's next VERIFY. Ordinary use presents
+  PW1; PW3 gates the admin surface only, and an OpenPGP resetting code may never
+  be presented at all. Until one is, a flash dump plus the public chip serial
+  opens the DEK copy behind it — every OpenPGP private key and the AES key with
+  them — and a PW3 still on its published default needs no search at all. PIV's
+  PUK has the same shape, with no DEK behind it. The card cannot retire what it
+  cannot recognise: a verifier is an opaque hash, so a record written before the
+  burn and one written after are indistinguishable. *Status: registered as
+  `PLAT-THREAT-002`. After the burn, verify PW3 once and set the resetting code
+  again — presenting a reference is what moves it. Closing it for good needs the
+  DEK copies under an outer device-rooted seal a boot pass can move, which is a
+  persistent-format decision and the maintainer's.*
 - **A flash read that fails still reads as an absent record in most of the
   tree.** The store's `read` and `size` return the same "nothing there" for a key
   that was never written and for one the medium could not serve, and an absent
@@ -273,9 +288,10 @@ covers the security boundary. This page covers feature and hardware gaps.
   enabling the soft-lock) leaves the old record in the log until compaction
   naturally overwrites it, so most at-rest guarantees harden over time rather
   than instantly. *(On a provisioned device the superseded copy is sealed to
-  the fused root.)* The one record that is **not** left to lazy healing is the
-  pre-OTP seed superseded by the OTP-burn migration. It is sealed under the
-  chip-serial-only root, so the first boot after provisioning scrubs it eagerly
-  with a one-shot full-GC-lap compaction.
+  the fused root — unless it is PIN-derived, which the burn cannot re-root.)*
+  What is **not** left to lazy healing is every record the boot passes re-seal
+  off the chip-serial root — the seed, the attestation key and the persistent
+  `pcmr` grant: the first boot after provisioning scrubs their superseded copies
+  eagerly with a one-shot full-GC-lap compaction.
 - **The board is the security boundary**: anyone with the device and your
   PIN is you. Same as every security key.
