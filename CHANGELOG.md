@@ -2221,6 +2221,26 @@ the release carries the flag, the decision stays yours
 
 ### Fixed
 
+- Deactivating an OpenPGP resetting code now drops its staged DEK copy as well.
+  A `PUT DATA 0xD3` that tore or was refused between its two records leaves
+  `EF_DEK_STAGE_RC` holding the whole DEK sealed under the code being replaced,
+  and the deactivation that followed took the verifier, the committed copy and the
+  retry budget — not that one. Nothing else could: the at-rest lap only reclaims
+  SUPERSEDED bodies and this record is live, and `load_dek`'s stage retirement
+  needs a resetting-code session, which needs the verifier the deactivation has
+  just deleted. So a revoked code kept a readable copy of every OpenPGP private
+  key behind it. Found by a review of the resetting-code work below.
+
+- A flash read that fails during an OpenPGP PIN migration no longer strands the
+  DEK. `migrate_pin_kbase` re-wraps the DEK copy and then moves the verifier to
+  the fused root; it read that copy with the probe that answers the same "nothing
+  there" for an absent record and a failed read, so one faulted read skipped the
+  re-wrap silently and moved the verifier anyway. The PIN then verified for ever
+  while every operation behind it answered `6A00`, with TERMINATE DF the only way
+  back. The read is now the fallible one and a fault fails the VERIFY instead,
+  leaving both records where they were. Same class as 0x0995 and 0x09D8; host
+  tests drive both over a medium that fails one read. **bcdDevice → 0x09DA.**
+
 - The OTP burn now re-seals the persistent pinUvAuthToken too. The boot pass that
   moves a device's secrets from the chip-serial root to the fused one carried the
   seed and the attestation key; the `pcmr` grant record was not on that list.

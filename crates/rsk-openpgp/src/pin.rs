@@ -329,7 +329,14 @@ fn migrate_pin_kbase<S: Storage>(
     // and a medium that refuses it reaches the losing state with no reset at all.
     rsk_fs::request_rescrub(fs).map_err(|_| Sw::MEMORY_FAILURE)?;
     let mut blob = [0u8; DEK_FILE_SIZE];
-    if let Some(n) = fs.read_key(dek_fid, &mut blob).map(|n| n.min(blob.len())) {
+    // `try_read_key`: a read this medium could not serve is not a copy that was
+    // never written. Skipping the re-wrap and storing the verifier anyway leaves a
+    // PIN that verifies forever over a DEK nothing can open — `6A00` on every
+    // operation, with TERMINATE DF the only way back.
+    let copy = fs
+        .try_read_key(dek_fid, &mut blob)
+        .map_err(|_| Sw::MEMORY_FAILURE)?;
+    if let Some(n) = copy.map(|n| n.min(blob.len())) {
         if n < 1 || blob[0] != DEK_FORMAT_V3 {
             return Err(Sw::EXEC_ERROR);
         }
@@ -585,8 +592,13 @@ pub(crate) fn reseed_pin<S: Storage>(
 }
 
 /// Deactivate the resetting code: drop its verifier, the DEK copy sealed under
-/// it, and its retry budget — the three together are what RESET RETRY P1=0 walks
-/// in through, so an `Ok` over a survivor revokes a credential only on paper.
+/// it, its STAGE slot and its retry budget — the four together are what RESET
+/// RETRY P1=0 walks in through, so an `Ok` over a survivor revokes a credential
+/// only on paper. The stage is the one a reader forgets: a torn or refused PUT
+/// DATA 0xD3 leaves it holding the whole DEK under the code being revoked, and
+/// nothing else retires it — `load_dek`'s retirement needs an `sess.has_rc` that
+/// needs the EF_RC this function has just deleted, and the at-rest lap cannot
+/// touch it because it is LIVE rather than superseded.
 /// `init`'s repair pass reaches the FACTORY reset code alone, so nothing else on
 /// the card clears a set one.
 ///
@@ -608,8 +620,9 @@ pub(crate) fn clear_reset_code<S: Storage>(fs: &mut Fs<S>, sess: &mut Session) -
     rsk_fs::request_rescrub(fs).map_err(|_| Sw::MEMORY_FAILURE)?;
     let verifier = fs.delete(EF_RC).is_ok();
     let dek = fs.delete_key(EF_DEK_RC).is_ok();
+    let staged = fs.delete_key(EF_DEK_STAGE_RC).is_ok();
     let counter = set_pin_retry_counter(fs, EF_RC, 0).is_ok();
-    if verifier && dek && counter {
+    if verifier && dek && staged && counter {
         Ok(())
     } else {
         Err(Sw::MEMORY_FAILURE)

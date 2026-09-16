@@ -723,6 +723,101 @@ fn put_reset_code_then_reset_retry_via_rc() {
     load_dek(&d, &mut fs, &sess, &mut dek).unwrap();
 }
 
+/// Revoking the resetting code must take its STAGE slot with it. A torn or refused
+/// PUT DATA 0xD3 leaves `EF_DEK_STAGE_RC` holding the whole DEK under the code the
+/// next deactivation revokes — LIVE, so no at-rest lap can reach it, and invisible
+/// to `load_dek`'s retirement, which needs an `sess.has_rc` that needs the `EF_RC`
+/// the same deactivation has just deleted.
+#[test]
+fn deactivating_the_reset_code_takes_its_staged_dek_copy_with_it() {
+    let mut fs = setup();
+    let mut sess = Session::new();
+    let mut rng = CountRng(7);
+    let d = dev();
+    assert_eq!(
+        verify(
+            &d,
+            &mut fs,
+            &mut sess,
+            &mut rng,
+            0x00,
+            PW3_MODE83,
+            PW3_DEFAULT
+        ),
+        Sw::OK
+    );
+    assert_eq!(
+        put_reset_code(&d, &mut fs, &mut sess, &mut rng, b"resetme0"),
+        Sw::OK
+    );
+    let mut dek = [0u8; DEK_SIZE];
+    load_dek(&d, &mut fs, &sess, &mut dek).unwrap();
+
+    // An update that staged and then did not land.
+    stage_dek(&d, &mut fs, &mut rng, EF_DEK_RC, b"resetme0", &dek).unwrap();
+    assert!(fs.has_key(EF_DEK_STAGE_RC), "fixture: the stage is live");
+
+    assert_eq!(
+        put_reset_code(&d, &mut fs, &mut sess, &mut rng, &[]),
+        Sw::OK,
+        "an empty PUT DATA 0xD3 deactivates the code"
+    );
+    assert!(!fs.has_data(EF_RC));
+    assert!(!fs.has_key(EF_DEK_RC));
+    assert!(
+        !fs.has_key(EF_DEK_STAGE_RC),
+        "the staged copy holds the whole DEK under the code this just revoked"
+    );
+}
+
+/// A faulted read of the DEK copy must not leave the verifier migrated over it.
+/// `store_verifier` runs after the re-wrap, so taking a failed read for "no copy"
+/// moved PW1 to the fused root while its DEK copy stayed on the old one: the PIN
+/// then verifies for ever and everything behind it answers `6A00`, with TERMINATE
+/// DF the only way back.
+#[test]
+fn a_faulted_dek_read_does_not_migrate_the_verifier_alone() {
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    let mut rng = CountRng(0);
+    scan_files(&dev(), &mut fs, &mut rng).unwrap();
+    let d = otp_dev();
+
+    let mut sess = Session::new();
+    medium.stick_once(EF_DEK_PW1.get());
+    assert_eq!(
+        verify(
+            &d,
+            &mut fs,
+            &mut sess,
+            &mut rng,
+            0x00,
+            PW1_MODE81,
+            PW1_DEFAULT
+        ),
+        Sw::MEMORY_FAILURE,
+        "a migration that could not read the DEK copy must fail, not half-run"
+    );
+
+    // The verifier is where it was, so the PIN still opens its own DEK copy.
+    let mut sess2 = Session::new();
+    assert_eq!(
+        verify(
+            &d,
+            &mut fs,
+            &mut sess2,
+            &mut rng,
+            0x00,
+            PW1_MODE81,
+            PW1_DEFAULT
+        ),
+        Sw::OK
+    );
+    let mut dek = [0u8; DEK_SIZE];
+    load_dek(&d, &mut fs, &sess2, &mut dek).expect("the DEK copy is still reachable");
+}
+
 /// The one secret the burn cannot move, and the shape of the residual. Both other
 /// verifiers migrate at their first use; `migrate_pin_kbase` runs from `check_pin`'s
 /// fallback, so it needs the secret in hand — and nothing presents a resetting code

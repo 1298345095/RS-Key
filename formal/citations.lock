@@ -488,8 +488,8 @@ assurance/platform.toml	crates/rsk-fs/src/fs.rs	295-302	});	// (`complete == fal
 assurance/platform.toml	crates/rsk-fs/src/fs.rs	477-477	pub fn factory_wipe(	pub fn factory_wipe(
 assurance/platform.toml	crates/rsk-oath/src/seal.rs	42-42	pub fn seal_put<S: Storage>(	pub fn seal_put<S: Storage>(
 assurance/platform.toml	crates/rsk-openpgp/src/pin.rs	277-277	if let Err(sw) = migrate_pin_kbase(dev, fs, rng, fid, data) {	if let Err(sw) = migrate_pin_kbase(dev, fs, rng, fid, data) {
-assurance/platform.toml	crates/rsk-openpgp/src/pin.rs	333-333	if n < 1 || blob[0] != DEK_FORMAT_V3 {	if n < 1 || blob[0] != DEK_FORMAT_V3 {
-assurance/platform.toml	crates/rsk-openpgp/src/pin.rs	762-762	rec[1] = PIN_FORMAT_V1;	rec[1] = PIN_FORMAT_V1;
+assurance/platform.toml	crates/rsk-openpgp/src/pin.rs	340-340	if n < 1 || blob[0] != DEK_FORMAT_V3 {	if n < 1 || blob[0] != DEK_FORMAT_V3 {
+assurance/platform.toml	crates/rsk-openpgp/src/pin.rs	775-775	rec[1] = PIN_FORMAT_V1;	rec[1] = PIN_FORMAT_V1;
 assurance/platform.toml	crates/rsk-otp/src/seal.rs	55-55	pub fn seal_put<S: Storage>(	pub fn seal_put<S: Storage>(
 assurance/platform.toml	crates/rsk-piv/src/lib.rs	1328-1328	// kbase-migration fallback: the correct PIN against a verifier stored	// kbase-migration fallback: the correct PIN against a verifier stored
 assurance/platform.toml	crates/rsk-store/src/lib.rs	88-88	matches!(fid, 0xC000 | 0xC001 | 0x0093 | 0xCC01)	matches!(fid, 0xC000 | 0xC001 | 0x0093 | 0xCC01)
@@ -774,8 +774,8 @@ formal/README.md	crates/rsk-openpgp/src/pin.rs	232-234	let n = n.min(pw.len());	
 formal/README.md	crates/rsk-openpgp/src/pin.rs	234-234	if idx < n && pw[idx] == 0 {	if idx < n && pw[idx] == 0 {
 formal/README.md	crates/rsk-openpgp/src/pin.rs	240-240	Some(n) if n >= 3 && rec[0] != 0 => n,	Some(n) if n >= 3 && rec[0] != 0 => n,
 formal/README.md	crates/rsk-openpgp/src/pin.rs	267-269	// comparison, but a YubiKey 5.7.4 clears exactly the addressed	// stops PSO:CDS and the admin surface instead of leaving them open.
-formal/README.md	crates/rsk-openpgp/src/pin.rs	882-882	Some(n) if n >= 1 => rc_rec[0] as usize,	Some(n) if n >= 1 => rc_rec[0] as usize,
-formal/README.md	crates/rsk-openpgp/src/pin.rs	885-885	if data.len() <= rc_len {	if data.len() <= rc_len {
+formal/README.md	crates/rsk-openpgp/src/pin.rs	895-895	Some(n) if n >= 1 => rc_rec[0] as usize,	Some(n) if n >= 1 => rc_rec[0] as usize,
+formal/README.md	crates/rsk-openpgp/src/pin.rs	898-898	if data.len() <= rc_len {	if data.len() <= rc_len {
 formal/README.md	crates/rsk-openpgp/src/pso.rs	80-92	(0x9E, 0x9A) => {	if !sess.has_pw2 {
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	59-65	pub fn write_authorized(sess: &Session, fid: u16) -> bool {	}
 formal/README.md	crates/rsk-openpgp/src/putdata.rs	246-249	pub fn put_pw_status<S: Storage>(fs: &mut Fs<S>, sess: &Session, data: &[u8]) -> Sw {	}
@@ -899,10 +899,10 @@ formal/RSKeyBootHardening.tla	firmware/src/pin_lock.rs	52-54	/// Refines `RSKeyB
 formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	139-139	pw[idx] -= 1;	pw[idx] -= 1;
 formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	209-300	/// Refines `RSKeyRetryLattice!NoAuthWhenBlocked` — SEC-LAT-001.	}
 formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	232-234	let n = n.min(pw.len());	if idx < n && pw[idx] == 0 {
-formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	656-656	let mut fid = pw_fid(p2);	let mut fid = pw_fid(p2);
-formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	862-912	/// resetting code (P1=0x00) or via a verified admin PIN (P1=0x02). Both re-seal	return match result {
-formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	885-885	if data.len() <= rc_len {	if data.len() <= rc_len {
-formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	917-917	if p1 != 0x02 {	if p1 != 0x02 {
+formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	669-669	let mut fid = pw_fid(p2);	let mut fid = pw_fid(p2);
+formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	875-925	/// resetting code (P1=0x00) or via a verified admin PIN (P1=0x02). Both re-seal	return match result {
+formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	898-898	if data.len() <= rc_len {	if data.len() <= rc_len {
+formal/RSKeyRetryLattice.tla	crates/rsk-openpgp/src/pin.rs	930-930	if p1 != 0x02 {	if p1 != 0x02 {
 formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	580-587	fn reset_retry<S: Storage>(&mut self, dev: &Device, fs: &mut Fs<S>, apdu: &Apdu) -> Sw {	unblock_pin_with_puk(dev, fs, puk, new)
 formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1287-1354	/// Refines `RSKeyRetryLattice!NoAuthWhenBlocked` — SEC-LAT-001.	Sw::retries(left)
 formal/RSKeyRetryLattice.tla	crates/rsk-piv/src/lib.rs	1292-1294	Err(sw) => return sw,	if left == 0 {
@@ -1135,7 +1135,7 @@ formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	260-262	if !putdata::write_a
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	337-339	fn deselect(&mut self, _fs: &mut Fs<S>) {	}
 formal/comutants.toml	crates/rsk-openpgp/src/lib.rs	355-358	fn select(&mut self, reselect: bool, _fs: &mut Fs<S>, res: &mut ResBuf) -> Sw {	}
 formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	234-238	if idx < n && pw[idx] == 0 {	let mut rec = [0u8; 64];
-formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	888-888	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);
+formal/comutants.toml	crates/rsk-openpgp/src/pin.rs	901-901	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);	let sw = check_pin(dev, fs, sess, rng, EF_RC, p2, &data[..rc_len]);
 formal/comutants.toml	crates/rsk-otp/src/counter_tests.rs	9-9	assert_eq!(next_use_counter(5, 0), (5, 1, false));	assert_eq!(next_use_counter(5, 0), (5, 1, false));
 formal/comutants.toml	crates/rsk-otp/src/lib.rs	611-615	let unmatched =	}
 formal/comutants.toml	crates/rsk-otp/src/tests.rs	1405-1405	assert!(	assert!(
