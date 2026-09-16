@@ -3143,6 +3143,47 @@ fn a_min_pin_record_wider_than_this_build_is_left_whole_rather_than_truncated() 
     assert_eq!(&back[..n], &oversized[..], "and kept them unchanged");
 }
 
+/// A `pcmr` request whose read of the grant faults must fail rather than mint: the
+/// read's `None` used to reach `ensure_ppuat` as "never minted", and the platform
+/// asking was handed a new token that revoked every other platform's grant.
+#[test]
+fn a_faulted_grant_read_does_not_hand_out_a_new_pcmr_token() {
+    let (backend, medium) = ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    let mut rng = SeqRng(1);
+    ensure_seed(&dev(), &mut fs, &mut rng).unwrap();
+    let mut state = FidoState::new();
+    let plat = key_agreement(&mut fs, &mut rng, &mut state, PinProto::Two, 2);
+    let mut out = [0u8; 256];
+    let pcmr = plat.get_token_perms_req(PIN, PERM_PCMR as u64);
+    run(
+        &mut fs,
+        &mut rng,
+        &mut state,
+        &plat.set_pin_req(PIN),
+        &mut out,
+    )
+    .unwrap();
+    let n = run(&mut fs, &mut rng, &mut state, &pcmr, &mut out).unwrap();
+    let ppuat = plat.decrypt_token(&out[..n]);
+    let stored = medium.value(crate::consts::EF_PAUTHTOKEN.get()).unwrap();
+
+    medium.stick_once(crate::consts::EF_PAUTHTOKEN.get());
+    let r = run(&mut fs, &mut rng, &mut state, &pcmr, &mut out);
+    assert_eq!(
+        medium.value(crate::consts::EF_PAUTHTOKEN.get()).as_deref(),
+        Some(&stored[..]),
+        "a faulted read minted a new persistent token over the live one"
+    );
+    assert!(
+        r.is_err(),
+        "a grant that could not be read was answered as issued"
+    );
+
+    let n = run(&mut fs, &mut rng, &mut state, &pcmr, &mut out).unwrap();
+    assert_eq!(plat.decrypt_token(&out[..n]), ppuat);
+}
+
 // The permission-domain sweep lives in its own file: it is a source obligation
 // of the formal programme (PLAT-MODEL-001), not another clientPIN case, and it
 // needs this module's fixture.

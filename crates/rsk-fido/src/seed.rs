@@ -296,22 +296,22 @@ pub fn store_att_key<S: Storage>(dev: &Device, fs: &mut Fs<S>, key: &[u8; 32]) -
 }
 
 /// The persistent pinUvAuthToken (CTAP 2.2 §6.5.2.2), sealed exactly like the
-/// seed; `None` if never minted or a PIN change dropped it. Presence is necessary but
-/// NOT sufficient — a build whose wipe deferred this record could leave it behind
-/// its PIN, so [`crate::credmgmt`] owns the grant test, not this reader.
+/// seed; `None` if never minted, dropped by a PIN change, or unreadable here.
+/// Presence is necessary but NOT sufficient — provisioning mints it before any PIN
+/// exists, so [`crate::credmgmt`] owns the grant test, not this reader.
 pub fn load_ppuat<S: Storage>(dev: &Device, fs: &mut Fs<S>) -> Option<[u8; 32]> {
     get_sealed32(dev, fs, EF_PAUTHTOKEN)
 }
 
-/// [`load_ppuat`], minting and persisting a fresh token when none exists — the
-/// `pcmr` half of §6.5.5.7.2/.3. Unlike the session token it outlives the power
+/// [`load_ppuat`], minting a fresh token only when the record is confirmed absent —
+/// the `pcmr` half of §6.5.5.7.2/.3. Unlike the session token it outlives the power
 /// cycle, so it must reach flash before it reaches the platform.
 pub fn ensure_ppuat<S: Storage>(
     dev: &Device,
     fs: &mut Fs<S>,
     rng: &mut impl Rng,
 ) -> Result<[u8; 32]> {
-    if let Some(tok) = load_ppuat(dev, fs) {
+    if let Some(tok) = try_get_sealed32(dev, fs, EF_PAUTHTOKEN)? {
         return Ok(tok);
     }
     let mut tok = [0u8; 32];
@@ -450,9 +450,24 @@ fn seal_getinfo_member(
 
 /// Read and unseal a 32-byte value from any supported at-rest form (read-both).
 fn get_sealed32<S: Storage>(dev: &Device, fs: &mut Fs<S>, fid: KeyFid) -> Option<[u8; 32]> {
+    try_get_sealed32(dev, fs, fid).ok().flatten()
+}
+
+/// [`get_sealed32`] keeping a confirmed absence (`Ok(None)`) apart from a read that
+/// failed or a record that will not open under `dev` (`Err`): the OTP root is read per
+/// operation, so either can be one bad read. Mint over `Ok(None)` only.
+fn try_get_sealed32<S: Storage>(
+    dev: &Device,
+    fs: &mut Fs<S>,
+    fid: KeyFid,
+) -> Result<Option<[u8; 32]>> {
     let mut buf = [0u8; 64];
-    let n = fs.read_key(fid, &mut buf)?;
-    let out = open_any(dev, &buf[..n.min(buf.len())]);
+    let out = match fs.try_read_key(fid, &mut buf) {
+        Ok(Some(n)) => open_any(dev, &buf[..n.min(buf.len())])
+            .map(Some)
+            .ok_or(Error::ExecError),
+        other => other.map(|_| None),
+    };
     buf.zeroize();
     out
 }

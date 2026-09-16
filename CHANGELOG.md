@@ -2221,6 +2221,24 @@ the release carries the flag, the decision stays yours
 
 ### Fixed
 
+- A flash read that fails at boot no longer replaces the persistent
+  pinUvAuthToken. Since 0x09CB the boot of every unlocked key ends provisioning by
+  making sure the `pcmr` grant exists, and a read of that record that failed
+  counted as a record never written: one transient fault minted a new token over
+  the live one. Every platform holding the grant lost it, and getInfo's
+  `encIdentifier` stopped matching the key those platforms had paired with. A
+  `pcmr` request has done the same over a faulted read since the grant became
+  persistent (0x086E), and so did a record that was there but would not open under
+  that operation's key. That last case is refused too rather than repaired: the
+  OTP root is read per operation and a failed read of it looks unprovisioned, so a
+  record that will not open is no proof the grant is gone. Only a confirmed absence
+  mints now. A boot leaves the record alone and carries on, a vendor backup load
+  answers an error with the loaded seed already installed (a retry completes it),
+  and a `pcmr` request answers `0x7F`. Host tests drive the boot
+  and `pcmr` paths over a medium that fails one read, and the unopenable record
+  under a key without the OTP root; not reproduced on a board.
+  **bcdDevice → 0x09D8.**
+
 - An HOTP code is no longer sent when the store refuses to advance its counter,
   and U2F no longer signs a counter it could not advance. OATH `CALCULATE` built
   the code into the response before writing the bumped counter, and the response

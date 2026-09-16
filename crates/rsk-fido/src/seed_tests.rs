@@ -720,6 +720,67 @@ fn a_faulted_probe_does_not_reinitialise_the_counter_or_the_large_blob() {
     }
 }
 
+/// Every boot ends `ensure_seed` in `ensure_ppuat`, whose read took "could not read"
+/// for "never minted": one faulted read minted a token over the live one, revoking
+/// every platform's `pcmr` grant and changing getInfo's encIdentifier under them.
+#[test]
+fn a_faulted_grant_read_does_not_rotate_the_persistent_token() {
+    let d = dev();
+    let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+    let mut fs = Fs::new(backend);
+    fs.scan();
+    ensure_seed(&d, &mut fs, &mut SeqRng(1)).unwrap();
+    let token = load_ppuat(&d, &mut fs).expect("provisioning mints the grant");
+    let stored = medium
+        .value(EF_PAUTHTOKEN.get())
+        .expect("and it is on the medium");
+
+    // The next boot, with ONE read of the grant record failing and then recovering.
+    let mut fs = Fs::new(fs.into_storage());
+    fs.scan();
+    medium.stick_once(EF_PAUTHTOKEN.get());
+    let r = ensure_seed(&d, &mut fs, &mut SeqRng(2));
+    assert_eq!(
+        medium.value(EF_PAUTHTOKEN.get()).as_deref(),
+        Some(&stored[..]),
+        "a faulted read minted a new persistent token over the live one"
+    );
+    assert!(
+        r.is_err(),
+        "a boot that could not read the grant must say so, not re-mint it"
+    );
+    assert_eq!(
+        load_ppuat(&d, &mut fs),
+        Some(token),
+        "every platform holding the grant must still hold it"
+    );
+}
+
+/// The OTP root is read per operation and a failed read looks unprovisioned, so an
+/// OTP-arm record can refuse to open for one operation. Minting there rotated a live
+/// grant and sealed the replacement under the serial-only arm the fuses retire.
+#[test]
+fn a_grant_that_will_not_open_is_not_reminted() {
+    let mut fs = Fs::new(RamStorage::new());
+    fs.scan();
+    let token = ensure_ppuat(&otp_dev(), &mut fs, &mut SeqRng(1)).unwrap();
+    let mut before = [0u8; 64];
+    let n = fs.read_key(EF_PAUTHTOKEN, &mut before).unwrap();
+
+    assert!(
+        ensure_ppuat(&dev(), &mut fs, &mut SeqRng(2)).is_err(),
+        "a grant this operation's key cannot open must not be replaced"
+    );
+    let mut after = [0u8; 64];
+    assert_eq!(fs.read_key(EF_PAUTHTOKEN, &mut after), Some(n));
+    assert_eq!(after[..n], before[..n], "the sealed record was rewritten");
+    assert_eq!(
+        ensure_ppuat(&otp_dev(), &mut fs, &mut SeqRng(3)).unwrap(),
+        token,
+        "the next operation that can open it hands out the same grant"
+    );
+}
+
 /// The global signature counter is FIDO's clone-detection signal, and a collapsing
 /// `Fs::read` of it answers the same 0 for "never written" and "I could not look".
 /// `bump_sign_counter` then persists 1 over whatever was there, and U2F
