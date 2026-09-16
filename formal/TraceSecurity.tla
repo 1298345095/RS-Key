@@ -52,7 +52,7 @@ ModelProjection ==
     [ pinSet       |-> pin.set,
       pinRetries   |-> pin.retries,
       alwaysUv     |-> gate.alwaysUv,
-      grant        |-> gate.ppuat,
+      grant        |-> gate.ppuatRec,
       backupSealed |-> gate.backupSealed,
       seed         |-> store.seed,
       credAny      |-> store.cred # {},

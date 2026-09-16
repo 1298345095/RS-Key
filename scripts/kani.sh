@@ -150,10 +150,10 @@ FLOOR_light3=28
 # floor is for the partial case, a cover that stopped being reported while the
 # rest still are. Counted from source by the same guard as the floors above.
 COVERS_pr=41
-COVERS_state=35
-COVERS_all=66
+COVERS_state=36
+COVERS_all=67
 COVERS_heavy=1
-COVERS_light1=34
+COVERS_light1=35
 COVERS_light2=12
 COVERS_light3=19
 

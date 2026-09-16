@@ -6274,6 +6274,31 @@ the release carries the flag, the decision stays yours
 
 ### Internal
 
+- **The trace replay CI runs against the emulator went red on the grant `0x09CB`
+  mints at provisioning.** Since then `ensure_seed` has written the persistent
+  grant record beside the seed, so a factory key holds `EF_PAUTHTOKEN` with no PIN
+  behind it. `RSKeySecurityState` still began without one, and `TraceSecurity`
+  failed `R4aRawRefinesB` on its initial state. Local `check.sh` replays only the
+  committed recording, which predated the change, so it stayed green.
+  The model now keeps the record apart from the grant a platform was handed.
+  `gate.ppuatRec` is what the recording, the Rust alpha, γ and the reset sweep
+  read. `gate.ppuat` is what the two invariants about a held grant read:
+  `NoAccessibleSecretWithoutGate`'s structural clause and
+  `NoTokenAfterInvalidation`. So `gate.ppuat => pin.set` and the
+  `BugPpuatIsAGate` kill stand unchanged. A boot may mint the record or not,
+  because `ensure_seed` skips the mint on a soft-locked key; the trace mapper pins
+  the mint it predicts. Tier A gains `ProvisionGrant`, the record appearing with no
+  PIN at a boot, a finished reset or a backup load, and the generated Rust table
+  grows to 12 operations and 1 039 edges. A's `persistentGrant` is therefore the
+  record and not a holder of it, which `docs/authorization-slice.md` now lists
+  among what A does not say.
+  The emulator had its own copy of the gap: its replug and warm reboot ran none of
+  `main.rs`'s boot block, so a grant a setPIN revoked never came back there as it
+  does on a board. Both now run it, and `every_boot_runs_the_boot_block` fails
+  on the old device loop. `formal/traces/security-phase4.jsonl` is re-recorded:
+  75 steps, the extra one being the reset sweeping that record. Every
+  `TraceSecurity*`, `TokenGate*` and `TokenRefinement*` verdict held.
+
 - **The seam mutants moved the model, and every published count was of a state
   space that had gone.** Five applet-seam mutants and a moved `gen-configs.sh`
   left ten configurations the safety tier lists in no recorded run at all, and 43

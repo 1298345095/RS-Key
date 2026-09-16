@@ -259,7 +259,7 @@ Three spellings of "not current", which used to sit on two different pages and i
 | platform | `PLAT-SOURCE-001` | The revoke-before-write ORDER that the first conjunct of `NoTokenAfter |
 | platform | `PLAT-SOURCE-002` | Three of the citations that carry this property's model-to-code bridge |
 | platform | `PLAT-GRANT-001` | `NoAccessibleSecretWithoutGate`'s ghost clause is DEAD by construction |
-| platform | `PLAT-GRANT-002` | The C-tier reset bridge cannot express this property at all: `ResetPer |
+| platform | `PLAT-GRANT-002` | The C-tier reset bridge cannot express this property, and a field for  |
 | platform | `PLAT-GRANT-003` | `FixPpuatRequiresPin`'s FALSE arm is unobserved: the one configuration |
 | platform | `PLAT-CRED-001` | `r \in store.rpent` is read as `the EF_RP record for r is reachable by |
 | platform | `PLAT-CRED-002` | No action of `RSKeySecurityState` can fail a flash write: the model's  |

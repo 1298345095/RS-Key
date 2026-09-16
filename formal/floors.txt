@@ -145,18 +145,18 @@ Transport.cfg                        GREEN   4
 \* harness proven able to refuse a session at all.
 TraceSeams.cfg                       GREEN   5
 TraceSeamsBad.cfg                    RED     -
-\* Full RSKeySecurityState refinement replay: 49 inferred B micro-steps from
-\* 21 real CBOR boundaries across three suites and one replug. The α mutant's
-\* GREEN control, with R4b disabled, proves that the corresponding RED row is
-\* caught by R4b alone. The last two are R4c's, one per half of the gate rule,
+\* Full RSKeySecurityState refinement replay: the B micro-steps inferred from
+\* five suites' real CBOR boundaries and one replug, counted by the pins below.
+\* The α mutant's GREEN control, with R4b disabled, proves that the corresponding
+\* RED row is caught by R4b alone. The last two are R4c's, one per half of the gate rule,
 \* so a RED names which half was load-bearing rather than "a gate somewhere".
-\* The two GREEN rows are PINS, not thirds: a linear replay of 74 forced steps
-\* has exactly 75 states, so anything less is the model refusing to follow the
+\* The two GREEN rows are PINS, not thirds: a linear replay of 75 forced steps
+\* has exactly 76 states, so anything less is the model refusing to follow the
 \* recording. It reached 44 of 59 for three days and read as GREEN.
-TraceSecurity.cfg                    GREEN   75
+TraceSecurity.cfg                    GREEN   76
 TraceSecurityBadBeta.cfg             RED     -       -       R4aRawRefinesB
 TraceSecurityBadAlpha.cfg            RED     -       -       R4bAlphaMatchesGamma
-TraceSecurityBadAlphaNoR4b.cfg       GREEN   75
+TraceSecurityBadAlphaNoR4b.cfg       GREEN   76
 TraceSecurityBadOutcome.cfg          RED     -       -       R4bEventConsensus
 TraceSecurityBadUvNotRqd.cfg         RED     -       -       R4cGateAnswers
 TraceSecurityBadResetWindow.cfg      RED     -       -       R4cGateAnswers
@@ -176,7 +176,9 @@ TraceSecurityBadPinSet.cfg           RED     -       -       R4cGateAnswers
 \* seed arm empties `cred` and `rpent` with it, so the phase is two steps however
 \* many credentials B holds. The model had been refusing the surplus since the
 \* three-suite recording landed, and TLC was run with `-deadlock`.
-@TraceSecurityStepsMin 74
+\* 74 until the replug ran the boot block (ea63a56's grant): the record it mints
+\* is one more live secret for the sweep of the reset that follows it.
+@TraceSecurityStepsMin 75
 @TraceSecurityActionsMin 22
 \* Boundaries whose outcome B answers from a GATE rule rather than from the
 \* actions -- there are none to read, both sides of each gate being a stutter.
@@ -256,7 +258,7 @@ Fairness.cfg                         GREEN   2000000
 \* in the tree ever passed the constant TRUE: every configuration that assigned
 \* it assigned it FALSE, so the conjunct it guards could be deleted with every
 \* recorded verdict unchanged. GREEN here is what makes it load-bearing -- delete the
-\* conjunct at RSKeySecurityState.tla:1405 and this file behaves as
+\* conjunct at RSKeySecurityState.tla:1412 and this file behaves as
 \* `Mut_BugSeedDoesNotLead.cfg` does, which is RED.
 \*
 \* THE FLOOR WAS ARGUED, NOT MEASURED, AND NOTHING HERE COULD CHECK THAT. Driven
@@ -274,7 +276,7 @@ Fairness.cfg                         GREEN   2000000
 \* The dead-disjunct half rests on `ram = FALSE` through the whole sweep, and
 \* that is not a property of `KeepOpen` -- it holds because `BugStateResetAfterWipe`
 \* is FALSE here, which is what lets ResetConfirmed's `ram' = FALSE` stand
-\* (RSKeySecurityState.tla:1310). With the RAM copy gone, the seed's delete
+\* (RSKeySecurityState.tla:1317). With the RAM copy gone, the seed's delete
 \* empties `store.rpent`, so `\E r \in store.rpent` can never fire on Shipped and
 \* the added conjunct removes nothing it had. Arm that switch and the argument
 \* goes with it.

@@ -129,6 +129,9 @@ function = "spend_and_verify_pin_at"
 op = "Noop"
 generic = true
 
+# `pcmr` issuance is this row. Its other caller, `ensure_seed`, mints the record with
+# no PIN door at a boot, a finished reset and a vendor BACKUP_LOAD: tier A's
+# `ProvisionGrant`, which no row here owns because the function is not the writer.
 [[persistent_writer]]
 file = "crates/rsk-fido/src/seed.rs"
 function = "ensure_ppuat"

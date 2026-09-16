@@ -189,8 +189,11 @@ InvNames == { "NoAuthorizationBypass",
 
 VARIABLES
     pin,    \* EF_PIN:  [set, retries, everSet]                (clientpin.rs:35)
-    \* The gate records: [ppuat, ppuatStale, alwaysUv, backupSealed,
+    \* The gate records: [ppuat, ppuatRec, ppuatStale, alwaysUv, backupSealed,
     \* forceChange].
+    \* `ppuatRec` is EF_PAUTHTOKEN itself and `ppuat` is that record ISSUED to a
+    \* platform. `ensure_seed` mints the record with no PIN behind it (ea63a56), and a
+    \* record nobody was handed grants nobody anything, so the invariants read `ppuat`.
     \* `backupSealed` is EF_BACKUP_SEALED and it runs the other way round from
     \* the rest: its ABSENCE is the permissive state (reset.rs:215-252), so what
     \* a torn wipe can re-open is a window the owner had closed.
@@ -247,8 +250,8 @@ NoSnap == [seen |-> FALSE, pin |-> FALSE, auv |-> FALSE, surv |-> {},
 
 TypeOK ==
     /\ pin   \in [set: BOOLEAN, retries: 0..MaxRetries, everSet: BOOLEAN]
-    /\ gate  \in [ppuat: BOOLEAN, ppuatStale: BOOLEAN, alwaysUv: BOOLEAN,
-                  backupSealed: BOOLEAN, forceChange: BOOLEAN]
+    /\ gate  \in [ppuat: BOOLEAN, ppuatRec: BOOLEAN, ppuatStale: BOOLEAN,
+                  alwaysUv: BOOLEAN, backupSealed: BOOLEAN, forceChange: BOOLEAN]
     /\ store \in [cred: SUBSET RPs, rpent: SUBSET RPs, seed: BOOLEAN]
     /\ lock  \in [soft: BOOLEAN, mism: 0..MismatchLimit,
                   policyMism: 0..MismatchLimit]
@@ -272,7 +275,9 @@ Init ==
     /\ pin   = [set |-> FALSE, retries |-> MaxRetries, everSet |-> FALSE]
     \* alwaysUv's COMPILED default, not a state choice: `--features always-uv`
     \* is what the device comes up on and what a reset restores it to.
-    /\ gate  = [ppuat |-> FALSE, ppuatStale |-> FALSE,
+    \* The record exists from provisioning: `ensure_seed` mints it beside the seed
+    \* (seed.rs:625-628), and no platform has been handed it yet.
+    /\ gate  = [ppuat |-> FALSE, ppuatRec |-> TRUE, ppuatStale |-> FALSE,
                 alwaysUv |-> AlwaysUvShipped, backupSealed |-> FALSE,
                 forceChange |-> FALSE]
     /\ store = [cred |-> {}, rpent |-> {}, seed |-> TRUE]
@@ -720,13 +725,13 @@ WrongPin ==
                                         ELSE [open |-> FALSE, chan |-> NoChan]
     /\ UNCHANGED << gate, store, pres, sys, op, snap, upSpent, ram >>
 
-\* getPinUvAuthTokenUsingPinWithPermissions with `pcmr`: mints the PERSISTENT
-\* token, a flash record that outlives the power cycle (clientpin.rs:414-419,
-\* seed.rs:302-313). Holding it IS the grant (credmgmt.rs:249-266).
+\* getPinUvAuthTokenUsingPinWithPermissions with `pcmr`: hands the platform the
+\* PERSISTENT token, minting the record first if none exists (clientpin.rs:414-419,
+\* `ensure_ppuat`). Holding it IS the grant (credmgmt.rs:249-266).
 MintPpuat ==
     /\ PinAttempt(TRUE, TokenIssuancePolicy)
     /\ TokenIssuanceGuard
-    /\ gate' = [gate EXCEPT !.ppuat = TRUE, !.ppuatStale = FALSE]
+    /\ gate' = [gate EXCEPT !.ppuat = TRUE, !.ppuatRec = TRUE, !.ppuatStale = FALSE]
     /\ UNCHANGED << store, tok, plat, pres, walk, sys, op, snap, upSpent,
                     ram >>
 
@@ -834,7 +839,8 @@ SetPinClearPpuat ==
     /\ op.step = (IF BugPinWriteBeforeRevoke THEN 1 ELSE 0)
     /\ gate' = IF BugSetPinKeepsPpuat
                  THEN [gate EXCEPT !.ppuatStale = TRUE]
-                 ELSE [gate EXCEPT !.ppuat = FALSE, !.ppuatStale = FALSE]
+                 ELSE [gate EXCEPT !.ppuat = FALSE, !.ppuatRec = FALSE,
+                                   !.ppuatStale = FALSE]
     /\ op' = IF BugPinWriteBeforeRevoke THEN NoOp ELSE [op EXCEPT !.step = 1]
     /\ UNCHANGED << pin, store, lock, tok, plat, pres, walk, sys, snap,
                     upSpent, viol, ram >>
@@ -868,7 +874,8 @@ ChangePinClearPpuat ==
     /\ op.step = (IF BugPinWriteBeforeRevoke THEN 1 ELSE 0)
     /\ gate' = IF BugChangePinKeepsPpuat
                  THEN [gate EXCEPT !.ppuatStale = TRUE]
-                 ELSE [gate EXCEPT !.ppuat = FALSE, !.ppuatStale = FALSE]
+                 ELSE [gate EXCEPT !.ppuat = FALSE, !.ppuatRec = FALSE,
+                                   !.ppuatStale = FALSE]
     /\ op' = [op EXCEPT !.step = IF BugPinWriteBeforeRevoke THEN 2 ELSE 1]
     /\ UNCHANGED << pin, store, lock, tok, plat, pres, walk, sys, snap,
                     upSpent, viol, ram >>
@@ -1116,7 +1123,7 @@ ConfigOp ==
        \/ /\ ForceChangeModelled
           /\ pin.set /\ ~gate.forceChange
           /\ gate' = [gate EXCEPT !.forceChange = TRUE, !.ppuat = FALSE,
-                                   !.ppuatStale = FALSE]
+                                   !.ppuatRec = FALSE, !.ppuatStale = FALSE]
           /\ tok'  = [live |-> FALSE, perms |-> {}, rp |-> NoRp]
           /\ plat' = [plat EXCEPT !.verifies = FALSE, !.revoked = TRUE]
           /\ walk' = [open |-> FALSE, chan |-> NoChan]
@@ -1355,8 +1362,8 @@ SealedIsASecret == BugBackupSealedNotAGate /\ gate.backupSealed
 \* phase 1 is EMPTY, so with the grant in phase 1 the torn state is unreachable
 \* rather than merely refused at the consumer -- which is what the structural
 \* clause on NoAccessibleSecretWithoutGate can now say.
-PpuatIsAGate   == BugPpuatIsAGate /\ gate.ppuat
-PpuatIsASecret == ~BugPpuatIsAGate /\ gate.ppuat
+PpuatIsAGate   == BugPpuatIsAGate /\ gate.ppuatRec
+PpuatIsASecret == ~BugPpuatIsAGate /\ gate.ppuatRec
 
 SecretsLive == store.seed \/ store.cred # {} \/ store.rpent # {} \/ SealedIsASecret
                \/ PpuatIsASecret
@@ -1410,7 +1417,7 @@ ResetSweepSecrets ==
                     /\ UNCHANGED << store, snap >>
                  \/ /\ PpuatIsASecret
                     /\ SeedLeadsTheWipe => ~store.seed
-                    /\ gate' = [gate EXCEPT !.ppuat = FALSE,
+                    /\ gate' = [gate EXCEPT !.ppuat = FALSE, !.ppuatRec = FALSE,
                                             !.ppuatStale = FALSE]
                     /\ UNCHANGED << store, snap >>
               /\ UNCHANGED op
@@ -1439,6 +1446,7 @@ ResetSweepGates ==
                        /\ gate' = [gate EXCEPT !.alwaysUv = AlwaysUvShipped]
                        /\ UNCHANGED pin)
                  \/ (PpuatIsAGate /\ gate' = [gate EXCEPT !.ppuat = FALSE,
+                                                         !.ppuatRec = FALSE,
                                                          !.ppuatStale = FALSE]
                                   /\ UNCHANGED pin)
                  \/ (SealedIsAGate /\ gate' = [gate EXCEPT !.backupSealed = FALSE]
@@ -1458,10 +1466,13 @@ ResetSweepGates ==
 
 \* reset.rs:72: ensure_seed. The session already died at reset.rs:104, ahead of the
 \* flash, so `ram` is only still standing here on the BugStateResetAfterWipe tree.
+\* The wipe deleted the grant record, so the mint here ROTATES it: a new record that
+\* nobody holds.
 ResetFinish ==
     /\ op.kind = "reset" /\ op.step = 3
     /\ ram'   = FALSE
     /\ store' = [store EXCEPT !.seed = TRUE]
+    /\ gate'  = [gate EXCEPT !.ppuatRec = TRUE]
     /\ tok'   = [live |-> FALSE, perms |-> {}, rp |-> NoRp]
     /\ plat'  = [held |-> FALSE, verifies |-> FALSE, revoked |-> TRUE]
     /\ lock'  = [soft |-> FALSE, mism |-> 0, policyMism |-> 0]
@@ -1473,7 +1484,7 @@ ResetFinish ==
     \* The reset ran to completion: nothing survived it, so the relational
     \* claim is discharged and must not follow the device into its next life.
     /\ snap' = NoSnap
-    /\ UNCHANGED << gate, sys, viol >>
+    /\ UNCHANGED << sys, viol >>
 
 \* Any `?` in reset.rs:71-72, 113-121 -- a force_delete that errors, a truncated
 \* `for_each_key` (reset.rs:152-156), the RESET_MAX_DELETES backstop, a failed
@@ -1505,7 +1516,7 @@ VolatileCleared ==
     /\ upSpent' = FALSE
 
 \* EVERY boot runs ensure_seed, not just the one at the end of a reset:
-\* firmware/src/main.rs:629 and tools/emu/src/device.rs:264. A cut that stranded
+\* firmware/src/main.rs:629 and tools/emu/src/device.rs:507. A cut that stranded
 \* the device mid-wipe therefore comes back WITH a seed and can hold usable
 \* credentials again. Leaving it out made the model less permissive than the
 \* firmware -- the one direction a safety argument cannot absorb.
@@ -1513,9 +1524,15 @@ VolatileCleared ==
 \* The boot is also where a RAM-only seed dies: a cut taken with the flash record
 \* already deleted comes back with a FRESH seed and nothing that opens under the
 \* old one, so KeepOpen/KeepSurv settle up here for whatever the wipe left.
+\*
+\* And it MAY mint the grant record if none stands (`ensure_ppuat`), which is how a
+\* grant a PIN change revoked comes back -- as a record, issued to nobody. May,
+\* because `ensure_seed` skips the mint on a vendor-soft-locked key (seed.rs:620)
+\* and main.rs drops its error: a boot that leaves no record is the firmware's too.
 BootEnsuresSeed ==
     /\ store' = [KeepOpen(store, store.seed) EXCEPT !.seed = TRUE]
     /\ snap'  = KeepSurv(snap, store.seed)
+    /\ gate'  \in {gate, [gate EXCEPT !.ppuatRec = TRUE]}
 
 \* A real power cycle: the RAM soft lock and its mismatch batch are gone
 \* because the thing they were counting -- this power cycle -- has ended.
@@ -1525,7 +1542,7 @@ PowerCut ==
     /\ lock' = [soft |-> FALSE, mism |-> 0, policyMism |-> 0]
     /\ sys'  = [warmBoot |-> FALSE, clock |-> 0]
     /\ pin'  = [pin EXCEPT !.retries = pin.retries]
-    /\ UNCHANGED << gate, viol >>
+    /\ UNCHANGED viol
 
 \* A host-requestable warm reset (SCB::sys_reset -- vendor 0x1F P1=0, the
 \* rescue twin, the phy config-write auto-reboot). ctap.rs:354-361 carries the
@@ -1538,7 +1555,7 @@ WarmReset ==
                  ELSE [soft |-> lock.soft, mism |-> lock.mism,
                        policyMism |-> lock.policyMism]
     /\ sys'  = [warmBoot |-> TRUE, clock |-> 0]
-    /\ UNCHANGED << pin, gate, viol >>
+    /\ UNCHANGED << pin, viol >>
 
 Tick ==
     /\ sys.clock < MaxClock
@@ -1768,8 +1785,8 @@ NoTokenAfterInvalidation ==
 \* persistent grant with credentials to read implies the PIN that bought it.
 \*
 \* The second half stays a ghost DELIBERATELY, and CmBeginViaPpuat is its only
-\* writer. The structural form -- `gate.ppuat => pin.set`, no stranded grant
-\* record may exist at all -- is a strictly stronger claim than the fix under
+\* writer. The structural form -- `gate.ppuat => pin.set`, no stranded issued
+\* grant may exist at all -- is a strictly stronger claim than the fix under
 \* consideration: FixPpuatRequiresPin refuses the record at the guard and
 \* leaves it stranded, so a structural clause would call the accepted fix a
 \* defect. What the invariant is about is REACHABILITY, and reachability here
@@ -1778,13 +1795,15 @@ NoAccessibleSecretWithoutGate ==
     /\ "NoAccessibleSecretWithoutGate" \notin viol
     /\ Idle => ((store.cred # {} /\ SeedReachable /\ pin.everSet) => pin.set)
     \* AND THE STRUCTURAL FORM, which this invariant could not carry until
-    \* eab4b5c: no stranded grant record may EXIST, not merely be refused. It was
+    \* eab4b5c: no stranded issued grant may EXIST, not merely be refused. It was
     \* a strictly stronger claim than the fix under consideration while
     \* FixPpuatRequiresPin was the only defence -- that fix refuses the record and
     \* leaves it stranded, so the clause would have called the accepted fix a
     \* defect. With the grant swept in phase 1 the state is unreachable, because
     \* phase 2 provably cannot start until phase 1 is empty, and unreachable is
     \* the claim worth making. BugPpuatIsAGate is the tree that cannot make it.
+    \* It reads the ISSUED grant: since ea63a56 a record with no PIN is the factory
+    \* state, and it strands nothing until some platform is handed it.
     /\ Idle => (gate.ppuat => pin.set)
 
 (***************************************************************************)

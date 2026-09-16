@@ -115,8 +115,8 @@ NoAuthorizationBypassA ==
 
 **The domain.** `AStates` has 44 elements — five permission shapes × the
 `live`/`rpBound`/`pinSet`/`persistentGrant` combinations the shape constraint
-admits, which is 12 for the empty shape and 8 for each of the other four. With 11
-`Ops` and 3 `Outcomes` the candidate tuple space is 44 × 11 × 3 × 44 = 63 888,
+admits, which is 12 for the empty shape and 8 for each of the other four. With 12
+`Ops` and 3 `Outcomes` the candidate tuple space is 44 × 12 × 3 × 44 = 69 696,
 which is the space the generated Rust table is already checked over
 exhaustively.
 
@@ -143,6 +143,12 @@ whole slice and it must not be discovered later:
   invisible at A. The rpId-identity half belongs to B;
 - A observes record *presence*, never record contents, so nothing about PIN
   entropy, verifier derivation or MAC verification is in scope;
+- `persistentGrant` is that record, not a platform holding it. Since 0x09CB the
+  device writes `EF_PAUTHTOKEN` itself at a boot, a finished reset or a backup
+  load (`ProvisionGrant`), so `UseCm`'s grant arm is met by a record nobody may
+  have been handed. Possession is the token's secrecy and has no image in A. B
+  keeps the issued grant apart as `gate.ppuat` and `PpuatGuard` reads it, but no
+  mutant in the roster takes that half of the guard out;
 - A has no time, so `PUAT_MAX_USAGE_PERIOD_MS` (`600000`) and
   `RESET_WINDOW_MS` (`10000`) are outside it by construction.
 

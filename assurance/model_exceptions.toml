@@ -432,7 +432,7 @@ owed = "PolicySolo_BugOnceSlotUnrecorded.cfg"
 [[exception]]
 id = "MX-TOKG-001"
 module = "RSKeyTokenGate.tla"
-line = 80
+line = 86
 shape = "clause"
 site = "AuthorizedFrom"
 clause = 'op = "UseAcfg"'

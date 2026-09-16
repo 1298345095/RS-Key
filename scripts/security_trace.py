@@ -218,7 +218,7 @@ NO_OPINION_EXEMPTIONS = {
     ),
     "pseudo-command": (
         "a power cycle is not a CTAP command and has no response: `outcome_raw` is"
-        " the literal 0 that `tools/emu/src/device.rs:751-752` passes as the status,"
+        " the literal 0 that `tools/emu/src/device.rs:754-755` passes as the status,"
         " so agreeing with `delta_c` of it would be agreeing with a placeholder",
         1,
     ),
@@ -303,8 +303,10 @@ def new_ledger() -> dict:
     relying party onto one model element, and the raw slot counters cannot say
     how many that is. Nothing here is read back from the trace.
     """
+    # `ppuat_rec` is B's `gate.ppuatRec`: `ensure_seed` mints the grant record with
+    # the seed, so a fresh store and a finished reset both hold one.
     return {"seed": True, "cred": set(), "rpent": set(), "pin_set": False,
-            "always_uv": False, "ppuat": False, "sealed": False, "clock": 0}
+            "always_uv": False, "ppuat_rec": True, "sealed": False, "clock": 0}
 
 
 def reset_path(ledger: dict) -> list[tuple[str, str]]:
@@ -327,7 +329,7 @@ def reset_path(ledger: dict) -> list[tuple[str, str]]:
         die("a store with records but no seed has no modelled sweep length")
     # `SealedIsASecret` needs `BugBackupSealedNotAGate`, which no trace
     # configuration sets, so the seal is counted with the gates below.
-    secrets = int(ledger["seed"]) + int(ledger["ppuat"])
+    secrets = int(ledger["seed"]) + int(ledger["ppuat_rec"])
     gates = int(ledger["pin_set"]) + int(ledger["always_uv"]) + int(ledger["sealed"])
     steps = [
         ("ResetStart", "ResetStart"),
@@ -429,6 +431,7 @@ def infer(event: dict, ledger: dict) -> tuple[list[tuple[str, str]], tuple[str, 
             ("SetPinWrite", "SetPinWrite"),
         ]
         ledger["pin_set"] = True
+        ledger["ppuat_rec"] = False
     elif (
         command == 0x06
         and after["token_in_use_raw"]
@@ -496,11 +499,12 @@ def infer(event: dict, ledger: dict) -> tuple[list[tuple[str, str]], tuple[str, 
         perms = ISSUED_PERMS[after["token_permissions_raw"]]
         actions = [("GetPinToken", f"GetPinToken({perms}, NoRp)")]
     elif command == POWER_CYCLE:
-        # The event kind is the signature, not any state difference: the replayer
-        # is told a power cycle happened and R4a then checks that the raw state
-        # matches what `PowerCut` says one does.
-        actions = [("PowerCut", "PowerCut")]
+        # The event kind is the signature, not a state difference. B's boot MAY mint
+        # the grant record and an unlocked emulator's does, so the ledger predicts it
+        # and pins that branch; R4a then holds the raw state to what `PowerCut` does.
+        actions = [("PowerCut", "/\\ PowerCut /\\ gate'.ppuatRec = TRUE")]
         ledger["clock"] = 0
+        ledger["ppuat_rec"] = True
     elif not changed or changed == {"channel_raw"}:
         actions = [("Stutter", "TraceStutter")]
     else:
@@ -601,7 +605,7 @@ def no_opinion_class(event: dict, action_names: set[str]) -> str | None:
     """
     if event["command_raw"] == POWER_CYCLE:
         # The class's whole reason is that `outcome_raw` here is the literal 0
-        # `tools/emu/src/device.rs:751-752` passes for a replug, not a response.
+        # `tools/emu/src/device.rs:754-755` passes for a replug, not a response.
         # Asserted rather than described: with this unchecked, a power cycle
         # carrying 0x31 was excused and the row stayed green at 15/18.
         if event["outcome_raw"] != 0x00:

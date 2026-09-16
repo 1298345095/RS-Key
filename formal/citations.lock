@@ -458,6 +458,7 @@ assurance/platform.toml	crates/rsk-fido/src/conformance/mod.rs	165-165	self.stat
 assurance/platform.toml	crates/rsk-fido/src/consts.rs	333-333	pub const EF_COUNTER: u16 = 0xC000; // global signature counter (U2F + legacy-cred migration seed)	pub const EF_COUNTER: u16 = 0xC000; // global signature counter (U2F + legacy-cred migration seed)
 assurance/platform.toml	crates/rsk-fido/src/consts.rs	340-340	pub const EF_CRED_CTR: u16 = 0xC001;	pub const EF_CRED_CTR: u16 = 0xC001;
 assurance/platform.toml	crates/rsk-fido/src/consts.rs	392-392	pub const PUAT_MAX_USAGE_PERIOD_MS: u64 = 600_000;	pub const PUAT_MAX_USAGE_PERIOD_MS: u64 = 600_000;
+assurance/platform.toml	crates/rsk-fido/src/credmgmt.rs	263-265	if !ctx.fs.has_data(EF_PIN) {	}
 assurance/platform.toml	crates/rsk-fido/src/credmgmt.rs	364-364	let Some(n) = ctx.fs.read(EF_RP + i, &mut buf) else {	let Some(n) = ctx.fs.read(EF_RP + i, &mut buf) else {
 assurance/platform.toml	crates/rsk-fido/src/credmgmt_kani.rs	77-77	st.begin_using_token(false, 1_000);	st.begin_using_token(false, 1_000);
 assurance/platform.toml	crates/rsk-fido/src/passkeys.rs	113-113	let Some(n) = fs.read(EF_RP + i, &mut buf) else {	let Some(n) = fs.read(EF_RP + i, &mut buf) else {
@@ -476,8 +477,6 @@ assurance/platform.toml	crates/rsk-fido/src/state.rs	300-304	/// Cached `getKeyA
 assurance/platform.toml	crates/rsk-fido/src/state.rs	305-309	pub paut: PinUvAuthToken,	pub(crate) new_pin_mismatches: u8,
 assurance/platform.toml	crates/rsk-fido/src/state.rs	547-562	/// `stopUsingPinUvAuthToken` — drop the in-use state, permissions, and	}
 assurance/platform.toml	crates/rsk-fido/src/state.rs	584-599	pub fn retire_sequences_except(&mut self, cmd: u8) {	/// Refines `RSKeySecurityState!NoTokenAfterInvalidation` — SEC-FIDO-003.
-assurance/platform.toml	crates/rsk-fido/src/state_assurance.rs	12-15	pub struct TokenPersistentView {	}
-assurance/platform.toml	crates/rsk-fido/src/state_assurance.rs	21-22	pub const TOKEN_PERSISTENT_FIDS: [u16; 2] =	[crate::consts::EF_PIN, crate::consts::EF_PAUTHTOKEN.get()];
 assurance/platform.toml	crates/rsk-fido/src/state_kani.rs	86-86	st.begin_using_token(false, now_ms);	st.begin_using_token(false, now_ms);
 assurance/platform.toml	crates/rsk-fido/src/vendor.rs	842-845	// material; the MSE channel is ChaCha20-Poly1305 — not approved transport).	return Err(CtapError::NotAllowed);
 assurance/platform.toml	crates/rsk-fido/src/vendor.rs	1035-1035	pub fn backup_sealed<S: Storage>(fs: &mut rsk_fs::Fs<S>) -> bool {	pub fn backup_sealed<S: Storage>(fs: &mut rsk_fs::Fs<S>) -> bool {
@@ -709,6 +708,7 @@ formal/README.md	crates/rsk-fido/src/reset.rs	255-261	/// CTAP 2.1 §6.6: a rese
 formal/README.md	crates/rsk-fido/src/reset.rs	260-260	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 formal/README.md	crates/rsk-fido/src/reset.rs	307-315	/// Whether `fid` survives an on-device **factory reset** (the trusted-display	fid == EF_ATT_KEY.get() || fid == EF_ATT_CHAIN
 formal/README.md	crates/rsk-fido/src/seed.rs	323-324	r.map(|()| tok)	}
+formal/README.md	crates/rsk-fido/src/seed.rs	620-620	if !locked {	if !locked {
 formal/README.md	crates/rsk-fido/src/state.rs	33-51	/// State carried between `getAssertion` and `getNextAssertion` when resident	pub slots: [u16; MAX_ASSERTION_CREDS],
 formal/README.md	crates/rsk-fido/src/state.rs	169-180	/// Whether `channel` may take the next leg of the RP walk: it opened it, and	}
 formal/README.md	crates/rsk-fido/src/state.rs	173-173	pub fn may_walk_rps(&self, channel: u32) -> bool {	pub fn may_walk_rps(&self, channel: u32) -> bool {
@@ -813,7 +813,7 @@ formal/README.md	firmware/src/worker.rs	521-521	ex.req[..rl].zeroize();	ex.req[.
 formal/README.md	firmware/src/worker.rs	526-528	// Nothing is in flight again: a wait started from here on is an on-panel	crate::presence::set_wait_scope(crate::presence::SCOPE_NONE);
 formal/README.md	firmware/src/worker.rs	528-528	crate::presence::set_wait_scope(crate::presence::SCOPE_NONE);	crate::presence::set_wait_scope(crate::presence::SCOPE_NONE);
 formal/README.md	firmware/src/worker.rs	661-663	// Scope any touch wait this command starts to the OTP transport, so a host	crate::presence::set_wait_scope(crate::presence::SCOPE_OTP);
-formal/README.md	tools/emu/src/device.rs	264-264	/// power cycle restarts (`crate::usb_attach`). One clock, not two, is what stops a	/// power cycle restarts (`crate::usb_attach`). One clock, not two, is what stops a
+formal/README.md	tools/emu/src/device.rs	507-507	let seeded = rsk_fido::seed::ensure_seed(&dev(), &mut fsb, &mut *rngb);	let seeded = rsk_fido::seed::ensure_seed(&dev(), &mut fsb, &mut *rngb);
 formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	243-243	/// the enabled-applications TLV *without* any transport length prefix; the caller	/// the enabled-applications TLV *without* any transport length prefix; the caller
 formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	254-268	// the lock, and READ CONFIG echoes this blob to any unauthenticated host, so a	let mut merged = [0u8; DEV_CONF_MERGE_MAX];
 formal/RSKeyAdminSurface.tla	crates/rsk-devconf/src/lib.rs	592-592	return u16::from_be_bytes([conf[i + 2], conf[i + 3]]) & SUPPORTED_CAPS;	return u16::from_be_bytes([conf[i + 2], conf[i + 3]]) & SUPPORTED_CAPS;
@@ -1009,7 +1009,8 @@ formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	255-260	/// CTAP 2.1 
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	259-260	fn in_reset_window<S: Storage, R: Rng>(ctx: &Ctx<S, R>) -> bool {	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	260-260	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/reset.rs	263-305	/// Whether `fid` is cleared by `authenticatorReset` — every FIDO-owned flash file plus	}
-formal/RSKeySecurityState.tla	crates/rsk-fido/src/seed.rs	302-313	pub fn load_ppuat<S: Storage>(dev: &Device, fs: &mut Fs<S>) -> Option<[u8; 32]> {	) -> Result<[u8; 32]> {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/seed.rs	620-620	if !locked {	if !locked {
+formal/RSKeySecurityState.tla	crates/rsk-fido/src/seed.rs	625-628	// getInfo 0x19/0x1E are sealed under this grant, so a device never asked for	let mut tok = ensure_ppuat(dev, fs, rng)?;
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	22-28	pub const PERM_MC: u8 = 0x01; // makeCredential	pub const PERM_PCMR: u8 = 0x40; // per-credential-management read-only
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	109-109	pub struct CredMgmtState {	pub struct CredMgmtState {
 formal/RSKeySecurityState.tla	crates/rsk-fido/src/state.rs	169-180	/// Whether `channel` may take the next leg of the RP walk: it opened it, and	}
@@ -1042,7 +1043,7 @@ formal/RSKeySecurityState.tla	firmware/src/worker.rs	526-528	// Nothing is in fl
 formal/RSKeySecurityState.tla	firmware/src/worker.rs	528-528	crate::presence::set_wait_scope(crate::presence::SCOPE_NONE);	crate::presence::set_wait_scope(crate::presence::SCOPE_NONE);
 formal/RSKeySecurityState.tla	firmware/src/worker.rs	646-669	/// dirty latch, so the CCID / FIDO2 / U2F / OTP gates all act on the new set	// confirms on an already-held button — so without this the release edge of
 formal/RSKeySecurityState.tla	firmware/src/worker.rs	661-663	// Scope any touch wait this command starts to the OTP transport, so a host	crate::presence::set_wait_scope(crate::presence::SCOPE_OTP);
-formal/RSKeySecurityState.tla	tools/emu/src/device.rs	264-264	/// power cycle restarts (`crate::usb_attach`). One clock, not two, is what stops a	/// power cycle restarts (`crate::usb_attach`). One clock, not two, is what stops a
+formal/RSKeySecurityState.tla	tools/emu/src/device.rs	507-507	let seeded = rsk_fido::seed::ensure_seed(&dev(), &mut fsb, &mut *rngb);	let seeded = rsk_fido::seed::ensure_seed(&dev(), &mut fsb, &mut *rngb);
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	105-105	present: [u8; FID_PRESENT_BYTES],	present: [u8; FID_PRESENT_BYTES],
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	114-114	decided: [u8; FID_PRESENT_BYTES],	decided: [u8; FID_PRESENT_BYTES],
 formal/RSKeyStore.tla	crates/rsk-fs/src/fs.rs	214-216	fn known_absent(&self, fid: u16) -> bool {	}
@@ -1165,9 +1166,9 @@ scripts/security_trace.py	crates/rsk-fido/src/clientpin.rs	136-136	match req.sub
 scripts/security_trace.py	crates/rsk-fido/src/config.rs	248-248	ctx.state.mark_token_used(ctx.now_ms);	ctx.state.mark_token_used(ctx.now_ms);
 scripts/security_trace.py	crates/rsk-fido/src/consts.rs	404-404	pub const RESET_WINDOW_MS: u64 = 10_000;	pub const RESET_WINDOW_MS: u64 = 10_000;
 scripts/security_trace.py	crates/rsk-fido/src/reset.rs	260-260	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS	!ctx.state.warm_boot && ctx.now_ms <= RESET_WINDOW_MS
-scripts/security_trace.py	tools/emu/src/device.rs	751-752	crate::security_trace::POWER_CYCLE,	0,
+scripts/security_trace.py	tools/emu/src/device.rs	754-755	crate::security_trace::POWER_CYCLE,	0,
 scripts/test_run_tlc.py	scripts/verdict_gate.py	619-634	if row["invariant"] is not None:	" that name")
-scripts/test_security_trace.py	tools/emu/src/device.rs	751-752	crate::security_trace::POWER_CYCLE,	0,
+scripts/test_security_trace.py	tools/emu/src/device.rs	754-755	crate::security_trace::POWER_CYCLE,	0,
 scripts/test_token_refinement_gate.py	crates/rsk-device/src/ctap.rs	122-122	*st = rsk_fido::FidoState::new();	*st = rsk_fido::FidoState::new();
 scripts/test_token_refinement_gate.py	crates/rsk-fido/src/credential.rs	919-919	let fid = EF_RP + i;	let fid = EF_RP + i;
 scripts/test_token_refinement_gate.py	firmware/src/main.rs	1167-1167	let fido_state_ref = FIDO_STATE.init(RefCell::new(rsk_fido::FidoState::new()));	let fido_state_ref = FIDO_STATE.init(RefCell::new(rsk_fido::FidoState::new()));

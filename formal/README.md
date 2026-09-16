@@ -259,6 +259,14 @@ Both carry their companion from a `companion_bug` table in `gen-configs.sh`. A
 mutant that stops firing because a fix subsumed it is worth knowing; a mutant
 that stops firing silently is the failure this file exists to avoid.
 
+The structural clause reads the grant ISSUED to a platform (`gate.ppuat`), not the
+record, and has to. Since `ea63a56` `ensure_seed` mints `EF_PAUTHTOKEN` beside the
+seed, so a factory key holds a record (`gate.ppuatRec`) with no PIN behind it, an
+unlocked key's boot mints one a PIN change revoked, and a finished reset rotates
+it: over the record, the clause would call the factory state a defect. The
+recording, C's alpha and γ all observe the record; a holder exists only after
+`MintPpuat`, and tier A calls the record's own appearance `ProvisionGrant`.
+
 **31 of 31 mutants are caught, each by the invariant that names it**, and 3 of 3
 liveness mutants by the property that names them, and the one fairness-shape
 mutant by `OpAdvancesIsOneActivity`.
@@ -2987,7 +2995,7 @@ it does not promote MODELLED-ONLY to a proof or turn bounded Kani into PROVEN.
 behaviour than the firmware, "which is sound for safety". That was false**, and
 the one that broke it was holding the green run up: `PowerCut` left the seed as
 the cut found it, while the firmware regenerates a missing seed on **every**
-boot (`firmware/src/main.rs:629`, `tools/emu/src/device.rs:264`). A cut device
+boot (`firmware/src/main.rs:629`, `tools/emu/src/device.rs:507`). A cut device
 was permanently seedless in the model and could never hold a usable credential
 again — the model was *narrower* than the code, which is the one direction a
 safety argument cannot absorb. It is fixed (`BootEnsuresSeed`), and every
@@ -3010,6 +3018,11 @@ abstractions producing traces the firmware cannot follow.
   half of the gate and a deliberate hold (`vendor.rs:937-949`). Widening where
   the marker can be **set** never widens where it can be **lost**, and the loss
   is what the invariant is about.
+- **Any boot may mint the grant record, or not.** `BootEnsuresSeed` leaves
+  `gate.ppuatRec` either way. `ensure_seed` skips the mint on a vendor-soft-locked
+  key (`seed.rs:620`), and mints nothing when a step before it fails — an error
+  `firmware/src/main.rs:629` drops. The trace mapper pins the mint it predicts for
+  the unlocked emulator, so R4a still holds the recording to one branch.
 - **A regenerated seed still opens the credentials made under the old one.**
   `store.seed` is one boolean, so the model cannot tell the owner's seed from
   the one a boot minted after a torn wipe; in the firmware those credentials are
@@ -3407,8 +3420,8 @@ outcome mutant is RED while the corresponding state projection still stutters.
 `AllowedEventRel` is A's only relation. `Next` existentially closes it, and
 `RSKeyTokenExport.tla` serializes the complete TLA-owned domains and allowed
 relation. The host exporter contains no operation list or transition guard.
-Codegen currently reports 44 states, 11 operations, 3 outcomes, 63,888 checked
-tuples, and 871 allowed edges; the generated Rust self-test exhausts that full
+Codegen currently reports 44 states, 12 operations, 3 outcomes, 69,696 checked
+tuples, and 1,039 allowed edges; the generated Rust self-test exhausts that full
 product rather than sampling non-edges.
 
 The lower bridge is bounded: Kani owns R0a/R0p, R2a/R2b, and R3a/R3b harnesses.

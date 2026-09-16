@@ -305,7 +305,7 @@ force_ch=TRUE ship_auv=TRUE retries=2 mism=1 rps='{r1}' chans='{c1, c2}' \
 # family nothing else runs: the pre-0x08BF tree with the repair the model
 # proposed and the maintainer did not take. `FixSweepDropsCredsBeforeRpEntries`
 # had never been passed TRUE by any call -- every configuration that assigned it
-# assigned it FALSE -- so the conjunct it guards (RSKeySecurityState.tla:1405) could
+# assigned it FALSE -- so the conjunct it guards (RSKeySecurityState.tla:1412) could
 # be deleted with every recorded verdict unchanged: a model constant nothing
 # branches on. Armed HERE it is load-bearing, because this row is GREEN only if
 # the repair closes E76, and deleting the conjunct makes this file's behaviour
