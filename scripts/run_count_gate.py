@@ -174,14 +174,15 @@ LABEL_WORDS = 8
 
 #: Literals one fragment may exempt. A registry entry buys silence for its own
 #: span, and a span can be a whole paragraph: seven literals went quiet under one
-#: entry, which is an exemption nobody sized. Measured maximum today is five, in
-#: the `COVERAGE=1` sweep sentence; a sixth in one sentence means splitting the
+#: entry, which is an exemption nobody sized. Measured maximum today is three, in
+#: four sentences -- the `COVERAGE=1` sweep's five fell to three when the model it
+#: swept moved past two of them; a fourth in one sentence means splitting the
 #: registration, not widening it.
 #:
 #: Held ONE above that maximum rather than merely over it, for the reason under
 #: the two ceilings below: raising it to 99 was a surviving mutant, because a cap
 #: with headroom is a cap nothing has to move.
-SCOPE_SPAN_CAP = 6
+SCOPE_SPAN_CAP = 4
 
 #: And the registry as a whole only grows deliberately: this EQUALS `len(SCOPED)`,
 #: so a bump belongs in the diff beside the entry that needs it, the way every
@@ -198,7 +199,7 @@ SCOPE_SPAN_CAP = 6
 #: 27 in its own comment one commit after being written, thirty lines from the
 #: constant, in the guard whose whole subject is a hand-typed number going
 #: stale. `scripts/` is outside the scan, so nothing was ever going to catch it.)
-SCOPE_CEILING = 41
+SCOPE_CEILING = 39
 
 #: The other rule, and the one the shape scan cannot be: a value the generator
 #: PRINTS may not appear as a literal anywhere else. It needs no noun list, no
@@ -262,11 +263,12 @@ GENERATED_ELSEWHERE = {
 #: number that merely resembles one of its own.
 #:
 #: What an entry does NOT buy, and this is open: when a value the regions print
-#: MOVES, four of its five registered copies redden -- their fragment stops
-#: exempting anything, which is the rule below -- and the fifth is silent,
-#: because that fragment also covers three literals of other rules and its count
-#: stays over zero. Eight of these entries exempt more than one literal and would
-#: hide a stale value the same way. Closing it needs the registry to say which
+#: MOVES, a registered copy reddens only once its fragment exempts nothing -- the
+#: rule below. Measured when `Shipped.cfg` went from 77 563 872 to 108 618 956:
+#: four copies reddened, and the fifth, the `COVERAGE=1` sweep, stayed silent
+#: because its fragment still covers literals of other rules. Eight of these
+#: entries exempt more than one literal and would hide a stale value the same
+#: way. Closing it needs the registry to say which
 #: value each entry is a copy OF, and half of these entries are quoting a figure
 #: that is deliberately historical and must NOT track anything.
 SCOPED = {
@@ -355,39 +357,29 @@ SCOPED = {
     # of prose that goes stale with it, where before nothing could name them.
     (
         "docs/assurance-matrix.md",
-        "GREEN over 23 521 512 distinct states at depth 51",
+        "GREEN over 31 451 172 distinct states at depth 51",
     ): "`AlwaysUv.cfg`'s own size, in the cell arguing that the model half of that "
     "column is answered and the code half is not",
     (
-        "formal/floors.txt",
-        "alwaysUv. 23 521 512 distinct at depth 51",
-    ): "the same configuration, in the comment that says why its floor is where it is — "
-    "a floor's justification is the one place its measurement belongs",
-    (
         "formal/gen-configs.sh",
-        "They cost 77 563 872 now",
+        "They cost 108 618 956 now",
     ): "`Shipped.cfg`'s size in the generator's own note on why the real constants were "
     "kept over the reduced ones, which is an argument about the two numbers",
     (
         "formal/README.md",
-        "at 77 563 872 distinct (2026-08-26)",
+        "at\n108 618 956 after `c92bfb3`",
     ): "the count the fingerprint estimate is a closed form IN, in the paragraph about "
     "what `exhaustive` means — the estimate is meaningless without it",
     (
         "formal/README.md",
-        "same 77 563 872\ndistinct",
-    ): "and the same count again two lines down, which is the whole of that sentence: "
-    "two runs of one configuration agreed on it and disagreed on the estimate",
+        "**108 618 956 at depth 58**",
+    ): "the configuration's size today, in the sentence saying the floor re-derived "
+    "from the older count is a quarter of it — the ratio is nothing without the count",
     (
         "formal/README.md",
-        "**77 563 872 at depth 58**",
-    ): "the count on the far side of a before/after comparison with the reduced scope, "
-    "where dropping it would leave the comparison with one side",
-    (
-        "formal/README.md",
-        "GREEN over 10 720 348 distinct\nstates at the liveness constants",
-    ): "`Liveness.cfg`'s distinct count beside the 5% wall-clock comparison it is the "
-    "denominator of",
+        "GREEN over 14 514 424 distinct\nstates at the liveness constants",
+    ): "`Fairness.cfg`'s distinct count, the space the invariant is checked over, beside "
+    "the 5% it cost when it went in — dated in place by its commit",
     # ONE configuration's own measurement, in the narrative that is about it,
     # reached by widening the nouns to `states` and `mutants` — what a run
     # PRODUCED is a run-count by the same definition as what it covered.

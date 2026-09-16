@@ -734,7 +734,7 @@ the alwaysUv gate surviving a reset, with a compiled-in default this column \
 moves. Do the model's gate constants cover the alwaysUv-on arm? THE MODEL \
 HALF IS ANSWERED: `AlwaysUvShipped` is AS-AUTH-2 in \
 `assurance/assumptions.toml`, and `formal/AlwaysUv.cfg` runs `TypeOK` plus \
-the eight P0-launch invariants with it TRUE — GREEN over 23 521 512 distinct \
+the eight P0-launch invariants with it TRUE — GREEN over 31 451 172 distinct \
 states at depth 51, per `formal/runs.toml`. Read the cfg for that count, \
 never this sentence: it said "all six invariants", and the file has carried \
 nine entries in every commit it has ever had, so the number was wrong when \
