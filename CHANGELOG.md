@@ -6310,6 +6310,26 @@ the release carries the flag, the decision stays yours
 
 ### Internal
 
+- **The roster that refuses an unowned writer of the grant record could not see
+  one that goes through a free function.** `scripts/token_refinement_gate.py`
+  recognised a write by its receiver — `fs.put_key(fid, ..)` — and reached one hop
+  further, to a caller that hands a named fid to such a helper. The boot re-seal
+  is three hops (`migrate_keydev_boot` → `migrate_slot` → `put_sealed32` →
+  `fs.put_key`) and only the last one has a receiver, so `EF_PAUTHTOKEN` gained a
+  production writer the registry owned nothing for and the row stayed green.
+  Measured, not argued: a `[[persistent_writer]]` row for `migrate_slot` answered
+  `stale owner` — the gate did not consider the site a writer at all. The
+  hand-off clause now follows a fid parameter as far as the chain goes, in both
+  directions: a helper that hands its own fid on becomes a writer, and a named key
+  that reaches one reaches everything it hands the fid to. Which parameters count
+  is derived from the sites that already write a handed fid (`KeyFid`, `u16`
+  today) rather than named here. Both new owners are registered as `Noop`: the
+  re-seal rewrites the record in place, so nothing tier A reads moves. The gate's
+  own summary line moves with the roster, and eleven evidence bundles transcribe
+  it, so `persistent=12/4` becomes `14/5` in each. Seven mutants of the new clause
+  are each killed by a named case of `scripts/test_token_refinement_gate.py`,
+  which is where this gate keeps its mutation table.
+
 - **The trace replay CI runs against the emulator went red on the grant `0x09CB`
   mints at provisioning.** Since then `ensure_seed` has written the persistent
   grant record beside the seed, so a factory key holds `EF_PAUTHTOKEN` with no PIN

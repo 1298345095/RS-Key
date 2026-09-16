@@ -142,13 +142,28 @@ file = "crates/rsk-fido/src/seed.rs"
 function = "clear_ppuat"
 op = "RevokeGrant"
 
-# Where `ensure_ppuat`'s write physically happens: it seals whatever KeyFid it is
-# handed, and EF_PAUTHTOKEN is the only token record that reaches it.
+# Where the grant's writes physically happen: it seals whatever KeyFid it is handed,
+# and EF_PAUTHTOKEN is the only token record that reaches it — from `ensure_ppuat`'s
+# mint, which this row is for, and from the boot re-seal below, which mints nothing.
 [[persistent_writer]]
 file = "crates/rsk-fido/src/seed.rs"
 function = "put_sealed32"
 op = "MintGrant"
 generic = true
+
+# The boot pass that moves the record between kbase arms, and the helper it hands
+# the fid to. `Noop`, not `MintGrant`: the record stands before and after and the
+# token value is unchanged, so nothing tier A reads moves.
+[[persistent_writer]]
+file = "crates/rsk-fido/src/seed.rs"
+function = "migrate_slot"
+op = "Noop"
+generic = true
+
+[[persistent_writer]]
+file = "crates/rsk-fido/src/seed.rs"
+function = "migrate_keydev_boot"
+op = "Noop"
 
 [[persistent_writer]]
 file = "crates/rsk-fido/src/conformance/mod.rs"

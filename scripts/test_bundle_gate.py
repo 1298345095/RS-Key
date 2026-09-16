@@ -1021,11 +1021,11 @@ def test_a_transcribed_gate_line_that_the_gate_does_not_derive(tmp_path, key, ol
 @pytest.mark.parametrize(
     "old,new",
     [("volatile=11/10", "volatile=11/12"),
-     ("persistent=12/4", "persistent=12/11"),
+     ("persistent=14/5", "persistent=14/11"),
      ("outcomes=7/6", "outcomes=7/12")],
 )
 def test_a_transcribed_fraction_denominator_is_that_gate_s(tmp_path, old, new):
-    """The pair rule reads `persistent=12/4` as `persistent=12` and stops at the
+    """The pair rule reads `persistent=14/5` as `persistent=14` and stops at the
     slash, so the denominator was left to the bare-integer rule — which asks only
     whether the number stands SOMEWHERE in the derived line. Every denominator
     here is replaced by one the SAME line carries (`11` off `api=11`, `12` off
@@ -1034,7 +1034,7 @@ def test_a_transcribed_fraction_denominator_is_that_gate_s(tmp_path, old, new):
     before it. 33 denominators over 11 bundles were held that way.
 
     The count is asserted because it is the whole point — one finding, quoting
-    the WHOLE token. A message naming `persistent=12` would be the pair rule
+    the WHOLE token. A message naming `persistent=14` would be the pair rule
     firing on something else, and this case passing over it."""
     root = tree(tmp_path)
 
@@ -1418,14 +1418,14 @@ def test_the_unit_vocabulary_stops_where_another_rule_already_reads():
     """The lookbehind, which is what keeps this clause off numbers already
     compared IN POSITION by the pair and fraction rules. Without the `=`, the
     joined arm line offers `91 ForceChangeModelled` as a count of a constant
-    name; without the `/`, `persistent=12/4 outcomes=7/6` offers `4 outcomes`,
+    name; without the `/`, `persistent=14/5 outcomes=7/6` offers `5 outcomes`,
     which is a roster size read as a count of the axis after it."""
     arms = f"5 {bundle_gate.STANDING} AlwaysUvShipped TRUE=5 FALSE=91 ForceChangeModelled"
     assert bundle_gate.derived_units(arms) == {
         "standing": ({"5"}, "standing"),
         "standing assumption": ({"5"}, "standing assumption(s)"),
     }
-    ledger = "GREEN keys=2 api=11 volatile=11/10 persistent=12/4 outcomes=7/6 walk=4"
+    ledger = "GREEN keys=2 api=11 volatile=11/10 persistent=14/5 outcomes=7/6 walk=4"
     assert bundle_gate.derived_units(ledger) == {}
 
 

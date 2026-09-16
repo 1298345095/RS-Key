@@ -294,7 +294,7 @@ def test_the_shipped_registry_and_tree_are_green_together():
     assert not findings, findings
     assert {c["subject"]: c["method"] for c in claims} == gate.SUBJECTS
     sites = {(f, fn) for _axis, f, fn in gate.roster(ROOT)}
-    assert len(sites) == 45, len(sites)
+    assert len(sites) == 47, len(sites)
     # The shipped floor, held from BOTH sides. Zero is the weakening a case
     # cannot see — the cases hand their own floor in — and a floor set AT the
     # measurement of 21 turns a deleted guard into a report about its reader,
@@ -316,8 +316,8 @@ def test_the_roster_deduplicates_a_ledger_that_owns_more_rows_than_sites():
     doc = tomllib.loads((ROOT / refinement.MANIFEST).read_text(encoding="utf-8"))
     rows = sum(len(doc.get(axis, [])) for axis in refinement.AXES)
     sites = gate.roster(ROOT)
-    assert rows == 48, rows
-    assert len(sites) == 45 == len({(f, fn) for _axis, f, fn in sites}), len(sites)
+    assert rows == 50, rows
+    assert len(sites) == 47 == len({(f, fn) for _axis, f, fn in sites}), len(sites)
 
 
 # ---- the registry shape ------------------------------------------------------

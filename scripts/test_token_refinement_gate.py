@@ -636,6 +636,98 @@ def test_a_caller_that_hands_a_token_fid_to_a_generic_writer_is_a_site(tree: Tre
     assert contains(findings, "persistent: unowned concrete site crates/rsk-fido/src/state.rs::helper")
 
 
+def test_a_fid_handed_through_a_free_function_reaches_every_hop(tree: Tree):
+    """The shape the boot re-seal of the grant record arrives in: only the LAST
+    hop is a receiver call, so a clause that stops at the first one sees none of
+    it. Measured on the checkout 2026-09-16 — `migrate_keydev_boot` →
+    `migrate_slot` → `put_sealed32` → `fs.put_key` was a production write the
+    roster refused nothing for."""
+    tree.append(
+        "crates/rsk-fido/src/state.rs",
+        "fn sealer(fid: u16) { fs.put(fid, &[]); }\n\n"
+        "fn relay(fid: u16) { sealer(fid); }\n\n"
+        "fn stray() { relay(EF_PIN); }\n",
+    )
+    findings = tree.findings()
+    assert contains(findings, "persistent: unowned concrete site crates/rsk-fido/src/state.rs::relay")
+    assert contains(findings, "persistent: unowned concrete site crates/rsk-fido/src/state.rs::stray")
+
+
+def test_the_hand_off_is_followed_through_more_than_one_relay(tree: Tree):
+    """A chain, not a hop: the rule is transitive or it is a special case for the
+    one depth the tree happens to have today."""
+    tree.append(
+        "crates/rsk-fido/src/state.rs",
+        "fn sealer(fid: u16) { fs.put(fid, &[]); }\n\n"
+        "fn inner(fid: u16) { sealer(fid); }\n\n"
+        "fn outer(fid: u16) { inner(fid); }\n\n"
+        "fn stray() { outer(EF_PIN); }\n",
+    )
+    findings = tree.findings()
+    # `sealer` is the SECOND hop down: assert it, or a closure that walks one link
+    # and stops reads exactly like the transitive one.
+    for site in ("sealer", "inner", "outer", "stray"):
+        assert contains(findings, f"persistent: unowned concrete site crates/rsk-fido/src/state.rs::{site}")
+
+
+def test_the_chain_is_found_with_the_caller_written_first(tree: Tree):
+    """The same chain in the other source order. `catalogue()` keeps file order, so
+    a single pass finds it only when each callee is already known — which is what
+    the fixpoint is for, and what appending callee-first would never show."""
+    tree.append(
+        "crates/rsk-fido/src/state.rs",
+        "fn outer(fid: u16) { inner(fid); }\n\n"
+        "fn inner(fid: u16) { sealer(fid); }\n\n"
+        "fn sealer(fid: u16) { fs.put(fid, &[]); }\n\n"
+        "fn stray() { outer(EF_PIN); }\n",
+    )
+    findings = tree.findings()
+    for site in ("sealer", "inner", "outer", "stray"):
+        assert contains(findings, f"persistent: unowned concrete site crates/rsk-fido/src/state.rs::{site}")
+
+
+def test_a_relay_that_hands_a_fid_of_its_own_but_not_a_token_one_is_no_writer(tree: Tree):
+    """The clause reads WHICH argument is handed on, not that a call happened: this
+    relay has a fid parameter of its own and hands the helper a different record, so
+    the token fid its own caller names reaches nothing this projection owns."""
+    tree.append(
+        "crates/rsk-fido/src/state.rs",
+        "fn sealer(fid: u16) { fs.put(fid, &[]); }\n\n"
+        "fn relay(slot: u16) { sealer(EF_ALWAYS_UV); let _ = slot; }\n\n"
+        "fn stray() { relay(EF_PIN); }\n",
+    )
+    assert tree.findings() == []
+
+
+def test_a_nested_call_before_the_fid_does_not_break_the_chain(tree: Tree):
+    """An argument list with a call in it. Stopping at the first `)` hides every
+    argument after it — the fid among them — and the chain goes quiet."""
+    tree.append(
+        "crates/rsk-fido/src/state.rs",
+        "fn sealer(dev: &D, fid: u16) { fs.put(fid, &[]); }\n\n"
+        "fn relay(fid: u16) { sealer(pick(0), fid); }\n\n"
+        "fn stray() { relay(EF_PIN); }\n",
+    )
+    findings = tree.findings()
+    for site in ("relay", "stray"):
+        assert contains(findings, f"persistent: unowned concrete site crates/rsk-fido/src/state.rs::{site}")
+
+
+def test_handing_something_that_is_not_a_fid_makes_no_writer(tree: Tree):
+    """The other direction, and the one that keeps the clause from owning the
+    tree: `relay`'s own parameter is the payload, not the fid, so reaching a
+    fid-parameter helper with it writes no record — and neither does the caller
+    that hands `relay` bytes which merely MENTION a token fid. Read `own` as
+    "any parameter of mine" instead of "a fid one" and both become writers."""
+    tree.append(
+        "crates/rsk-fido/src/state.rs",
+        "fn sealer(fid: u16, data: &[u8]) { fs.put(fid, data); }\n\n"
+        "fn relay(data: &[u8]) { sealer(EF_ALWAYS_UV, data); }\n\n"
+        "fn stray() { relay(&[EF_PIN as u8]); }\n",
+    )
+    assert tree.findings() == []
+
+
 def test_a_predicate_that_names_a_token_fid_reaches_the_sweep_it_selects(tree: Tree):
     tree.append(
         "crates/rsk-fido/src/state.rs",

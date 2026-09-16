@@ -588,11 +588,11 @@ run "constant-time sites in the image" python scripts/ct_gate.py
 # and the allocator surface of the DEFAULT image, before the three builds below
 # overwrite it with another profile's.
 run "image segments and allocator" python scripts/elf_gate.py
-# Third reader of the same window: 21 of the 44 owners assurance/token_refinement.toml
+# Third reader of the same window: 22 of the 47 owners assurance/token_refinement.toml
 # names have NO symbol — they survive only as an inlined call site in this image's
 # DWARF — and three MUST be absent from it. Which profile it reads is the DISPLAY
 # build below, not the no-touch one: measured over both binaries, the no-touch
-# image (sha cb1830ac…) gives all 44 dispositions and call-site counts of the
+# image (sha cb1830ac…) gives all 47 dispositions and call-site counts of the
 # default image (08dad541…) unchanged, so the earlier claim here that "both
 # answers are profile-specific" was false in the direction it was written for.
 # The display build at line ~600 is what moves them — 17 symbol / 21 inlined /
