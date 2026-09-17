@@ -1287,10 +1287,10 @@ own smaller constants and no symmetry. The floor did not move then, and being
 stricter than the "near a third" rule read as the safe direction to be wrong in
 — which is how a ratchet goes slack without anyone deciding to loosen it.
 20 000 000 was a third of the 61 215 504 it had been set against, and against the
-count above it had drifted to a quarter; it is 25 854 624 now, re-derived from
-the recorded run. The grant record that any boot may mint (`c92bfb3`) has since
-taken the configuration to **108 618 956 at depth 58**, and that floor is a
-quarter of it again.
+count above it had drifted to a quarter; it was re-derived to 25 854 624 from
+the recorded run. The grant record that any boot may mint (`c92bfb3`) then took
+the configuration to **108 618 956 at depth 58** and that floor back to a
+quarter of it, and it is 36 206 318 now — a third of the recorded run again.
 
 ### What the review's repairs cost
 
@@ -2757,14 +2757,14 @@ to itself.
 | `SeamMut_*.cfg` `RED` → `GREEN` | `… requires GREEN, but the configuration switches BugAdminOpensKeyOps on and so owes RED` | **1** |
 | the `SeamSolo_*.cfg` row deleted | `no verdict entry in formal/floors.txt and no registered exemption` | **1** |
 | a broader `SeamMut*` laid above it | `` `SeamMut_*.cfg` never decides anything: … `SeamMut*` matches 19 configuration(s) first `` | **1** |
-| a second, disagreeing `Shipped.cfg` row | `both match it and disagree (('RED', None, None) against ('GREEN', 25854624, None))` | **1** |
+| a second, disagreeing `Shipped.cfg` row | `both match it and disagree (('RED', None, None) against ('GREEN', 36206318, None))` | **1** |
 | `Mut_*.cfg` given a floor | `RED with a floor of 5000 — a counterexample search halts at the first violation` | **1** |
 | a RED naming an invariant its configuration does not check | `expects RED at NoOrphanedMetadata, which the configuration does not check` | **1** |
 | a RED attributed to `TypeOK` | `which every configuration checks and no mutant targets — that attributes the RED to nothing` | **1** |
 | a RED attributed to a temporal property | `` names the property EveryWalkCloses; … reads `Invariant … is violated` and nothing else `` | **1** |
 | `TraceSeamsBad.cfg` `RED` → `GREEN`, the one carve-out | `the carve-out exempts the derivation, not the verdict` | **1** |
 | `Shipped.cfg` floored at 1 | `GREEN floored at 1, under the 2 the runner already refuses as VACUOUS` | **1** |
-| `Store.cfg` floor 90 → 30 | `floor 90 -> 30 with no justification — add \* floor-decrease: …` | **1** |
+| `Store.cfg` floor 121 → 30 | `floor 121 -> 30 with no justification — add \* floor-decrease: …` | **1** |
 | the same, with the marker beside it | the summary — a re-measurement is allowed, saying nothing about it is not | 0 |
 | `@TraceSecurityGatesMin` 7 → 6 | `floor 7 -> 6 with no justification` | **1** |
 | `@TraceSecurityAmbiguousMax` 0 → 1 | `floor 0 -> 1 with no justification` — a `Max` is the same ratchet upside down | **1** |

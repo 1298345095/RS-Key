@@ -44,14 +44,14 @@
 \* -- the token-less non-discoverable registration -- so the same number had
 \* quietly fallen to about a QUARTER of the measurement. A ratchet drifting slack
 \* is the one failure nothing here reports: every gate stayed green through it.
-\* Re-derived to a third of the distinct count `runs.toml` records for the safety
-\* run at 9cafee7, the same rule as its siblings.
-Shipped.cfg                          GREEN   25854624
+\* Re-derived to a third of the distinct count `runs.toml` recorded for the safety
+\* run at 9cafee7, and again when the grant record (c92bfb3) made it a quarter.
+Shipped.cfg                          GREEN   36206318
 \* AS-AUTH-2's other arm: its own nine invariants over a build that SHIPS
-\* alwaysUv, set against 23 521 512 distinct (depth 51) on a reduced (2 : 1) retry
-\* ladder -- the arm buys the reachability question, not the ladder -- so a third
-\* of that is the floor, as its siblings'. Nine is counted in the cfg, not here.
-AlwaysUv.cfg                         GREEN   7800000
+\* alwaysUv, on a reduced (2 : 1) retry ladder -- the arm buys the reachability
+\* question, not the ladder -- so a third of its recorded distinct count is the
+\* floor, as its siblings'. Nine is counted in the cfg, not here.
+AlwaysUv.cfg                         GREEN   10483724
 \* `WidePerms`'s other arm: all sixteen permission subsets a host can obtain,
 \* against the five the model carries. One relying party, because the wide
 \* domain is what is being paid for, and two channels because scopes.txt holds
@@ -60,18 +60,18 @@ AlwaysUv.cfg                         GREEN   7800000
 \* measured distinct count is the floor, the same rule as its siblings; the
 \* narrow arm of the same scope was measured at 9 472 044 in 142 s and is not a
 \* recorded row, so it is here rather than there.
-PermWide.cfg                         GREEN   7000000
+PermWide.cfg                         GREEN   9728632
 \* `ForceChangeModelled`'s other arm: EF_MINPINLEN[1], the forced-PIN-change
 \* flag, which the module did not carry at all until PLAT-MODEL-010 measured the
 \* gap. PermWide.cfg's constants for the same reason -- the question is the gate,
 \* not the ladder -- and alwaysUv ON because with no PIN there is nothing to
-\* pend. A third of the measured 11 977 584 distinct states is the floor, the
-\* same rule as its siblings.
-ForceChange.cfg                      GREEN   4000000
+\* pend. A third of its recorded distinct count is the floor, the same rule as
+\* its siblings.
+ForceChange.cfg                      GREEN   4951108
 Seams.cfg                            GREEN   200
 \* The flash layer (RSKeyStore): a small exhaustive space -- 364 distinct at
 \* depth 6 -- so its floor is set near a third, the same rule as its siblings.
-Store.cfg                            GREEN   90
+Store.cfg                            GREEN   121
 \* The retry/recovery lattice (RSKeyRetryLattice): 243 distinct at depth 11, five
 \* budgeted references over a ceiling of two -- a third is the floor here too.
 Lattice.cfg                          GREEN   80
@@ -231,12 +231,12 @@ TokenRefinementDeadToken.cfg         RED     -
 \* million nodes at these constants -- and runs out of memory at the 4 GB
 \* default after the state search has already completed (E172). The heap column
 \* is that one-line fix, kept beside the number that motivates it.
-Liveness.cfg                         GREEN   2000000   12g
+Liveness.cfg                         GREEN   4838141   12g
 Liveness_Full.cfg                    GREEN   2000000   24g
 \* The fairness-shape check: the same reduced constants, `Spec` rather than
-\* `FairSpec`, and eighteen ENABLED evaluations per state for about 5% more wall
-\* clock than the plain safety run.
-Fairness.cfg                         GREEN   2000000
+\* `FairSpec`. When it went in (c749779) that was eighteen ENABLED evaluations per
+\* state, for about 5% more wall clock than the plain safety run.
+Fairness.cfg                         GREEN   4838141
 
 \* Every mutant must FIRE. A counterexample search halts at the first violation,
 \* so its state count is worker-scheduling dependent and carries no floor.
@@ -266,8 +266,8 @@ Fairness.cfg                         GREEN   2000000
 \* same floor with a dozen more digits on it ALL passed the merge gate; only a
 \* GREEN with no floor is refused, so the number was an ASSERTION about a run
 \* nobody had made. That run has since happened -- `runs.toml`'s safety tier,
-\* recorded at 9cafee7 -- and the floor below is a third of what it found, the
-\* way every other GREEN row in this file was set.
+\* recorded at 9cafee7 and again since -- and the floor below is a third of what
+\* it last found, the way every other GREEN row in this file was set.
 \*
 \* It is Shipped.cfg's own number because that is the one thing about this
 \* configuration that could be known before running it: its transition relation
@@ -283,7 +283,7 @@ Fairness.cfg                         GREEN   2000000
 \* The recording settles that argument rather than repeating it: this row came
 \* back at Shipped.cfg's distinct count TO THE STATE and at Shipped.cfg's depth,
 \* a superset that added nothing, so both rows carry one number for one reason.
-Historical_E76.cfg                   GREEN   25854624
+Historical_E76.cfg                   GREEN   36206318
 Historical_E77.cfg                   RED     -
 Mut_*.cfg                            RED     -
 Solo_*.cfg                           RED     -

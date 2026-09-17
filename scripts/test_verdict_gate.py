@@ -429,7 +429,7 @@ def test_a_red_row_given_a_floor_is_rejected():
 def test_a_green_row_naming_an_invariant_is_rejected():
     """Nothing compares an invariant on a pass, so a name there is a claim the
     runner never reads — and reads exactly like one it does."""
-    text = rewrite("Shipped.cfg", "Shipped.cfg GREEN 25854624 - NoAuthorizationBypass")
+    text = rewrite("Shipped.cfg", "Shipped.cfg GREEN 36206318 - NoAuthorizationBypass")
     assert any("nothing compares" in p for p in findings(text))
 
 

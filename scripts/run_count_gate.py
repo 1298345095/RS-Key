@@ -373,8 +373,8 @@ SCOPED = {
     (
         "formal/README.md",
         "**108 618 956 at depth 58**",
-    ): "the configuration's size today, in the sentence saying the floor re-derived "
-    "from the older count is a quarter of it — the ratio is nothing without the count",
+    ): "the configuration's size today, in the sentence that re-derives the floor as a "
+    "third of it — a floor stated as a ratio is nothing without the count",
     (
         "formal/README.md",
         "GREEN over 14 514 424 distinct\nstates at the liveness constants",

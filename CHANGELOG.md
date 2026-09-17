@@ -6330,6 +6330,22 @@ the release carries the flag, the decision stays yours
 
 ### Internal
 
+- **The slack TLC floors are a third of what they bound again.** The grant record
+  (`c92bfb3`) grew the shipped configuration from 77 563 872 to 108 618 956
+  distinct states and left the large safety floors at about a quarter of what
+  they bound — the drift `formal/floors.txt` names as the one failure nothing
+  reports. Three more had drifted earlier and on their own: `Store` sat at 24.7%
+  since its count grew from 272 to 364 and only its comment followed (`e7bf392`),
+  and `Liveness` and `Fairness`, set at about a quarter of 7 903 336 and never at
+  a third, were at 13.8%. Each is now a third of the count `formal/runs.toml`
+  recorded at `70e104a`: `Shipped` and `Historical_E76` 25 854 624 -> 36 206 318,
+  `AlwaysUv` 7 800 000 -> 10 483 724, `PermWide` 7 000 000 -> 9 728 632,
+  `ForceChange` 4 000 000 -> 4 951 108, `Liveness` and `Fairness` 2 000 000 ->
+  4 838 141, and `Store` 90 -> 121. `TokenRefinement` sits above a third (54%),
+  and `Liveness_Full` is in no tier and has no recorded count, so both keep
+  theirs. `floors.txt` is a model input as well, so this lands with the runner
+  fix and one re-run records both.
+
 - **Two gates in two checkouts no longer share one pytest base.** `check.sh`
   pinned its three pytest rows under `~/.cache/rs-key/pytest`, one base per user,
   and pytest removes a pinned base when a session starts. Two sessions ran the

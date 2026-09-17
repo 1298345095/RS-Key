@@ -163,7 +163,7 @@ def test_one_state_model_is_vacuous_not_green(fake_tlc):
 def test_floor_regression_is_not_green(fake_tlc):
     result = run(fake_tlc, "Shipped.cfg", GREEN)
     assert result.returncode == 1
-    assert "FLOOR: 100 < 25854624" in result.stdout
+    assert "FLOOR: 100 < 36206318" in result.stdout
     assert "expected GREEN" in result.stdout
 
 
