@@ -188,9 +188,9 @@ CLAIM_ROWS=(
 # --- running ------------------------------------------------------------------
 
 #: One reproduction at a time. Two `check.sh` runs collide on their build tree
-#: and two TLC runs collide on `formal/states/<timestamp>`, so a second copy is
-#: refused rather than started -- silently interleaved runs are how a recorded
-#: model tier stops describing anything.
+#: and two TLC runs on `formal/out/<cfg>.log`, so a second copy is refused rather
+#: than started -- silently interleaved runs are how a recorded model tier stops
+#: describing anything.
 LOCK="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/reproduce.lock"
 
 # `[r]…` so the pattern cannot match the `pgrep` that carries it, which is the
@@ -204,7 +204,7 @@ take_lock() {
     held=$(cat "$LOCK/pid" 2>/dev/null || echo "")
     if [ -n "$held" ] && kill -0 "$held" 2>/dev/null; then
       echo "refusing to start: reproduce.sh is already running as pid $held." >&2
-      echo "  Two runs collide on the build tree and on formal/states/<timestamp>." >&2
+      echo "  Two runs collide on the build tree and on formal/out/<cfg>.log." >&2
       exit 3
     fi
     echo "note: taking over a stale lock from pid ${held:-unknown}" >&2

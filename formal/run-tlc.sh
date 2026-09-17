@@ -21,10 +21,11 @@ JAR=${TLA2TOOLS_JAR:-}
 JAVA=${JAVA:-$(command -v java)}
 WORKERS=${WORKERS:-2}
 HEAP=${HEAP:-4g}
-# Where the logs land, and a knob because this runner's own mutation table drives
-# the REAL script: pointing it into the real `out/` is what put a NUL run in a
-# live `Shipped.log` and reported a 48.7 M-state GREEN as VACUOUS.
+# Where the logs and TLC's scratch land, knobs because this runner's own mutation
+# table drives the REAL script: pointing it into the real `out/` is what put a NUL
+# run in a live `Shipped.log` and reported a 48.7 M-state GREEN as VACUOUS.
 OUT=${TLC_OUT:-out}
+STATES=${TLC_STATES:-states}
 
 # `--tiers` is a pure query -- scripts/assurance_gate.py reads it to hold every
 # .cfg against the tier union -- so it must answer without a jar, a JVM or a
@@ -39,6 +40,14 @@ if [ "${1:-}" != "--tiers" ]; then
   # by its own UNCHANGED. Both have bitten this model. Checking anything before
   # the source is clean would be checking the wrong spec.
   python3 tla-lint.py || exit 2
+
+  # TLC names its metadir after the second, and a run refuted in its initial state
+  # leaves it: the next start in that second refused to run at all, which cost a
+  # whole safety tier its record once. So every row gets its own directory here.
+  mkdir -p "$STATES"
+  metaroot=$(mktemp -d "$STATES/run.XXXXXX")
+  trap 'rm -rf "$metaroot"' EXIT
+  [ -n "$metaroot" ] || { echo "run-tlc: no metadir under $STATES" >&2; exit 2; }
 fi
 
 # Which module a configuration belongs to: the seam configs are the second
@@ -234,7 +243,8 @@ one() {
   # 153, measured. O_APPEND has no offset to go stale: truncate here, append below.
   : > "$log"
   "$JAVA" -XX:+UseParallelGC -Xmx"${HEAP_OVERRIDE:-${heap:-$HEAP}}" -cp "$JAR" tlc2.TLC \
-      -nowarning -workers "$WORKERS" "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
+      -nowarning -metadir "$metaroot/${cfg%.cfg}" -workers "$WORKERS" \
+      "${cov[@]+"${cov[@]}"}" -config "$cfg" "$SPEC" \
       >> "$log" 2>&1
   t1=$(date +%s)
   if [ "${COVERAGE:-0}" = 1 ]; then

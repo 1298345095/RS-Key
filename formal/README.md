@@ -2620,6 +2620,16 @@ a RED row's invariant name, the `COVERAGE=1` dead-action reader, and the hole
 itself — the stand-in re-truncates its own log mid-run and the result must carry
 no NUL.
 
+TLC's own scratch had the same shape one level down. It names its metadir after
+the current second, a run refuted in its initial state exits without removing
+that directory, and the runner starts the next configuration straight away — so
+a configuration that began in the same second was refused before it checked
+anything, and its row printed `RED:` with no reason. Every row gets a directory
+of its own under one fresh root in `states/` now, and the root goes when the
+runner exits. The stand-in treats its metadir the way the pinned jar was measured
+to, between two runs and between the rows of one tier, and each part of the fix
+is cut out once to watch its case fall.
+
 `floors.txt` also carries the **per-config heap**. `Liveness.cfg` runs out of
 memory at the 4 GB default *after* its state search completes, which had left
 `./run-tlc.sh all` reporting a red row for a property that is true.

@@ -508,7 +508,8 @@ jobs:
   # invariant that misses its mutant, one-state VACUOUS, and a muted Mut switch.
   # Direct RED and FLOOR cases make all three job verdict boundaries explicit,
   # and four more hold every reader of a log with a NUL hole in it — the state
-  # that reported a finished 48.7 M-state GREEN as VACUOUS.
+  # that reported a finished 48.7 M-state GREEN as VACUOUS. The last hold TLC's
+  # metadir, which a row refuted in its initial state leaves for the next start.
   formal:
     if: github.event.schedule != '17 5 * * *'
     runs-on: ubuntu-latest

@@ -3,7 +3,8 @@
 """Mutation table for the formal runner's verdict boundary.
 
 TLC itself is the slow system under test in the weekly job. These cases replace
-its output stream and the directory the log lands in — nothing else — then drive
+its output stream and the directories its log and its scratch land in — nothing
+else — then drive
 the real runner, floors and configurations so each silent-pass shape is
 permanently reproducible in the merge gate. The directory is not a detail: this
 file used to write into the real `formal/out/`, so it truncated the log of any
@@ -90,6 +91,21 @@ def fake_tlc(tmp_path):
         "if '-Xmx-' in sys.argv:\n"
         "    sys.stderr.write('Error: Could not create the Java Virtual Machine.')\n"
         "    raise SystemExit(1)\n"
+        # The metadir as the pinned jar (2.19) was measured to treat it: named after
+        # the second under `states/` or `-metadir`, refused if that name exists, and
+        # left behind by a run refuted in its initial state.
+        "stamp = os.environ.get('FAKE_TLC_STAMP')\n"
+        "if stamp:\n"
+        "    root = sys.argv[sys.argv.index('-metadir') + 1] if '-metadir' in sys.argv else 'states'\n"
+        # And never outside the test's own directory, whatever a cut runner hands it.
+        f"    if os.path.isabs(root) and not root.startswith({str(tmp_path) + os.sep!r}):\n"
+        "        print('stand-in refuses a metadir outside its test: ' + root)\n"
+        "        raise SystemExit(3)\n"
+        "    meta = os.path.join(root, stamp)\n"
+        "    if os.path.exists(meta):\n"
+        "        print('This directory should be ' + os.path.abspath(meta) + ', but that directory already exists.')\n"
+        "        raise SystemExit(1)\n"
+        "    os.makedirs(meta)\n"
         f"head, _, tail = os.environ['FAKE_TLC_OUTPUT'].partition({HOLE!r})\n"
         "out = sys.stdout.buffer\n"
         "out.write(head.encode())\n"
@@ -101,9 +117,11 @@ def fake_tlc(tmp_path):
         "    out.flush()\n"
         "    open(os.environ['FAKE_TLC_TRUNCATE'], 'w').close()\n"
         "out.write(tail.encode() + b'\\n')\n"
+        "if stamp and not os.environ.get('FAKE_TLC_LEAVES_METADIR'):\n"
+        "    os.rmdir(meta)\n"
     )
     java.chmod(0o755)
-    return jar, java, tmp_path / "out"
+    return jar, java, tmp_path / "out", tmp_path / "states"
 
 
 def run(
@@ -115,8 +133,10 @@ def run(
     truncate: pathlib.Path | None = None,
     coverage: bool = False,
     runner: pathlib.Path | None = None,
+    stamp: str = "",
+    leaves: bool = False,
 ):
-    real_jar, java, out = fake_tlc
+    real_jar, java, out, states = fake_tlc
     env = {
         **os.environ,
         "COVERAGE": "1" if coverage else "0",
@@ -125,10 +145,14 @@ def run(
         "FAKE_TLC_OUTPUT": output,
         "FAKE_TLC_HOLE": str(hole),
         "FAKE_TLC_TRUNCATE": str(truncate or ""),
+        "FAKE_TLC_STAMP": stamp,
+        "FAKE_TLC_LEAVES_METADIR": "1" if leaves else "",
         # Not `formal/out/`: these cases drive the REAL runner, so writing there
         # truncates the log of whatever real TLC run is in flight beside them —
         # which is the hole these cases are named for, and cost a standing rule.
         "TLC_OUT": str(out),
+        # And for the same reason TLC's scratch: the runner makes a directory there.
+        "TLC_STATES": str(states),
     }
     script = runner or RUNNER
     return subprocess.run(
@@ -921,3 +945,111 @@ def test_the_two_clauses_the_roster_cannot_falsify_have_an_arm_of_their_own(
     cut = run(fake_tlc, name, output, runner=arena(old, new, {name: text}))
     assert cut.returncode == 1
     assert NO_PROPERTY in cut.stdout
+
+
+#: A row refuted in its INITIAL state, then one that is not, both RED on the same
+#: invariant: the first pair the lost safety tier failed on, back to back.
+LEAVER = "SeamSolo_BugCodelessOathIsAStatus.cfg"
+VICTIM = "SeamSolo_BugDeselectKeepsOathUnlock.cfg"
+RED_SEAM = RED.replace("NoAuthorizationBypass", "NoStatusOutsideItsSelection")
+
+#: One TLC second for every start, which is what sub-second mutants make of them.
+STAMP = "26-09-16-15-45-59"
+
+
+def _same_second(fake_tlc, runner):
+    """The leaver, then the victim, in one second. In an arena, because a runner cut
+    of its `-metadir` sends the stand-in to `states/` beside itself."""
+    first = run(fake_tlc, LEAVER, RED_SEAM, runner=runner, stamp=STAMP, leaves=True)
+    assert first.returncode == 0, first.stdout + first.stderr
+    return run(fake_tlc, VICTIM, RED_SEAM, runner=runner, stamp=STAMP)
+
+
+def _refused_in_a_tier(fake_tlc, runner):
+    """Every row of `liveness` leaving its metadir, all in one second: the measured
+    failure happened INSIDE one tier run, where every row shares the runner's root."""
+    run(fake_tlc, "liveness", RED_SEAM, runner=runner, stamp=STAMP, leaves=True)
+    # The runner's own `--tiers` says which rows that is, so the size lives in one place.
+    tiers = subprocess.run([str(runner), "--tiers"], cwd=runner.parent, capture_output=True, text=True)
+    rows = next(line.split(":", 1)[1].split() for line in tiers.stdout.splitlines() if line.startswith("liveness:"))
+    logs = sorted(fake_tlc[2].glob("*.log"))
+    assert [log.stem for log in logs] == sorted(row.removesuffix(".cfg") for row in rows)
+    return any("already exists" in log.read_text() for log in logs)
+
+
+def test_a_row_refuted_in_its_initial_state_does_not_refuse_the_next_start(fake_tlc, arena):
+    """Measured 2026-09-16: `./run-tlc.sh safety` lost five `SeamSolo_Bug*` rows,
+    each `RED:` with no reason and a `!!`, because TLC names its metadir after the
+    current second and a run refuted in its initial state leaves that directory
+    behind. Every one of the five started in the second a leaver had."""
+    victim = _same_second(fake_tlc, arena())
+    log = (fake_tlc[2] / VICTIM.replace(".cfg", ".log")).read_text()
+    assert "already exists" not in log
+    assert victim.returncode == 0, victim.stdout
+    assert "RED: NoStatusOutsideItsSelection" in victim.stdout
+
+
+def test_the_rows_of_one_tier_do_not_share_a_metadir(fake_tlc, arena):
+    """A root per runner is not enough on its own: TLC names its directory INSIDE
+    whatever it is handed, so rows sharing one collide exactly as they did."""
+    assert not _refused_in_a_tier(fake_tlc, arena())
+
+
+def test_no_metadir_outlives_the_runner(fake_tlc, arena):
+    """A directory per row would otherwise pile up a tier's worth, and the ones a
+    refuted initial state leaves hold TLC's fingerprint and queue files."""
+    _same_second(fake_tlc, arena())
+    assert not any(fake_tlc[3].iterdir())
+
+
+def test_a_metadir_that_cannot_be_made_stops_the_runner_before_tlc(fake_tlc, arena):
+    """An environment that refuses TLC its scratch is the broken-jar case, not a
+    row: exit 2 before anything is run or logged."""
+    fake_tlc[3].write_text("not a directory\n")
+    result = run(fake_tlc, VICTIM, RED_SEAM, runner=arena(), stamp=STAMP)
+    assert result.returncode == 2
+    assert "no metadir" in result.stderr
+    assert not (fake_tlc[2] / VICTIM.replace(".cfg", ".log")).exists()
+
+
+def _victim_refused(fake_tlc, runner):
+    victim = _same_second(fake_tlc, runner)
+    return victim.returncode == 1 and "!! expected RED: NoStatusOutsideItsSelection" in victim.stdout
+
+
+def _metadir_left(fake_tlc, runner):
+    _same_second(fake_tlc, runner)
+    return any(fake_tlc[3].iterdir())
+
+
+def _ran_with_no_metadir(fake_tlc, runner):
+    fake_tlc[3].write_text("not a directory\n")
+    return run(fake_tlc, VICTIM, RED_SEAM, runner=runner, stamp=STAMP).returncode != 2
+
+
+#: THE METADIR ARMS: each part of the fix cut out of the runner, and the case that
+#: then shows its defect -- the first two in the measured direction, a start
+#: refused and its row RED with no reason.
+METADIR_ARMS = [
+    ("a metadir for the run", ' -metadir "$metaroot/${cfg%.cfg}"', "", _victim_refused),
+    ("a directory per row", '"$metaroot/${cfg%.cfg}"', '"$metaroot"', _refused_in_a_tier),
+    ("removing the root on exit", "  trap 'rm -rf \"$metaroot\"' EXIT\n", "", _metadir_left),
+    (
+        "stopping when none can be made",
+        '  [ -n "$metaroot" ] || { echo "run-tlc: no metadir under $STATES" >&2; exit 2; }\n',
+        "",
+        _ran_with_no_metadir,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "label,old,new,defect", METADIR_ARMS, ids=[a[0] for a in METADIR_ARMS]
+)
+def test_every_part_of_the_metadir_fix_has_a_row_that_falsifies_it(
+    fake_tlc, arena, label, old, new, defect
+):
+    """Both sides asserted: the shipped runner shows no defect and the cut one
+    does, so a cut that breaks the row somewhere else is not this part's kill."""
+    assert not defect(fake_tlc, arena())
+    assert defect(fake_tlc, arena(old, new))

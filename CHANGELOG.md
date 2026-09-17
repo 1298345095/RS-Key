@@ -6330,6 +6330,25 @@ the release carries the flag, the decision stays yours
 
 ### Internal
 
+- **The TLC runner no longer loses a row to the second the row before it
+  started in.** TLC names its metadir after the current second, and a run refuted
+  in its initial state exits without removing that directory, so the next
+  configuration — started straight after a sub-second mutant — found the name
+  taken and refused to run at all. A whole `safety` tier lost five `SeamSolo_Bug*`
+  rows that way, each `RED:` with no reason and a `!!`, and its record took a
+  second 2.5-hour run through a wrapper that cleared the leftover by hand.
+  `run-tlc.sh` makes one fresh root under `formal/states/` per invocation, hands
+  every row a `-metadir` of its own inside it, removes the root from an EXIT trap,
+  and stops with exit 2 when it cannot make one; `TLC_STATES` moves that root the
+  way `TLC_OUT` moves the logs, so the merge gate's cases no longer write into
+  `formal/`. `scripts/test_run_tlc.py` reproduces the refusal — between two runs
+  and between the rows of one tier — with a stand-in that treats the metadir the
+  way the pinned jar (TLC 2.19) was measured to: named after the second inside
+  whatever root it is handed, refused when taken, left behind by an initial-state
+  refutation. Each of the four parts is cut out of the runner once to watch its
+  own case fall. `formal/run-tlc.sh` is a model input, so the recorded tiers are
+  stale until the next re-run.
+
 - **The slack TLC floors are a third of what they bound again.** The grant record
   (`c92bfb3`) grew the shipped configuration from 77 563 872 to 108 618 956
   distinct states and left the large safety floors at about a quarter of what

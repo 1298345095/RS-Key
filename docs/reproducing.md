@@ -36,8 +36,8 @@ the machine to itself; `deep` is the weekly matrix. Any phase can also be named
 on its own, and phases can be combined — a repeated phase runs once.
 
 One run at a time. Two gate runs collide on the build tree and two TLC runs
-collide on the model checker's state directory, so a second copy refuses to
-start rather than interleaving with the first.
+collide on the model checker's per-configuration logs, so a second copy refuses
+to start rather than interleaving with the first.
 
 ## What a clean checkout does not have
 
