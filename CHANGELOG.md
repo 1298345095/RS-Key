@@ -6330,6 +6330,28 @@ the release carries the flag, the decision stays yours
 
 ### Internal
 
+- **Two gates in two checkouts no longer share one pytest base.** `check.sh`
+  pinned its three pytest rows under `~/.cache/rs-key/pytest`, one base per user,
+  and pytest removes a pinned base when a session starts. Two sessions ran the
+  full gate in two checkouts of this repository at once, both gate rows pinned to
+  `~/.cache/rs-key/pytest/gate`, where the later start removes the earlier run's
+  `tmp_path` tree under it — a row that can go red for nothing in the code. The
+  base is keyed by the checkout now, a short hash of `git rev-parse
+  --show-toplevel` under the same cache root. A base still holds one run per row;
+  what changes is that every checkout path gets its own, so a deleted worktree
+  leaves its base (about a megabyte) with nothing to sweep it.
+  `scripts/test_gate_scripts.py` evaluates `check.sh`'s own assignment, under its
+  own `set` line, in a repository and a worktree of it; holds every gate pytest
+  row to `$GATE_PYTEST_TMP/`; runs two concurrent pytest sessions pinned where
+  each checkout's gate row would pin them, the first holding a file while the
+  second starts; and requires a gate with no git to stop rather than fall back to
+  the shared base. Eight mutations of `check.sh` — per user, by basename, by the
+  common git dir, inside the checkout, ignoring `XDG_CACHE_HOME`, a row spelling
+  its own path, a second assignment below the first, `pipefail` dropped — each
+  redden one to four of those cases for their own reason, while the mutation table
+  itself falls for none of them; the per-user line, driven through the `pytest
+  (gate scripts)` row, fails the same three cases it fails alone.
+
 - **A PIN-derived record stays on the pre-burn root until its own reference is
   presented**, and that is now written down instead of assumed away. Every record
   sealed under the key base alone moves to the fused root at a boot pass; re-keying

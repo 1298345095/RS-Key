@@ -48,12 +48,12 @@ trap 'exit 143' TERM
 # fat one to slim. Same volume-to-zero as the mktemp sites above.
 #
 # A pinned --basetemp is removed and recreated by pytest at startup, so a row
-# holds one run instead of every run. Three things it has to get right. It must
-# not be inside the checkout: under `target/`, `git rev-parse` answers from
-# RS-Key's own .git and test_verdict_gate's "git cannot answer here" case goes
-# red (measured, 1788 of 1789). pytest creates the leaf but not its parents. And
-# it wipes whatever it is pointed at, so each row gets a leaf of its own.
-GATE_PYTEST_TMP="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest"
+# holds one run instead of every run. It must not be inside the checkout: under
+# `target/`, `git rev-parse` answers from RS-Key's own .git and test_verdict_gate's
+# "git cannot answer here" case goes red (measured, 1788 of 1789). pytest makes the
+# leaf, not its parents. It wipes what it is pointed at, so each row gets a leaf
+# and each checkout a base: one per user let one worktree's gate wipe another's.
+GATE_PYTEST_TMP="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest/$(git rev-parse --show-toplevel | git hash-object --stdin | cut -c1-12)"
 mkdir -p "$GATE_PYTEST_TMP"
 # A passing test's directory goes as it passes, a failing one's stays — the only
 # kind anybody opens. 351 MB → 1 MB on the row above, which is what keeps a base

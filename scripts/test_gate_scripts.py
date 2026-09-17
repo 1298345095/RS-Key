@@ -40,11 +40,14 @@ previous run. 361 orphaned bases, 8.9 GB, inside one day.
 import ast
 import importlib
 import inspect
+import os
 import pathlib
 import re
 import shutil
 import subprocess
 import sys
+import textwrap
+import time
 import types
 
 import pytest
@@ -146,7 +149,7 @@ TABLE_FLOOR = 5
 #: What it still does not cover: a case gutted rather than deleted. `assert True`
 #: counts here exactly as the case it replaced did, and nothing in this file reads
 #: a case's body.
-SUITE_CASES = 2633
+SUITE_CASES = 2638
 
 
 def check_sh():
@@ -989,3 +992,186 @@ def test_the_tmpdir_rules_can_go_red():
     assert not TMPDIR_SWEEP.search('find "$TMPDIR" -mindepth 1 -exec rm -rf {} +\n')
     zero = TMPDIR_SWEEP.search('find "$TMPDIR" -mindepth 1 -mtime +0 -exec rm -rf {} +\n')
     assert zero and int(zero["days"]) == 0
+
+
+# --- the pytest base is per checkout, not per user ------------------------------
+
+#: `check.sh`'s own assignment of the pytest base, and the `set` line it runs
+#: under. The cases below EVALUATE both in a stand-in checkout.
+PYTEST_BASE = re.compile(r"^GATE_PYTEST_TMP=.*$", re.M)
+SHELL_OPTIONS = re.compile(r"^set -.*$", re.M)
+
+#: A session that holds a file in its `tmp_path` until told to let go. Indented
+#: here and dedented at use, so [`CASE`] does not count its `def test_` as a case.
+HOLDER = textwrap.dedent("""\
+    import os, pathlib, time
+
+    def test_hold(tmp_path):
+        held = tmp_path / "held"
+        held.write_text("x")
+        pathlib.Path(os.environ["HOLD_READY"]).write_text(str(held))
+        go = pathlib.Path(os.environ["HOLD_GO"])
+        for _ in range(1200):
+            if go.exists():
+                break
+            time.sleep(0.05)
+        assert held.exists(), "the base was wiped under a running session"
+    """)
+#: …and one that only starts, which is when pytest wipes a pinned base.
+STARTER = "def test_start(tmp_path):\n    (tmp_path / 'x').write_text('x')\n"
+
+
+def no_git_env(**extra):
+    """The environment with git's own variables dropped, so no caller's repository leaks in."""
+    return {**{k: v for k, v in os.environ.items() if not k.startswith("GIT_")}, **extra}
+
+
+def two_checkouts(tmp_path):
+    """A repository and a worktree of it, with one basename between them: the shape
+    of the collision, which was two checkouts of ONE repository."""
+    one, two = tmp_path.resolve() / "one" / "RS-Key", tmp_path.resolve() / "two" / "RS-Key"
+    one.mkdir(parents=True)
+    two.parent.mkdir(parents=True)
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+           "-c", "core.hooksPath=/dev/null", "-C", str(one)]
+    for args in (["init", "-q"], ["commit", "-q", "--allow-empty", "-m", "t"],
+                 ["worktree", "add", "-q", "--detach", str(two)]):
+        subprocess.run(git + args, check=True, env=no_git_env(), capture_output=True)
+    return one, two
+
+
+def a_bin_without_git(tmp_path):
+    """A PATH with the one tool the assignment needs besides git."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    if not (bin_dir / "cut").exists():
+        (bin_dir / "cut").symlink_to(shutil.which("cut"))
+    return str(bin_dir)
+
+
+def gate_pytest_base(checkout, cache, line=None, options=None, path=None):
+    """Evaluate `check.sh`'s assignment, under its `set` line, standing in `checkout`."""
+    text = check_sh()
+    if line is None:
+        # Exactly one: bash keeps the LAST of two, so a stale line below the fixed
+        # one would put the gate back on a shared base with the first still read here.
+        found = PYTEST_BASE.findall(text)
+        assert len(found) == 1, f"check.sh assigns GATE_PYTEST_TMP {len(found)} times: {found}"
+        line = found[0]
+    options = SHELL_OPTIONS.search(text)[0] if options is None else options
+    env = no_git_env(XDG_CACHE_HOME=str(cache), **({"PATH": path} if path else {}))
+    return subprocess.run(
+        [shutil.which("bash"), "-c", f'{options}\n{line}\nprintf %s "$GATE_PYTEST_TMP"'],
+        cwd=checkout, env=env, capture_output=True, text=True,
+    )
+
+
+def base_of(checkout, cache, line=None):
+    done = gate_pytest_base(checkout, cache, line)
+    assert done.returncode == 0, done.stderr
+    return pathlib.Path(done.stdout)
+
+
+def test_two_checkouts_get_two_pytest_bases(tmp_path):
+    """The base was `…/rs-key/pytest` for every checkout of this user, and pytest
+    removes a pinned base when a session starts. Each base must still sit under the
+    cache root, which is what keeps it out of the checkout it was moved out of."""
+    cache = tmp_path.resolve() / "cache"
+    bases = [base_of(c, cache) for c in two_checkouts(tmp_path)]
+    assert bases[0] != bases[1], bases
+    for base in bases:
+        assert base.is_relative_to(cache / "rs-key" / "pytest"), base
+
+
+def test_every_gate_pytest_row_pins_under_the_checkout_s_base():
+    """The assignment is half of it: a row that spells its own path pins wherever
+    that says, per user again, and the cases around this one never see it."""
+    pinned = [pinned_at(code) for rel, code in pytest_calls() if rel == "scripts/check.sh"]
+    assert pinned, "no pytest row in scripts/check.sh"
+    stray = [p for p in pinned if not p.startswith("$GATE_PYTEST_TMP/")]
+    assert not stray, f"check.sh pytest rows pinned outside $GATE_PYTEST_TMP: {stray}"
+
+
+def test_a_gate_in_one_checkout_does_not_wipe_another_s_pytest_base(tmp_path):
+    """On 2026-09-16 two sessions ran the full gate in two checkouts of this
+    repository at once, both gate rows pinned to `~/.cache/rs-key/pytest/gate`,
+    where the later start removes the earlier run's tree. Here each session is
+    pinned where `check.sh` pins its checkout's gate row, and the first holds a file
+    while the second starts."""
+    cache = tmp_path.resolve() / "cache"
+    first, second = (base_of(c, cache) / "gate" for c in two_checkouts(tmp_path))
+    for leaf in (first, second):
+        # A line that ignored XDG_CACHE_HOME would aim these at a live gate's base.
+        assert leaf.is_relative_to(tmp_path.resolve()), f"refusing to pin {leaf}"
+        # `check.sh`'s own `mkdir -p` after the assignment: pytest makes only the leaf.
+        leaf.parent.mkdir(parents=True, exist_ok=True)
+    probe = tmp_path / "probe"
+    probe.mkdir()
+    (probe / "pytest.ini").write_text("[pytest]\n")
+    (probe / "test_hold.py").write_text(HOLDER)
+    (probe / "test_start.py").write_text(STARTER)
+    ready, go = tmp_path / "ready", tmp_path / "go"
+    session = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+    env = no_git_env(HOLD_READY=str(ready), HOLD_GO=str(go))
+    holder = subprocess.Popen(session + [f"--basetemp={first}", "test_hold.py"],
+                              cwd=probe, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        for _ in range(1200):
+            if ready.exists() or holder.poll() is not None:
+                break
+            time.sleep(0.05)
+        assert ready.exists(), holder.communicate()[0]
+        started = subprocess.run(session + [f"--basetemp={second}", "test_start.py"],
+                                 cwd=probe, env=env, capture_output=True, text=True)
+        assert started.returncode == 0, started.stdout + started.stderr
+    finally:
+        go.write_text("go")
+        out = holder.communicate(timeout=120)[0]
+    assert holder.returncode == 0, out
+
+
+def test_a_base_that_cannot_be_keyed_stops_the_gate(tmp_path):
+    """With no git to key it the assignment must stop the gate, not hand back
+    `…/rs-key/pytest/`, which is the shared base again, silently. `pipefail` in
+    `check.sh`'s `set` line is what makes the failing git the assignment's status."""
+    checkout = two_checkouts(tmp_path)[0]
+    done = gate_pytest_base(checkout, tmp_path.resolve() / "cache", path=a_bin_without_git(tmp_path))
+    assert done.returncode != 0 and not done.stdout, (done.returncode, done.stdout)
+
+
+def test_the_per_checkout_base_can_go_red(tmp_path):
+    """The mutation table, each arm run through the same helpers the cases above
+    use. Driven through the `pytest (gate scripts)` row as well, exit code taken
+    with no pipe, for the first arm.
+
+    * per user again, the line as it stood → both behavioural cases
+    * keyed by basename → the repository and its worktree share a base
+    * keyed by the common git dir → the same, the way a per-repository fix would
+    * under the checkout's own `target/` → outside the cache root
+    * a row spelling its own per-user path → the row rule
+    * a second assignment below the first → every case that reads the line
+    * `pipefail` dropped from the `set` line → the keyless fallback, at rc 0
+    """
+    cache = tmp_path.resolve() / "cache"
+    checkouts = two_checkouts(tmp_path)
+    root = cache / "rs-key" / "pytest"
+    arms = (
+        ('GATE_PYTEST_TMP="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest"', True, True),
+        ('GATE_PYTEST_TMP="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest/$(basename "$PWD")"', True, True),
+        ('GATE_PYTEST_TMP="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest/'
+         '$(cd "$(git rev-parse --git-common-dir)" && pwd -P | git hash-object --stdin | cut -c1-12)"', True, True),
+        ('GATE_PYTEST_TMP="$PWD/target/pytest"', False, False),
+    )
+    for line, shared, under_root in arms:
+        bases = [base_of(c, cache, line) for c in checkouts]
+        assert (bases[0] == bases[1]) is shared, (line, bases)
+        assert bases[0].is_relative_to(root) is under_root, (line, bases)
+    row = 'run "x" python -m pytest scripts -q --basetemp="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest/gate"'
+    assert not pinned_at(row).startswith("$GATE_PYTEST_TMP/")
+    assert len(PYTEST_BASE.findall('GATE_PYTEST_TMP="$A/x"\nrun x\nGATE_PYTEST_TMP="$HOME/x"\n')) == 2
+    # The keyed spelling itself, not the live line: an arm about `set` must not
+    # also fall whenever the assignment is the thing a mutation changed.
+    keyed = ('GATE_PYTEST_TMP="${XDG_CACHE_HOME:-$HOME/.cache}/rs-key/pytest/'
+             '$(git rev-parse --show-toplevel | git hash-object --stdin | cut -c1-12)"')
+    keyless = gate_pytest_base(checkouts[0], cache, keyed, "set -eu", a_bin_without_git(tmp_path))
+    assert keyless.returncode == 0 and keyless.stdout.endswith("/rs-key/pytest/"), keyless
