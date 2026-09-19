@@ -52,7 +52,8 @@
 #          `floors.txt` says and on the invariant it names wherever it names
 #          one. How many of each is that file's to say: the copy that stood here
 #          said 194 rows, 20 GREEN and 174 RED, and the tier had moved past all
-#          three. Gating. It also runs on
+#          three. Gating, and sharded three ways since the model outgrew the one
+#          job it used to run in (`TLC_SHARD`, and the job's own comment). It also runs on
 #          any push touching formal/, so an edit to the model is checked at once
 #          rather than up to a week later. The `liveness` tier is deliberately
 #          not here — it needs a 12g heap, and the kani `heavy` runner has
@@ -515,7 +516,18 @@ jobs:
   formal:
     if: github.event.schedule != '17 5 * * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Three shards, and a cap well past what one of them needs. A single runner
+    # carried this tier until the model outgrew it: the job reported ONE row of
+    # 224 and was killed for time, `Shipped.cfg` alone having taken most of its
+    # budget (`formal/runs.toml` holds the wall clocks; the CHANGELOG dates the
+    # measurement). `run-tlc.sh` splits by recorded cost, so the three shards are
+    # within a minute of each other, and none can come under the heaviest single
+    # configuration — which is what the cap leaves room for, not the tier's sum.
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -535,16 +547,22 @@ jobs:
       # `set -o pipefail` is load-bearing: a `run:` block is `bash -e` WITHOUT it,
       # so the pipe below would report tee's exit code and a RED matrix would pass
       # as green — the exact hole this row exists to close, in the row itself.
+      # The denominator is `strategy.job-total` and not a second hand-kept 3, for
+      # the reason the mutants row above gives: two numbers that must agree is how
+      # a shard space silently loses a slice. The runner refuses a shard that
+      # selected nothing, so widening the matrix past the tier is a red row.
       - name: formal — TLC over the model, its mutants and their floors
         run: |
           set -o pipefail
           nix develop -c ./formal/run-tlc.sh safety | tee "$RUNNER_TEMP/formal.log"
+        env:
+          TLC_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
 
       - name: publish the matrix
         if: always()
         run: |
           {
-            echo "### TLA+ — safety tier"
+            echo "### TLA+ — safety tier, shard ${{ matrix.shard }}/${{ strategy.job-total }}"
             echo '```'
             cat "$RUNNER_TEMP/formal.log"
             echo '```'
@@ -553,6 +571,6 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
-          name: formal-logs-${{ github.run_id }}
+          name: formal-logs-${{ github.run_id }}-${{ matrix.shard }}
           path: formal/out/
           if-no-files-found: ignore

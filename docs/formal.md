@@ -241,6 +241,7 @@ cd formal
 ./run-tlc.sh all                  # both
 ./run-tlc.sh Shipped.cfg          # one configuration
 ./run-tlc.sh --tiers              # what each tier runs, for the gate
+TLC_SHARD=2/3 ./run-tlc.sh safety # one shard of it, the way the weekly job runs
 python3 ../scripts/assurance_gate.py   # the registry, held against the tree
 python3 ../scripts/assurance_gate.py --write-readme  # refresh its README table
 python3 ../scripts/comutate.py --lint  # closed roster + patch/table freshness
