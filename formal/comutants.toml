@@ -292,9 +292,12 @@ slice = ["cargo", "test", "-p", "rsk-fido"]
 # conjunct out of `may_walk_rps`, so B1's EQUALITY must fail on the non-owning
 # probe specifically — a different check falling means a different defect, which
 # is what `proof_names` compares.
+# `--verbose` because Kani suppresses a child's output without it (its own
+# `--quiet` says so), and the runner's first answer here was `goto-cc exited with
+# status 1` with goto-cc's reason thrown away.
 proof = [
   "cargo", "kani", "-p", "rsk-fido", "--features", "kani-soft",
-  "--harness", "no_authorization_bypass_walk_owner",
+  "--harness", "no_authorization_bypass_walk_owner", "--verbose",
 ]
 proof_names = "NoAuthorizationBypass/B1"
 expect = "killed"

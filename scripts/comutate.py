@@ -932,6 +932,23 @@ def tool_said(out: str, width: int = 160) -> str:
     return said[:width]
 
 
+def reached_no_verdict(out: str) -> bool:
+    """Neither of Kani's two verdict lines: the harness never answered at all."""
+    return PROOF_SUCCEEDED not in out and PROOF_FAILED not in out
+
+
+def proof_tail(out: str, keep: int = 25) -> str:
+    """The tool's own last words, for a run that answered nothing.
+
+    One line of detail named `goto-cc exited with status 1` and not why. Kani
+    suppresses a child's output unless the command says `--verbose`, which is why
+    the roster's proof does, and the worktree is gone by the next statement.
+    """
+    lines = [line.rstrip() for line in out.splitlines() if line.strip()]
+    head = "  the proof answered nothing; its last words:\n"
+    return head + "\n".join(f"  | {line[:200]}" for line in lines[-keep:])
+
+
 def proof_verdict(out: str, code: int, names: str) -> tuple[str, str] | None:
     """(verdict, detail) when the proof half did NOT redden for its own reason."""
     if PROOF_TIMED_OUT in out:
@@ -941,7 +958,7 @@ def proof_verdict(out: str, code: int, names: str) -> tuple[str, str] | None:
         for limit in PROOF_NOT_A_KILL:
             if limit in line:
                 return "proof-broke", f"a check fell on a TOOL limit: {limit}"
-    if PROOF_SUCCEEDED not in out and PROOF_FAILED not in out:
+    if reached_no_verdict(out):
         return "proof-broke", f"the harness reached no verdict: {tool_said(out)}"
     if code == 0 or PROOF_FAILED not in out:
         return "proof-survived", "the harness stayed green under the patch"
@@ -1049,6 +1066,8 @@ def run_one(root: pathlib.Path, bug: str, entry: dict, host: str) -> tuple[str, 
         # whose wiring nothing exercises, one layer in.
         proof = run_slice(list(entry["proof"]), wt, root, host)
         text = proof.stdout + proof.stderr
+        if reached_no_verdict(text):
+            print(proof_tail(text), file=sys.stderr)
         refused = proof_verdict(text, proof.returncode, entry["proof_names"])
         if refused:
             return refused
