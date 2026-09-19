@@ -3448,6 +3448,24 @@ the release carries the flag, the decision stays yours
   refutation does. The weekly `comutants` job gains the out-of-band Kani install
   the `kani` job already had.
 
+- **And its verdict word could not tell a green harness from one that never
+  ran.** `proof_verdict` read `proof-survived` off the ABSENCE of
+  `VERIFICATION:- FAILED`, so "the harness ran and stayed green" and "the harness
+  reached no verdict at all" were the same answer. The half's first CI run is
+  what said so: `BugCmWalkIgnoresChannel` came back `proof-survived` from the
+  Linux runner, and repeated it on the next push, while the same patch reddens
+  `NoAuthorizationBypass/B1` on the maintainer's host — re-measured there, still
+  `Failed Checks: NoAuthorizationBypass/B1`. That verdict is read off
+  `VERIFICATION:- SUCCESSFUL` now and off nothing else; an output carrying
+  neither line is `proof-broke` with the tool's own first `error` line attached,
+  so the next run names what broke instead of crediting the mutant with a
+  survivor. `proof_problems`' three ways to name a harness that cannot redden are
+  unchanged and are all STATIC — this is the fourth, and no static answer reaches
+  a tool that does not run on the host. Why the runner reaches no verdict is not
+  answered here: the proof is the one command in this pipeline that runs
+  `cargo kani` inside `nix develop` — the `kani` job is rustup-based — and the
+  line the row now prints is what settles it.
+
 - **Three quarters of `NoAuthorizationBypass` had no ownership ledger, and now
   do.** The invariant is four clauses — the token and its permission, the retry
   budget's soft lock, the reset window, the walk's owning channel — and

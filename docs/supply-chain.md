@@ -168,7 +168,7 @@ The commands those steps run, as this gate reads them: `\` continuations joined,
 
 ```sh
 # 1. uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-# 2. uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+# 2. uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
 # 3. uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
 # 4. uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 # 5. uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -328,7 +328,7 @@ The files that decide what a release is. A digest here covers the parts the tabl
 | File | sha256 |
 |---|---|
 | `.github/workflows/release.yml` | `943eae75595831de403c51f1468be0d255b182a20fb155ab9a9eca956c54270f` |
-| `.github/workflows/release-build.yml` | `0d4ee2b9b09d475c52531644e1e35122851fc7f466c307685b0db2914c303549` |
+| `.github/workflows/release-build.yml` | `1ddbf12b1acfd1e09793a9b574128e2e692cf76351b5e5614545086894655584` |
 | `nix/firmware.nix` | `93468064b0328a06e8059b418e3e220df3ee4f273b4445052494f832eb5e26d8` |
 | `scripts/pt.sh` | `c55ba6255421a664c13ba8b1e3b05b01af842d3ba8e95cd986a7a46005c877ed` |
 
@@ -337,7 +337,7 @@ The CI code that runs them, pinned by commit:
 | Action | Pin | Release |
 |---|---|---|
 | `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` | v7.0.1 |
-| `DeterminateSystems/nix-installer-action` | `ef8a148080ab6020fd15196c2084a2eea5ff2d25` | v22 |
+| `DeterminateSystems/nix-installer-action` | `3138316df39ed29be04236d7ffc686fa525866aa` | v23 |
 | `nix-community/cache-nix-action` | `7df957e333c1e5da7721f60227dbba6d06080569` | v7.0.2 |
 | `actions/cache` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | v6.1.0 |
 | `sigstore/cosign-installer` | `6f9f17788090df1f26f669e9d70d6ae9567deba6` | v4.1.2 |
