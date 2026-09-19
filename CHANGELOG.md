@@ -38,26 +38,6 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
-### Fixed
-
-- A co-refutation proof that never answered read as a proof that passed. The
-  weekly `comutants` row's first run with a proof half scored
-  `BugCmWalkIgnoresChannel` `proof-survived`, and the same patch reddens
-  `NoAuthorizationBypass/B1` under `cargo kani` on the maintainer's host — that
-  measurement was repeated against this tree and still ends `Failed Checks:
-  NoAuthorizationBypass/B1`. `proof_verdict` read the verdict off the ABSENCE of
-  `VERIFICATION:- FAILED`, so "the harness ran and stayed green" and "the harness
-  reached no verdict at all" were one word, and the row could not say which it had
-  seen. `proof-survived` is read off `VERIFICATION:- SUCCESSFUL` now; an output
-  carrying neither line is `proof-broke` with the tool's own first error line
-  attached, so the next run names what broke instead of crediting the mutant with
-  a survivor. The lint's three static ways to name a harness that cannot redden
-  are unchanged — this is the fourth, and no static answer reaches a tool that
-  does not run on the host. `scripts/test_comutate.py` drives the three
-  no-verdict shapes (a driver error, a loader failure, silence) through
-  `proof_verdict`, and one of them through `run_one`. Host tooling only; the row
-  stays red until the runner's own reason is read out of the line it now prints.
-
 ## [0.4.11] - 2026-09-08
 
 The catch-up release, and the one where the instruments were audited harder than
@@ -3467,6 +3447,24 @@ the release carries the flag, the decision stays yours
   or an unsupported Rust construct ends in the same `VERIFICATION:- FAILED` a real
   refutation does. The weekly `comutants` job gains the out-of-band Kani install
   the `kani` job already had.
+
+- **And its verdict word could not tell a green harness from one that never
+  ran.** `proof_verdict` read `proof-survived` off the ABSENCE of
+  `VERIFICATION:- FAILED`, so "the harness ran and stayed green" and "the harness
+  reached no verdict at all" were the same answer. The half's first CI run is
+  what said so: `BugCmWalkIgnoresChannel` came back `proof-survived` from the
+  Linux runner, and repeated it on the next push, while the same patch reddens
+  `NoAuthorizationBypass/B1` on the maintainer's host — re-measured there, still
+  `Failed Checks: NoAuthorizationBypass/B1`. That verdict is read off
+  `VERIFICATION:- SUCCESSFUL` now and off nothing else; an output carrying
+  neither line is `proof-broke` with the tool's own first `error` line attached,
+  so the next run names what broke instead of crediting the mutant with a
+  survivor. `proof_problems`' three ways to name a harness that cannot redden are
+  unchanged and are all STATIC — this is the fourth, and no static answer reaches
+  a tool that does not run on the host. Why the runner reaches no verdict is not
+  answered here: the proof is the one command in this pipeline that runs
+  `cargo kani` inside `nix develop` — the `kani` job is rustup-based — and the
+  line the row now prints is what settles it.
 
 - **Three quarters of `NoAuthorizationBypass` had no ownership ledger, and now
   do.** The invariant is four clauses — the token and its permission, the retry
