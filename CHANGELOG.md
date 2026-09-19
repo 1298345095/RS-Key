@@ -38,6 +38,26 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+### Fixed
+
+- A co-refutation proof that never answered read as a proof that passed. The
+  weekly `comutants` row's first run with a proof half scored
+  `BugCmWalkIgnoresChannel` `proof-survived`, and the same patch reddens
+  `NoAuthorizationBypass/B1` under `cargo kani` on the maintainer's host — that
+  measurement was repeated against this tree and still ends `Failed Checks:
+  NoAuthorizationBypass/B1`. `proof_verdict` read the verdict off the ABSENCE of
+  `VERIFICATION:- FAILED`, so "the harness ran and stayed green" and "the harness
+  reached no verdict at all" were one word, and the row could not say which it had
+  seen. `proof-survived` is read off `VERIFICATION:- SUCCESSFUL` now; an output
+  carrying neither line is `proof-broke` with the tool's own first error line
+  attached, so the next run names what broke instead of crediting the mutant with
+  a survivor. The lint's three static ways to name a harness that cannot redden
+  are unchanged — this is the fourth, and no static answer reaches a tool that
+  does not run on the host. `scripts/test_comutate.py` drives the three
+  no-verdict shapes (a driver error, a loader failure, silence) through
+  `proof_verdict`, and one of them through `run_one`. Host tooling only; the row
+  stays red until the runner's own reason is read out of the line it now prints.
+
 ## [0.4.11] - 2026-09-08
 
 The catch-up release, and the one where the instruments were audited harder than

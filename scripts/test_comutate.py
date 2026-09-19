@@ -682,6 +682,16 @@ def test_the_host_target_goes_on_a_cargo_test_and_nowhere_else():
             1,
             "killed-not-refused",
         ),
+        # And the third direction, which the two above cannot see: a run that
+        # answered NEITHER line. The weekly row met all three shapes wearing one
+        # word, on a host where the same patch reddens B1 locally.
+        ("Error: Failed to run cargo build\n", 101, "proof-broke"),
+        (
+            "cbmc: /nix/store/x/libstdc++.so.6: version `GLIBC_2.40' not found\n",
+            127,
+            "proof-broke",
+        ),
+        ("", 0, "proof-broke"),
     ],
 )
 def test_a_proof_that_did_not_redden_for_its_own_reason(out, code, verdict):
@@ -695,6 +705,23 @@ def test_a_proof_that_did_not_redden_for_its_own_reason(out, code, verdict):
         assert got is None, got
     else:
         assert got[0] == verdict
+
+
+def test_a_proof_that_reached_no_verdict_carries_the_tools_own_line():
+    # The detail is the whole point of the arm: `proof-broke` with a fixed string
+    # says a tool broke, and the next reader still has to reproduce the host to
+    # learn which one. cargo and rustc cascade, so the FIRST error line wins.
+    loader = "cbmc: /nix/store/x/libstdc++.so.6: version `GLIBC_2.40' not found"
+    _, detail = comutate.proof_verdict(f"Checking harness y…\n{loader}\n", 127, "B1")
+    assert loader in detail, detail
+    # The child names itself first and the driver wraps it, so an anchored match
+    # on the driver's own `Error:` would carry the wrapper and drop the cause.
+    child = "cbmc: error while loading shared libraries: libstdc++.so.6"
+    _, detail = comutate.proof_verdict(f"{child}\nError: Failed to run cbmc\n", 1, "B1")
+    assert detail.endswith(child), detail
+    cascade = "error: could not compile `rsk-fido`\nerror: aborting due to 1 error\n"
+    _, detail = comutate.proof_verdict(cascade, 101, "B1")
+    assert detail.endswith("could not compile `rsk-fido`"), detail
 
 
 def test_a_proof_that_fell_on_its_named_check_is_not_refused():
@@ -733,6 +760,23 @@ def test_a_killed_slice_with_a_reddened_proof_names_the_check(tmp_path):
     verdict, detail = comutate.run_one(root, "BugAlpha", entry, "any-host")
     assert verdict == "killed", (verdict, detail)
     assert "proof: Failed Checks: NoAuthorizationBypass/B1" in detail, detail
+
+
+def test_a_killed_slice_whose_proof_never_ran_is_not_a_survivor(tmp_path):
+    # The run-time half of `proof_problems`, driven through `run_one`: the three
+    # static ways to name a harness that cannot redden are a gate row, and a tool
+    # that does not run on the host is a fourth the lint cannot reach.
+    root = git_tree(tmp_path)
+    entry = {
+        "file": "src/lib.rs",
+        "find": "GUARD_LINE\n",
+        "slice": ["sh", "-c", 'echo "test result: FAILED"; exit 1'],
+        "proof": ["sh", "-c", 'echo "error: no such command: kani" >&2; exit 101', "--harness"],
+        "proof_names": "NoAuthorizationBypass/B1",
+    }
+    verdict, detail = comutate.run_one(root, "BugAlpha", entry, "any-host")
+    assert verdict == "proof-broke", (verdict, detail)
+    assert "no such command: kani" in detail, detail
 
 
 def test_a_green_slice_never_reaches_the_proof(tmp_path):

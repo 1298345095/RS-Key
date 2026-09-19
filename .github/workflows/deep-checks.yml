@@ -440,8 +440,10 @@ jobs:
     # One comutant now carries a PROOF half — `cargo kani` over the harness its
     # defect must redden — so this job needs the same out-of-band install the
     # `kani` job has. Without it the proof command answers `error: no such
-    # command`, which `comutate.py` classifies as `build-broke` and the row goes
-    # red for the tool rather than for the patch.
+    # command`, which `comutate.py` classifies as `proof-broke` and the row goes
+    # red for the tool rather than for the patch. This is the one place kani runs
+    # INSIDE `nix develop`; the `kani` job above is rustup-based for the reason
+    # its own comment gives, and the two environments are not the same one.
     env:
       KANI_VERSION: "0.67.0"
     steps:

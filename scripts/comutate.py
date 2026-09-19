@@ -75,6 +75,15 @@ none of which a gate row could see. [`proof_problems`] is the three rules, and
 a name search is not one of them: `--harness` must resolve to a real
 `#[kani::proof]` DECLARED BY the package `-p` names.
 
+The lint closes those three statically and the fourth cannot be closed there at
+all: a tool that does not RUN on the host reaches no verdict, and `proof-survived`
+was read off the absence of a failure, so "the harness stayed green" and "the
+harness never answered" were one word. Measured on the first CI run of this half
+— `BugCmWalkIgnoresChannel` reddens `NoAuthorizationBypass/B1` on the maintainer's
+host and came back `proof-survived` from the Linux runner. `VERIFICATION:-
+SUCCESSFUL` is the only thing that verdict is read off now; anything else is
+`proof-broke` carrying the tool's own line.
+
 Three modes:
 
 * `--lint` — the cheap closed-world half, a `check.sh` row. Every `Mut_*.cfg`
@@ -696,7 +705,7 @@ def proof_problems(
     nothing compared what it holds to the tree: `--harness` took any string, `-p`
     took any package, and the patch could land in a crate that package never
     compiles. Every one of the three ends the same way at run time — the harness
-    is not built or not reached, `proof_verdict` reads `proof-survived`, and the
+    is not built or not reached, `proof_verdict` reads `proof-broke`, and the
     entry's `expect = "killed"` fails for a reason that is about the RECORD and
     not about the code. That verdict is a weekly row; this is the gate row.
 
@@ -714,7 +723,7 @@ def proof_problems(
         out.append(
             f"{where}: the proof runs `-p {crate}`, which is no workspace member"
             " — cargo answers a package-spec error, and a run that never built a"
-            " harness reads proof-survived"
+            " harness reaches no verdict"
         )
     if known and harness not in harnesses[crate]:
         elsewhere = sorted(c for c, names in harnesses.items() if harness in names)
@@ -839,6 +848,11 @@ def lint(root: pathlib.Path, check_generated_readme: bool = True) -> list[str]:
 #: did not converge would score a kill wearing the right colour. Refused by name,
 #: which is the same rule `floors.txt`'s invariant column applies one tier up.
 PROOF_FAILED = "VERIFICATION:- FAILED"
+#: Its other half, and the only thing `proof-survived` may be read OFF. Absence
+#: of a failure is not a green harness: a run that never produced either line --
+#: a tool that could not load, a build that did not compile, a filter that
+#: matched nothing -- left an exit code the old rule answered "stayed green".
+PROOF_SUCCEEDED = "VERIFICATION:- SUCCESSFUL"
 #: The one line Kani prints per check that ACTUALLY fell. Everything below is
 #: read out of these and nothing else: `not currently supported` also appears in
 #: a codegen WARNING and in the description of checks that are unreachable, on a
@@ -904,6 +918,20 @@ def run_slice(cmd: list[str], wt: pathlib.Path, root: pathlib.Path, host: str):
     )
 
 
+def tool_said(out: str, width: int = 160) -> str:
+    """The one line worth carrying out of a proof run that reached no verdict.
+
+    The FIRST line that says `error`, since cargo and rustc cascade and a driver
+    wraps its child's failure in its own -- not anchored, because the child names
+    itself first (`cbmc: error while loading shared libraries: ...`). A loader
+    message need not carry the word, so otherwise the last thing it said.
+    """
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
+    said = next((l for l in lines if "error" in l.lower()), None)
+    said = said or (lines[-1] if lines else "it printed nothing at all")
+    return said[:width]
+
+
 def proof_verdict(out: str, code: int, names: str) -> tuple[str, str] | None:
     """(verdict, detail) when the proof half did NOT redden for its own reason."""
     if PROOF_TIMED_OUT in out:
@@ -913,6 +941,8 @@ def proof_verdict(out: str, code: int, names: str) -> tuple[str, str] | None:
         for limit in PROOF_NOT_A_KILL:
             if limit in line:
                 return "proof-broke", f"a check fell on a TOOL limit: {limit}"
+    if PROOF_SUCCEEDED not in out and PROOF_FAILED not in out:
+        return "proof-broke", f"the harness reached no verdict: {tool_said(out)}"
     if code == 0 or PROOF_FAILED not in out:
         return "proof-survived", "the harness stayed green under the patch"
     # Scoped to the failed lines for the same reason: Kani lists EVERY check with
