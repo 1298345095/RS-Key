@@ -3466,6 +3466,31 @@ the release carries the flag, the decision stays yours
   `cargo kani` inside `nix develop` — the `kani` job is rustup-based — and the
   line the row now prints is what settles it.
 
+- **And the line it printed named the tool, not its reason.** The runner's answer
+  was `the harness reached no verdict: error: goto-cc exited with status exit
+  status: 1`, with goto-cc's own words gone: Kani suppresses a child's output
+  unless the command asks for `--verbose`, as its `--quiet` says in as many words.
+  The roster's proof asks now, and a run that reaches no verdict prints the tool's
+  last lines before the worktree it ran in is removed — `proof-broke` with a
+  wrapper's message and nothing under it was one round trip of a weekly row.
+
+- **The weekly `formal` row stopped finishing, and said `cancelled` rather than
+  anything about the model.** The safety tier outgrew the single job it ran in:
+  one configuration took most of that job's budget, the row reported it and was
+  killed for time, and 223 others went unwatched behind a verdict that named
+  none of them. The tier is sharded now — `TLC_SHARD=i/n`, beside `MIRI_SHARD`
+  and `MUTANTS_SHARD` — with one difference: membership is by RECORDED COST, read
+  from `formal/runs.toml`, because round-robin puts the heaviest configuration
+  and the next-heaviest in one shard (they sit 7 apart in the lister, and
+  0 == 6 mod 3) and that shard then carries most of the tier. By cost the three
+  are within a minute of each other, and none can come under the heaviest single
+  configuration, which is what the job's cap leaves room for rather than the
+  tier's sum. `scripts/test_run_tlc.py` holds the property sharding silently
+  breaks — the shards of a tier are a PARTITION of it, so a configuration no
+  shard runs cannot hide behind a matrix of green ones — plus the balance, a bare
+  `TLC_SHARD=3` (which both of the runner's expansions read as 3/3), and a matrix
+  wider than its tier.
+
 - **Three quarters of `NoAuthorizationBypass` had no ownership ledger, and now
   do.** The invariant is four clauses — the token and its permission, the retry
   budget's soft lock, the reset window, the walk's owning channel — and

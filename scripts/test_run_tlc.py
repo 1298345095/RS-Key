@@ -135,6 +135,7 @@ def run(
     runner: pathlib.Path | None = None,
     stamp: str = "",
     leaves: bool = False,
+    shard: str = "",
 ):
     real_jar, java, out, states = fake_tlc
     env = {
@@ -146,6 +147,9 @@ def run(
         "FAKE_TLC_HOLE": str(hole),
         "FAKE_TLC_TRUNCATE": str(truncate or ""),
         "FAKE_TLC_STAMP": stamp,
+        # Unset unless a case asks for one, so every other row drives the runner
+        # exactly as a local `./run-tlc.sh safety` does.
+        **({"TLC_SHARD": shard} if shard else {}),
         "FAKE_TLC_LEAVES_METADIR": "1" if leaves else "",
         # Not `formal/out/`: these cases drive the REAL runner, so writing there
         # truncates the log of whatever real TLC run is in flight beside them —
@@ -1053,3 +1057,89 @@ def test_every_part_of_the_metadir_fix_has_a_row_that_falsifies_it(
     does, so a cut that breaks the row somewhere else is not this part's kill."""
     assert not defect(fake_tlc, arena())
     assert defect(fake_tlc, arena(old, new))
+
+
+# ---- the shard ---------------------------------------------------------------
+
+
+def rows_of(result) -> list[str]:
+    """The configurations a run reported, read off the rows it printed."""
+    return [
+        line.split()[0]
+        for line in result.stdout.splitlines()
+        if line.split() and line.split()[0].endswith(".cfg")
+    ]
+
+
+def test_the_shards_of_the_safety_tier_are_a_partition_of_it(fake_tlc):
+    """The property sharding silently breaks: a configuration no shard runs is a
+    row nobody watches, and a matrix of green shards says nothing about it.
+
+    Three, because that is what `deep-checks.yml` runs, and over `safety` because
+    that is the tier it shards. The roster comes from `--tiers`, so this cannot
+    drift from the runner's own answer.
+    """
+    tiers = subprocess.run(
+        [str(RUNNER), "--tiers"], cwd=RUNNER.parent, capture_output=True, text=True
+    )
+    whole = next(
+        line.split(":", 1)[1].split()
+        for line in tiers.stdout.splitlines()
+        if line.startswith("safety:")
+    )
+    shards = [rows_of(run(fake_tlc, "safety", GREEN, shard=f"{i}/3")) for i in (1, 2, 3)]
+    for i, mine in enumerate(shards, 1):
+        assert mine, f"shard {i}/3 ran nothing"
+        assert len(set(mine)) == len(mine), f"shard {i}/3 ran a configuration twice"
+    ran = [cfg for mine in shards for cfg in mine]
+    assert sorted(ran) == sorted(whole), "the shards are not the tier"
+    assert all(len(mine) < len(whole) for mine in shards), "a shard took the whole tier"
+
+
+def test_a_shard_keeps_the_tier_s_own_order(fake_tlc):
+    # Weight decides MEMBERSHIP and nothing else: the rows are read against
+    # `runs.toml`, and `--record` writes them in the order the lister names.
+    tiers = subprocess.run(
+        [str(RUNNER), "--tiers"], cwd=RUNNER.parent, capture_output=True, text=True
+    )
+    whole = next(
+        line.split(":", 1)[1].split()
+        for line in tiers.stdout.splitlines()
+        if line.startswith("liveness:")
+    )
+    mine = rows_of(run(fake_tlc, "liveness", GREEN, shard="1/2"))
+    assert mine == [cfg for cfg in whole if cfg in set(mine)]
+
+
+def test_the_heaviest_configurations_do_not_share_a_shard(fake_tlc):
+    """What round-robin got wrong, and the reason membership is cost-derived.
+
+    `Shipped.cfg` and `Historical_E76.cfg` are the two 47-minute rows and sit 7
+    apart in the lister, so `i mod 3` puts them in ONE shard — 220 minutes of a
+    120-minute job, which is the shape that made this tier need splitting at all.
+    """
+    homes = {
+        cfg: i
+        for i in (1, 2, 3)
+        for cfg in rows_of(run(fake_tlc, "safety", GREEN, shard=f"{i}/3"))
+        if cfg in ("Shipped.cfg", "Historical_E76.cfg")
+    }
+    assert len(homes) == 2, homes
+    assert len(set(homes.values())) == 2, f"both giants landed in one shard: {homes}"
+
+
+@pytest.mark.parametrize("shard", ["4/3", "0/3", "1/0", "one/3", "3"])
+def test_a_shard_that_is_not_i_of_k_is_refused(fake_tlc, shard):
+    # `1/1` is the default and every other row runs under it, so the malformed
+    # ones have to fail loudly rather than fall back to the whole tier.
+    result = run(fake_tlc, "liveness", GREEN, shard=shard)
+    assert result.returncode == 2, result.stdout
+    assert "TLC_SHARD" in result.stderr, result.stderr
+
+
+def test_a_shard_wider_than_its_tier_is_refused(fake_tlc):
+    # A matrix with more jobs than the tier has rows would otherwise report a
+    # green shard that ran nothing, which is the whole class this file is about.
+    result = run(fake_tlc, "liveness", GREEN, shard="5/5")
+    assert result.returncode == 2, result.stdout
+    assert "selected no configuration" in result.stderr, result.stderr

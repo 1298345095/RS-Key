@@ -447,7 +447,67 @@ list_liveness() {
   # constants give in 139 s. Run it by hand when the reduction is questioned.
 }
 
-run_tier() { local f; for f in $($1); do one "$f"; done; }
+# One runner carried the whole safety tier until the model grew past the job it
+# ran in, which then reported ONE configuration and was killed for time (the wall
+# clocks are `runs.toml`'s to hold, and the CHANGELOG dates the ones that decided
+# this). `TLC_SHARD=i/n` splits it the way `MIRI_SHARD` and `MUTANTS_SHARD` split
+# theirs, with the one difference that is the whole point: round-robin puts the
+# heaviest configuration and the next-heaviest in ONE shard -- they sit 7 apart
+# in `list_safety`, and 0 == 6 mod 3. So membership is by RECORDED COST: heaviest
+# first into the lightest shard, seconds read from `runs.toml`, which already
+# holds the last observed run of this tier. No n can beat the heaviest single
+# configuration, which is what bounds the job's cap rather than the tier's sum. A
+# configuration `runs.toml` has never seen weighs 0 and lands in the lightest
+# shard; it is never dropped, which is the property `scripts/test_run_tlc.py`
+# holds over the union of the shards.
+TLC_SHARD=${TLC_SHARD:-1/1}
+shard_i=${TLC_SHARD%%/*}
+shard_n=${TLC_SHARD##*/}
+# Both expansions answer `3` for a bare `3`, so that spelling would silently run
+# a THIRD of the tier under a row that asked for all of it. It has to round-trip.
+[ "$TLC_SHARD" = "$shard_i/$shard_n" ] || shard_n=0
+if ! [ "$shard_i" -ge 1 ] 2>/dev/null || ! [ "$shard_i" -le "$shard_n" ] 2>/dev/null; then
+  echo "::error::TLC_SHARD=$TLC_SHARD is not i/k with 1 <= i <= k" >&2
+  exit 2
+fi
+
+# The shard's configurations, in the TIER'S own order and not by weight: the log
+# stays readable against `runs.toml`, and `--record` writes the rows in the order
+# the lister names them.
+shard_members() {
+  "$1" | awk -v runs=runs.toml '
+      BEGIN {
+        while ((getline line < runs) > 0)
+          if (match(line, / [0-9]+s$/)) {
+            split(line, field, /[ \t]+/)
+            seconds = substr(line, RSTART + 1, RLENGTH - 2) + 0
+            if (field[1] ~ /\.cfg$/ && seconds > cost[field[1]]) cost[field[1]] = seconds
+          }
+      }
+      { printf "%d\t%d\t%s\n", cost[$1] + 0, NR, $1 }' \
+    | sort -k1,1nr -k3,3 \
+    | awk -v want="$shard_i" -v n="$shard_n" '
+        { bin = 1
+          for (i = 2; i <= n; i++) if (load[i] < load[bin]) bin = i
+          load[bin] += $1
+          if (bin == want) print $2 "\t" $3 }' \
+    | sort -k1,1n | cut -f2
+}
+
+run_tier() {
+  local f mine total picked
+  total=$("$1" | grep -c '\.cfg$')
+  mine=$(shard_members "$1")
+  picked=$(printf '%s\n' "$mine" | grep -c '\.cfg$')
+  if [ "$picked" -eq 0 ]; then
+    echo "::error::shard $TLC_SHARD selected no configuration of $total" >&2
+    exit 2
+  fi
+  # Printed only when a shard is in play, so an unsharded run's output -- which
+  # `--record` parses and the matrix quotes -- stays byte-identical.
+  [ "$shard_n" -eq 1 ] || echo "run-tlc: shard $TLC_SHARD, $picked of $total configuration(s)"
+  for f in $mine; do one "$f"; done
+}
 
 case "${1:-}" in
   --tiers)  echo "safety: $(list_safety | tr '\n' ' ')"

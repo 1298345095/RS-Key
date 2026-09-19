@@ -762,7 +762,7 @@ def test_a_killed_slice_with_a_reddened_proof_names_the_check(tmp_path):
     assert "proof: Failed Checks: NoAuthorizationBypass/B1" in detail, detail
 
 
-def test_a_killed_slice_whose_proof_never_ran_is_not_a_survivor(tmp_path):
+def test_a_killed_slice_whose_proof_never_ran_is_not_a_survivor(tmp_path, capsys):
     # The run-time half of `proof_problems`, driven through `run_one`: the three
     # static ways to name a harness that cannot redden are a gate row, and a tool
     # that does not run on the host is a fourth the lint cannot reach.
@@ -771,12 +771,21 @@ def test_a_killed_slice_whose_proof_never_ran_is_not_a_survivor(tmp_path):
         "file": "src/lib.rs",
         "find": "GUARD_LINE\n",
         "slice": ["sh", "-c", 'echo "test result: FAILED"; exit 1'],
-        "proof": ["sh", "-c", 'echo "error: no such command: kani" >&2; exit 101', "--harness"],
+        "proof": [
+            "sh",
+            "-c",
+            'echo "goto-cc: it would not say why"; echo "error: goto-cc exited 1" >&2; exit 101',
+            "--harness",
+        ],
         "proof_names": "NoAuthorizationBypass/B1",
     }
     verdict, detail = comutate.run_one(root, "BugAlpha", entry, "any-host")
     assert verdict == "proof-broke", (verdict, detail)
-    assert "no such command: kani" in detail, detail
+    assert "goto-cc exited 1" in detail, detail
+    # One line of detail named the tool and not its reason, measured: the runner
+    # answered `goto-cc exited with status 1`, and what goto-cc said is gone by
+    # the time the verdict is read — so the run prints its last words itself.
+    assert "goto-cc: it would not say why" in capsys.readouterr().err
 
 
 def test_a_green_slice_never_reaches_the_proof(tmp_path):
