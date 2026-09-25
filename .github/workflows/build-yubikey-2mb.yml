@@ -29,4 +29,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: RS-Key-YubiKey5-RP2350-Zero-CM
-          path: result/firmware-2mb.uf2
+          path: |
+            result/firmware-2mb.elf
+            result/firmware-2mb.uf2
