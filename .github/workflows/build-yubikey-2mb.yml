@@ -22,6 +22,7 @@ jobs:
 
       - name: Build firmware
         run: |
+          AAGUID=39a5647e-1853-446c-a1f6-a79bae9f5bc7 \
           VIDPID=Yubikey5 \
           nix build --impure .#firmware-2mb
 
