@@ -766,11 +766,11 @@ fn make_credential_inner<S: Storage, R: Rng>(
     // cert and no `ep` (CTAP2.1 §6.1.3, conformance Enterprise-Attestation F-6).
     let ea_performed = req.enterprise_attestation == Some(2)
         || (req.enterprise_attestation == Some(1) && rp_eligible_for_vendor_ea(ctx.fs, rp_id_hash));
-    
+
     // Ordinary packed Basic Attestation uses the imported org key.
     // Preserve the original EA Type 1 RP allowlist behavior.
     let use_org_att = ea_performed || req.enterprise_attestation.is_none();
-    
+
     // Every credential ships packed **basic** attestation: the device key signs and
     // the x5c leaf is its cert. Both alternatives break clients — an empty
     // `fmt:"none"` statement is rejected by OpenSSH < 10.0, which verifies any
