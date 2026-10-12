@@ -17,6 +17,7 @@ result-*
 /secrets/
 secure_boot_*.pem
 *.pem
+*.key
 /tools/tui/target/
 /tools/emu/target/
 # `rsk-emu --store <path>` writes a flash image, and that image holds the device
