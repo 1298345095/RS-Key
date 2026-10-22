@@ -116,7 +116,21 @@ DWARF = """  Compilation Unit @ offset 0x169a19:
  <1><4828ba>: ...
 """
 
-RECORDED = {"phdr": PHDR, "defined": DEFINED, "undefined": UNDEFINED, "dwarf": DWARF}
+# Historical program-header evidence remains verbatim. The section output below
+# reproduces the independently observed .text address and declared alignment
+# in the October 22 Rust 1.96.0 custom artifact. It is not a default build.
+SECTIONS_MISALIGNED = """There are 2 section headers, starting at offset 0x100:
+Section Headers:
+  [Nr] Name              Type            Address  Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        1000013c 000274 0b8170 00  AX  0   0  8
+"""
+# SYNTHETIC ALIGNED CONTROL ONLY: change the .text address by four bytes.
+# This is NOT a rebuilt ELF, a corrected linker output, or firmware evidence.
+SECTIONS_SYNTHETIC_ALIGNED = SECTIONS_MISALIGNED.replace("1000013c", "10000140")
+
+RECORDED = {"phdr": PHDR, "defined": DEFINED, "undefined": UNDEFINED,
+            "dwarf": DWARF, "sections": SECTIONS_MISALIGNED}
 
 PINNED = "clang LLVM (rustc version 1.96.0 (ac68faa20 2026-05-25))"
 BLOB = "clang LLVM (rustc version 1.59.0-nightly (c5ecc1570 2021-12-15))"
@@ -134,7 +148,7 @@ def edited(text: str, old: str, new: str, count: int = 1) -> str:
 
 def raw(**overrides) -> dict:
     """The recorded reads with one of them mutated."""
-    return {**RECORDED, **overrides}
+    return {**RECORDED, "sections": SECTIONS_SYNTHETIC_ALIGNED, **overrides}
 
 
 def shipped():
@@ -204,32 +218,74 @@ def test_the_linker_regions_parse():
 
 def test_the_recorded_image_is_clean():
     """The control. Without it every case below could pass over a dead parser."""
-    findings, summary = elf_gate.audit(ROOT, raw=RECORDED)
+    findings, summary = elf_gate.audit(ROOT, raw=raw())
     assert not findings, findings
     assert "5 LOAD segment(s) inside 4" in summary
     assert "1 writable-executable as registered" in summary
     assert "3 allocator symbol(s) from 1 declaration, 0 undefined" in summary
     assert "3 compile unit(s) from 2 registered producer(s)" in summary
+    assert "section alignment checked" in summary
+
+
+def test_observed_custom_artifact_text_alignment_is_a_finding():
+    """Negative: measured address 0x1000013c modulo declared 8 is 4."""
+    findings, _ = elf_gate.audit(ROOT, raw=RECORDED)
+    assert any("section .text at 0x1000013c" in f and
+               "8 bytes (remainder 4)" in f for f in findings), findings
+
+
+def test_synthetic_aligned_control_is_explicit_and_clean():
+    assert SECTIONS_SYNTHETIC_ALIGNED != SECTIONS_MISALIGNED
+    assert "10000140" in SECTIONS_SYNTHETIC_ALIGNED
+    findings, _ = elf_gate.audit(ROOT, raw=raw())
+    assert not findings, findings
+
+
+def test_missing_and_unparseable_section_data_fail_closed():
+    for sections in ("", "not readelf output", SECTIONS_MISALIGNED.replace(
+        "  [ 1] .text", "  [ 1] .missing"
+    ).replace(" 8\n", " nonsense\n"),
+        SECTIONS_MISALIGNED.replace("There are 2", "There are 3"),
+    ):
+        findings, _ = elf_gate.audit(ROOT, raw=raw(sections=sections))
+        assert any("section" in f for f in findings), (sections, findings)
+    missing_key = raw()
+    del missing_key["sections"]
+    findings, _ = elf_gate.audit(ROOT, raw=missing_key)
+    assert findings, findings
+
+
+def test_other_section_alignment_is_checked_too():
+    sections = SECTIONS_SYNTHETIC_ALIGNED.replace(".text", ".rodata")
+    findings, _ = elf_gate.audit(ROOT, raw=raw(sections=sections))
+    assert any("no .text section" in f for f in findings), findings
+    # An additional non-.text section is checked, not merely the known warning.
+    sections = SECTIONS_SYNTHETIC_ALIGNED.replace(
+        "There are 2", "There are 3"
+    ) + "  [ 2] .rodata PROGBITS 10000203 000278 000010 00 A 0 0 4\n"
+    findings, _ = elf_gate.audit(ROOT, raw=raw(sections=sections))
+    assert any("section .rodata" in f and "remainder 3" in f
+               for f in findings), findings
 
 
 def test_a_second_writable_executable_segment_is_a_finding():
     image = copy.deepcopy(shipped())
     image["writable_executable"] = []
-    findings, _ = elf_gate.audit(ROOT, image=image, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, image=image, raw=raw())
     assert any("writable AND executable" in f for f in findings), findings
 
 
 def test_an_allocator_symbol_that_is_not_registered_is_a_finding():
     image = copy.deepcopy(shipped())
     image["allocator"] = ["__rust_alloc"]
-    findings, _ = elf_gate.audit(ROOT, image=image, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, image=image, raw=raw())
     assert any("allocator surface" in f for f in findings), findings
 
 
 def test_a_vector_table_away_from_the_flash_origin_is_a_finding():
     image = copy.deepcopy(shipped())
     image["vector_section"] = ".text"
-    findings, _ = elf_gate.audit(ROOT, image=image, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, image=image, raw=raw())
     assert any("not at" in f and "FLASH origin" in f for f in findings), findings
 
 
@@ -241,7 +297,7 @@ def test_a_segment_outside_every_region_is_a_finding():
         "FLASH  : ORIGIN = 0x10000000, LENGTH = 2560K",
         "FLASH  : ORIGIN = 0x10000000, LENGTH = 4K",
     )
-    findings, _ = elf_gate.audit(ROOT, linker=linker, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, linker=linker, raw=raw())
     assert any("outside every" in f for f in findings), findings
 
 
@@ -254,7 +310,7 @@ def test_code_landing_in_the_kv_store_is_a_finding():
         "KVMAIN : ORIGIN = 0x10280000, LENGTH = 1408K",
         "KVMAIN : ORIGIN = 0x10001000, LENGTH = 1408K",
     )
-    findings, _ = elf_gate.audit(ROOT, linker=linker, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, linker=linker, raw=raw())
     assert any("erased by its own store" in f for f in findings), findings
 
 
@@ -274,14 +330,14 @@ def test_a_vector_section_no_segment_carries_is_a_finding():
     would otherwise leave `table` empty and every address rule silent."""
     image = copy.deepcopy(shipped())
     image["vector_section"] = ".no_such_section"
-    findings, _ = elf_gate.audit(ROOT, image=image, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, image=image, raw=raw())
     assert any("no LOAD segment carries" in f for f in findings), findings
 
 
 def test_a_linker_script_with_no_regions_is_a_finding():
     """Vacuity, one layer down: with no region parsed, "inside a region" and
     "not inside the KV store" are both true of everything."""
-    findings, _ = elf_gate.audit(ROOT, linker="", raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, linker="", raw=raw())
     assert any("no MEMORY region parsed" in f for f in findings), findings
 
 
