@@ -158,6 +158,7 @@ def read(root: pathlib.Path, elf: pathlib.Path) -> dict[str, str]:
 
     return {
         "phdr": out(READELF, "-lW", binary),
+        "sections": out(READELF, "-SW", binary),
         "defined": out(NM, "--defined-only", binary),
         "undefined": out(NM, "-u", binary),
         "dwarf": out(READELF, "--debug-dump=info", "--dwarf-depth=1", binary),
@@ -184,6 +185,50 @@ def segments(out: str):
             names[int(index)] = listed.strip()
     entry = ENTRY.search(out)
     return rows, names, int(entry.group(1), 16) if entry else 0
+
+
+def section_alignment_findings(out: str, elf: pathlib.Path) -> list[str]:
+    """Check readelf -SW section addresses against sh_addralign, fail closed.
+
+    The section count and every indexed row must parse; an absent or changed
+    readelf format cannot turn the alignment check into an empty success.
+    """
+    count = re.search(r"There are (\\d+) section headers", out)
+    if count is None:
+        return [f"{elf}: missing or unparseable section-header count"]
+    expected = int(count.group(1))
+    lines = re.findall(r"^\\s*\\[\\s*(\\d+)\\]\\s+(.+)$", out, re.M)
+    if expected < 2 or len(lines) != expected or {int(i) for i, _ in lines} != set(range(expected)):
+        return [f"{elf}: missing or unparseable section headers ({len(lines)}/{expected} rows)"]
+    findings: list[str] = []
+    names: set[str] = set()
+    for index, remainder in lines:
+        fields = remainder.split()
+        # Name, Type, Address, Off, Size, ES, [Flg], Lk, Inf, Al.
+        # A flagless NULL row has only nine tokens.
+        if len(fields) not in (9, 10):
+            return [f"{elf}: unparseable section header {index}: {remainder!r}"]
+        name = fields[0]
+        try:
+            address = int(fields[2], 16)
+            alignment = int(fields[-1], 10)
+        except ValueError:
+            return [f"{elf}: unparseable section header {index}: {remainder!r}"]
+        if alignment < 0 or (alignment and alignment & (alignment - 1)):
+            return [f"{elf}: invalid section alignment for {name}: {alignment}"]
+        if int(index) != 0 and alignment == 0:
+            return [f"{elf}: zero section alignment for {name}"]
+        if name in names:
+            return [f"{elf}: duplicate section header {name}"]
+        names.add(name)
+        if alignment > 1 and address % alignment:
+            findings.append(
+                f"{elf}: section {name} at {address:#x} is not aligned to"
+                f" {alignment} bytes (remainder {address % alignment})"
+            )
+    if ".text" not in names:
+        findings.append(f"{elf}: no .text section header parsed")
+    return findings
 
 
 def producers(out: str) -> collections.Counter:
@@ -215,9 +260,10 @@ def audit(root: pathlib.Path, image=None, linker=None, raw=None):
         where = regions(root, linker)
         raw = read(root, elf) if raw is None else raw
         rows, names, entry = segments(raw["phdr"])
+        findings.extend(section_alignment_findings(raw["sections"], elf))
         allocator, undefined = symbols(raw["defined"], raw["undefined"])
         compiled = producers(raw["dwarf"])
-    except (OSError, subprocess.CalledProcessError, ValueError) as error:
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError) as error:
         return [f"{elf}: {error}"], ""
 
     if not where:
@@ -330,7 +376,7 @@ def audit(root: pathlib.Path, image=None, linker=None, raw=None):
         f" {len(allocator)} allocator symbol(s) from"
         f" {len(declared)} declaration, 0 undefined,"
         f" {sum(compiled.values())} compile unit(s) from"
-        f" {len(compiled)} registered producer(s)"
+        f" {len(compiled)} registered producer(s), section alignment checked"
     )
     return findings, summary
 
