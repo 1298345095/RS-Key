@@ -204,6 +204,11 @@ def section_alignment_findings(out: str, elf: pathlib.Path) -> list[str]:
     names: set[str] = set()
     for index, remainder in lines:
         fields = remainder.split()
+        # The NULL row has a blank name and is not an allocated section.
+        if int(index) == 0:
+            if len(fields) != 8 or fields[0] != "NULL":
+                return [f"{elf}: unparseable NULL section header"]
+            continue
         # Name, Type, Address, Off, Size, ES, [Flg], Lk, Inf, Al.
         # A flagless NULL row has only nine tokens.
         if len(fields) not in (9, 10):
