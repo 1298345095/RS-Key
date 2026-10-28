@@ -182,4 +182,6 @@ opt-level = "s"    # embassy/HAL needs some opt even in dev to fit/behave
 # fork is deliberately kept that narrow — one file, and the patch says which
 # functions; upstream tracks the idea in tweedegolf/sequential-storage#105.
 [patch.crates-io]
+# Rust compatibility for the host-side PIO macro dependency; see the recorded patch.
+proc-macro-error2 = { path = "third_party/proc-macro-error2" }
 sequential-storage = { path = "third_party/sequential-storage" }

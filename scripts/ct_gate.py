@@ -92,8 +92,8 @@ the secret nibble into the BASE pointer rather than an index
 that `CONSTANT_MEMORY_ACCESS_PATTERN 0` in `crates/rsk-rsa/csrc/bignum_config.h`
 selects); the load itself happens inside `bignum_mulacc`, so the taint would have
 to cross a `bl` and the ABI into hand-written asm; and neither end is in `.text`
-— the C carries `BIGNUM_RAMFUNC`, which is `section(".data.bignum_hl")`, the
-asm's whole translation unit is `.section .data.bignum_asm`, and the disassembly
+— `build.rs` renames the C's `BIGNUM_RAMFUNC` section to `.data.bignum_hl`
+and the asm's section to `.data.bignum_asm`, and the disassembly
 below is `--section=.text`. A rule whose extension is empty over everything the
 audit page names is a green cell with nothing in it, which is the shape this file
 exists to refuse.

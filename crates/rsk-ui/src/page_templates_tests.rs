@@ -15,7 +15,8 @@ fn flash_rows_match_the_public_theme_colors() {
     ] {
         let row = row(color.into_storage()).unwrap();
         let expected = color.into_storage().to_be_bytes();
-        assert!(row.chunks_exact(2).all(|pixel| pixel == expected));
+        let (pixels, _) = row.as_chunks::<2>();
+        assert!(pixels.iter().all(|pixel| *pixel == expected));
     }
 }
 

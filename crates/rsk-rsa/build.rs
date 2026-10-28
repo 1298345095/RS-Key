@@ -46,4 +46,24 @@ fn main() {
         .flag("-ffunction-sections")
         .flag("-fdata-sections")
         .compile("bignum_armv7");
+
+    // GAS reserves .data.* for non-executable input sections. Assemble under
+    // .ramfunc.*, then rename without changing flags so cortex-m-rt still
+    // copies these hot functions into SRAM through its .data.* rule.
+    let out_dir = std::env::var_os("OUT_DIR").expect("Cargo did not set OUT_DIR");
+    let archive = std::path::PathBuf::from(out_dir).join("libbignum_armv7.a");
+    let status = std::process::Command::new("arm-none-eabi-objcopy")
+        .args([
+            "--rename-section",
+            ".ramfunc.bignum_hl=.data.bignum_hl",
+            "--rename-section",
+            ".ramfunc.bignum_asm=.data.bignum_asm",
+        ])
+        .arg(archive)
+        .status()
+        .expect("failed to run arm-none-eabi-objcopy for SRAM sections");
+    assert!(
+        status.success(),
+        "arm-none-eabi-objcopy failed to restore SRAM section names: {status}"
+    );
 }

@@ -47,11 +47,11 @@ static inline int bignum_reduce_once(uint32_t *output, const uint32_t *modulus_b
 
 /* RS-Key: the keygen Fermat filter drives bignum_modexp_private_exponent on
  * BOTH RP2350 cores at once; executed from XIP the cores throttle each other
- * on the shared flash cache. The .data.* section name puts the hot call chain
- * in SRAM (cortex-m-rt copies .data.* into RAM at boot — the same trick as
+ * on the shared flash cache. build.rs renames .ramfunc.* to .data.*, placing
+ * the chain in SRAM (cortex-m-rt copies .data.* into RAM at boot — the same trick as
  * embassy-rp's flash RAM-functions). Only the chain the prime search uses is
  * moved; the CRT/public/endian paths stay in flash. */
-#define BIGNUM_RAMFUNC __attribute__((section(".data.bignum_hl"), noinline))
+#define BIGNUM_RAMFUNC __attribute__((section(".ramfunc.bignum_hl"), noinline))
 
 static BIGNUM_RAMFUNC void ones_complement(uint32_t *output, const uint32_t *input, size_t byte_length) {
     do {

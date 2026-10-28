@@ -1,6 +1,6 @@
 # third_party — code from elsewhere
 
-Code that is not RS-Key's, kept in the tree so a checkout has what it needs. Three
+Code that is not RS-Key's, kept in the tree so a checkout has what it needs. Four
 unrelated kinds live here:
 
 - **Two external conformance suites** — `pico-fido-tests/`,
@@ -8,6 +8,12 @@ unrelated kinds live here:
   checking out the upstream repos. They are **not** part of RS-Key's own test
   suite (`tests/`, `cargo test`) — they are the upstream ecosystems' own tests,
   kept runnable against this implementation. Everything below is about them.
+- **A host-side macro compatibility patch** — `proc-macro-error2/` 2.0.1,
+  used by the PIO compiler, retains its MIT/Apache-2.0 licenses. The sole change
+  makes the existing `proc_macro` import public so its public re-export remains
+  valid on newer Rust. `proc-macro-error2.patch` records the published crate's
+  checksum, upstream revision and complete diff. The root and `fuzz/` manifests
+  use this same source; it adds no firmware runtime dependency.
 - **A vendored crate carrying a local fork** — `sequential-storage/` plus
   `sequential-storage.patch`, wired into `[patch.crates-io]` by the root,
   `fuzz/` and `tools/emu/` manifests. All three, or the emulator runs a
@@ -17,7 +23,7 @@ unrelated kinds live here:
   trusted display draws its text from, emitted by
   `scripts/generate_ui_fonts.py` from the Nix-pinned IBM Plex Sans/Mono files
   (`scripts/check.sh` re-runs the generator and fails when the committed copy
-  drifted). Unlike the two above, this one **is compiled into the firmware** —
+  drifted). This data **is compiled into the firmware** —
   the display flavor links it — under **OFL-1.1**, which `ibm-plex/LICENSE.txt`
   carries. OFL governs the font data, AGPL-3.0-only the rest of the image; the
   two coexist because neither is a derivative of the other.

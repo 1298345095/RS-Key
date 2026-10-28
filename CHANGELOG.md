@@ -40,6 +40,16 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **Clear Rust 1.99 lint and deprecation diagnostics** with fixed-size slice
+  iteration and the emulator's supported atomic-update API. The host-side PIO
+  macro dependency keeps version 2.0.1 with a documented one-line visibility
+  patch for its future-incompatible re-export. RSA C/assembly now uses executable
+  section names during assembly, then restores the existing SRAM section names
+  in the archive; archive bytes and SRAM residency are preserved. Also fix two
+  redundant private rustdoc links and the fork workflow's SPDX header, and keep
+  all four workspaces formatted.
+  `bcdDevice` moves to **0x09DD**. Persistent-store geometry, record formats and
+  key derivation are unchanged.
 - **Align the firmware's `.text` section after the RP2350 boot block** to its
   declared alignment instead of assigning an unaligned start address. This
   removes the linker alignment warning exposed by Rust 1.99.1. The ELF gate now

@@ -2314,7 +2314,9 @@ fn a_faulted_sealed_probe_does_not_reopen_the_export_window() {
 
 /// A presence that offers built-in UV and declines the pad entry — the device-PIN
 /// half of [`pin_gate`] runs only when `uv_available`.
+#[cfg(not(feature = "fips-profile"))]
 struct UvDecline;
+#[cfg(not(feature = "fips-profile"))]
 impl UserPresence for UvDecline {
     fn request(&mut self, _confirm: crate::Confirm<'_>) -> Presence {
         Presence::Confirmed
