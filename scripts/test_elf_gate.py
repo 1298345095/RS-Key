@@ -2,7 +2,7 @@
 # Copyright (C) 2026 RS-Key contributors
 """The mutation table for `elf_gate.py`.
 
-Every case runs against RECORDED tool output and a registry handed in as text.
+Every case runs against tool-output fixtures and a registry handed in as text.
 Neither the ELF nor the working tree is touched here, and NOTHING in this file
 skips — the three corrections an audit drove, each of them measured:
 
@@ -29,17 +29,23 @@ skips — the three corrections an audit drove, each of them measured:
 What that trades away, said here rather than discovered later: these cases cannot
 fail on the parsers meeting a `readelf`/`nm` whose OUTPUT format moved. That is
 the row's job — it runs the real tools over the real image — and the split is the
-one `test_ct_gate.py` already makes. The recorded text is verbatim tool output
-from a `cargo build --release -p firmware` of `9cafee7`, with the DIE lines the
-DWARF parser does not read elided; the arms no case can drive are recorded in
+one `test_ct_gate.py` already makes. The historical text is tool output from a
+`cargo build --release -p firmware` of `9cafee7`, with the DIE lines the DWARF
+parser does not read elided. The clean program/section-header fixtures below
+are synthetic: the historical image has the alignment defect being tested.
+The arms no case can drive are recorded in
 [`test_the_image_arms_were_driven_by_hand`].
 """
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import io
 import pathlib
+import subprocess
 import sys
+from unittest.mock import patch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import elf_gate  # noqa: E402
@@ -50,7 +56,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 #: `arm-none-eabi-readelf -lW`, verbatim. Five LOAD segments: the vector table,
 #: `.text`, the read-only tail, `.data` — the one that RUNS in RAM and is STORED
 #: in flash, which is why both addresses are parsed — and `.bss`.
-PHDR = """
+HISTORICAL_PHDR = """
 Elf file type is EXEC (Executable file)
 Entry point 0x1000013d
 There are 6 program headers, starting at offset 52
@@ -72,6 +78,32 @@ Program Headers:
    03     .data
    04     .bss
    05
+"""
+
+#: Synthetic aligned control: move .text's start/entry by four bytes and remove
+#: four bytes from its size, keeping its end and the following segments fixed.
+#: These are parser fixtures, not measurements of a rebuilt firmware.
+PHDR = HISTORICAL_PHDR.replace("0x1000013d", "0x10000141").replace(
+    "0x000274 0x1000013c 0x1000013c 0xb8170 0xb8170",
+    "0x000278 0x10000140 0x10000140 0xb816c 0xb816c",
+)
+
+#: Synthetic `readelf -SW` rows matching the control's allocated layout. NULL
+#: has no name; debug rows have no A flag (including a deliberately unaligned
+#: address), and must not be mistaken for allocated sections.
+SHDR = """
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .vector_table     PROGBITS        10000000 000134 000114 00   A  0   0  4
+  [ 2] .start_block      PROGBITS        10000114 000248 000028 00   A  0   0  4
+  [ 3] .text             PROGBITS        10000140 000278 0b816c 00  AX  0   0  8
+  [ 4] .bi_entries       PROGBITS        100b82ac 0b83ec 000014 00   A  0   0  4
+  [ 5] .rodata           PROGBITS        100b82c0 0b8400 00cee8 00   A  0   0 16
+  [ 6] .data             PROGBITS        2002baa0 0c52e8 001ec0 00 WAX  0   0  4
+  [ 7] .bss              NOBITS          2002d960 0c71c0 052694 00  WA  0   0 32
+  [ 8] .debug_info       PROGBITS        00000003 0c71c0 000020 00      0   0 16
+  [ 9] .debug_str        PROGBITS        00000003 0c71e0 000020 01  MS  0   0 16
 """
 
 #: `arm-none-eabi-nm --defined-only`, the three symbols the rule matches and four
@@ -116,7 +148,13 @@ DWARF = """  Compilation Unit @ offset 0x169a19:
  <1><4828ba>: ...
 """
 
-RECORDED = {"phdr": PHDR, "defined": DEFINED, "undefined": UNDEFINED, "dwarf": DWARF}
+BASELINE = {
+    "phdr": PHDR,
+    "shdr": SHDR,
+    "defined": DEFINED,
+    "undefined": UNDEFINED,
+    "dwarf": DWARF,
+}
 
 PINNED = "clang LLVM (rustc version 1.96.0 (ac68faa20 2026-05-25))"
 BLOB = "clang LLVM (rustc version 1.59.0-nightly (c5ecc1570 2021-12-15))"
@@ -133,8 +171,8 @@ def edited(text: str, old: str, new: str, count: int = 1) -> str:
 
 
 def raw(**overrides) -> dict:
-    """The recorded reads with one of them mutated."""
-    return {**RECORDED, **overrides}
+    """The clean fixture reads with one of them mutated."""
+    return {**BASELINE, **overrides}
 
 
 def shipped():
@@ -202,9 +240,9 @@ def test_the_linker_regions_parse():
     assert where["RAM"][0] == 0x20000000
 
 
-def test_the_recorded_image_is_clean():
+def test_the_aligned_control_is_clean():
     """The control. Without it every case below could pass over a dead parser."""
-    findings, summary = elf_gate.audit(ROOT, raw=RECORDED)
+    findings, summary = elf_gate.audit(ROOT, raw=BASELINE)
     assert not findings, findings
     assert "5 LOAD segment(s) inside 4" in summary
     assert "1 writable-executable as registered" in summary
@@ -212,24 +250,102 @@ def test_the_recorded_image_is_clean():
     assert "3 compile unit(s) from 2 registered producer(s)" in summary
 
 
+def test_a_text_section_at_the_reported_unaligned_address_is_a_finding():
+    """The reported address is 4 mod 8; segment-only checks missed it."""
+    sections = edited(
+        SHDR, "10000140 000278 0b816c", "1000013c 000274 0b8170"
+    )
+    findings, _ = elf_gate.audit(
+        ROOT, raw=raw(phdr=HISTORICAL_PHDR, shdr=sections)
+    )
+    assert any(".text" in f and "alignment 8" in f for f in findings), findings
+
+
+def test_section_alignment_uses_the_declared_value_not_a_fixed_eight():
+    sections = edited(SHDR, "0b816c 00  AX  0   0  8", "0b816c 00  AX  0   0 32")
+    findings, _ = elf_gate.audit(ROOT, raw=raw(shdr=sections))
+    assert not findings, findings
+    findings, _ = elf_gate.audit(
+        ROOT, raw=raw(shdr=edited(sections, "10000140", "10000148"))
+    )
+    assert any(".text" in f and "alignment 32" in f for f in findings), findings
+
+
+def test_non_executable_allocated_sections_are_checked_too():
+    findings, _ = elf_gate.audit(
+        ROOT, raw=raw(shdr=edited(SHDR, "2002d960", "2002d964"))
+    )
+    assert any(".bss" in f and "alignment 32" in f for f in findings), findings
+
+
+def test_zero_and_one_section_alignment_impose_no_constraint():
+    for alignment in (0, 1):
+        sections = edited(
+            SHDR, "0b816c 00  AX  0   0  8", f"0b816c 00  AX  0   0  {alignment}"
+        )
+        findings, _ = elf_gate.audit(ROOT, raw=raw(shdr=sections))
+        assert not findings, findings
+
+
+def test_no_allocated_section_headers_is_a_finding():
+    non_allocated = "\n".join(
+        line for line in SHDR.splitlines() if "NULL" in line or ".debug" in line
+    )
+    for sections in ("", "unexpected readelf output", non_allocated):
+        findings, _ = elf_gate.audit(ROOT, raw=raw(shdr=sections))
+        assert any("no allocated sections parsed" in f for f in findings), findings
+    missing = raw()
+    del missing["shdr"]
+    findings, _ = elf_gate.audit(ROOT, raw=missing)
+    assert any("no allocated sections parsed" in f for f in findings), findings
+
+
+def test_the_gate_entry_point_reads_section_headers_and_reports_the_defect():
+    """Drive main and read, so a rule disconnected from the gate cannot pass."""
+    row("python scripts/elf_gate.py")
+    for sections, expected in ((SHDR, 0), (edited(SHDR, "10000140", "1000013c"), 1)):
+        reads = {
+            (elf_gate.READELF, "-lW"): PHDR,
+            (elf_gate.READELF, "-SW"): sections,
+            (elf_gate.NM, "--defined-only"): DEFINED,
+            (elf_gate.NM, "-u"): UNDEFINED,
+            (elf_gate.READELF, "--debug-dump=info", "--dwarf-depth=1"): DWARF,
+        }
+
+        def out(argv, **_kwargs):
+            assert argv[-1] == str(ROOT / elf_gate.ELF)
+            return subprocess.CompletedProcess(argv, 0, stdout=reads[tuple(argv[:-1])])
+
+        output = io.StringIO()
+        with (
+            patch.object(elf_gate.pathlib.Path, "is_file", return_value=True),
+            patch.object(elf_gate.subprocess, "run", side_effect=out),
+            contextlib.redirect_stderr(output),
+            contextlib.redirect_stdout(output),
+        ):
+            assert elf_gate.main([]) == expected, output.getvalue()
+        if expected:
+            assert ".text" in output.getvalue() and "alignment 8" in output.getvalue()
+
+
 def test_a_second_writable_executable_segment_is_a_finding():
     image = copy.deepcopy(shipped())
     image["writable_executable"] = []
-    findings, _ = elf_gate.audit(ROOT, image=image, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, image=image, raw=BASELINE)
     assert any("writable AND executable" in f for f in findings), findings
 
 
 def test_an_allocator_symbol_that_is_not_registered_is_a_finding():
     image = copy.deepcopy(shipped())
     image["allocator"] = ["__rust_alloc"]
-    findings, _ = elf_gate.audit(ROOT, image=image, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, image=image, raw=BASELINE)
     assert any("allocator surface" in f for f in findings), findings
 
 
 def test_a_vector_table_away_from_the_flash_origin_is_a_finding():
     image = copy.deepcopy(shipped())
     image["vector_section"] = ".text"
-    findings, _ = elf_gate.audit(ROOT, image=image, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, image=image, raw=BASELINE)
     assert any("not at" in f and "FLASH origin" in f for f in findings), findings
 
 
@@ -241,7 +357,7 @@ def test_a_segment_outside_every_region_is_a_finding():
         "FLASH  : ORIGIN = 0x10000000, LENGTH = 2560K",
         "FLASH  : ORIGIN = 0x10000000, LENGTH = 4K",
     )
-    findings, _ = elf_gate.audit(ROOT, linker=linker, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, linker=linker, raw=BASELINE)
     assert any("outside every" in f for f in findings), findings
 
 
@@ -254,7 +370,7 @@ def test_code_landing_in_the_kv_store_is_a_finding():
         "KVMAIN : ORIGIN = 0x10280000, LENGTH = 1408K",
         "KVMAIN : ORIGIN = 0x10001000, LENGTH = 1408K",
     )
-    findings, _ = elf_gate.audit(ROOT, linker=linker, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, linker=linker, raw=BASELINE)
     assert any("erased by its own store" in f for f in findings), findings
 
 
@@ -263,7 +379,7 @@ def test_an_entry_point_outside_flash_is_a_finding():
     that says so had no case: it was asserted directly on the real ELF, which is
     the assertion that vanished when the image was missing."""
     findings, _ = elf_gate.audit(
-        ROOT, raw=raw(phdr=edited(PHDR, "Entry point 0x1000013d", "Entry point 0x2000013d"))
+        ROOT, raw=raw(phdr=edited(PHDR, "Entry point 0x10000141", "Entry point 0x20000141"))
     )
     assert any("entry point" in f and "outside FLASH" in f for f in findings), findings
 
@@ -274,14 +390,14 @@ def test_a_vector_section_no_segment_carries_is_a_finding():
     would otherwise leave `table` empty and every address rule silent."""
     image = copy.deepcopy(shipped())
     image["vector_section"] = ".no_such_section"
-    findings, _ = elf_gate.audit(ROOT, image=image, raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, image=image, raw=BASELINE)
     assert any("no LOAD segment carries" in f for f in findings), findings
 
 
 def test_a_linker_script_with_no_regions_is_a_finding():
     """Vacuity, one layer down: with no region parsed, "inside a region" and
     "not inside the KV store" are both true of everything."""
-    findings, _ = elf_gate.audit(ROOT, linker="", raw=RECORDED)
+    findings, _ = elf_gate.audit(ROOT, linker="", raw=BASELINE)
     assert any("no MEMORY region parsed" in f for f in findings), findings
 
 
@@ -406,6 +522,12 @@ def test_the_table_can_go_red():
     the rule reported NOTHING where a finding was expected. None failed the other
     way round, which is the reading that would have meant the case models the
     inverse defect; the three exceptions are read one by one above.
+
+    Alignment additions: 29 cases pass. In-memory mutations were rejected for
+    disabling the modulo rule (missing finding), capping alignment at 8 (missing
+    32-byte finding), disabling the empty-section guard (missing finding),
+    deleting the section-header tool read (main rejects the clean control), and
+    checking non-allocated debug sections (false findings on the clean control).
 
     One trap, measured here: pytest's assertion-rewrite cache is keyed on
     (mtime, size), so a mutation of the SAME LENGTH — `0x1000013d` for

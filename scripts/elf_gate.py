@@ -81,6 +81,15 @@ PHDR = re.compile(
 MAPPING = re.compile(r"^\s+(\d+)\s+(.*)$", re.M)
 ENTRY = re.compile(r"^Entry point (0x[0-9a-f]+)$", re.M)
 
+#: `readelf -SW` rows: the A flag marks allocated sections. Horizontal space
+#: keeps empty names/flags from consuming fields from the next row.
+SHDR = re.compile(
+    r"^[ \t]*\[[ \t]*\d+\][ \t]+(\S+)[ \t]+\S+[ \t]+"
+    r"([0-9a-fA-F]+)[ \t]+[0-9a-fA-F]+[ \t]+[0-9a-fA-F]+[ \t]+"
+    r"[0-9a-fA-F]+[ \t]+([A-Za-z]*)[ \t]+\d+[ \t]+\d+[ \t]+(\d+)[ \t]*$",
+    re.M,
+)
+
 #: A symbol that allocates. Matched on the DEMANGLED-ish tail, because the v0
 #: scheme wraps `__rust_alloc` in `_RNvCs…7___rustc12___rust_alloc`.
 ALLOCATOR = re.compile(
@@ -138,7 +147,7 @@ def regions(root: pathlib.Path, text: str | None = None) -> dict[str, tuple[int,
 
 
 def read(root: pathlib.Path, elf: pathlib.Path) -> dict[str, str]:
-    """The four reads of the binary, in ONE place so a case can hand them in.
+    """The binary's tool output, in ONE place so a case can hand it in.
 
     That injection point is what stops the mutation table needing a linked image
     and a cross toolchain — and with them, the wrong image: at the `pytest (gate
@@ -158,6 +167,7 @@ def read(root: pathlib.Path, elf: pathlib.Path) -> dict[str, str]:
 
     return {
         "phdr": out(READELF, "-lW", binary),
+        "shdr": out(READELF, "-SW", binary),
         "defined": out(NM, "--defined-only", binary),
         "undefined": out(NM, "-u", binary),
         "dwarf": out(READELF, "--debug-dump=info", "--dwarf-depth=1", binary),
@@ -191,6 +201,15 @@ def producers(out: str) -> collections.Counter:
     return collections.Counter(m.group(1).strip() for m in PRODUCER.finditer(out))
 
 
+def allocated_sections(out: str):
+    """(name, address, alignment) for sections occupying runtime memory."""
+    return [
+        (name, int(address, 16), int(alignment))
+        for name, address, flags, alignment in SHDR.findall(out)
+        if "A" in flags
+    ]
+
+
 def symbols(defined: str, undefined: str):
     """(defined allocator symbols, undefined symbols)."""
     found = set()
@@ -215,6 +234,7 @@ def audit(root: pathlib.Path, image=None, linker=None, raw=None):
         where = regions(root, linker)
         raw = read(root, elf) if raw is None else raw
         rows, names, entry = segments(raw["phdr"])
+        sections = allocated_sections(raw.get("shdr", ""))
         allocator, undefined = symbols(raw["defined"], raw["undefined"])
         compiled = producers(raw["dwarf"])
     except (OSError, subprocess.CalledProcessError, ValueError) as error:
@@ -225,6 +245,15 @@ def audit(root: pathlib.Path, image=None, linker=None, raw=None):
     loads = [r for r in rows if r[0] == "LOAD"]
     if len(loads) < 2:
         findings.append(f"{elf}: {len(loads)} LOAD segment(s) — the parser found nothing")
+
+    if not sections:
+        findings.append(f"{elf}: no allocated sections parsed from readelf -SW")
+    for name, address, alignment in sections:
+        if alignment > 1 and address % alignment:
+            findings.append(
+                f"{elf}: {name} address {address:#x} is not a multiple of"
+                f" its declared alignment {alignment}"
+            )
 
     # Every byte the image occupies has to be inside a region the linker script
     # declares, at BOTH addresses: `.data` runs in RAM and is stored in flash.

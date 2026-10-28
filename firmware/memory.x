@@ -41,8 +41,8 @@ SECTIONS {
     } > FLASH
 } INSERT AFTER .vector_table;
 
-/* Move .text after the boot block so the entry point sits past the IMAGE_DEF. */
-_stext = ADDR(.start_block) + SIZEOF(.start_block);
+/* An explicit .text address must honor the input sections' alignment too. */
+_stext = ALIGN(ADDR(.start_block) + SIZEOF(.start_block), ALIGNOF(.text));
 
 SECTIONS {
     /* Picotool 'Binary Info' entries (program name, etc.). */

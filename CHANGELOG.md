@@ -40,6 +40,13 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ### Fixed
 
+- **Align the firmware's `.text` section after the RP2350 boot block** to its
+  declared alignment instead of assigning an unaligned start address. This
+  removes the linker alignment warning exposed by Rust 1.99.1. The ELF gate now
+  rejects misaligned allocated sections, with regression tests for the old
+  layout and higher alignment requirements. `bcdDevice` moves to **0x09DC**;
+  the vector table, boot-block placement and persistent-store boundaries stay
+  unchanged.
 - **PIV serves a Card Capability Container** (`5FC107`) where it previously
   answered `6A82` on a card whose host had never written one. It is a mandatory
   PIV object (SP 800-73-4 pt1 §3.1.1), and the Windows inbox PIV minidriver
