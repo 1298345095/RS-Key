@@ -52,8 +52,17 @@ dependencies. It works; it's just more moving parts to keep in sync.
 Everything that has to be green before a merge: rustfmt, clippy twice
 (embedded and host-test profiles), the host test suite, the fips-profile test
 flavor, both firmware images, the rsk-wipe image, cargo-audit, cargo-deny,
-gitleaks. CI runs exactly this script (`.github/workflows/ci.yml`), so green
-locally means green on the PR — there is no CI-only logic to discover later.
+gitleaks. The manual CI workflow (`.github/workflows/ci.yml`) runs this same
+script. This fork's validation workflows use `workflow_dispatch`; they do not
+run automatically on pull requests, pushes, or a schedule.
+
+Run **CI** for the main gate and **Emulator** for socket and USB/IP suites.
+**Deep checks** offers `daily` (the default), `weekly`, and `all` suites; the
+larger suites include long-running proof, mutation, and fuzzing jobs. Artifacts
+stay attached to runs in this repository. These workflows need no maintainer
+secrets and do not publish releases, previews, or a documentation site. The
+separate release-assurance contract still requires a fork-specific publishing
+decision; restoring validation does not make that gate pass.
 
 The default host target is `aarch64-apple-darwin` because that's where
 development happens; on Linux run `HOST_TARGET=x86_64-unknown-linux-gnu
@@ -139,8 +148,8 @@ stage 3.
   nix develop -c ./scripts/emu-suites.sh
   ```
 
-  CI runs exactly that, on every PR. Against a board, flash the **no-touch test
-  build** first (otherwise every makeCredential waits for a finger that never
+  The manual Emulator workflow runs that suite. Against a board, flash the
+  **no-touch test build** first (otherwise every makeCredential waits for a finger that never
   comes). See [docs/testing.md](docs/testing.md) and `tools/emu/README.md`.
 - **Fuzzing**: every external-facing parser has a target —
   `nix develop .#fuzz -c cargo fuzz run <target>`. New parser, new target;
@@ -162,7 +171,7 @@ are Mermaid code blocks. Preview and check them from the dev shell:
 ```
 
 Keep the README short — it's the entry point; put detail in `docs/` and link to
-it. The site deploys on push to `main` via `.github/workflows/pages.yml`.
+it. This fork does not configure automatic documentation-site deployment.
 
 ## Commits and PRs
 
