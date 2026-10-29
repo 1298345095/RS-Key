@@ -113,7 +113,7 @@ symbol = "rsk_otp::OtpApplet::cmd_swap"
 surface = "OTP slot swap access code"
 
 [[caller]]
-symbol = "rsk_otp::OtpApplet::cmd_swap::_{{closure}}"
+symbol = "rsk_otp::OtpApplet::cmd_swap::{closure#0}"
 surface = "OTP slot swap access code, inner"
 
 [[caller]]
@@ -129,11 +129,11 @@ symbol = "rsk_piv::PivApplet::get_metadata"
 surface = "PIV slot metadata default-value check"
 
 [[caller]]
-symbol = "rsk_piv::auth::GenAuth<S>::mutual_auth"
+symbol = "rsk_piv::auth::GenAuth::mutual_auth"
 surface = "PIV mutual authenticate"
 
 [[caller]]
-symbol = "rsk_piv::auth::GenAuth<S>::single_auth_verify"
+symbol = "rsk_piv::auth::GenAuth::single_auth_verify"
 surface = "PIV single authenticate"
 
 [[caller]]
@@ -143,3 +143,11 @@ surface = "PIV PIN/PUK reference verify"
 [[caller]]
 symbol = "rsk_piv::ct_eq"
 surface = "PIV's forwarder onto the canonical comparator"
+
+[[caller]]
+symbol = "<rsk_otp::OtpApplet as rsk_sdk::applet::Applet>::process"
+surface = "OTP APDU dispatch into slot access-code checks"
+
+[[caller]]
+symbol = "<rsk_piv::PivApplet as rsk_sdk::applet::Applet>::process"
+surface = "PIV APDU dispatch into PIN/PUK and management-key checks"

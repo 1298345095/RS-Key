@@ -198,6 +198,7 @@ import tomllib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import elf_gate  # noqa: E402  the producer parser, so the two cannot disagree
+from rust_symbols import demangle, demangle_many, frame_identity  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -295,18 +296,12 @@ SITE_ID = re.compile(r"^CT-[A-Z]+-\d{3}$")
 #: A first-party frame, by CRATE and not by path: the paths objdump prints are
 #: this machine's absolute build paths, and a rule keyed on them would answer
 #: differently on the runner.
-FIRST_PARTY = re.compile(r"^(rsk_[a-z0-9_]+|firmware)::")
+FIRST_PARTY = re.compile(r"^<?(rsk_[a-z0-9_]+|firmware)::")
 
 INSN = re.compile(r"^\s*([0-9a-f]+):\t[0-9a-f ]+\t(\S+)\s*(.*)$")
 FUNC_HEAD = re.compile(r"^(\S+)\(\):$")
 INLINED_BY = re.compile(r"^inlined by (\S+):(\d+) \((\S+)\)$")
 SOURCE_LINE = re.compile(r"^(/\S+):(\d+)(?: \(discriminator \d+\))?$")
-
-#: Legacy Rust mangling: `_ZN` then length-prefixed components then `E`, with a
-#: final `17h<16 hex>` disambiguator this drops.
-LEGACY = re.compile(r"^_ZN(.+)E$")
-COMPONENT = re.compile(r"(\d+)")
-HASH_COMPONENT = re.compile(r"^h[0-9a-f]{16}$")
 
 #: Every mnemonic is read with its width suffix REMOVED, and that is not a
 #: nicety: the sets below first shipped matching `cmp` exactly, and the loop in
@@ -427,42 +422,6 @@ REASONED_FLOOR = 20
 # taint reaches moves 2 of 82, and nothing fires.
 
 
-def demangle(symbol: str) -> str:
-    """`_ZN10rsk_crypto3mac5ct_eq17h3eb6…E` -> `rsk_crypto::mac::ct_eq`.
-
-    The v0 scheme (`_R…`) and plain C names are returned unchanged: nothing this
-    gate registers is mangled that way, and a wrong guess would silently widen
-    attribution rather than narrow it.
-    """
-    body = LEGACY.match(symbol)
-    if not body:
-        return symbol
-    rest, parts = body.group(1), []
-    while rest:
-        size = COMPONENT.match(rest)
-        if not size:
-            break
-        start = size.end()
-        width = int(size.group(1))
-        parts.append(rest[start : start + width])
-        rest = rest[start + width :]
-    if parts and HASH_COMPONENT.match(parts[-1]):
-        parts.pop()
-    return unescape("::".join(parts)) if parts else symbol
-
-
-#: The escapes legacy mangling puts in a generic component. Only the ones this
-#: tree actually produces, because an unescape nobody drove is a second parser.
-ESCAPES = (("$LT$", "<"), ("$GT$", ">"), ("$C$", ","), ("$u20$", " "),
-           ("$RF$", "&"), ("$u7b$", "{"), ("$u7d$", "}"), ("..", "::"))
-
-
-def unescape(name: str) -> str:
-    for spelling, char in ESCAPES:
-        name = name.replace(spelling, char)
-    return name
-
-
 def registry(root: pathlib.Path, findings: list[str], text: str | None = None):
     """The hand-written half: sites and the surface each caller stands for.
 
@@ -524,6 +483,15 @@ def disassembly(root: pathlib.Path) -> list[str]:
     return out.stdout.splitlines()
 
 
+def frame_symbol(line):
+    """The raw frame label in either objdump location-line shape."""
+    head = FUNC_HEAD.match(line)
+    if head:
+        return head.group(1)
+    under = INLINED_BY.match(line)
+    return under.group(3) if under else None
+
+
 def instructions(lines):
     """(addr, mnemonic, operands, chain) per instruction, innermost frame first.
 
@@ -532,16 +500,18 @@ def instructions(lines):
     from scratch per instruction would attribute those to nothing — which is the
     silent-undercount direction, so it is done the other way.
     """
+    lines = list(lines)
+    names = demangle_many(name for line in lines if (name := frame_symbol(line)))
     chain, inner, outer, func = [], None, [], None
     fresh = False
     for line in lines:
         head = FUNC_HEAD.match(line)
         if head:
-            func, inner, outer, fresh = demangle(head.group(1)), None, [], True
+            func, inner, outer, fresh = names[head.group(1)], None, [], True
             continue
         under = INLINED_BY.match(line)
         if under:
-            outer.append(demangle(under.group(3)))
+            outer.append(names[under.group(3)])
             fresh = True
             continue
         source = SOURCE_LINE.match(line)
@@ -625,10 +595,10 @@ def walk_back(stream, index, want, limit=64):
     The position is yielded because the flag-setter's caller has to trace its
     operands from WHERE IT SITS, not from the branch that reads its flags.
     """
-    frame = stream[index][3][-1] if stream[index][3] else None
+    frame = frame_identity(stream[index][3])
     for step in range(index - 1, max(-1, index - limit - 1), -1):
         addr, mnemonic, operands, chain = stream[step]
-        if (chain[-1] if chain else None) != frame:
+        if frame_identity(chain) != frame:
             return
         yield step, stream[step]
         if BARRIER.match(mnemonic) and step != index - 1:
@@ -644,10 +614,10 @@ def last_definition(stream, index, register):
     use could have read, and crediting it makes the verdict a function of how the
     linker laid the blocks out.
     """
-    frame = stream[index][3][-1] if stream[index][3] else None
+    frame = frame_identity(stream[index][3])
     for step in range(index - 1, max(-1, index - 65), -1):
         addr, mnemonic, operands, chain = stream[step]
-        if (chain[-1] if chain else None) != frame:
+        if frame_identity(chain) != frame:
             return None
         if mnemonic in FLAG_ONLY:
             continue
@@ -712,10 +682,10 @@ def reload_of_a_store(stream, index):
     address = ADDRESS.search(load[2])
     if not address:
         return False
-    frame = load[3][-1] if load[3] else None
+    frame = frame_identity(load[3])
     for step in range(index - 1, max(-1, index - 64), -1):
         addr, mnemonic, operands, chain = stream[step]
-        if (chain[-1] if chain else None) != frame:
+        if frame_identity(chain) != frame:
             return False
         if leaves_the_block(mnemonic, operands):
             return False
@@ -996,7 +966,7 @@ def audit(
     loads: dict[str, tuple[int, int, int]] = {}
     try:
         seen = observe(root, sites, lines, loads)
-    except (OSError, subprocess.CalledProcessError) as error:
+    except (OSError, subprocess.CalledProcessError, ValueError) as error:
         return [f"{ELF}: {error}"], ""
 
     total_runs = total_branches = 0

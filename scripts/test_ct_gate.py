@@ -52,8 +52,8 @@ PIN = "/x/crates/rsk-openpgp/src/pin.rs"
 CODE = "/x/crates/rsk-oath/src/code.rs"
 
 CHAIN = (
-    f"inlined by {MAC}:60 (_ZN10rsk_crypto3mac5ct_eq17h0000000000000000E)\n"
-    f"inlined by {PIN}:93 (_ZN11rsk_openpgp3pin9check_pin17h0000000000000001E)"
+    f"inlined by {MAC}:60 (_ZN10rsk_crypto3mac5ct_eq17h0123456789abcde0E)\n"
+    f"inlined by {PIN}:93 (_ZN11rsk_openpgp3pin9check_pin17h0123456789abcde1E)"
 )
 
 #: The shipped loop, verbatim in shape: two byte loads, a flag-setting XOR, the
@@ -150,7 +150,7 @@ LITERAL = f"""{CHAIN}
 #: A second frame under the SAME outermost one, so the block below is next in
 #: address order without being reachable from the comparator's — which is the
 #: whole point: the frame check alone does not separate them.
-OTHER = f"inlined by {PIN}:97 (_ZN11rsk_openpgp3pin9check_pin17h0000000000000001E)"
+OTHER = f"inlined by {PIN}:97 (_ZN11rsk_openpgp3pin9check_pin17h0123456789abcde1E)"
 
 #: The comparator's loop, then an unconditional `b`, then a block that branches
 #: on a register the comparator happened to leave in `r4`. Copied in shape from
@@ -302,7 +302,7 @@ GAP = f"""{OTHER}
 #: or on a total. Its excuse covers two of its three loads — two spill/reload
 #: pairs and one genuine buffer read — while `CLEAN`'s covers one of three, so
 #: summed they cancel at 3 against 3 and only the per-site question sees it.
-OATH = f"inlined by {CODE}:41 (_ZN8rsk_oath4code7ct_eq_b17h0000000000000002E)"
+OATH = f"inlined by {CODE}:41 (_ZN8rsk_oath4code7ct_eq_b17h0123456789abcde2E)"
 TWO_SITES = f"""{CLEAN}{OATH}
 10001000:\tf88d 0090 \tstrb.w\tr0, [sp, #144]
 {OATH}
@@ -349,6 +349,21 @@ def summary_of(text, page=None):
 
 def shipped_registry() -> str:
     return (ROOT / ct_gate.REGISTRY).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("fixture, leaky", [(CLEAN, False), (LEAKY, True)], ids=["clean", "leaky"])
+def test_v0_inline_chains_keep_the_comparator_and_its_leaks(fixture, leaky):
+    v0 = fixture.replace(
+        "_ZN10rsk_crypto3mac5ct_eq17h0123456789abcde0E",
+        "_RNvNtCs8x1y6wfIl46_10rsk_crypto3mac5ct_eq",
+    ).replace(
+        "_ZN11rsk_openpgp3pin9check_pin17h0123456789abcde1E",
+        "_RNvNtCsbEEkjhEpY5s_11rsk_openpgp3pin9check_pin",
+    )
+    violations, runs, branches, callers, reasoned = observed(v0)
+    assert (runs, branches, reasoned) == (1, 2, 2)
+    assert bool(violations) is leaky
+    assert callers == {"rsk_openpgp::pin::check_pin"}
 
 
 def test_the_shipped_loop_is_clean():
@@ -759,7 +774,7 @@ def test_a_surface_that_stopped_routing_through_it_is_a_finding():
     `cmd_update` and the row stayed green."""
     findings, _ = ct_gate.audit(ROOT, lines=CLEAN.splitlines(), **NO_FLOORS)
     stale = [f for f in findings if "inlines no site in the image" in f]
-    assert len(stale) == 27, stale
+    assert len(stale) == 29, stale
 
 
 #: The scope clause as it read before `a4b53c2` refuted it, and the clause that
@@ -1021,11 +1036,6 @@ def test_the_image_arms_were_driven_by_hand():
 #: function, and cutting at those would cut a run in half.
 FUNCTION = re.compile(r"^[0-9a-f]{8} <")
 
-#: `ct_eq` as the disassembly SPELLS it, hash suffix excluded. `ct_gate.demangle`
-#: is what turns this into `SYMBOL`; deciding which functions survive the cut is
-#: a grep over the text, before any parse has happened.
-MANGLED = "_ZN10rsk_crypto3mac5ct_eq"
-
 SYMBOL = SITE["CT-CMP-001"]["symbol"]
 
 #: The half of a finding that says THE DEFECT. A row that goes red on a floor, on
@@ -1102,12 +1112,21 @@ def inlining_functions(whole_image):
         else:
             prologue.append(line)
     blocks.append(current)
-    kept = [b for b in blocks if b and any(MANGLED in line for line in b)]
+    names = ct_gate.demangle_many(
+        name for line in whole_image if (name := ct_gate.frame_symbol(line))
+    )
+
+    def site_frame(line):
+        name = ct_gate.frame_symbol(line)
+        return name is not None and names[name] == SYMBOL
+
+    kept = [b for b in blocks if b and any(site_frame(line) for line in b)]
+    assert kept, "no emitted function contains the registered site"
     cut = prologue + [line for block in kept for line in block]
     # Whole blocks are kept, so an attributed line falling outside the cut is the
     # one way it could lose a run before any case has looked at it.
-    assert sum(MANGLED in line for line in cut) == sum(
-        MANGLED in line for line in whole_image
+    assert sum(site_frame(line) for line in cut) == sum(
+        site_frame(line) for line in whole_image
     ), "the cut dropped a line the site is attributed to"
     return cut
 
@@ -1378,7 +1397,7 @@ def scratch(work, source):
     for directory in ("scripts", "assurance", "docs", str(ct_gate.ELF.parent)):
         (root / directory).mkdir(parents=True, exist_ok=True)
     (root / "scripts/ct_gate.py").write_text(source, encoding="utf-8")
-    for name in ("elf_gate.py",):
+    for name in ("elf_gate.py", "rust_symbols.py"):
         shutil.copy(ROOT / "scripts" / name, root / "scripts" / name)
     for path in (ct_gate.REGISTRY, ct_gate.PAGE):
         shutil.copy(ROOT / path, root / path)

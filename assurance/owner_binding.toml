@@ -78,10 +78,10 @@ statement = "Every (file, function) assurance/token_refinement.toml owns is boun
 [[claim]]
 subject = "bit-for-bit"
 method = "MEASURED"
-artifact = "result/firmware.uf2"
+artifact = "result-repro/firmware.uf2"
 build = "nix build .#firmware"
-verified_by = ".github/workflows/release-build.yml"
-statement = "The published images rebuild bit-identical per platform, per flake.lock; the release job fails if any flavor does not. Recorded here so the boundary is data: this gate cannot rebuild anything and does not discharge this row, and no run of it may raise this subject to BINARY-CHECKED. `verified_by` is not satisfied by a file that exists — the gate requires a workflow that RUNS this row's own `build`, read through gate_lines' `run:` walk."
+verified_by = ".github/workflows/deep-checks.yml"
+statement = "The manual deep-checks repro job builds the default firmware on x86_64-linux and requires bit-identical outputs with nix build --rebuild for the same flake.lock. This is not a claim about other flavors or published releases. Recorded here so the boundary is data: this gate cannot rebuild anything and does not discharge this row, and no run of it may raise this subject to BINARY-CHECKED. `verified_by` is not satisfied by a file that exists — the gate requires a workflow that RUNS this row's own `build`, read through gate_lines' `run:` walk."
 
 # ---- Registered absences -----------------------------------------------------
 #

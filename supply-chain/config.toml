@@ -84,6 +84,16 @@ criteria = "safe-to-deploy"
 version = "1.1.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.aho-corasick]]
+version = "1.1.5"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
+[[exemptions.arrayvec]]
+version = "0.7.8"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
 [[exemptions.ascii-canvas]]
 version = "4.0.0"
 criteria = "safe-to-deploy"
@@ -128,9 +138,24 @@ criteria = "safe-to-deploy"
 version = "0.14.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.bitfield]]
+version = "0.19.5"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
+[[exemptions.bitfield-macros]]
+version = "0.19.5"
+criteria = "safe-to-deploy"
+notes = "New dependency in the root lockfile. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
 [[exemptions.bitflags]]
 version = "2.13.0"
 criteria = "safe-to-deploy"
+
+[[exemptions.bitflags]]
+version = "2.13.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.block-buffer]]
 version = "0.10.4"
@@ -140,6 +165,11 @@ criteria = "safe-to-deploy"
 version = "0.12.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.block-buffer]]
+version = "0.12.1"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.block-padding]]
 version = "0.3.3"
 criteria = "safe-to-deploy"
@@ -148,13 +178,28 @@ criteria = "safe-to-deploy"
 version = "0.14.0-rc.15"
 criteria = "safe-to-deploy"
 
+[[exemptions.bp256]]
+version = "0.14.0"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.bp384]]
 version = "0.14.0-rc.15"
 criteria = "safe-to-deploy"
 
+[[exemptions.bp384]]
+version = "0.14.0"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.bytemuck]]
 version = "1.25.0"
 criteria = "safe-to-deploy"
+
+[[exemptions.bytemuck]]
+version = "1.25.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.cbc]]
 version = "0.1.2"
@@ -164,9 +209,19 @@ criteria = "safe-to-deploy"
 version = "1.2.63"
 criteria = "safe-to-deploy"
 
+[[exemptions.cc]]
+version = "1.10.0"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.cfb-mode]]
 version = "0.8.2"
 criteria = "safe-to-deploy"
+
+[[exemptions.cfg-if]]
+version = "1.0.5"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.chacha20]]
 version = "0.9.1"
@@ -204,17 +259,42 @@ criteria = "safe-to-deploy"
 version = "0.3.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.cordyceps]]
+version = "0.3.5"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.cortex-m]]
 version = "0.7.7"
 criteria = "safe-to-deploy"
+
+[[exemptions.cortex-m]]
+version = "0.7.10"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
+[[exemptions.cortex-m-macros]]
+version = "0.7.8"
+criteria = "safe-to-deploy"
+notes = "New dependency in the root lockfile. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.cortex-m-rt]]
 version = "0.7.5"
 criteria = "safe-to-deploy"
 
+[[exemptions.cortex-m-rt]]
+version = "0.7.7"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.cortex-m-rt-macros]]
 version = "0.7.5"
 criteria = "safe-to-deploy"
+
+[[exemptions.cortex-m-rt-macros]]
+version = "0.7.7"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.cpubits]]
 version = "0.1.1"
@@ -228,6 +308,11 @@ criteria = "safe-to-deploy"
 version = "2.5.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.crc-any]]
+version = "2.5.1"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.critical-section]]
 version = "1.2.0"
 criteria = "safe-to-deploy"
@@ -235,6 +320,11 @@ criteria = "safe-to-deploy"
 [[exemptions.crypto-bigint]]
 version = "0.7.5"
 criteria = "safe-to-deploy"
+
+[[exemptions.crypto-bigint]]
+version = "0.7.10"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.crypto-common]]
 version = "0.1.7"
@@ -251,6 +341,11 @@ criteria = "safe-to-deploy"
 [[exemptions.ctutils]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
+
+[[exemptions.ctutils]]
+version = "0.4.7"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.curve25519-dalek]]
 version = "4.1.3"
@@ -276,9 +371,19 @@ criteria = "safe-to-deploy"
 version = "2.11.0"
 criteria = "safe-to-run"
 
+[[exemptions.data-encoding]]
+version = "2.11.1"
+criteria = "safe-to-run"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.debug-helper]]
 version = "0.3.13"
 criteria = "safe-to-deploy"
+
+[[exemptions.debug-helper]]
+version = "0.3.14"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.der]]
 version = "0.7.10"
@@ -288,9 +393,19 @@ criteria = "safe-to-deploy"
 version = "0.8.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.der]]
+version = "0.8.3"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.der-parser]]
 version = "9.0.0"
 criteria = "safe-to-run"
+
+[[exemptions.deranged]]
+version = "0.5.9"
+criteria = "safe-to-run"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.des]]
 version = "0.8.1"
@@ -308,6 +423,11 @@ criteria = "safe-to-deploy"
 version = "0.2.6"
 criteria = "safe-to-run"
 
+[[exemptions.displaydoc]]
+version = "0.2.7"
+criteria = "safe-to-run"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.ecdsa]]
 version = "0.17.0"
 criteria = "safe-to-deploy"
@@ -320,9 +440,19 @@ criteria = "safe-to-deploy"
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.either]]
+version = "1.19.0"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
 [[exemptions.elliptic-curve]]
 version = "0.14.1"
 criteria = "safe-to-deploy"
+
+[[exemptions.elliptic-curve]]
+version = "0.14.3"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.embassy-embedded-hal]]
 version = "0.6.0@git:6c28443489ad5940ab8c1824c090b1f8a7233bf6"
@@ -436,9 +566,19 @@ criteria = "safe-to-deploy"
 version = "0.3.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.embedded-storage]]
+version = "0.3.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.embedded-storage-async]]
 version = "0.4.1"
 criteria = "safe-to-deploy"
+
+[[exemptions.embedded-storage-async]]
+version = "0.4.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.ena]]
 version = "0.14.4"
@@ -448,6 +588,11 @@ criteria = "safe-to-deploy"
 version = "0.3.6"
 criteria = "safe-to-deploy"
 
+[[exemptions.equivalent]]
+version = "1.0.3"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
 [[exemptions.ff]]
 version = "0.14.0"
 criteria = "safe-to-deploy"
@@ -455,6 +600,11 @@ criteria = "safe-to-deploy"
 [[exemptions.find-msvc-tools]]
 version = "0.1.9"
 criteria = "safe-to-deploy"
+
+[[exemptions.find-msvc-tools]]
+version = "0.1.15"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.fixed]]
 version = "1.29.0"
@@ -472,13 +622,28 @@ criteria = "safe-to-deploy"
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+[[exemptions.futures-core]]
+version = "0.3.34"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.futures-sink]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+[[exemptions.futures-sink]]
+version = "0.3.34"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.generator]]
 version = "0.8.9"
 criteria = "safe-to-deploy"
+
+[[exemptions.generator]]
+version = "0.8.11"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.generic-array]]
 version = "0.14.7"
@@ -532,6 +697,11 @@ criteria = "safe-to-deploy"
 version = "0.4.13"
 criteria = "safe-to-deploy"
 
+[[exemptions.hybrid-array]]
+version = "0.4.15"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.ident_case]]
 version = "1.0.1"
 criteria = "safe-to-deploy"
@@ -539,6 +709,11 @@ criteria = "safe-to-deploy"
 [[exemptions.indexmap]]
 version = "2.14.0"
 criteria = "safe-to-deploy"
+
+[[exemptions.indexmap]]
+version = "2.14.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.itertools]]
 version = "0.14.0"
@@ -556,6 +731,11 @@ criteria = "safe-to-deploy"
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.keccak]]
+version = "0.2.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.kem]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
@@ -568,9 +748,19 @@ criteria = "safe-to-deploy"
 version = "0.22.2"
 criteria = "safe-to-deploy"
 
+[[exemptions.lazy_static]]
+version = "1.5.1"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
 [[exemptions.libc]]
 version = "0.2.186"
 criteria = "safe-to-deploy"
+
+[[exemptions.libc]]
+version = "0.2.191"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.libm]]
 version = "0.2.16"
@@ -584,6 +774,11 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.litrs]]
+version = "1.0.1"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.lock_api]]
 version = "0.4.14"
 criteria = "safe-to-deploy"
@@ -591,6 +786,11 @@ criteria = "safe-to-deploy"
 [[exemptions.log]]
 version = "0.4.32"
 criteria = "safe-to-deploy"
+
+[[exemptions.log]]
+version = "0.4.34"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.loom]]
 version = "0.7.2"
@@ -604,6 +804,11 @@ criteria = "safe-to-deploy"
 version = "2.8.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.memchr]]
+version = "2.8.3"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.micromath]]
 version = "2.1.0"
 criteria = "safe-to-deploy"
@@ -611,6 +816,11 @@ criteria = "safe-to-deploy"
 [[exemptions.minicbor]]
 version = "2.2.2"
 criteria = "safe-to-deploy"
+
+[[exemptions.minicbor]]
+version = "2.3.1"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.minimal-lexical]]
 version = "0.2.1"
@@ -623,6 +833,11 @@ criteria = "safe-to-deploy"
 [[exemptions.ml-kem]]
 version = "0.3.2"
 criteria = "safe-to-deploy"
+
+[[exemptions.ml-kem]]
+version = "0.3.3"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.module-lattice]]
 version = "0.2.3"
@@ -640,6 +855,11 @@ criteria = "safe-to-deploy"
 version = "0.4.6"
 criteria = "safe-to-run"
 
+[[exemptions.num-bigint]]
+version = "0.4.8"
+criteria = "safe-to-run"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.num-bigint-dig]]
 version = "0.8.6"
 criteria = "safe-to-deploy"
@@ -647,6 +867,16 @@ criteria = "safe-to-deploy"
 [[exemptions.num-conv]]
 version = "0.2.2"
 criteria = "safe-to-run"
+
+[[exemptions.num-integer]]
+version = "0.1.47"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
+[[exemptions.num-iter]]
+version = "0.1.46"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.num_enum]]
 version = "0.7.6"
@@ -744,6 +974,16 @@ criteria = "safe-to-deploy"
 version = "1.13.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.portable-atomic]]
+version = "1.15.0"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
+[[exemptions.powerfmt]]
+version = "0.2.1"
+criteria = "safe-to-run"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
 [[exemptions.ppv-lite86]]
 version = "0.2.21"
 criteria = "safe-to-deploy"
@@ -755,6 +995,16 @@ criteria = "safe-to-deploy"
 [[exemptions.primeorder]]
 version = "0.14.0"
 criteria = "safe-to-deploy"
+
+[[exemptions.proc-macro2]]
+version = "1.0.107"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
+[[exemptions.rand]]
+version = "0.8.8"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.rand_core]]
 version = "0.10.1"
@@ -768,13 +1018,28 @@ criteria = "safe-to-deploy"
 version = "1.12.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.regex]]
+version = "1.13.1"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.regex-automata]]
 version = "0.4.14"
 criteria = "safe-to-deploy"
 
+[[exemptions.regex-automata]]
+version = "0.4.18"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.regex-syntax]]
 version = "0.8.10"
 criteria = "safe-to-deploy"
+
+[[exemptions.regex-syntax]]
+version = "0.8.11"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.rfc6979]]
 version = "0.6.0"
@@ -787,6 +1052,11 @@ criteria = "safe-to-deploy"
 [[exemptions.rlsf]]
 version = "0.2.2"
 criteria = "safe-to-deploy"
+
+[[exemptions.rlsf]]
+version = "0.2.3"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.rp-pac]]
 version = "7.0.0@git:c2e27609b021c444f634673155318977d7f0bdf6"
@@ -803,6 +1073,11 @@ criteria = "safe-to-deploy"
 [[exemptions.rusticata-macros]]
 version = "4.1.0"
 criteria = "safe-to-run"
+
+[[exemptions.rustversion]]
+version = "1.0.23"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.same-file]]
 version = "1.0.6"
@@ -832,13 +1107,38 @@ criteria = "safe-to-deploy"
 version = "0.7.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.serde]]
+version = "1.0.229"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
+[[exemptions.serde_core]]
+version = "1.0.229"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
+[[exemptions.serde_derive]]
+version = "1.0.229"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
 [[exemptions.sha1]]
 version = "0.10.6"
 criteria = "safe-to-deploy"
 
+[[exemptions.sha1]]
+version = "0.10.7"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.sha2]]
 version = "0.11.0"
 criteria = "safe-to-deploy"
+
+[[exemptions.sha2]]
+version = "0.11.1"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.sha2-const-stable]]
 version = "0.1.0"
@@ -851,6 +1151,16 @@ criteria = "safe-to-deploy"
 [[exemptions.sha3]]
 version = "0.11.0"
 criteria = "safe-to-deploy"
+
+[[exemptions.sha3]]
+version = "0.12.0"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
+[[exemptions.shake]]
+version = "0.1.0"
+criteria = "safe-to-deploy"
+notes = "New dependency in the root lockfile. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.sharded-slab]]
 version = "0.1.7"
@@ -868,6 +1178,16 @@ criteria = "safe-to-deploy"
 version = "1.0.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.siphasher]]
+version = "1.0.4"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
+[[exemptions.smallvec]]
+version = "1.16.4"
+criteria = "safe-to-deploy"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
+
 [[exemptions.smart-leds]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
@@ -883,6 +1203,11 @@ criteria = "safe-to-deploy"
 [[exemptions.spki]]
 version = "0.7.3"
 criteria = "safe-to-deploy"
+
+[[exemptions.sponge-cursor]]
+version = "0.1.0"
+criteria = "safe-to-deploy"
+notes = "New dependency in the root lockfile. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.ssmarshal]]
 version = "1.0.0"
@@ -912,6 +1237,16 @@ criteria = "safe-to-deploy"
 version = "2.0.117"
 criteria = "safe-to-deploy"
 
+[[exemptions.syn]]
+version = "2.0.119"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
+[[exemptions.syn]]
+version = "3.0.9"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.term]]
 version = "1.2.1"
 criteria = "safe-to-deploy"
@@ -932,9 +1267,24 @@ criteria = "safe-to-run"
 version = "1.1.9"
 criteria = "safe-to-deploy"
 
+[[exemptions.thread_local]]
+version = "1.1.10"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.time]]
 version = "0.3.47"
 criteria = "safe-to-run"
+
+[[exemptions.time]]
+version = "0.3.55"
+criteria = "safe-to-run"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
+[[exemptions.time-macros]]
+version = "0.2.32"
+criteria = "safe-to-run"
+notes = "Existing dependency. Maintainer-authorized exact-version exemption for the 2026-10-29 refresh; no source audit is claimed."
 
 [[exemptions.tracing]]
 version = "0.1.44"
@@ -964,6 +1314,11 @@ criteria = "safe-to-deploy"
 version = "1.0.24"
 criteria = "safe-to-deploy"
 
+[[exemptions.unicode-ident]]
+version = "1.0.27"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.usb-device]]
 version = "0.3.2"
 criteria = "safe-to-deploy"
@@ -972,13 +1327,28 @@ criteria = "safe-to-deploy"
 version = "0.10.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.usbd-hid]]
+version = "0.10.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.usbd-hid-descriptors]]
 version = "0.10.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.usbd-hid-descriptors]]
+version = "0.10.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.usbd-hid-macros]]
 version = "0.10.0"
 criteria = "safe-to-deploy"
+
+[[exemptions.usbd-hid-macros]]
+version = "0.10.2"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
 
 [[exemptions.valuable]]
 version = "0.1.1"
@@ -1016,6 +1386,11 @@ criteria = "safe-to-deploy"
 version = "0.14.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.wnaf]]
+version = "0.14.1"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.x25519-dalek]]
 version = "2.0.1"
 criteria = "safe-to-deploy"
@@ -1028,10 +1403,25 @@ criteria = "safe-to-run"
 version = "0.8.50"
 criteria = "safe-to-deploy"
 
+[[exemptions.zerocopy]]
+version = "0.8.63"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.zerocopy-derive]]
 version = "0.8.50"
 criteria = "safe-to-deploy"
 
+[[exemptions.zerocopy-derive]]
+version = "0.8.63"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."
+
 [[exemptions.zeroize_derive]]
 version = "1.4.3"
 criteria = "safe-to-deploy"
+
+[[exemptions.zeroize_derive]]
+version = "1.5.0"
+criteria = "safe-to-deploy"
+notes = "Maintainer-authorized exact-version exemption for the 2026-10-29 refresh, continuing prior exemptions for this crate; no source audit is claimed."

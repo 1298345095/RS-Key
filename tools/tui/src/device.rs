@@ -24,8 +24,9 @@ use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use p256::ecdsa::signature::Verifier;
 use p256::ecdsa::{Signature, VerifyingKey};
-use p256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
-use p256::{EncodedPoint, PublicKey, SecretKey};
+use p256::elliptic_curve::Generate;
+use p256::elliptic_curve::sec1::{FromSec1Point, ToSec1Point};
+use p256::{PublicKey, Sec1Point, SecretKey};
 use pcsc::{Context, Protocols, Scope, ShareMode};
 use rand_core::{OsRng, RngCore};
 use sha2::{Digest, Sha256};
@@ -437,8 +438,8 @@ fn as_u32(v: &Value) -> Option<u32> {
 // ===========================================================================
 
 fn ecdh_pub() -> (SecretKey, [u8; 32], [u8; 32]) {
-    let sk = SecretKey::random(&mut OsRng);
-    let ep = sk.public_key().to_encoded_point(false);
+    let sk = SecretKey::generate();
+    let ep = sk.public_key().to_sec1_point(false);
     let (mut x, mut y) = ([0u8; 32], [0u8; 32]);
     x.copy_from_slice(ep.x().unwrap());
     y.copy_from_slice(ep.y().unwrap());
@@ -446,8 +447,8 @@ fn ecdh_pub() -> (SecretKey, [u8; 32], [u8; 32]) {
 }
 
 fn ecdh_raw(sk: &SecretKey, px: &[u8; 32], py: &[u8; 32]) -> Option<[u8; 32]> {
-    let ep = EncodedPoint::from_affine_coordinates(px.into(), py.into(), false);
-    let peer = Option::<PublicKey>::from(PublicKey::from_encoded_point(&ep))?;
+    let ep = Sec1Point::from_affine_coordinates(px.into(), py.into(), false);
+    let peer = Option::<PublicKey>::from(PublicKey::from_sec1_point(&ep))?;
     let shared = p256::ecdh::diffie_hellman(sk.to_nonzero_scalar(), peer.as_affine());
     let mut z = [0u8; 32];
     z.copy_from_slice(shared.raw_secret_bytes());
@@ -1236,16 +1237,12 @@ pub fn verify_identity(pin: Option<&str>) -> Result<(String, String), String> {
         _ => return Err("no pubkey".into()),
     };
 
-    let vk = VerifyingKey::from_sec1_bytes(&pubkey).map_err(|_| "bad attestation pubkey")?;
-    let signature = Signature::from_der(&sig).map_err(|_| "bad signature DER")?;
     let mut msg = Vec::with_capacity(CKPT_TAG.len() + head.len() + 4 + challenge.len());
     msg.extend_from_slice(CKPT_TAG);
     msg.extend_from_slice(&head);
     msg.extend_from_slice(&seq.to_le_bytes());
     msg.extend_from_slice(&challenge);
-    if vk.verify(&msg, &signature).is_err() {
-        return Err("SIGNATURE INVALID — this device cannot prove its identity".into());
-    }
+    verify_p256_signature(&pubkey, &sig, &msg)?;
 
     let fp: String = Sha256::digest(&pubkey)
         .iter()
@@ -1265,6 +1262,13 @@ pub fn verify_identity(pin: Option<&str>) -> Result<(String, String), String> {
         hex(&head),
     );
     Ok(("device identity".into(), body))
+}
+
+fn verify_p256_signature(pubkey: &[u8], der: &[u8], msg: &[u8]) -> Result<(), String> {
+    let vk = VerifyingKey::from_sec1_bytes(pubkey).map_err(|_| "bad attestation pubkey")?;
+    let signature = Signature::from_der(der).map_err(|_| "bad signature DER")?;
+    vk.verify(msg, &signature)
+        .map_err(|_| "SIGNATURE INVALID — this device cannot prove its identity".into())
 }
 
 fn hex(b: &[u8]) -> String {
@@ -1751,3 +1755,7 @@ impl DeviceProvider for MockProvider {
 #[cfg(test)]
 #[path = "device_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "device_crypto_tests.rs"]
+mod crypto_tests;

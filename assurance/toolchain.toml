@@ -140,6 +140,13 @@ statement = "Reads the symbols the KV fence's start and end addresses are comput
 # statement about a different program.
 
 [[tool]]
+name = "arm-none-eabi-c++filt"
+role = "checker"
+provenance = "flake.lock:nixpkgs"
+pin = "31ecbaca1bdefa45dffc409f0250bd8039ea0010"
+statement = "The CT and owner-binding gates use its standard Rust demangler for legacy and v0 linkage names. It ships in the same pinned gcc-arm-embedded package as the other ARM binutils; decoding failure is fatal, and raw linkage identities remain the data-flow boundary."
+
+[[tool]]
 name = "cargo-kani"
 role = "prover"
 provenance = "workflow:.github/workflows/ci.yml:KANI_VERSION"

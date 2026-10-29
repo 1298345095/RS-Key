@@ -47,9 +47,9 @@ specification references in this image, and reading the instances alone finds
 Two readers are imported rather than rewritten: `elf_gate` for which ELF, which
 tools, and the `DW_AT_producer` parser — a STRIPPED image would otherwise read
 as 45 absent owners and this gate would be decorative, so no producers is
-refused before anything else is judged — and `ct_gate.demangle` for the legacy
-`_ZN…` scheme 1332 of this image's symbols use, so a finding names a function
-and not a mangling. The roster and its production/test split come from
+refused before anything else is judged — and `rust_symbols` for standard
+legacy/v0 demangling and source attribution, so a finding names a function and
+not a mangling. The roster and its production/test split come from
 `token_refinement_gate`, which derives both from the tree.
 
 Scope is the DEFAULT image and the row's POSITION is what makes that true:
@@ -164,7 +164,7 @@ TRAIT_ITEM = re.compile(r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:unsafe[ \t]+)?tr
 #: `crates/rsk-device/src/ctap.rs` puts its parameter list on one line and the
 #: self type on the next.
 ITEM = re.compile(
-    r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:unsafe[ \t]+)?(?:impl|trait)\b([^{;]*)", re.M
+    r"\b(?:impl|trait)\b([^{;]*)"
 )
 
 #: The trees a caller is looked for in, and the trees a crate is looked for in.
@@ -373,21 +373,34 @@ def instances(dwarf: str, tables: dict[int, dict[int, str]]):
             current["file"] = relative(table.get(int(value), ""), comp_dir)
         elif key in ("DW_AT_specification", "DW_AT_abstract_origin"):
             current[key] = int(value.strip("<>"), 16)
-        elif key in ("DW_AT_low_pc", "DW_AT_inline", "DW_AT_declaration"):
+        elif key in ("DW_AT_low_pc", "DW_AT_inline", "DW_AT_declaration", "DW_AT_decl_line"):
             current[key] = value
+
+    names = ct_gate.demangle_many(
+        d["DW_AT_linkage_name"] for d in subprograms.values() if "DW_AT_linkage_name" in d
+    )
+
+    def inherited(die, key, depth=0):
+        if depth > 8:
+            return None
+        if key in die:
+            return die[key]
+        for origin_key in ("DW_AT_specification", "DW_AT_abstract_origin"):
+            origin = subprograms.get(die.get(origin_key))
+            if origin is not None and (value := inherited(origin, key, depth + 1)) is not None:
+                return value
+        return None
 
     def qualify(die: dict, fallback: str) -> str:
         """`FidoState::reset`, not `reset` — the KEY, and the whole of this bug.
 
-        Keeps `fallback` when the mangling is one `ct_gate` does not read (the v0
-        scheme, a C name): a wrong path would attribute a symbol to the wrong
-        function, and the collapse a fallback causes is caught downstream by the
-        source-anchored count.
+        C names retain the declaration fallback. An undecodable Rust linkage
+        name fails the batch instead of collapsing distinct owners silently.
         """
         mangled = die.get("DW_AT_linkage_name")
         if not mangled:
             return fallback
-        path = ct_gate.demangle(mangled)
+        path = names[mangled]
         return path if path.rsplit("::", 1)[-1] == fallback.rsplit("::", 1)[-1] else fallback
 
     def identity(die: dict, depth: int = 0):
@@ -411,6 +424,9 @@ def instances(dwarf: str, tables: dict[int, dict[int, str]]):
     for die in subprograms.values():
         site = identity(die)
         if site:
+            die["_source_line"] = inherited(die, "DW_AT_decl_line")
+            linkage = inherited(die, "DW_AT_linkage_name")
+            die["_spelling"] = names[linkage].spelling if linkage else site[1]
             by_site[site].append(die)
     inlined: collections.Counter = collections.Counter()
     for offset, count in call_sites.items():
@@ -540,6 +556,7 @@ def declarations(text: str, function: str) -> list[str]:
     than one at all is `state.rs` — so the exclusion is not written; a sibling
     behind an off feature would report as a shortfall, and the message names it.
     """
+    text = gate_lines.rust_code(text)
     blocks = []
     for head in ITEM.finditer(text):
         start = text.find("{", head.end())
@@ -568,7 +585,7 @@ def declarations(text: str, function: str) -> list[str]:
         item = item.strip().rsplit(" for ", 1)[-1].split("<")[0].split()
         blocks.append((start, cursor, item[0].split("::")[-1] if item else ""))
     found = []
-    for site in re.finditer(DECLARATION.format(name=re.escape(function)), text, re.M):
+    for site in re.finditer(rf"\bfn\s+{re.escape(function)}\b", text):
         # The LAST enclosing header is the innermost one — `blocks` is in source
         # order — and a `fn` in no `impl` at all is a free function, labelled "".
         inside = [b for b in blocks if b[0] < site.end() < b[1]]
@@ -695,6 +712,12 @@ def bind(site, dies, inlined, defined):
     for the rest is `symbol`, and reading the abstract half first would report a
     function `nm` defines as evidence-by-call-site.
     """
+    lines = {d.get("_source_line") for d in dies}
+    spellings = {d["_spelling"] for d in dies if "_spelling" in d}
+    if len(lines - {None}) > 1 or (len(spellings) > 1 and None in lines):
+        raise ValueError(
+            f"{site[1]} has ambiguous source declarations after generic normalization"
+        )
     concrete = [d for d in dies if "DW_AT_low_pc" in d]
     abstract = [d for d in dies if "DW_AT_inline" in d]
     names = sorted({d["DW_AT_linkage_name"] for d in dies if "DW_AT_linkage_name" in d})
@@ -823,7 +846,11 @@ def audit(root, registry_text=None, raw=None, sites=None, gated=None, floors=FLO
                 f" ({', '.join(k[1] for k in candidates)}) — the roster names this"
                 " owner by its bare name, so every function of that name is owed"
             )
-        judged = [bind(k, by_site[k], inlined, defined) for k in candidates]
+        try:
+            judged = [bind(k, by_site[k], inlined, defined) for k in candidates]
+        except ValueError as error:
+            findings.append(f"{axis} `{where}::{function}`: {error}")
+            continue
         # The WEAKEST answer is the owner's: a sibling with a symbol does not put
         # a function that is nowhere into the image, which is this row's defect.
         disposition, evidence = min(

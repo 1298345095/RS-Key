@@ -2,7 +2,7 @@
 // Copyright (C) 2026 RS-Key contributors
 
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { afterEach, test } from "node:test";
 import {
   addCommentOnce,
@@ -158,14 +158,41 @@ test("the publisher requests an audience-scoped GitHub OIDC token", async () => 
   );
 });
 
-test("the preview workflow grants OIDC and PR comment access with no upload secret", async () => {
-  const workflow = await readFile(new URL("../workflows/preview-publish.yml", import.meta.url), "utf8");
-  const publisher = await readFile(new URL("publish-preview.mjs", import.meta.url), "utf8");
-  assert.match(workflow, /id-token:\s*write/);
-  assert.match(workflow, /pull-requests:\s*write/);
-  assert.doesNotMatch(workflow, /issues:\s*write/);
-  assert.doesNotMatch(workflow, /RS_KEY_FLASHER_UPLOAD_TOKEN/);
-  assert.doesNotMatch(publisher, /RS_KEY_FLASHER_UPLOAD_TOKEN/);
+function assertPreviewPublisherDisabled(name, workflow) {
+  assert.doesNotMatch(
+    workflow,
+    /\bpublish-preview\.mjs\b/,
+    `${name} must not reference the external preview publisher`,
+  );
+}
+
+test("this fork's workflows do not invoke the external preview publisher", async () => {
+  const directory = new URL("../workflows/", import.meta.url);
+  const workflows = (await readdir(directory, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && /\.ya?ml$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  assert.ok(workflows.length > 0, "the workflow scan must inspect at least one file");
+  for (const name of workflows) {
+    assertPreviewPublisherDisabled(name, await readFile(new URL(name, directory), "utf8"));
+  }
+});
+
+test("renaming a workflow cannot enable the external preview publisher", () => {
+  for (const name of ["another-build.yml", "another-build.yaml"]) {
+    const workflow = 'jobs:\n  build:\n    steps:\n      - run: node .github/scripts/publish-preview.mjs\n';
+    assert.throws(
+      () => assertPreviewPublisherDisabled(name, workflow),
+      { message: `${name} must not reference the external preview publisher` },
+    );
+  }
+});
+
+test("the workflow policy permits the publisher's mocked unit tests", () => {
+  assertPreviewPublisherDisabled(
+    "ci.yml",
+    'jobs:\n  check:\n    steps:\n      - run: node --test .github/scripts/publish-preview.test.mjs\n',
+  );
 });
 
 test("CI adds the partition table before UF2 conversion", async () => {

@@ -35,6 +35,8 @@ import pathlib
 import sys
 import tomllib
 
+import pytest
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import gate_lines  # noqa: E402
 import owner_binding_gate as gate  # noqa: E402
@@ -156,19 +158,19 @@ FIDO_RESET = """ <1><b0000>: Abbrev Number: 14 (DW_TAG_subprogram)
     <b0012>   DW_AT_decl_line   : 426
 """
 SIBLING_RESETS = """ <1><b1000>: Abbrev Number: 169 (DW_TAG_subprogram)
-    <b1002>   DW_AT_linkage_name: (indirect string, offset: 0x2af310): _ZN8rsk_fido5state14AssertionState5reset17haaaaaaaaaaaaaaaaE
+    <b1002>   DW_AT_linkage_name: (indirect string, offset: 0x2af310): _ZN8rsk_fido5state14AssertionState5reset17h0123456789abcdeaE
     <b1006>   DW_AT_name        : (indirect string, offset: 0x209f00): reset
     <b100a>   DW_AT_decl_file   : 3
     <b100c>   DW_AT_decl_line   : 96
     <b1012>   DW_AT_inline      : 1\t(inlined)
  <1><b2000>: Abbrev Number: 169 (DW_TAG_subprogram)
-    <b2002>   DW_AT_linkage_name: (indirect string, offset: 0x2af320): _ZN8rsk_fido5state13CredMgmtState5reset17hbbbbbbbbbbbbbbbbE
+    <b2002>   DW_AT_linkage_name: (indirect string, offset: 0x2af320): _ZN8rsk_fido5state13CredMgmtState5reset17h0123456789abcdebE
     <b2006>   DW_AT_name        : (indirect string, offset: 0x209f00): reset
     <b200a>   DW_AT_decl_file   : 3
     <b200c>   DW_AT_decl_line   : 193
     <b2012>   DW_AT_inline      : 1\t(inlined)
  <1><b3000>: Abbrev Number: 169 (DW_TAG_subprogram)
-    <b3002>   DW_AT_linkage_name: (indirect string, offset: 0x2af330): _ZN8rsk_fido5state14LargeBlobState5reset17hccccccccccccccccE
+    <b3002>   DW_AT_linkage_name: (indirect string, offset: 0x2af330): _ZN8rsk_fido5state14LargeBlobState5reset17h0123456789abcdecE
     <b3006>   DW_AT_name        : (indirect string, offset: 0x209f00): reset
     <b300a>   DW_AT_decl_file   : 3
     <b300c>   DW_AT_decl_line   : 241
@@ -230,7 +232,7 @@ subject = "bit-for-bit"
 method = "MEASURED"
 artifact = "result/firmware.uf2"
 build = "nix build .#firmware"
-verified_by = ".github/workflows/release-build.yml"
+verified_by = ".github/workflows/deep-checks.yml"
 statement = "the published images rebuild bit-identical; this gate does not discharge it"
 """
 
@@ -447,14 +449,14 @@ def test_the_row_this_gate_discharges_may_not_name_a_second_verifier():
 
 def test_a_row_this_gate_does_not_discharge_must_name_its_verifier():
     findings, _ = run(CLAIMS.replace(
-        'verified_by = ".github/workflows/release-build.yml"\n', ""
+        'verified_by = ".github/workflows/deep-checks.yml"\n', ""
     ) + ABSENT)
     assert any("claim 2: no `verified_by`" in f for f in findings), findings
 
 
 def test_a_verifier_that_is_not_a_file_is_refused():
     findings, _ = run(CLAIMS.replace(
-        ".github/workflows/release-build.yml", ".github/workflows/no-such-job.yml"
+        ".github/workflows/deep-checks.yml", ".github/workflows/no-such-job.yml"
     ) + ABSENT)
     assert any("no workflow of this repo" in f for f in findings), findings
 
@@ -463,16 +465,15 @@ def test_a_verifier_that_is_a_page_rather_than_a_job_is_refused():
     """The bypass `f124135` threw out one registry over, in this rule's own
     shape: `README.md` exists, mentions `nix build`, and verifies nothing."""
     findings, _ = run(CLAIMS.replace(
-        ".github/workflows/release-build.yml", "README.md"
+        ".github/workflows/deep-checks.yml", "README.md"
     ) + ABSENT)
     assert any("no workflow of this repo" in f for f in findings), findings
 
 
 def test_a_workflow_that_runs_the_build_is_what_verifies_it():
-    """Not "a workflow that exists": measured over this repo's eight, four
-    executed `nix build` lines in `release-build.yml` and none in `ci.yml`."""
+    """A verifier must execute the requested build, not merely exist."""
     findings, _ = run(CLAIMS.replace(
-        ".github/workflows/release-build.yml", ".github/workflows/ci.yml"
+        ".github/workflows/deep-checks.yml", ".github/workflows/ci.yml"
     ) + ABSENT)
     assert any("runs no `nix build`" in f for f in findings), findings
 
@@ -569,14 +570,34 @@ def test_an_owner_reached_only_through_a_specification_is_still_found():
     assert any("crates/rsk-fido/src/state.rs::mark_token_used" in f for f in findings), findings
 
 
+V0_RESETS = {
+    "_ZN8rsk_fido5state9FidoState5reset17h0123456789abcdefE":
+        "_RNvMs3_NtCsb9cJKSpPWap_8rsk_fido5stateNtB5_9FidoState5reset",
+    "_ZN8rsk_fido5state14AssertionState5reset17h0123456789abcdeaE":
+        "_RNvMNtCsb9cJKSpPWap_8rsk_fido5stateNtB2_14AssertionState5reset",
+    "_ZN8rsk_fido5state13CredMgmtState5reset17h0123456789abcdebE":
+        "_RNvMs_NtCsb9cJKSpPWap_8rsk_fido5stateNtB4_13CredMgmtState5reset",
+    "_ZN8rsk_fido5state14LargeBlobState5reset17h0123456789abcdecE":
+        "_RNvMs0_NtCsb9cJKSpPWap_8rsk_fido5stateNtB5_14LargeBlobState5reset",
+}
+
+
+def reset_mangling(text, v0):
+    for legacy, current in V0_RESETS.items():
+        if v0:
+            text = text.replace(legacy, current)
+    return text
+
+
 # ---- a site is a qualified path, not a bare name ------------------------------
 
 
-def test_four_functions_of_one_name_are_four_sites():
+@pytest.mark.parametrize("v0", [False, True], ids=["legacy", "v0"])
+def test_four_functions_of_one_name_are_four_sites(v0):
     """The defect this row shipped with. Keyed on `DW_AT_name`, `state.rs::reset`
     was ONE site merging twelve DIEs of four functions, and `bind` then took its
     concrete instance from one and its symbol from another."""
-    by_site, _inlined = gate.instances(DWARF + FIDO_RESET + SIBLING_RESETS, gate.source_paths(RAWLINE))
+    by_site, _inlined = gate.instances(reset_mangling(DWARF + FIDO_RESET + SIBLING_RESETS, v0), gate.source_paths(RAWLINE))
     resets = sorted(k[1] for k in by_site if k[1].rsplit("::", 1)[-1] == "reset")
     assert resets == [
         "rsk_fido::state::AssertionState::reset",
@@ -597,21 +618,18 @@ def test_an_instance_with_no_linkage_name_keeps_its_declarations_path():
     assert (state, "mark_token_used") not in by_site
 
 
-def test_a_mangling_this_reader_does_not_speak_keeps_the_bare_name():
-    """`ct_gate.demangle` returns the v0 scheme and plain C names unchanged, and
-    a path whose last component is not the `fn` is not that function's path. The
-    fallback is the bare name — a collapse the source-anchored count catches, and
-    strictly better than attributing a symbol to the wrong function."""
+def test_v0_linkage_preserves_the_qualified_owner():
     v0 = DWARF.replace(
         "_ZN8rsk_fido5reset5sweep17hb74b7f7c3f715bcfE",
         "_RNvNtCsbG6fPTLZAcM_8rsk_fido5reset5sweep",
     )
     by_site, _inlined = gate.instances(v0, gate.source_paths(RAWLINE))
-    assert ("crates/rsk-fido/src/reset.rs", "sweep") in by_site
-    assert ("crates/rsk-fido/src/reset.rs", "rsk_fido::reset::sweep") not in by_site
+    assert ("crates/rsk-fido/src/reset.rs", "rsk_fido::reset::sweep") in by_site
+    assert ("crates/rsk-fido/src/reset.rs", "sweep") not in by_site
 
 
-def test_every_function_of_the_name_the_file_declares_is_owed():
+@pytest.mark.parametrize("v0", [False, True], ids=["legacy", "v0"])
+def test_every_function_of_the_name_the_file_declares_is_owed(v0):
     """The false pass, driven. Deleting the two production callers of the
     `authenticatorReset` session wipe drops
     `_ZN8rsk_fido5state9FidoState5reset17h…E` from the image, and the owner's
@@ -619,7 +637,7 @@ def test_every_function_of_the_name_the_file_declares_is_owed():
     four, and never from the image, where three is all there is to count."""
     findings, _ = run(
         sites=SITES + [RESET_SITE],
-        raw=raw(dwarf=DWARF + SIBLING_RESETS, defined=DEFINED),
+        raw=raw(dwarf=reset_mangling(DWARF + SIBLING_RESETS, v0), defined=DEFINED),
     )
     assert len(findings) == 1, findings
     assert "declares 4 `fn reset` (AssertionState, CredMgmtState, LargeBlobState, FidoState)" in findings[0]
@@ -1113,3 +1131,90 @@ def test_the_table_can_go_red():
     """
     assert gate.SUBJECTS["owner->image"] == gate.DISCHARGED
     assert gate.SUBJECTS["bit-for-bit"] != gate.DISCHARGED
+
+
+# These were emitted by rustc's v0 mangler, not assembled by the parser under test.
+GENERIC_OWNERS = (
+    "_RNvMCshZXx2BFZwZ5_11rsk_fixtureINtB2_5OwnerhE5resetB2_",
+    "_RNvMCshZXx2BFZwZ5_11rsk_fixtureINtB2_5OwnertE5resetB2_",
+)
+SPECIALIZED_OWNERS = (
+    "_RNvMs_CshZXx2BFZwZ5_11rsk_fixtureINtB4_5OwnerhE5clear",
+    "_RNvMs0_CshZXx2BFZwZ5_11rsk_fixtureINtB5_5OwnertE5clear",
+)
+SPECIALIZED_TRAITS = (
+    "_RNvXs1_CshZXx2BFZwZ5_11rsk_fixtureINtB5_5OwnerhEINtB5_5ResethE5reset",
+    "_RNvXs2_CshZXx2BFZwZ5_11rsk_fixtureINtB5_5OwnerhEINtB5_5ResettE5reset",
+)
+
+
+def generic_dwarf(names, lines, function):
+    out = DWARF
+    for index, (name, line) in enumerate(zip(names, lines)):
+        offset = 0xc0000 + index * 0x100
+        out += f"""
+ <1><{offset:x}>: Abbrev Number: 14 (DW_TAG_subprogram)
+    <{offset + 1:x}> DW_AT_linkage_name: {name}
+    <{offset + 2:x}> DW_AT_name: {function}
+    <{offset + 3:x}> DW_AT_decl_file: 3
+    <{offset + 4:x}> DW_AT_low_pc: 0x10000000
+"""
+        if line is not None:
+            out += f"    <{offset + 5:x}> DW_AT_decl_line: {line}\n"
+    return out
+
+
+@pytest.mark.parametrize(
+    "names,function", [(SPECIALIZED_OWNERS, "clear"), (SPECIALIZED_TRAITS, "reset")],
+    ids=["concrete-impl", "trait-argument"],
+)
+@pytest.mark.parametrize("lines", [(12, 18), (12, None), (None, None)])
+def test_distinct_or_unknown_source_declarations_cannot_share_binding(names, function, lines):
+    by_site, inline = gate.instances(generic_dwarf(names, lines, function), gate.source_paths(RAWLINE))
+    site = next(k for k in by_site if k[1].startswith(("rsk_fixture", "<rsk_fixture")))
+    with pytest.raises(ValueError, match="ambiguous source declarations"):
+        gate.bind(site, by_site[site], inline, set(names))
+
+
+def test_multiple_instantiations_of_one_source_declaration_can_bind():
+    by_site, inline = gate.instances(generic_dwarf(GENERIC_OWNERS, (12, 12), "reset"), gate.source_paths(RAWLINE))
+    site = ("crates/rsk-fido/src/state.rs", "rsk_fixture::Owner::reset")
+    assert gate.bind(site, by_site[site], inline, set(GENERIC_OWNERS))[0] == "symbol"
+
+
+@pytest.mark.parametrize(
+    "names,function,source",
+    [
+        (SPECIALIZED_OWNERS, "clear", "impl Owner<u8> { fn clear() {} } impl Owner<u16> { fn clear() {} }"),
+        (SPECIALIZED_TRAITS, "reset", "impl Reset<u8> for Owner<u8> { fn reset() {} } impl Reset<u16> for Owner<u8> { fn reset() {} }"),
+    ],
+    ids=["concrete-impl", "trait-argument"],
+)
+def test_two_definitions_on_one_source_line_cannot_be_certified_as_one(tmp_path, names, function, source):
+    root = tmp_path / "tree"
+    file = "crates/rsk-fido/src/state.rs"
+    for relative in (file, ".github/workflows/deep-checks.yml", "assurance/image.toml"):
+        (root / relative).parent.mkdir(parents=True, exist_ok=True)
+    (root / file).write_text(source)
+    (root / ".github/workflows/deep-checks.yml").write_text("jobs:\n  build:\n    steps:\n      - run: nix build .#firmware\n")
+    (root / "assurance/image.toml").write_text((ROOT / "assurance/image.toml").read_text())
+    assert gate.declarations(source, function) == ["Owner", "Owner"]
+    findings, _ = gate.audit(
+        root, registry_text=CLAIMS,
+        raw=raw(dwarf=generic_dwarf(names, (1, 1), function), defined="\n".join(names)),
+        sites=[("volatile_writer", file, function)], gated=set(), floors={"inlined": 0},
+    )
+    assert any(f"declares 2 `fn {function}`" in f and "carries 1" in f for f in findings), findings
+
+
+def test_inline_declarations_ignore_comment_and_string_lookalikes():
+    source = 'impl Owner { fn reset() {} } // fn reset() {}\nconst S: &str = "fn reset() {}";'
+    assert gate.declarations(source, "reset") == ["Owner"]
+
+
+def test_bad_rust_linkage_is_a_finding_instead_of_a_bare_owner_fallback():
+    findings, summary = run(raw=raw(dwarf=DWARF.replace(
+        "_ZN8rsk_fido5reset5sweep17hb74b7f7c3f715bcfE", "_Rnot_a_valid_symbol"
+    )))
+    assert any("Rust demangler could not decode" in f for f in findings)
+    assert not summary

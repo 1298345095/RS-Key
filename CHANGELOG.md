@@ -43,12 +43,33 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 - **Refresh the build toolchain and compatible dependencies**: pin Rust 1.99.1
   on both the Nix and rustup paths, update the main Nix inputs and Cargo locks,
   and move Brainpool to stable 0.14. Keep the existing Embassy revision,
-  RustCrypto API generations, and patched sequential-storage 8.0.0; exact
+  firmware RustCrypto API generations, and patched sequential-storage 8.0.0; exact
   storage constraints preserve that fork during future updates.
   Keep `bcdDevice` at the branch's existing **0x09DD** while this upgrade
   remains under validation.
+- **Update the host TUI to P-256 0.14** and version 0.3.13. Migrate SEC1 point
+  conversion and ephemeral-key generation to the new APIs while preserving
+  ECDH, PIN-protocol key derivation, MSE and checkpoint-signature formats.
+  Fixed ECDH, HKDF and ECDSA vectors cover the migration, including leading-zero
+  shared secrets and invalid signatures. The firmware version is unchanged.
+- **Record 78 maintainer-authorized, exact-version cargo-vet exemptions** for
+  the dependency refresh, following the existing exemption policy. Keep the
+  prior entries, criteria and audit records intact; new notes explicitly
+  record accepted risk, not a completed source audit.
 
 ### Fixed
+
+- **Read both legacy and Rust v0 symbols in the CT and owner-binding gates**
+  through the standard Rust demangler. Keep raw inline-frame identities for
+  data-flow boundaries and normalize only source identities, retaining trait
+  identities and rejecting ambiguous declarations. Preserve the existing
+  coverage floors and add real-image positive and injected-leak regression
+  checks. Register the demangler against the existing pinned ARM toolchain.
+  The owner-binding reproducibility claim now points to the manual
+  default-firmware rebuild job and describes only that job's actual scope.
+- **Match preview workflow tests to this fork's disabled external publisher**:
+  scan every workflow for the former publication entry point, including renamed
+  workflow files, while retaining mock publisher tests and UF2 packaging checks.
 
 - **Clear Rust 1.99 lint and deprecation diagnostics** with fixed-size slice
   iteration and the emulator's supported atomic-update API. The host-side PIO
