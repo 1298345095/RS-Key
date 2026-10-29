@@ -11,9 +11,11 @@ unrelated kinds live here:
 - **A host-side macro compatibility patch** — `proc-macro-error2/` 2.0.1,
   used by the PIO compiler, retains its MIT/Apache-2.0 licenses. The sole change
   makes the existing `proc_macro` import public so its public re-export remains
-  valid on newer Rust. `proc-macro-error2.patch` records the published crate's
-  checksum, upstream revision and complete diff. The root and `fuzz/` manifests
-  use this same source; it adds no firmware runtime dependency.
+  valid on newer Rust. With Rust 1.99.1, the unpatched registry dependency still
+  compiles with a future-incompatibility warning; an unpatched local path copy
+  fails with E0365. `proc-macro-error2.patch` records the published crate's
+  checksum, upstream revision and complete diff. The root manifest uses this
+  source; `fuzz/` no longer depends on it. It adds no firmware runtime dependency.
 - **A vendored crate carrying a local fork** — `sequential-storage/` plus
   `sequential-storage.patch`, wired into `[patch.crates-io]` by the root,
   `fuzz/` and `tools/emu/` manifests. All three, or the emulator runs a

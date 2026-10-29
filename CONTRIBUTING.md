@@ -60,9 +60,11 @@ Run **CI** for the main gate and **Emulator** for socket and USB/IP suites.
 **Deep checks** offers `daily` (the default), `weekly`, and `all` suites; the
 larger suites include long-running proof, mutation, and fuzzing jobs. Artifacts
 stay attached to runs in this repository. These workflows need no maintainer
-secrets and do not publish releases, previews, or a documentation site. The
-separate release-assurance contract still requires a fork-specific publishing
-decision; restoring validation does not make that gate pass.
+secrets and do not publish releases, previews, or a documentation site.
+Automatic GitHub Release publication is disabled for this fork; CI output
+stays in Actions artifacts. The inherited release-assurance contract still
+needs to be reconciled with this policy; validation restoration alone does
+not make that gate pass.
 
 The default host target is `aarch64-apple-darwin` because that's where
 development happens; on Linux run `HOST_TARGET=x86_64-unknown-linux-gnu

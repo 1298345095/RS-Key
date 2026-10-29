@@ -1,6 +1,10 @@
 # Releases & verification
 
-Releases live on the [GitHub Releases](https://github.com/TheMaxMur/RS-Key/releases)
+> **This fork:** Download firmware artifacts from manually dispatched runs in [1298345095/RS-Key Actions](https://github.com/1298345095/RS-Key/actions).
+> CI does not publish GitHub Releases. The release formats and verification commands below describe the upstream project's release process.
+> Its signature and provenance examples do not apply to this fork's artifacts; the upstream signer identities are retained for upstream downloads.
+
+Upstream releases live on the [GitHub Releases](https://github.com/TheMaxMur/RS-Key/releases)
 page. Each is cut from a `v*` git tag by the
 [release workflow](https://github.com/TheMaxMur/RS-Key/blob/main/.github/workflows/release.yml).
 It builds every artifact reproducibly, hashes it, and signs the manifest.

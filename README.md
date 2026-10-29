@@ -1,7 +1,11 @@
 # RS-Key
 
-[![ci](https://github.com/TheMaxMur/RS-Key/actions/workflows/ci.yml/badge.svg)](https://github.com/TheMaxMur/RS-Key/actions/workflows/ci.yml)
-[![deep-checks](https://github.com/TheMaxMur/RS-Key/actions/workflows/deep-checks.yml/badge.svg)](https://github.com/TheMaxMur/RS-Key/actions/workflows/deep-checks.yml)
+> **This fork:** Download firmware artifacts from manually dispatched runs in [1298345095/RS-Key Actions](https://github.com/1298345095/RS-Key/actions).
+> CI does not publish GitHub Releases. The upstream release, flasher and documentation links below refer to the original project.
+> Upstream signature and provenance examples describe its release process and do not apply to this fork's artifacts.
+
+[![ci](https://github.com/1298345095/RS-Key/actions/workflows/ci.yml/badge.svg)](https://github.com/1298345095/RS-Key/actions/workflows/ci.yml)
+[![deep-checks](https://github.com/1298345095/RS-Key/actions/workflows/deep-checks.yml/badge.svg)](https://github.com/1298345095/RS-Key/actions/workflows/deep-checks.yml)
 [![docs](https://github.com/TheMaxMur/RS-Key/actions/workflows/pages.yml/badge.svg)](https://themaxmur.github.io/RS-Key/)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14195/badge)](https://www.bestpractices.dev/projects/14195/silver)
 
@@ -164,7 +168,7 @@ The release images are reproducible, so you can rebuild any of them bit for bit
 ([docs/releases.md](docs/releases.md)). To build your own:
 
 ```sh
-git clone https://github.com/TheMaxMur/RS-Key && cd RS-Key
+git clone https://github.com/1298345095/RS-Key && cd RS-Key
 nix develop                       # toolchain, picotool, host tools, everything
 
 cargo build --release -p firmware

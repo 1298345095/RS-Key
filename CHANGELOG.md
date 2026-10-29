@@ -45,7 +45,8 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
   and move Brainpool to stable 0.14. Keep the existing Embassy revision,
   RustCrypto API generations, and patched sequential-storage 8.0.0; exact
   storage constraints preserve that fork during future updates.
-  `bcdDevice` → **0x09DE**.
+  Keep `bcdDevice` at the branch's existing **0x09DD** while this upgrade
+  remains under validation.
 
 ### Fixed
 

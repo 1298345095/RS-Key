@@ -3,6 +3,10 @@
 
 # Supply chain
 
+> **This fork:** Download firmware artifacts from manually dispatched runs in [1298345095/RS-Key Actions](https://github.com/1298345095/RS-Key/actions); CI does not publish GitHub Releases.
+> The signature and provenance examples below describe the upstream release process and do not apply to this fork's artifacts.
+> The inherited release manifest refers to removed upstream workflows; it is not an active release pipeline in this fork.
+
 How a downloaded RS-Key release proves it came from this source tree, was built
 by this project's CI, and pulls in only reviewed dependencies. And how you
 verify each claim yourself.
