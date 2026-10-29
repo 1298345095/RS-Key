@@ -39,18 +39,16 @@ vector_section = ".vector_table"
 
 # Every compiler whose output is IN the image, read out of the image's own DWARF
 # (`DW_AT_producer`, one per compile unit) and not out of `rustc -vV`, which
-# names the compiler on the PATH — the one that WOULD build it. Measured on this
-# profile at `9cafee7`: 165 compile units, 164 from the pinned rustc and ONE from
-# a 2021 nightly, the prebuilt `cortex-m` `asm/lib.rs` blob that ships as an
-# object and is never recompiled. `scripts/ct_gate.py` publishes the MAJORITY
-# producer as "built by" and claimed the set was held here while nothing held it,
-# so a third compiler could arrive through a dependency and be invisible to both.
+# names the compiler on the PATH — the one that WOULD build it. With
+# `cortex-m` 0.7.10 the assembly is compiled by the pinned toolchain; the old
+# prebuilt blob's 2021 nightly is no longer a producer in the default image.
+# `scripts/ct_gate.py` publishes the MAJORITY producer as "built by"; this list
+# holds the complete set so another compiler cannot arrive unnoticed.
 #
 # A rustc bump moves this list, deliberately: the toolchain the image was built
 # by is a fact worth re-reading, and the pin moving without this moving is the
 # case that would otherwise be silent.
 producers = [
-    "clang LLVM (rustc version 1.96.0 (ac68faa20 2026-05-25))",
-    "clang LLVM (rustc version 1.59.0-nightly (c5ecc1570 2021-12-15))",
+    "clang LLVM (rustc version 1.99.1 (58cf8f9c3 2026-10-13))",
 ]
 note = "The partition table fences the KV store from BOOTSEL; nothing fenced it from the linker, which is the overlap rule here."

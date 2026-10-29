@@ -49,7 +49,7 @@ let
     sourceRoot = "source/tools/tui";
     cargoLock.lockFile = ../tools/tui/Cargo.lock;
     nativeBuildInputs = [ pkgs.pkg-config ];
-    buildInputs = lib.optionals pkgs.stdenv.isLinux [
+    buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
       pkgs.pcsclite
       # libudev (hidapi's hidraw backend) — `udev` is systemd-minimal-libs, which
       # keeps libudev.so.1 in lib/; `systemd` does not, so it linked but lost the

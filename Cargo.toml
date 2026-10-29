@@ -81,13 +81,10 @@ p256 = { version = "0.14", default-features = false, features = ["ecdsa", "arith
 p384 = { version = "0.14", default-features = false, features = ["ecdsa", "arithmetic", "ecdh"] }
 p521 = { version = "0.14", default-features = false, features = ["ecdsa", "arithmetic", "ecdh"] }
 k256 = { version = "0.14", default-features = false, features = ["ecdsa", "arithmetic", "ecdh"] }
-# Brainpool for the OpenPGP applet. The bp256/bp384 wrappers are still 0.14.0-rc.15
-# (no stable release yet), but their ecdsa/elliptic-curve/primeorder deps resolve to
-# the SAME stable 0.14 line as the NIST curves above — one EC generation, no
-# duplication. The looped crypto-bigint field backend is picked in .cargo/config
-# (`bp*_backend="bigint"`) — smaller than fiat, and brainpool is not a hot path.
-bp256 = { version = "=0.14.0-rc.15", default-features = false, features = ["ecdsa", "arithmetic", "sha256"] }
-bp384 = { version = "=0.14.0-rc.15", default-features = false, features = ["ecdsa", "arithmetic", "sha384"] }
+# Brainpool shares the stable EC 0.14 generation with the NIST curves.
+# The looped bigint backend in .cargo/config keeps these non-hot paths smaller.
+bp256 = { version = "0.14", default-features = false, features = ["ecdsa", "arithmetic", "sha256"] }
+bp384 = { version = "0.14", default-features = false, features = ["ecdsa", "arithmetic", "sha384"] }
 # ecdsa 0.17 / elliptic-curve 0.14: the single EC generation shared by every curve.
 # `ecdsa` is named directly for the brainpool SigningKey (bp* don't alias it),
 # `elliptic-curve` for brainpool ECDH.

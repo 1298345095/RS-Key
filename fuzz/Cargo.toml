@@ -441,6 +441,4 @@ bench = false
 # kv_durability fuzz targets exercise the exact KV code the firmware ships (see the
 # root Cargo.toml [patch] note + third_party/sequential-storage.patch).
 [patch.crates-io]
-# Rust compatibility for the host-side PIO macro dependency; see the recorded patch.
-proc-macro-error2 = { path = "../third_party/proc-macro-error2" }
 sequential-storage = { path = "../third_party/sequential-storage" }

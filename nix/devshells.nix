@@ -13,6 +13,23 @@
   rskBin,
   rskTui,
 }:
+let
+  # Nixpkgs' Rust 1.99 uses an older LLVM (nixpkgs#578990).
+  # Keep coverage's compiler and profiling tools on the firmware's LLVM version.
+  cargoLlvmCov =
+    (pkgs.cargo-llvm-cov.override {
+      rustPlatform = pkgs.makeRustPlatform {
+        cargo = toolchain;
+        rustc = toolchain;
+      };
+    }).overrideAttrs
+      (old: {
+        env = old.env // {
+          LLVM_COV = "${toolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/bin/llvm-cov";
+          LLVM_PROFDATA = "${toolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/bin/llvm-profdata";
+        };
+      });
+in
 {
   default = pkgs.mkShell {
     packages = [
@@ -34,7 +51,7 @@
       pkgs.cargo-deny # SCA: advisories + licenses + source/ban policy
       pkgs.cargo-cyclonedx # CycloneDX SBOM generation (release provenance)
       pkgs.cargo-vet # supply-chain: provenance-of-review (audited dependency set)
-      pkgs.cargo-llvm-cov # host-crate line-coverage floor for the daily deep-checks
+      cargoLlvmCov # host-crate line-coverage floor for the daily deep-checks
       # Mutation testing (scripts/mutants-all.sh, weekly + `--in-diff` by hand).
       # Coverage says a line ran; this says a test would notice if it changed —
       # which is the property the `require_pin_inputs` gap was invisible to.
@@ -92,7 +109,7 @@
     buildInputs = [
       sdl2
     ]
-    ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+    ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
       pkgs.pcsclite
       pkgs.systemd # libudev, for the hidapi crate's hidraw backend
     ];
@@ -124,7 +141,7 @@
             pkgs.libgcrypt
             sdl2
           ]
-          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             pkgs.systemd
             pkgs.pcsclite
             # check.sh's fuzz-liveness row executes the libFuzzer binaries, whose
@@ -204,7 +221,7 @@
     # search the host's /usr/lib (broke the deep-checks CI job, every target
     # exit 127). Lazy `optionalString` keeps darwin from evaluating the gcc
     # lib path at all — dyld finds the system libc++ there anyway.
-    LD_LIBRARY_PATH = pkgs.lib.optionalString pkgs.stdenv.isLinux (
+    LD_LIBRARY_PATH = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux (
       pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ]
     );
     shellHook = ''

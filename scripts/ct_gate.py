@@ -930,12 +930,10 @@ def toolchain(root: pathlib.Path, elf: pathlib.Path) -> str:
     )
     if not names:
         return "unknown"
-    # The MAJORITY producer, because the image is not built by one compiler: a
-    # prebuilt `cortex-m` asm blob carries a 2021 nightly's string, and picking
-    # the first name alphabetically published that one as "built by". The SET is
-    # `assurance/image.toml`'s `producers`, checked by `scripts/elf_gate.py` —
-    # which is what this comment claimed while that file had no producer code at
-    # all, so a third compiler was invisible to both. Shared parser, one string.
+    # Use the MAJORITY producer for the summary. Before cortex-m 0.7.10, its
+    # prebuilt assembly carried a 2021 nightly's string, and alphabetic order
+    # would have published that as "built by". The complete SET is registered
+    # in `assurance/image.toml` and checked by `scripts/elf_gate.py`.
     return names.most_common(1)[0][0]
 
 

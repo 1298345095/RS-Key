@@ -14,7 +14,7 @@ publish = false
 [dependencies]
 rsk-fs = { workspace = true }
 rsk-sdk = { workspace = true }
-sequential-storage = "8"
+sequential-storage = "=8.0.0"
 # The async NorFlash traits the backend is generic over (the same 0.4
 # `sequential-storage` uses).
 embedded-storage-async = "0.4"

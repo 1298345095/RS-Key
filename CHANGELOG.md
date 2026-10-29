@@ -38,6 +38,15 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+### Changed
+
+- **Refresh the build toolchain and compatible dependencies**: pin Rust 1.99.1
+  on both the Nix and rustup paths, update the main Nix inputs and Cargo locks,
+  and move Brainpool to stable 0.14. Keep the existing Embassy revision,
+  RustCrypto API generations, and patched sequential-storage 8.0.0; exact
+  storage constraints preserve that fork during future updates.
+  `bcdDevice` → **0x09DE**.
+
 ### Fixed
 
 - **Clear Rust 1.99 lint and deprecation diagnostics** with fixed-size slice
