@@ -766,6 +766,11 @@ fn make_credential_inner<S: Storage, R: Rng>(
     // cert and no `ep` (CTAP2.1 §6.1.3, conformance Enterprise-Attestation F-6).
     let ea_performed = req.enterprise_attestation == Some(2)
         || (req.enterprise_attestation == Some(1) && rp_eligible_for_vendor_ea(ctx.fs, rp_id_hash));
+    
+    // Ordinary packed Basic Attestation uses the imported org key.
+    // Preserve the original EA Type 1 RP allowlist behavior.
+    let use_org_att = ea_performed || req.enterprise_attestation.is_none();
+    
     // Every credential ships packed **basic** attestation: the device key signs and
     // the x5c leaf is its cert. Both alternatives break clients — an empty
     // `fmt:"none"` statement is rejected by OpenSSH < 10.0, which verifies any
@@ -782,7 +787,7 @@ fn make_credential_inner<S: Storage, R: Rng>(
     let (sig_len, chain_len, certs) = if omit_att {
         (0, 0, 0)
     } else {
-        make_attestation(ctx, seed, &ad[..ad_len + 32], ea_performed, &mut att)?
+        make_attestation(ctx, seed, &ad[..ad_len + 32], use_org_att, &mut att)?
     };
 
     // largeBlobKey response field (0x05) — resident credentials only.
@@ -957,10 +962,10 @@ fn make_attestation<S: Storage, R: Rng>(
     ctx: &mut Ctx<S, R>,
     seed: &[u8; 32],
     signed: &[u8],
-    ea_performed: bool,
+    use_org_att: bool,
     att: &mut AttBufs,
 ) -> Result<(usize, usize, u8), CtapError> {
-    let org_key = if ea_performed {
+    let org_key = if use_org_att {
         load_att_key(&ctx.dev, ctx.fs)
     } else {
         None
