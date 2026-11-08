@@ -1,3 +1,4 @@
+
 name: Build RS-Key YubiKey5 2MB
 
 on:
@@ -11,6 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 150
 
+    env:
+      AAGUID: 39a5647e-1853-446c-a1f6-a79bae9f5bc7
+      VIDPID: Yubikey5
+      FLASH_SIZE: 2M
+      KVMAIN: 896K
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -21,13 +28,56 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@main
 
       - name: Build firmware
+        shell: bash
         run: |
-          AAGUID=39a5647e-1853-446c-a1f6-a79bae9f5bc7 \
-          VIDPID=Yubikey5 \
-          nix build --impure .#firmware-2mb
+          set -euo pipefail
+
+          nix develop -c env \
+            AAGUID="$AAGUID" \
+            VIDPID="$VIDPID" \
+            FLASH_SIZE="$FLASH_SIZE" \
+            KVMAIN="$KVMAIN" \
+            cargo build --release -p firmware
+
+      - name: Verify compiled AAGUID
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EXPECTED_AAGUID="${AAGUID//-/}"
+
+          grep -hFx \
+            "cargo:rustc-env=PK_AAGUID=$EXPECTED_AAGUID" \
+            target/thumbv8m.main-none-eabihf/release/build/rsk-fido-*/output
+
+          echo "AAGUID build configuration verified."
+
+      - name: Generate ELF and UF2
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p result
+
+          nix develop -c scripts/pt.sh \
+            target/thumbv8m.main-none-eabihf/release/firmware \
+            result/firmware-2mb.elf
+
+          nix develop -c picotool uf2 convert \
+            result/firmware-2mb.elf -t elf \
+            result/firmware-2mb.uf2
+
+      - name: Verify build outputs
+        run: |
+          ls -lh result/
+          test -s result/firmware-2mb.uf2
+          test -s result/firmware-2mb.elf
 
       - name: Upload firmware
         uses: actions/upload-artifact@v7
         with:
           name: RS-Key-YubiKey5-RP2350-Zero-CM
-          path: result/firmware-2mb.uf2
+          path: |
+            result/firmware-2mb.uf2
+            result/firmware-2mb.elf
+          if-no-files-found: error
