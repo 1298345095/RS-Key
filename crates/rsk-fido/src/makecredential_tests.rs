@@ -2399,6 +2399,74 @@ fn verifies_under(key: &P256Key, auth_data: &[u8], sig: &[u8]) -> bool {
         .is_ok()
 }
 
+#[test]
+fn ordinary_packed_attestation_uses_the_org_key_without_ep() {
+    let req = mc_build(4, good_params);
+    let c1 = [0x30u8, 0x03, 1, 2, 3];
+    let c2 = [0x30u8, 0x02, 7, 7];
+    let mut chain = [0u8; 64];
+    let n = cert::att_chain_pack(&[&c1[..], &c2[..]].concat(), &mut chain).unwrap();
+    let org = P256Key::from_scalar(&[0x21u8; 32]).unwrap();
+    for enable in [false, true] {
+        let (resp, _) = run_ea_with(RamStorage::new(), &req, enable, |fs| {
+            install_org(fs, Some(&chain[..n]));
+        })
+        .unwrap();
+        assert_eq!(x5c_of(&resp), [c1.to_vec(), c2.to_vec()]);
+        let mut d = Decoder::new(&resp);
+        assert_eq!(d.map().unwrap(), Some(3), "no `ep`, EA enabled={enable}");
+        assert_eq!(d.u8().unwrap(), 1);
+        assert_eq!(d.str().unwrap(), "packed");
+        assert_eq!(d.u8().unwrap(), 2);
+        let ad = d.bytes().unwrap();
+        assert_eq!(d.u8().unwrap(), 3);
+        assert_eq!(d.map().unwrap(), Some(3));
+        assert_eq!(d.str().unwrap(), "alg");
+        assert_eq!(d.i64().unwrap(), ALG_ES256);
+        assert_eq!(d.str().unwrap(), "sig");
+        assert!(
+            verifies_under(&org, ad, d.bytes().unwrap()),
+            "ordinary attestation uses the org key, EA enabled={enable}"
+        );
+    }
+}
+
+#[test]
+fn ordinary_none_attestation_skips_org_key_and_chain_reads() {
+    let packed = mc_build(4, good_params);
+    let none = mc_build(5, |e| {
+        good_params(e);
+        e.u8(11).unwrap().array(1).unwrap().str("none").unwrap();
+    });
+    let mut chain = [0u8; 64];
+    let n = cert::att_chain_pack(&[0x30u8, 0x03, 1, 2, 3], &mut chain).unwrap();
+    for fid in [crate::consts::EF_ATT_KEY.get(), EF_ATT_CHAIN] {
+        let register = |req: &[u8]| {
+            let (backend, medium) = rsk_fs::storage::faults::ProbeStuck::new();
+            run_ea_with(backend, req, false, |fs| {
+                install_org(fs, Some(&chain[..n]));
+                medium.stick(Some(fid));
+            })
+            .map(|(resp, _)| resp)
+        };
+        assert_eq!(
+            register(&packed).unwrap_err(),
+            CtapError::Other,
+            "control: packed attestation reads the faulted record {fid:#x}"
+        );
+        let resp = register(&none).expect("none must skip the faulted org record");
+        let mut d = Decoder::new(&resp);
+        assert_eq!(d.map().unwrap(), Some(3), "no `ep`");
+        assert_eq!(d.u8().unwrap(), 1);
+        assert_eq!(d.str().unwrap(), "none");
+        assert_eq!(d.u8().unwrap(), 2);
+        d.bytes().unwrap();
+        assert_eq!(d.u8().unwrap(), 3);
+        assert_eq!(d.map().unwrap(), Some(0), "empty attestation statement");
+        assert_eq!(d.position(), resp.len());
+    }
+}
+
 /// Over an org chain that is not whole (cut as ab8bcfc3 describes, misframed, or
 /// missing) an enterprise request registers on the device's own key and cert,
 /// without `ep`. ab8bcfc3 promised that; the registration failed CTAP1_ERR_OTHER.

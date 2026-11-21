@@ -588,6 +588,12 @@ RS-Key implements:
   None is performed over an org key whose stored chain is missing or does not read
   back whole (RS-Key `0x0A6A`+): the device's own certificate attests, without
   `ep`, and the preference holds.
+  **This fork uses the imported org key for ordinary packed makeCredential.**
+  With `enterpriseAttestation` absent, a usable org key and complete chain supply
+  the signature and `x5c`, even while EA is disabled; the response omits `ep`.
+  Exactly `["none"]` skips both org-key and chain reads. An unusable key or cut
+  chain falls back to the device certificate; a storage read fault returns an
+  error for the host to retry.
   **Vendor-facilitated (type 1) enterprise attestation reads a stored RP list.**
   `enterpriseAttestation: 1` returns `ep` and the org certificate only for an RP on
   that list; any other RP gets the ordinary `packed` statement with the device's own

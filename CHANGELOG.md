@@ -38,6 +38,15 @@ tag: the USB `bcdDevice` build counter (bumped on every behavior change), and
 
 ## [Unreleased]
 
+### Changed
+
+- Preserve this fork's imported-key attestation on the 0.5.0 codebase: ordinary
+  packed registrations use the org key and chain without `ep`; explicit EA
+  requests keep their RP-list rules, and `["none"]` skips org reads. Retain
+  upstream storage-fault handling and secret wiping. bcdDevice → `0x0BEE`.
+- Keep the personal YubiKey5 2MB build settings and package the combined
+  TrustZone ELF and UF2 through `scripts/build.sh`.
+
 ## [0.5.0] - 2026-11-21
 
 ### TL;DR
