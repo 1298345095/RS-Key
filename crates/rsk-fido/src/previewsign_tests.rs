@@ -1569,11 +1569,10 @@ fn an_enterprise_request_over_a_cut_chain_attests_no_signing_key() {
     assert_eq!(key.att_stmt, [0xA0], "an empty map");
 }
 
-/// The other half: with the org key installed but enterprise attestation not asked
-/// for, the org key vouches for nothing, since a signature under it names the
-/// organisation to the site: the device's key attests the credential, none its key.
+/// Ordinary packed attestation uses the org key and chain for the credential.
+/// Its previewSign signing key keeps `none` attestation without an EA request.
 #[test]
-fn a_registration_without_enterprise_attestation_keeps_the_org_key_out() {
+fn a_registration_without_enterprise_attestation_uses_org_for_the_credential_only() {
     let (mut board, org, chain) = enterprise_board();
     let input = generate_key(&[ALG_ESP256_SPLIT_ARKG], Some(1));
     let reg = registered(
@@ -1583,9 +1582,9 @@ fn a_registration_without_enterprise_attestation_keeps_the_org_key_out() {
     );
     assert!(!reg.fields.contains(&4), "epAtt: {:?}", reg.fields);
     let (sig, x5c) = packed(&reg.att_stmt);
-    assert_ne!(x5c, chain, "the org chain rode a registration without EA");
-    assert!(!attests(&org_key(&org), &reg.auth_data, &sig));
-    assert!(attests(&board.attestation_key(), &reg.auth_data, &sig));
+    assert_eq!(x5c, chain, "ordinary packed attestation uses the org chain");
+    assert!(attests(&org_key(&org), &reg.auth_data, &sig));
+    assert!(!attests(&board.attestation_key(), &reg.auth_data, &sig));
     let key = attested_key(reg.att_obj.as_deref().unwrap());
     assert_eq!(key.fmt, "none");
     assert_eq!(key.att_stmt, [0xA0], "an empty map");

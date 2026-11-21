@@ -180,9 +180,10 @@ The [FIPS-style profile guide](guides/fips.md) covers its validation status.
   `VIDPID=Yubikey5` build for interop. Linux device permissions and CCID
   driver recognition are separate from application discovery. See
   [Build options](build.md) and [Linux setup](linux.md).
-- **FIDO attestation can identify the device.** Ordinary packed basic
-  attestation carries a stable per-device certificate. A client that
-  receives that certificate can correlate registrations. A CTAP client
+- **FIDO attestation can identify the device or organization.** In this fork,
+  ordinary packed basic attestation uses an installed org key and chain,
+  with the per-device certificate as its fallback. A client that receives
+  the chain can correlate registrations to that identity. A CTAP client
   can request `attestationFormatsPreference: ["none"]` to omit the
   statement when enterprise attestation is not performed. An eligible
   enterprise request can return the provisioned organization's chain.

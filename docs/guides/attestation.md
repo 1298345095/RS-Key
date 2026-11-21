@@ -267,12 +267,16 @@ and chain is the explicit, gated `attestation clear`. Nothing else clears them.
 
 ## Privacy note
 
-A shared org chain makes credentials linkable *to the organization* across its
-relying parties. That is the entire point of EA, and why the spec gates it
-behind both an explicit per-request field and a device-wide enable. Ordinary
-(non-EA) makeCredential still carries the per-device certificate, which is
-linkable to the device but not to the organization; the org chain is served only
-on explicit EA requests.
+A shared org chain makes registrations linkable to the organization for clients
+that receive the chain. In this fork, ordinary packed makeCredential uses that
+chain when it is installed, independently of EA enablement, and omits `ep`.
+The device certificate is the fallback when no org key is installed or the
+installed key or chain is unusable; it can identify the individual device.
+
+An explicit CTAP `attestationFormatsPreference: ["none"]` omits the statement
+unless EA is performed. At the browser layer, WebAuthn `attestation: "none"`
+replaces a certificate-bearing authenticator statement with an empty `none`
+statement before delivering it to the site.
 
 ## Troubleshooting
 
