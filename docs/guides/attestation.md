@@ -113,12 +113,14 @@ rsk fido attestation clear [--pin …]
 - **U2F / CTAP1 registration** attests with the chain's **leaf** instead of the
   self-signed device cert (classic batch attestation: a U2F response carries
   exactly one certificate, so only the leaf travels).
-- **Ordinary makeCredential is untouched**: packed basic attestation under the
-  device's own certificate, no org chain. EA fires only when the platform sets
-  the `enterpriseAttestation` request field *and* `enableEnterpriseAttestation`
-  is on (below).
+- **Ordinary makeCredential in this fork uses the imported org key and chain**
+  for packed basic attestation, with no `ep` response flag. This applies with
+  `enterpriseAttestation` absent, whether EA is enabled or disabled. A preference
+  of exactly `["none"]` returns an empty attestation statement and skips org-key
+  and chain reads. Explicit EA requests retain the enablement and RP-list rules
+  above.
 
-The chain has to read back whole to be used for enterprise attestation. A build
+The chain has to read back whole to be used for org attestation. A build
 before 0.4.11 could store one past the cap above, and it now reads back cut. An
 EA request over such a chain gets the per-device basic attestation and no `ep`
 flag, since the org attestation is the one the device cannot give. Re-import the
@@ -143,7 +145,7 @@ spec:
 
 | EA level | Without org key | With org key |
 |---|---|---|
-| (absent / 0) | basic, device cert | basic, device cert |
+| absent | basic, device cert | basic, org chain, no `ep` flag |
 | 1 — vendor-facilitated, RP **listed** | basic, device cert, `ep` flag | full org attestation |
 | 1 — vendor-facilitated, RP **not listed** | basic, device cert, no `ep` flag | basic, device cert, no `ep` flag |
 | 2 — platform-managed | basic, device cert, `ep` flag | full org attestation |
@@ -152,6 +154,11 @@ Without an org key every level answers with the same per-device basic
 attestation; what an EA request adds is the org chain and the `ep` response
 flag. The device key and that self-signed cert are the same pair U2F register
 uses.
+
+Ordinary packed requests use the same org-key and chain checks: an unusable key
+or incomplete chain falls back to the device certificate, while a storage read
+fault fails the registration for the host to retry. Their response always omits
+`ep`.
 
 ## Enabling EA on the device (`enableEnterpriseAttestation`)
 

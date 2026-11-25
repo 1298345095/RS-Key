@@ -829,8 +829,12 @@ fn make_credential_inner<S: Storage, R: Rng>(
     // §6.1.3, conformance Enterprise-Attestation F-6).
     let ea_requested = req.enterprise_attestation == Some(2)
         || (req.enterprise_attestation == Some(1) && rp_eligible_for_vendor_ea(ctx.fs, rp_id_hash));
+    // Ordinary packed attestation uses the imported org key without setting `ep`.
+    // A type-1 request still follows the RP allowlist; `none` skips org reads.
+    let use_org_att = ea_requested
+        || (req.enterprise_attestation.is_none() && req.att_fmt_pref != AttFmtPref::NoneOnly);
     let mut att = AttBufs::new();
-    let mut org = if ea_requested {
+    let mut org = if use_org_att {
         org_attestation(ctx, &mut att)?
     } else {
         OrgAtt::None
@@ -838,7 +842,7 @@ fn make_credential_inner<S: Storage, R: Rng>(
     // An org key whose chain does not read back whole cannot give the enterprise
     // attestation it was installed for: the device's own stands in, with no `ep`.
     let ea_performed = ea_requested && !matches!(org, OrgAtt::Cut);
-    // Every credential ships packed **basic** attestation: the device key signs and
+    // Every credential ships packed **basic** attestation: an ES256 key signs and
     // the x5c leaf is its cert. Both alternatives break clients — an empty
     // `fmt:"none"` statement is rejected by OpenSSH < 10.0, which verifies any
     // x5c-less credential unconditionally, and a packed EdDSA self-attestation fails
