@@ -1,0 +1,32 @@
+name: Build RS-Key YubiKey5 2MB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Build firmware
+        run: |
+          VIDPID=Yubikey5 \
+          nix build --impure .#firmware-2mb
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: RS-Key-YubiKey5-RP2350-Zero-CM
+          path: result/firmware-2mb.uf2
