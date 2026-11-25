@@ -17,6 +17,7 @@ result-*
 /secrets/
 secure_boot_*.pem
 *.pem
+*.key
 # ykman's own test fixtures: keys and certificates Yubico publishes for its suite.
 !/third_party/ykman-tests/tests/files/**/*.pem
 # P-256 upstream public PKCS#8 test vectors, matching the tracked DER fixtures.
