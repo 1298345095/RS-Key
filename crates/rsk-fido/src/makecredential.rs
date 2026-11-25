@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 RS-Key contributors
 
-//! `authenticatorMakeCredential`: every credential ships packed **basic**
-//! attestation — ES256 over authData ‖ clientDataHash by the device key, with the
-//! per-device cert as the x5c leaf. Self-attestation and `fmt:"none"` were both
-//! tried and both break clients: an empty statement is rejected by OpenSSH < 10.0
-//! and a packed EdDSA self-attestation fails on Windows/WinHello (issue #26).
+//! `authenticatorMakeCredential`: ordinary packed attestation uses an installed
+//! org key and chain, falling back to the device key and certificate when absent.
+//! A sole `"none"` format preference omits attestation unless EA was performed.
+//!
+//! Packed basic attestation signs with ES256 over authData ‖ clientDataHash.
+//! It avoids the empty statement OpenSSH < 10.0 rejects and the packed EdDSA
+//! self-attestation that fails on Windows/WinHello (issue #26).
 //! Resident keys (rk) are stored; non-resident credentials carry the full box in
 //! authData. A configured PIN requires a verified `pinUvAuthParam`
 //! (`enforce_pin`), which sets the `uv` flag — except for a non-discoverable
@@ -974,8 +976,8 @@ struct AttShape {
 /// [, 4: ep] [, 5: largeBlobKey] [, 6: unsignedExtensionOutputs]}`.
 ///
 /// `fmt` is `"packed"` with attStmt `{alg, sig, x5c}` — basic attestation with the
-/// device cert, or the org chain when EA was performed — unless the request asked
-/// for `none`, which is `fmt:"none"` and an EMPTY attStmt. The empty map is written,
+/// selected org chain or device cert. An omitted attestation uses
+/// `fmt:"none"` and an EMPTY attStmt. The empty map is written,
 /// not omitted: field 3 is required, and a reader that finds no attStmt at all sees
 /// an incomplete attestation object rather than a none-format one. The three keys
 /// are already in CTAP2 canonical order. `ep` appears only when EA was actually
@@ -1167,7 +1169,7 @@ impl AttBufs {
     }
 }
 
-/// What an enterprise request is attested with: the installed org key, its chain
+/// The org attestation choice: the installed key, its chain
 /// already read into the [`AttBufs`]; no org key; or one that will not open or whose
 /// chain is missing or not whole, which the device's own attestation stands in for.
 enum OrgAtt {
@@ -1185,8 +1187,8 @@ impl OrgAtt {
     }
 }
 
-/// Read the org key and its chain into `att` for an enterprise request. Whole, not
-/// merely present: a chain an older build stored over this build's cap does not fit
+/// Read the org key and its chain into `att` for ordinary or enterprise attestation.
+/// A chain an older build stored over this build's cap does not fit
 /// the buffer. A key or chain read the flash failed stays an error the host can retry.
 fn org_attestation<S: Storage, R: Rng>(
     ctx: &mut Ctx<S, R>,
